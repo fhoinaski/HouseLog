@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Building2, LayoutDashboard, Package, Wrench, FileText,
-  BarChart3, Settings, LogOut, Menu, X,
+  BarChart3, Settings, LogOut, Menu, X, Home, RefreshCw, Activity,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
@@ -16,11 +16,14 @@ const NAV_ITEMS = [
 ];
 
 const PROPERTY_NAV = (id: string) => [
-  { href: `/properties/${id}`,            label: 'Visão Geral', icon: Building2 },
-  { href: `/properties/${id}/inventory`,  label: 'Inventário',  icon: Package },
-  { href: `/properties/${id}/services`,   label: 'Serviços',    icon: Wrench },
-  { href: `/properties/${id}/documents`,  label: 'Documentos',  icon: FileText },
-  { href: `/properties/${id}/financial`,  label: 'Financeiro',  icon: BarChart3 },
+  { href: `/properties/${id}`,               label: 'Visão Geral',  icon: Building2 },
+  { href: `/properties/${id}/rooms`,         label: 'Cômodos',      icon: Home },
+  { href: `/properties/${id}/inventory`,     label: 'Inventário',   icon: Package },
+  { href: `/properties/${id}/services`,      label: 'Serviços',     icon: Wrench },
+  { href: `/properties/${id}/maintenance`,   label: 'Manutenção',   icon: RefreshCw },
+  { href: `/properties/${id}/documents`,     label: 'Documentos',   icon: FileText },
+  { href: `/properties/${id}/financial`,     label: 'Financeiro',   icon: BarChart3 },
+  { href: `/properties/${id}/report`,        label: 'Relatório',    icon: Activity },
 ];
 
 export function Sidebar() {

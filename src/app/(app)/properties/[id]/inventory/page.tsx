@@ -5,7 +5,8 @@ import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Package, Filter, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Package, Filter, Search, AlertTriangle, QrCode } from 'lucide-react';
+import Link from 'next/link';
 import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +33,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-function ItemCard({ item, onClick }: { item: InventoryItem; onClick: () => void }) {
+function ItemCard({ item, propertyId, onClick }: { item: InventoryItem; propertyId: string; onClick: () => void }) {
   const isLowStock = item.quantity <= item.reserve_qty;
 
   return (
@@ -64,6 +65,15 @@ function ItemCard({ item, onClick }: { item: InventoryItem; onClick: () => void 
             </Badge>
           </div>
         )}
+        {/* QR button */}
+        <Link
+          href={`/properties/${propertyId}/inventory/${item.id}/qr`}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-2 left-2 h-6 w-6 flex items-center justify-center rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Ver QR Code"
+        >
+          <QrCode className="h-3 w-3" />
+        </Link>
       </div>
       <CardContent className="p-3">
         <Badge variant="secondary" className="text-xs mb-1.5">
@@ -195,7 +205,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {items.map((item) => (
-            <ItemCard key={item.id} item={item} onClick={() => openEdit(item)} />
+            <ItemCard key={item.id} item={item} propertyId={id} onClick={() => openEdit(item)} />
           ))}
         </div>
       )}

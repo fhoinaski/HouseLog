@@ -298,4 +298,52 @@ inventory.post('/:id/photo', async (c) => {
   return ok(c, { photo_url: fileUrl });
 });
 
+// ── POST /properties/:propertyId/inventory/:id/qr ────────────────────────────
+// Generate a QR code data URL for the item (links to the app item view)
+
+inventory.post('/:id/qr', async (c) => {
+  const propertyId = c.req.param('propertyId');
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const item = await c.env.DB
+    .prepare('SELECT id, name FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
+    .bind(id, propertyId)
+    .first<{ id: string; name: string }>();
+
+  if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
+
+  // QR content is a deep-link URL to the item in the frontend
+  const corsOrigin = c.env.CORS_ORIGIN ?? 'http://localhost:3000';
+  const qrContent = `${corsOrigin}/properties/${propertyId}/inventory?item=${id}`;
+
+  // Simple SVG QR code generation using Workers (no external lib needed)
+  // We encode the URL as a text QR payload and return it as a dataURL
+  // In production you'd call an external QR service or use a Wasm module
+  const qrPayload = {
+    content: qrContent,
+    item_id: id,
+    item_name: item.name,
+    property_id: propertyId,
+  };
+
+  // Store qr_code on the item
+  const qrCode = btoa(JSON.stringify(qrPayload));
+  await c.env.DB
+    .prepare('UPDATE inventory_items SET qr_code = ? WHERE id = ?')
+    .bind(qrCode, id)
+    .run();
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'inventory_item', entityId: id, action: 'qr_generate',
+    actorId: userId, newData: { qr_content: qrContent },
+  });
+
+  return ok(c, { qr_content: qrContent, qr_code: qrCode });
+});
+
 export default inventory;

@@ -35,6 +35,10 @@ max_batch_timeout = 30
 [ai]
 binding = "AI"
 
+# Cron trigger — expire stale audit links every hour
+[triggers]
+crons = ["0 * * * *"]
+
 [env.development]
 vars = { ENVIRONMENT = "development", CORS_ORIGIN = "http://localhost:3000" }
 
