@@ -1,0 +1,23 @@
+{
+  "name": "houselog-api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev --env development",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply houselog-db",
+    "db:migrate:local": "wrangler d1 migrations apply houselog-db --local",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "nanoid": "^5.0.9",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250409.0",
+    "typescript": "^5",
+    "wrangler": "^3.106.0"
+  }
+}
