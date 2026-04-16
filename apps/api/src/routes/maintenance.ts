@@ -8,7 +8,8 @@ import type { Bindings, Variables } from '../lib/types';
 
 type MaintenanceSchedule = {
   id: string; property_id: string; system_type: string; title: string;
-  frequency: 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+  description: string | null; responsible: string | null;
+  frequency: 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
   last_done: string | null; next_due: string | null;
   auto_create_os: number; notes: string | null;
   created_at: string; deleted_at: string | null;
@@ -18,13 +19,15 @@ const maintenance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 maintenance.use('*', authMiddleware);
 
 const FREQUENCY_DAYS: Record<string, number> = {
-  monthly: 30, quarterly: 90, semiannual: 180, annual: 365,
+  weekly: 7, monthly: 30, quarterly: 90, semiannual: 180, annual: 365,
 };
 
 const schema = z.object({
   system_type: z.string().min(1),
   title: z.string().min(1),
-  frequency: z.enum(['monthly', 'quarterly', 'semiannual', 'annual']),
+  description: z.string().optional(),
+  frequency: z.enum(['weekly', 'monthly', 'quarterly', 'semiannual', 'annual']),
+  responsible: z.string().optional(),
   last_done: z.string().optional(),
   auto_create_os: z.boolean().default(false),
   notes: z.string().optional(),
@@ -87,19 +90,20 @@ maintenance.post('/', async (c) => {
     return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   }
 
-  const { system_type, title, frequency, last_done, auto_create_os, notes } = parsed.data;
+  const { system_type, title, description, frequency, responsible, last_done, auto_create_os, notes } = parsed.data;
   const next_due = calcNextDue(frequency, last_done);
   const id = nanoid();
 
   await c.env.DB
     .prepare(
       `INSERT INTO maintenance_schedules
-       (id, property_id, system_type, title, frequency, last_done, next_due, auto_create_os, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+       (id, property_id, system_type, title, description, frequency, responsible,
+        last_done, next_due, auto_create_os, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
     )
     .bind(
-      id, propertyId, system_type, title, frequency,
-      last_done ?? null, next_due, auto_create_os ? 1 : 0, notes ?? null
+      id, propertyId, system_type, title, description ?? null, frequency,
+      responsible ?? null, last_done ?? null, next_due, auto_create_os ? 1 : 0, notes ?? null
     )
     .run();
 
@@ -145,10 +149,12 @@ maintenance.put('/:id', async (c) => {
   const d = parsed.data;
   const pairs: [string, unknown][] = [];
 
-  if (d.system_type !== undefined)  pairs.push(['system_type', d.system_type]);
-  if (d.title !== undefined)        pairs.push(['title', d.title]);
-  if (d.frequency !== undefined)    pairs.push(['frequency', d.frequency]);
-  if (d.notes !== undefined)        pairs.push(['notes', d.notes]);
+  if (d.system_type !== undefined)    pairs.push(['system_type', d.system_type]);
+  if (d.title !== undefined)          pairs.push(['title', d.title]);
+  if (d.description !== undefined)    pairs.push(['description', d.description ?? null]);
+  if (d.frequency !== undefined)      pairs.push(['frequency', d.frequency]);
+  if (d.responsible !== undefined)    pairs.push(['responsible', d.responsible ?? null]);
+  if (d.notes !== undefined)          pairs.push(['notes', d.notes]);
   if (d.auto_create_os !== undefined) pairs.push(['auto_create_os', d.auto_create_os ? 1 : 0]);
   if (d.last_done !== undefined) {
     pairs.push(['last_done', d.last_done]);
