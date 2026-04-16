@@ -5,8 +5,8 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import {
   Building2, MapPin, Ruler, Calendar, Activity,
-  Wrench, Package, FileText, BarChart3, AlertTriangle,
-  CheckCircle2, Clock,
+  Wrench, Package, FileText, BarChart3,
+  CheckCircle2, Clock, Home, RefreshCw, Pencil,
 } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,7 +95,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             {property.address}, {property.city}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" asChild>
             <Link href={`/properties/${id}/services/new`}>
               <Wrench className="h-4 w-4" />
@@ -103,9 +103,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href={`/properties/${id}/inventory`}>
-              <Package className="h-4 w-4" />
-              Inventário
+            <Link href={`/properties/${id}/edit`}>
+              <Pencil className="h-4 w-4" />
+              Editar
             </Link>
           </Button>
         </div>
@@ -212,10 +212,13 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           <CardContent className="p-6 pt-0">
             <div className="grid grid-cols-2 gap-3">
               {[
+                { href: `/properties/${id}/rooms`, icon: Home, label: 'Cômodos', color: 'bg-slate-50 text-slate-600' },
                 { href: `/properties/${id}/inventory`, icon: Package, label: 'Inventário', color: 'bg-amber-50 text-amber-600' },
                 { href: `/properties/${id}/services`, icon: Wrench, label: 'Serviços', color: 'bg-primary-50 text-primary-600' },
+                { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', color: 'bg-orange-50 text-orange-600' },
                 { href: `/properties/${id}/documents`, icon: FileText, label: 'Documentos', color: 'bg-violet-50 text-violet-600' },
                 { href: `/properties/${id}/financial`, icon: BarChart3, label: 'Financeiro', color: 'bg-emerald-50 text-emerald-600' },
+                { href: `/properties/${id}/report`, icon: Activity, label: 'Relatório', color: 'bg-primary-50 text-primary-600' },
               ].map(({ href, icon: Icon, label, color }) => (
                 <Link
                   key={href}

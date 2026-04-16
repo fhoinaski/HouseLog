@@ -30,8 +30,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — ignore real secrets, keep examples
 .env*
+!.env*.example
+# Cloudflare Workers local secrets (wrangler dev)
+apps/api/.dev.vars
+!apps/api/.dev.vars.example
 
 # vercel
 .vercel

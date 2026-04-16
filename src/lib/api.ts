@@ -180,6 +180,110 @@ export const servicesApi = {
       body: fd,
     }).then((r) => r.json() as Promise<{ url: string; type: string }>);
   },
+
+  uploadVideo: (propertyId: string, id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = getToken();
+    return fetch(`${BASE}/properties/${propertyId}/services/${id}/video`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then((r) => r.json() as Promise<{ video_url: string }>);
+  },
+
+  createAuditLink: (
+    propertyId: string,
+    id: string,
+    data: { scope: { canUploadPhotos: boolean; canUploadVideo: boolean }; expires_in_hours: number }
+  ) =>
+    request<{ url: string; token: string; expires_at: string }>(
+      `/properties/${propertyId}/services/${id}/audit-link`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+};
+
+// Documents
+export const documentsApi = {
+  list: (propertyId: string, params?: { type?: string; cursor?: string }) =>
+    request<CursorPage<Document>>(
+      `/properties/${propertyId}/documents?${new URLSearchParams(params as Record<string, string>)}`
+    ),
+
+  upload: (propertyId: string, file: File, meta: Partial<Document> & { type: string; title: string }) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('meta', JSON.stringify(meta));
+    const token = getToken();
+    return fetch(`${BASE}/properties/${propertyId}/documents`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then((r) => r.json() as Promise<{ document: Document }>);
+  },
+
+  delete: (propertyId: string, id: string) =>
+    request<{ success: boolean }>(`/properties/${propertyId}/documents/${id}`, { method: 'DELETE' }),
+
+  ocr: (propertyId: string, id: string) =>
+    request<{ ocr_data: Record<string, unknown> }>(`/properties/${propertyId}/documents/${id}/ocr`, {
+      method: 'POST',
+    }),
+};
+
+// Audit (public token-based)
+export const auditApi = {
+  getByToken: (token: string) =>
+    request<AuditLinkData>(`/audit/public/${token}`),
+
+  submit: (token: string, photos: File[], notes: string) => {
+    const fd = new FormData();
+    photos.forEach((f) => fd.append('photos', f));
+    fd.append('notes', notes);
+    return fetch(`${BASE}/audit/public/${token}/submit`, {
+      method: 'POST',
+      body: fd,
+    }).then(async (r) => {
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({ error: 'Erro ao enviar' }));
+        throw new Error((body as { error: string }).error ?? 'Erro ao enviar');
+      }
+      return r.json() as Promise<{ success: boolean }>;
+    });
+  },
+};
+
+// Maintenance
+export const maintenanceApi = {
+  list: (propertyId: string) =>
+    request<{ schedules: MaintenanceSchedule[] }>(`/properties/${propertyId}/maintenance`),
+
+  create: (propertyId: string, data: Partial<MaintenanceSchedule>) =>
+    request<{ schedule: MaintenanceSchedule }>(`/properties/${propertyId}/maintenance`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+
+  update: (propertyId: string, id: string, data: Partial<MaintenanceSchedule>) =>
+    request<{ schedule: MaintenanceSchedule }>(`/properties/${propertyId}/maintenance/${id}`, {
+      method: 'PUT', body: JSON.stringify(data),
+    }),
+
+  markDone: (propertyId: string, id: string, auto_create_os?: boolean) =>
+    request<{ schedule: MaintenanceSchedule }>(`/properties/${propertyId}/maintenance/${id}/done`, {
+      method: 'POST', body: JSON.stringify({ auto_create_os: auto_create_os ? 1 : 0 }),
+    }),
+
+  delete: (propertyId: string, id: string) =>
+    request<{ success: boolean }>(`/properties/${propertyId}/maintenance/${id}`, { method: 'DELETE' }),
+};
+
+// Reports
+export const reportsApi = {
+  healthScore: (propertyId: string) =>
+    request<HealthScoreReport>(`/properties/${propertyId}/report/health-score`),
+
+  valuationPdf: (propertyId: string) =>
+    request<ValuationPayload>(`/properties/${propertyId}/report/valuation-pdf`),
 };
 
 // Expenses
@@ -339,4 +443,67 @@ export type ColorEntry = {
   supplier: string | null;
   room_id: string | null;
   room_name: string | null;
+};
+
+export type Document = {
+  id: string;
+  property_id: string;
+  type: string;
+  title: string;
+  file_url: string;
+  vendor_cnpj: string | null;
+  amount: number | null;
+  issue_date: string | null;
+  expiry_date: string | null;
+  ocr_data: Record<string, unknown> | null;
+  created_by: string;
+  created_at: string;
+};
+
+export type AuditLinkData = {
+  token: string;
+  order_title: string;
+  order_description: string | null;
+  system_type: string;
+  before_photos: string[];
+  property_name: string;
+  address: string;
+  scope: { canUploadPhotos: boolean; canUploadVideo: boolean; requiredFields: string[] };
+  expires_at: string;
+};
+
+export type MaintenanceSchedule = {
+  id: string;
+  property_id: string;
+  system_type: string;
+  title: string;
+  description: string | null;
+  frequency: 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
+  last_done: string | null;
+  next_due: string | null;
+  responsible: string | null;
+  is_overdue: boolean;
+  days_until_due: number | null;
+  created_at: string;
+};
+
+export type HealthScoreReport = {
+  score: number;
+  label: string;
+  breakdown: {
+    maintenance_compliance: number;
+    service_backlog: number;
+    preventive_ratio: number;
+    age_penalty: number;
+    document_completeness: number;
+  };
+};
+
+export type ValuationPayload = {
+  property: Property;
+  expenses_total: number;
+  services_total: number;
+  maintenance_total: number;
+  health_score: number;
+  generated_at: string;
 };

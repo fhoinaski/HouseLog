@@ -8,6 +8,10 @@ import rooms from './routes/rooms';
 import inventory from './routes/inventory';
 import services from './routes/services';
 import expenses from './routes/expenses';
+import documents from './routes/documents';
+import auditLinks from './routes/audit-links';
+import maintenance from './routes/maintenance';
+import reports from './routes/reports';
 import type { Bindings, Variables } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -40,20 +44,44 @@ const api = app.basePath('/api/v1');
 // Auth
 api.route('/auth', auth);
 
-// Properties (and nested resources)
+// Properties CRUD + dashboard
 api.route('/properties', properties);
 
-// Nested rooms: /api/v1/properties/:propertyId/rooms
-api.route('/properties/:propertyId/rooms', rooms);
+// Nested under /properties/:propertyId
+api.route('/properties/:propertyId/rooms',       rooms);
+api.route('/properties/:propertyId/inventory',   inventory);
+api.route('/properties/:propertyId/services',    services);
+api.route('/properties/:propertyId/expenses',    expenses);
+api.route('/properties/:propertyId/documents',   documents);
+api.route('/properties/:propertyId/maintenance', maintenance);
 
-// Nested inventory: /api/v1/properties/:propertyId/inventory
-api.route('/properties/:propertyId/inventory', inventory);
+// Reports: /api/v1/properties/:propertyId/report/...
+api.route('/properties/:propertyId/report', reports);
 
-// Nested services: /api/v1/properties/:propertyId/services
-api.route('/properties/:propertyId/services', services);
+// Audit link creation (nested under property+service)
+api.route('/properties/:propertyId/services/:serviceId/audit-link', auditLinks);
 
-// Nested expenses: /api/v1/properties/:propertyId/expenses
-api.route('/properties/:propertyId/expenses', expenses);
+// Public audit endpoints (no auth required — handled inside the route)
+api.route('/audit', auditLinks);
+
+// ── Cron trigger — expire audit links ────────────────────────────────────────
+
+app.get('/__cron/expire-links', async (c) => {
+  // Only allow Cloudflare Cron Triggers (or internal calls in dev)
+  const cronSecret = c.req.header('X-Cron-Secret');
+  if (c.env.ENVIRONMENT === 'production' && cronSecret !== c.env.JWT_SECRET) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  const result = await c.env.DB
+    .prepare(
+      `UPDATE audit_links SET status = 'expired'
+       WHERE status = 'active' AND expires_at < datetime('now')`
+    )
+    .run();
+
+  return c.json({ expired: result.meta?.changes ?? 0 });
+});
 
 // ── 404 fallback ─────────────────────────────────────────────────────────────
 

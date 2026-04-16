@@ -1,0 +1,36 @@
+# =============================================================================
+# HouseLog — Cloudflare Workers (wrangler dev)
+# =============================================================================
+# Este arquivo configura os *secrets* do Worker durante o desenvolvimento local.
+# O wrangler lê automaticamente um arquivo chamado .dev.vars na raiz do Worker.
+#
+#   cp apps/api/.dev.vars.example apps/api/.dev.vars
+#
+# ⚠️  NUNCA faça commit do .dev.vars — ele já está no .gitignore.
+# Em produção, defina os secrets com:
+#   wrangler secret put JWT_SECRET
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Segurança
+# -----------------------------------------------------------------------------
+
+# Chave secreta para assinar JWTs (HS256).
+# Gere uma string aleatória forte (mín. 32 caracteres), por exemplo:
+#   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+JWT_SECRET=troque-por-uma-chave-secreta-de-pelo-menos-32-caracteres
+
+# -----------------------------------------------------------------------------
+# CORS
+# -----------------------------------------------------------------------------
+
+# Origem permitida para requisições cross-origin.
+# Em desenvolvimento, aponta para o servidor Next.js local.
+CORS_ORIGIN=http://localhost:3000
+
+# -----------------------------------------------------------------------------
+# Ambiente
+# -----------------------------------------------------------------------------
+
+# Valores possíveis: development | production
+ENVIRONMENT=development
