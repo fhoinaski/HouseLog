@@ -5,8 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, DoorOpen, Wrench } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
+import { PROPERTY_TEMPLATES } from '@/lib/templates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,10 +31,13 @@ export default function NewPropertyPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { type: 'house', floors: 1 },
   });
+
+  const watchType = watch('type');
+  const template = PROPERTY_TEMPLATES[watchType ?? 'house'];
 
   async function onSubmit(data: FormData) {
     setError(null);
@@ -83,6 +87,34 @@ export default function NewPropertyPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Template preview */}
+              {template && (
+                <div className="sm:col-span-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm">
+                  <p className="font-semibold text-primary-800 mb-1.5">Modelo sugerido: {template.label}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-xs font-medium text-primary-700 flex items-center gap-1 mb-1">
+                        <DoorOpen className="h-3.5 w-3.5" /> Cômodos
+                      </p>
+                      <ul className="text-xs text-primary-600 space-y-0.5">
+                        {template.rooms.map((r, i) => <li key={i}>· {r.name}</li>)}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-primary-700 flex items-center gap-1 mb-1">
+                        <Wrench className="h-3.5 w-3.5" /> Manutenções
+                      </p>
+                      <ul className="text-xs text-primary-600 space-y-0.5">
+                        {template.maintenance.map((m, i) => <li key={i}>· {m.title}</li>)}
+                      </ul>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-xs text-primary-500">
+                    Estes itens serão sugeridos após criar o imóvel.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="floors">Andares</Label>

@@ -14,6 +14,7 @@ import maintenance, { autoCreateOverdueOS, sendMaintenanceDueEmails } from './ro
 import reports from './routes/reports';
 import bids from './routes/bids';
 import provider from './routes/provider';
+import search from './routes/search';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -71,6 +72,9 @@ api.route('/properties/:propertyId/services/:serviceId/audit-link', auditLinks);
 
 // Public audit endpoints (no auth required — handled inside the route)
 api.route('/audit', auditLinks);
+
+// Full-text search (services, documents/OCR, inventory, maintenance)
+api.route('/search', search);
 
 // ── 404 fallback ─────────────────────────────────────────────────────────────
 

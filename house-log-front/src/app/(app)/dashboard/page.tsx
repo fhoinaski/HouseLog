@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Building2, MapPin } from 'lucide-react';
+import { Loader2, Plus, Building2, MapPin, Sparkles } from 'lucide-react';
+import { SetupWizard } from '@/components/onboarding/setup-wizard';
 import { type Property } from '@/lib/api';
 import { usePagination } from '@/hooks/usePagination';
 import { Button } from '@/components/ui/button';
@@ -81,6 +82,7 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: properties, isLoading, isLoadingMore, hasMore, loadMore } =
     usePagination<Property>('/properties', search ? { search } : undefined);
@@ -95,10 +97,16 @@ export default function DashboardPage() {
             Olá, {user?.name?.split(' ')[0]}. Gerencie seu portfólio.
           </p>
         </div>
-        <Button onClick={() => router.push('/properties/new')}>
-          <Plus className="h-4 w-4" />
-          Novo Imóvel
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setWizardOpen(true)}>
+            <Sparkles className="h-4 w-4" />
+            Configuração guiada
+          </Button>
+          <Button onClick={() => router.push('/properties/new')}>
+            <Plus className="h-4 w-4" />
+            Novo Imóvel
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -127,10 +135,16 @@ export default function DashboardPage() {
             {!search && 'Adicione seu primeiro imóvel para começar.'}
           </p>
           {!search && (
-            <Button className="mt-4" onClick={() => router.push('/properties/new')}>
-              <Plus className="h-4 w-4" />
-              Adicionar Imóvel
-            </Button>
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
+              <Button onClick={() => setWizardOpen(true)}>
+                <Sparkles className="h-4 w-4" />
+                Configuração guiada
+              </Button>
+              <Button variant="outline" onClick={() => router.push('/properties/new')}>
+                <Plus className="h-4 w-4" />
+                Adicionar Imóvel
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -154,6 +168,8 @@ export default function DashboardPage() {
           )}
         </>
       )}
+
+      <SetupWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </div>
   );
 }

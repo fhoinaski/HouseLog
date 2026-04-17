@@ -104,6 +104,11 @@ export const propertiesApi = {
     request<{ success: boolean }>(`/properties/${id}`, { method: 'DELETE' }),
 
   dashboard: (id: string) => request<PropertyDashboard>(`/properties/${id}/dashboard`),
+
+  applyTemplate: (id: string, type: 'house' | 'apt' | 'commercial' | 'warehouse') =>
+    request<{ created: { rooms: number; maintenance: number } }>(`/properties/${id}/apply-template`, {
+      method: 'POST', body: JSON.stringify({ type }),
+    }),
 };
 
 // Rooms
@@ -540,6 +545,15 @@ export type HealthScoreReport = {
   };
 };
 
+export type SearchResult = {
+  type: 'service' | 'document' | 'inventory' | 'maintenance';
+  id: string;
+  title: string;
+  subtitle: string;
+  property_id: string;
+  href: string;
+};
+
 export type ValuationPayload = {
   property: Property;
   expenses_total: number;
@@ -572,6 +586,12 @@ export type ProviderServiceOrder = ServiceOrder & {
   property_name: string;
   property_address: string;
   property_id: string;
+};
+
+// Full-text search
+export const searchApi = {
+  search: (q: string, propertyId?: string) =>
+    request<{ results: SearchResult[] }>(`/search${qs({ q, propertyId })}`),
 };
 
 // Bids

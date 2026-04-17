@@ -384,4 +384,112 @@ properties.get('/:id/dashboard', async (c) => {
   });
 });
 
+// ── POST /properties/:id/apply-template ──────────────────────────────────────
+
+const templateSchema = z.object({
+  type: z.enum(['house', 'apt', 'commercial', 'warehouse']),
+});
+
+const TEMPLATES: Record<string, {
+  rooms: { name: string; type: string; floor: number }[];
+  maintenance: { title: string; system_type: string; frequency: string; description?: string }[];
+}> = {
+  house: {
+    rooms: [
+      { name: 'Sala de Estar', type: 'living', floor: 0 },
+      { name: 'Cozinha', type: 'kitchen', floor: 0 },
+      { name: 'Quarto Principal', type: 'bedroom', floor: 0 },
+      { name: 'Banheiro', type: 'bathroom', floor: 0 },
+      { name: 'Garagem', type: 'garage', floor: 0 },
+      { name: 'Área de Serviço', type: 'laundry', floor: 0 },
+    ],
+    maintenance: [
+      { title: 'Dedetização', system_type: 'Pragas', frequency: 'annual', description: 'Controle de pragas e insetos' },
+      { title: 'Limpeza de Calhas', system_type: 'Calhas', frequency: 'semiannual', description: 'Limpeza e desobstrução de calhas' },
+      { title: 'Revisão Elétrica', system_type: 'Elétrica', frequency: 'annual', description: 'Verificação de quadro elétrico e fiações' },
+      { title: 'Revisão Hidráulica', system_type: 'Hidráulica', frequency: 'annual', description: 'Inspeção de encanamentos e válvulas' },
+    ],
+  },
+  apt: {
+    rooms: [
+      { name: 'Sala', type: 'living', floor: 0 },
+      { name: 'Cozinha', type: 'kitchen', floor: 0 },
+      { name: 'Quarto Principal', type: 'bedroom', floor: 0 },
+      { name: 'Banheiro', type: 'bathroom', floor: 0 },
+    ],
+    maintenance: [
+      { title: 'Manutenção Ar-Condicionado', system_type: 'Climatização', frequency: 'semiannual', description: 'Limpeza de filtros e revisão do sistema' },
+      { title: 'Dedetização', system_type: 'Pragas', frequency: 'annual', description: 'Controle de pragas e insetos' },
+      { title: 'Revisão Elétrica', system_type: 'Elétrica', frequency: 'annual', description: 'Verificação de quadro elétrico e tomadas' },
+    ],
+  },
+  commercial: {
+    rooms: [
+      { name: 'Recepção', type: 'living', floor: 0 },
+      { name: 'Escritório', type: 'other', floor: 0 },
+      { name: 'Banheiro', type: 'bathroom', floor: 0 },
+      { name: 'Copa', type: 'kitchen', floor: 0 },
+    ],
+    maintenance: [
+      { title: 'Manutenção Ar-Condicionado', system_type: 'Climatização', frequency: 'quarterly', description: 'Limpeza de filtros e revisão do sistema' },
+      { title: 'Dedetização', system_type: 'Pragas', frequency: 'annual', description: 'Controle de pragas e insetos' },
+      { title: 'Revisão Elétrica', system_type: 'Elétrica', frequency: 'annual', description: 'Verificação de quadro elétrico' },
+    ],
+  },
+  warehouse: {
+    rooms: [
+      { name: 'Área de Carga', type: 'other', floor: 0 },
+      { name: 'Escritório', type: 'other', floor: 0 },
+      { name: 'Banheiro', type: 'bathroom', floor: 0 },
+    ],
+    maintenance: [
+      { title: 'Revisão Estrutural', system_type: 'Estrutura', frequency: 'annual', description: 'Inspeção de telhado, piso e estrutura' },
+      { title: 'Dedetização', system_type: 'Pragas', frequency: 'annual', description: 'Controle de pragas e roedores' },
+      { title: 'Revisão Elétrica', system_type: 'Elétrica', frequency: 'annual', description: 'Verificação de quadro elétrico industrial' },
+    ],
+  },
+};
+
+properties.post('/:id/apply-template', async (c) => {
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
+
+  const parsed = templateSchema.safeParse(body);
+  if (!parsed.success) return err(c, 'Template inválido', 'VALIDATION_ERROR', 422);
+
+  const template = TEMPLATES[parsed.data.type];
+
+  function calcNextDue(freq: string): string {
+    const days: Record<string, number> = { weekly: 7, monthly: 30, quarterly: 90, semiannual: 180, annual: 365 };
+    const d = new Date();
+    d.setDate(d.getDate() + (days[freq] ?? 365));
+    return d.toISOString().slice(0, 10);
+  }
+
+  const roomInserts = template.rooms.map((r) =>
+    c.env.DB.prepare(
+      `INSERT OR IGNORE INTO rooms (id, property_id, name, type, floor, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`
+    ).bind(nanoid(), id, r.name, r.type, r.floor)
+  );
+
+  const maintInserts = template.maintenance.map((m) =>
+    c.env.DB.prepare(
+      `INSERT INTO maintenance_schedules (id, property_id, system_type, title, description, frequency, next_due, auto_create_os, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`
+    ).bind(nanoid(), id, m.system_type, m.title, m.description ?? null, m.frequency, calcNextDue(m.frequency))
+  );
+
+  await c.env.DB.batch([...roomInserts, ...maintInserts]);
+
+  return ok(c, { created: { rooms: template.rooms.length, maintenance: template.maintenance.length } }, 201);
+});
+
 export default properties;
