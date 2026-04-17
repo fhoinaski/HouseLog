@@ -1,0 +1,63 @@
+name = "houselog-api"
+main = "src/index.ts"
+compatibility_date = "2024-04-15"
+compatibility_flags = ["nodejs_compat"]
+
+# --- CONFIGURAÇÃO GLOBAL / PRODUÇÃO ---
+[vars]
+ENVIRONMENT = "production"
+CORS_ORIGIN = "https://houselog.vercel.app"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "houselog-db"
+database_id = "COLE_AQUI_O_ID_DA_PRODUCAO_QUANDO_CRIAR"
+migrations_dir = "src/db/migrations"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "houselog-assets"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "COLE_AQUI_O_ID_DO_KV_PRODUCAO"
+
+[[queues.producers]]
+binding = "QUEUE"
+queue = "houselog-jobs"
+
+[ai]
+binding = "AI"
+
+[triggers]
+crons = ["0 * * * *"]
+
+# --- AMBIENTE DE DESENVOLVIMENTO (DEV) ---
+# Comando: npx wrangler deploy --env dev
+[env.dev]
+name = "houselog-api-dev"
+
+[env.dev.vars]
+ENVIRONMENT = "development"
+CORS_ORIGIN = "http://localhost:3000"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "houselog-db-dev"
+database_id = "62bd81c4-77da-4867-a996-22fff5e0d258"
+migrations_dir = "src/db/migrations"
+
+[[env.dev.r2_buckets]]
+binding = "STORAGE"
+bucket_name = "houselog-assets-dev"
+
+[[env.dev.kv_namespaces]]
+binding = "KV"
+id = "30d1ccabab2349e79151d3dec9eb11de"
+
+[[env.dev.queues.producers]]
+binding = "QUEUE"
+queue = "houselog-jobs"
+
+[env.dev.ai]
+binding = "AI"
