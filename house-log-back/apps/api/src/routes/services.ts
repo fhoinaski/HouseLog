@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware, assertPropertyAccess, canUserOpenOS } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
 import { sendEmail, emailOsStatusChanged } from '../lib/email';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
@@ -89,6 +89,9 @@ services.post('/', async (c) => {
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const allowed = await canUserOpenOS(c.env.DB, propertyId, userId);
+  if (!allowed) return err(c, 'Sem permissão para abrir OS neste imóvel', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');

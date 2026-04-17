@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft } from 'lucide-react';
-import { servicesApi, roomsApi } from '@/lib/api';
+import { servicesApi, roomsApi, propertiesApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
   const [apiError, setApiError] = useState<string | null>(null);
 
   const { data: roomsData } = useSWR(['rooms', id], () => roomsApi.list(id));
+  const { data: providersData } = useSWR(['providers', id], () => propertiesApi.providers(id));
 
   const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -139,8 +140,25 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="assigned_to">Atribuir para (ID do usuário)</Label>
-                <Input id="assigned_to" placeholder="ID do prestador..." {...register('assigned_to')} />
+                <Label>Atribuir para prestador</Label>
+                {providersData?.providers && providersData.providers.length > 0 ? (
+                  <Select onValueChange={(v) => setValue('assigned_to', v === '__none__' ? undefined : v)}>
+                    <SelectTrigger><SelectValue placeholder="Nenhum (deixar em aberto)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Nenhum (deixar em aberto)</SelectItem>
+                      {providersData.providers.map((p) => (
+                        <SelectItem key={p.user_id} value={p.user_id}>
+                          {p.name}
+                          {p.email && <span className="text-[var(--muted-foreground)] ml-1 text-xs">· {p.email}</span>}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-xs text-[var(--muted-foreground)] py-2">
+                    Nenhum prestador autorizado. Convide um na aba <strong>Equipe</strong>.
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="warranty_until">Garantia até</Label>

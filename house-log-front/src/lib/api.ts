@@ -109,6 +109,47 @@ export const propertiesApi = {
     request<{ created: { rooms: number; maintenance: number } }>(`/properties/${id}/apply-template`, {
       method: 'POST', body: JSON.stringify({ type }),
     }),
+
+  providers: (id: string) =>
+    request<{ providers: PropertyProvider[] }>(`/properties/${id}/providers`),
+};
+
+// Invites & Collaborators
+export const invitesApi = {
+  list: (propertyId: string) =>
+    request<{ invites: PropertyInvite[]; collaborators: PropertyCollaborator[] }>(
+      `/properties/${propertyId}/invites`
+    ),
+
+  create: (propertyId: string, data: { email: string; role: 'viewer' | 'provider' | 'manager' }) =>
+    request<{ id: string; token: string; expires_at: string }>(
+      `/properties/${propertyId}/invites`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  cancel: (propertyId: string, inviteId: string) =>
+    request<{ success: boolean }>(`/properties/${propertyId}/invites/${inviteId}`, { method: 'DELETE' }),
+
+  updatePermissions: (propertyId: string, collabId: string, can_open_os: boolean) =>
+    request<{ success: boolean }>(
+      `/properties/${propertyId}/collaborators/${collabId}`,
+      { method: 'PATCH', body: JSON.stringify({ can_open_os }) }
+    ),
+
+  removeCollaborator: (propertyId: string, collabId: string) =>
+    request<{ success: boolean }>(
+      `/properties/${propertyId}/collaborators/${collabId}`,
+      { method: 'DELETE' }
+    ),
+
+  getInvite: (token: string) =>
+    request<InviteDetails>(`/invite/${token}`),
+
+  acceptInvite: (token: string) =>
+    request<{ success: boolean; property_id: string; role: string }>(
+      `/invite/${token}/accept`,
+      { method: 'POST', body: '{}' }
+    ),
 };
 
 // Rooms
@@ -543,6 +584,52 @@ export type HealthScoreReport = {
     age_penalty: number;
     document_completeness: number;
   };
+};
+
+export type PropertyProvider = {
+  collab_id: string;
+  user_id: string;
+  role: string;
+  can_open_os: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  avatar_url: string | null;
+};
+
+export type PropertyCollaborator = {
+  id: string;
+  user_id: string;
+  role: 'viewer' | 'provider' | 'manager';
+  can_open_os: number;
+  created_at: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  avatar_url: string | null;
+};
+
+export type PropertyInvite = {
+  id: string;
+  property_id: string;
+  invited_by: string;
+  invited_by_name: string;
+  email: string;
+  role: 'viewer' | 'provider' | 'manager';
+  token: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
+export type InviteDetails = {
+  email: string;
+  role: string;
+  expires_at: string;
+  property_name: string;
+  property_address: string;
+  property_city: string;
+  invited_by_name: string;
 };
 
 export type SearchResult = {

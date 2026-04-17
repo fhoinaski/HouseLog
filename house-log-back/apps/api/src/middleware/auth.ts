@@ -41,15 +41,15 @@ export function requireRole(...roles: Role[]) {
   });
 }
 
-// Verifies the requesting user owns/manages the property (or is admin)
+// Verifies the requesting user owns/manages the property.
+// Admins no longer have blanket access — they must be explicitly assigned
+// as owner, manager_id, or collaborator (same as any other user).
 export async function assertPropertyAccess(
   db: D1Database,
   propertyId: string,
   userId: string,
-  role: Role
+  _role: Role
 ): Promise<boolean> {
-  if (role === 'admin') return true;
-
   const owned = await db
     .prepare(
       `SELECT id FROM properties
@@ -64,4 +64,35 @@ export async function assertPropertyAccess(
     .bind(propertyId, userId)
     .first();
   return collab !== null;
+}
+
+// Returns whether a user is allowed to open (create) a service order on a property.
+// - Owner or manager_id: always allowed
+// - Collaborator with role='manager' or 'provider': allowed only if can_open_os = 1
+// - Collaborator with role='viewer': never allowed
+export async function canUserOpenOS(
+  db: D1Database,
+  propertyId: string,
+  userId: string
+): Promise<boolean> {
+  const owned = await db
+    .prepare(
+      `SELECT id FROM properties
+       WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
+    )
+    .bind(propertyId, userId, userId)
+    .first();
+  if (owned) return true;
+
+  const collab = await db
+    .prepare(
+      `SELECT role, can_open_os FROM property_collaborators
+       WHERE property_id = ? AND user_id = ?`
+    )
+    .bind(propertyId, userId)
+    .first<{ role: string; can_open_os: number }>();
+
+  if (!collab) return false;
+  if (collab.role === 'viewer') return false;
+  return collab.can_open_os === 1;
 }
