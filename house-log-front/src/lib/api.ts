@@ -698,6 +698,106 @@ export const bidsApi = {
     ),
 };
 
+// Access Credentials
+export type AccessCredential = {
+  id: string;
+  property_id: string;
+  category: 'wifi' | 'alarm' | 'smart_lock' | 'gate' | 'app' | 'other';
+  label: string;
+  username: string | null;
+  secret: string;
+  notes: string | null;
+  integration_type: 'intelbras' | null;
+  integration_config: Record<string, unknown> | null;
+  share_with_os: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export const credentialsApi = {
+  list: (propertyId: string) =>
+    request<{ credentials: AccessCredential[] }>(`/properties/${propertyId}/credentials`),
+
+  create: (propertyId: string, data: Omit<AccessCredential, 'id' | 'property_id' | 'created_at' | 'updated_at'>) =>
+    request<{ credential: AccessCredential }>(`/properties/${propertyId}/credentials`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+
+  update: (propertyId: string, id: string, data: Partial<Omit<AccessCredential, 'id' | 'property_id' | 'created_at' | 'updated_at'>>) =>
+    request<{ credential: AccessCredential }>(`/properties/${propertyId}/credentials/${id}`, {
+      method: 'PUT', body: JSON.stringify(data),
+    }),
+
+  delete: (propertyId: string, id: string) =>
+    request<{ deleted: boolean }>(`/properties/${propertyId}/credentials/${id}`, { method: 'DELETE' }),
+
+  generateTempCode: (propertyId: string, id: string, data: { expires_hours?: number; provider_name?: string }) =>
+    request<{ temp_pin: string; expires_at: string; expires_hours: number; note: string }>(
+      `/properties/${propertyId}/credentials/${id}/generate-temp-code`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+};
+
+// Service Share Links
+export type ServiceShareLink = {
+  token: string;
+  url: string;
+  expires_at: string;
+};
+
+export type PublicServiceView = {
+  service: ServiceOrder & { room_name: string | null; requested_by_name: string };
+  property: { name: string; address: string; city: string; type: string };
+  link: {
+    token: string;
+    expires_at: string;
+    provider_name: string | null;
+    provider_accepted_at: string | null;
+    provider_started_at: string | null;
+    provider_done_at: string | null;
+    notes_from_provider: string | null;
+    share_credentials: boolean;
+  };
+  credentials: Pick<AccessCredential, 'category' | 'label' | 'username' | 'secret' | 'notes'>[];
+};
+
+const PUBLIC_BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') ?? 'http://localhost:8787';
+
+async function publicRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${PUBLIC_BASE}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+    throw new Error((body as { error: string }).error ?? 'Request failed');
+  }
+  return res.json() as Promise<T>;
+}
+
+export const shareApi = {
+  createLink: (propertyId: string, serviceId: string, data?: {
+    expires_hours?: number;
+    provider_name?: string;
+    provider_email?: string;
+    provider_phone?: string;
+    share_credentials?: boolean;
+  }) =>
+    request<ServiceShareLink>(
+      `/properties/${propertyId}/services/${serviceId}/share-link`,
+      { method: 'POST', body: JSON.stringify(data ?? {}) }
+    ),
+
+  getPublic: (token: string) =>
+    publicRequest<PublicServiceView>(`/api/v1/public/share/service/${token}`),
+
+  updateStatus: (token: string, data: { action: 'accept' | 'start' | 'done'; provider_name?: string; notes?: string }) =>
+    publicRequest<{ action: string; updated_at: string }>(
+      `/api/v1/public/share/service/${token}/status`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    ),
+};
+
 // Provider portal
 export const providerApi = {
   services: (params?: { status?: string; cursor?: string }) =>
