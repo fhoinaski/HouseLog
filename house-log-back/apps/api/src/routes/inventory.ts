@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
-import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { uploadToR2, getPublicUrl } from '../lib/r2';
 import type { Bindings, Variables, InventoryItem } from '../lib/types';
 
 const inventory = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -252,11 +252,14 @@ inventory.delete('/:id', async (c) => {
   return ok(c, { success: true });
 });
 
-// ── POST /inventory/:id/photo — upload photo to R2 ───────────────────────────
+// ── POST /properties/:propertyId/inventory/:itemId/photo ─────────────────────
 
-inventory.post('/:id/photo', async (c) => {
+const PHOTO_ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+inventory.post('/:itemId/photo', async (c) => {
   const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const itemId = c.req.param('itemId');
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -265,7 +268,7 @@ inventory.post('/:id/photo', async (c) => {
 
   const item = await c.env.DB
     .prepare('SELECT id FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
+    .bind(itemId, propertyId)
     .first();
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
@@ -273,37 +276,46 @@ inventory.post('/:id/photo', async (c) => {
   const formData = await c.req.formData().catch(() => null);
   if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
 
-  const file = formData.get('file') as File | null;
-  if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
+  const photo = formData.get('photo') as File | null;
+  if (!photo) return err(c, 'Campo "photo" ausente', 'MISSING_FILE', 422);
 
-  const validation = validateUpload(file.type, file.size);
-  if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
+  if (!PHOTO_ALLOWED.has(photo.type)) {
+    return err(c, 'Formato inválido. Use jpg, png ou webp', 'INVALID_FILE_TYPE', 422);
+  }
+  if (photo.size > PHOTO_MAX_BYTES) {
+    return err(c, 'Arquivo excede o limite de 5MB', 'FILE_TOO_LARGE', 422);
+  }
 
-  const key = buildR2Key({ propertyId, category: 'inventory', filename: file.name });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  const ext = photo.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+  const key = `properties/${propertyId}/inventory/${itemId}/${Date.now()}.${ext}`;
 
-  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
+  const buffer = await photo.arrayBuffer();
+  await uploadToR2(c.env.STORAGE, key, buffer, photo.type);
+
+  const photoUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
   await c.env.DB
-    .prepare('UPDATE inventory_items SET photo_url = ? WHERE id = ?')
-    .bind(fileUrl, id)
+    .prepare(`UPDATE inventory_items SET photo_url = ?, updated_at = datetime('now') WHERE id = ?`)
+    .bind(photoUrl, itemId)
     .run();
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'inventory_item', entityId: id, action: 'photo_upload',
-    actorId: userId, newData: { photo_url: fileUrl },
+    entityType: 'inventory_item',
+    entityId: itemId,
+    action: 'PHOTO_UPLOAD',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { photo_url: photoUrl },
   });
 
-  return ok(c, { photo_url: fileUrl });
+  return ok(c, { photo_url: photoUrl });
 });
 
-// ── POST /properties/:propertyId/inventory/:id/qr ────────────────────────────
-// Generate a QR code data URL for the item (links to the app item view)
+// ── POST /properties/:propertyId/inventory/:itemId/qr ────────────────────────
 
-inventory.post('/:id/qr', async (c) => {
+inventory.post('/:itemId/qr', async (c) => {
   const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const itemId = c.req.param('itemId');
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -311,39 +323,29 @@ inventory.post('/:id/qr', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const item = await c.env.DB
-    .prepare('SELECT id, name FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<{ id: string; name: string }>();
+    .prepare('SELECT id FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
+    .bind(itemId, propertyId)
+    .first();
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
-  // QR content is a deep-link URL to the item in the frontend
-  const corsOrigin = c.env.CORS_ORIGIN ?? 'http://localhost:3000';
-  const qrContent = `${corsOrigin}/properties/${propertyId}/inventory?item=${id}`;
+  const qrValue = `houselog://inventory/${itemId}`;
 
-  // Simple SVG QR code generation using Workers (no external lib needed)
-  // We encode the URL as a text QR payload and return it as a dataURL
-  // In production you'd call an external QR service or use a Wasm module
-  const qrPayload = {
-    content: qrContent,
-    item_id: id,
-    item_name: item.name,
-    property_id: propertyId,
-  };
-
-  // Store qr_code on the item
-  const qrCode = btoa(JSON.stringify(qrPayload));
   await c.env.DB
-    .prepare('UPDATE inventory_items SET qr_code = ? WHERE id = ?')
-    .bind(qrCode, id)
+    .prepare(`UPDATE inventory_items SET qr_code = ?, updated_at = datetime('now') WHERE id = ?`)
+    .bind(qrValue, itemId)
     .run();
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'inventory_item', entityId: id, action: 'qr_generate',
-    actorId: userId, newData: { qr_content: qrContent },
+    entityType: 'inventory_item',
+    entityId: itemId,
+    action: 'QR_GENERATED',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { qr_value: qrValue },
   });
 
-  return ok(c, { qr_content: qrContent, qr_code: qrCode });
+  return ok(c, { qr_value: qrValue, item_id: itemId });
 });
 
 export default inventory;

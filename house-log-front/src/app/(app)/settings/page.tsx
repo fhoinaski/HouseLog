@@ -41,29 +41,43 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const { register: regProfile, handleSubmit: handleProfile, formState: { isSubmitting: savingProfile } } = useForm<ProfileForm>({
+  const {
+    register: regProfile,
+    handleSubmit: handleProfile,
+    setError: setProfileError,
+    formState: { isSubmitting: savingProfile, errors: profileErrors },
+  } = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
     defaultValues: { name: user?.name ?? '', phone: user?.phone ?? '' },
   });
 
-  const { register: regPw, handleSubmit: handlePw, reset: resetPw, formState: { errors: pwErrors, isSubmitting: savingPw } } = useForm<PasswordForm>({
+  const {
+    register: regPw,
+    handleSubmit: handlePw,
+    reset: resetPw,
+    setError: setPwError,
+    formState: { errors: pwErrors, isSubmitting: savingPw },
+  } = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
   });
 
   async function onProfileSubmit(data: ProfileForm) {
-    // In a full implementation this would call PUT /auth/profile
-    // For now simulate success
-    void data;
-    await new Promise((r) => setTimeout(r, 500));
-    toast({ title: 'Perfil atualizado', variant: 'success' });
+    try {
+      await authApi.updateProfile(data);
+      toast({ title: 'Perfil atualizado', variant: 'success' });
+    } catch (e) {
+      setProfileError('root', { message: (e as Error).message ?? 'Erro ao atualizar perfil' });
+    }
   }
 
   async function onPasswordSubmit(data: PasswordForm) {
-    void data;
-    // Would call PUT /auth/password
-    await new Promise((r) => setTimeout(r, 500));
-    toast({ title: 'Senha alterada com sucesso', variant: 'success' });
-    resetPw();
+    try {
+      await authApi.changePassword({ currentPassword: data.currentPassword, newPassword: data.newPassword });
+      toast({ title: 'Senha alterada com sucesso', variant: 'success' });
+      resetPw();
+    } catch (e) {
+      setPwError('currentPassword', { message: (e as Error).message ?? 'Erro ao alterar senha' });
+    }
   }
 
   return (
@@ -120,6 +134,9 @@ export default function SettingsPage() {
                   <Input value={user?.email ?? ''} disabled className="opacity-60" />
                   <p className="text-xs text-[var(--muted-foreground)]">O email não pode ser alterado</p>
                 </div>
+                {profileErrors.root && (
+                  <p className="text-xs text-rose-500">{profileErrors.root.message}</p>
+                )}
                 <Button type="submit" loading={savingProfile}>Salvar alterações</Button>
               </form>
             </CardContent>
@@ -138,6 +155,9 @@ export default function SettingsPage() {
                 <div className="space-y-1.5">
                   <Label htmlFor="currentPw">Senha atual</Label>
                   <Input id="currentPw" type="password" {...regPw('currentPassword')} />
+                  {pwErrors.currentPassword && (
+                    <p className="text-xs text-rose-500">{pwErrors.currentPassword.message}</p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="newPw">Nova senha</Label>

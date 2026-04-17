@@ -5,8 +5,9 @@ import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Wrench, ChevronRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plus, Wrench, ChevronRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import { servicesApi, roomsApi, type ServiceOrder } from '@/lib/api';
+import { usePagination } from '@/hooks/usePagination';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -111,10 +112,11 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
   const [detailOpen, setDetailOpen] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const { data, mutate } = useSWR(
-    ['services', id, statusFilter],
-    () => servicesApi.list(id, { status: statusFilter || undefined })
-  );
+  const { data: orders, isLoadingMore, hasMore, loadMore, mutate } =
+    usePagination<ServiceOrder>(
+      `/properties/${id}/services`,
+      statusFilter ? { status: statusFilter } : undefined
+    );
 
   const { data: roomsData } = useSWR(['rooms', id], () => roomsApi.list(id));
 
@@ -122,8 +124,6 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
     resolver: zodResolver(schema),
     defaultValues: { priority: 'normal' },
   });
-
-  const orders = data?.data ?? [];
 
   async function onSubmit(form: FormData) {
     setApiError(null);
@@ -201,11 +201,25 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
           </Button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {orders.map((order) => (
-            <OrderRow key={order.id} order={order} onClick={() => openDetail(order)} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {orders.map((order) => (
+              <OrderRow key={order.id} order={order} onClick={() => openDetail(order)} />
+            ))}
+          </div>
+
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" onClick={loadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Carregar mais'
+                )}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Create dialog */}

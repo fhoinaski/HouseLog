@@ -73,14 +73,51 @@ export async function verifyJwt(token: string, secret: string): Promise<JwtPaylo
   return payload;
 }
 
-export async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return base64url(hash);
+const PBKDF2_ITERATIONS = 100_000;
+
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const computed = await hashPassword(password);
-  return computed === hash;
+async function deriveKey(password: string, saltHex: string): Promise<string> {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const saltBytes = Uint8Array.from(
+    saltHex.match(/.{2}/g)!.map((b) => parseInt(b, 16))
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: saltBytes, iterations: PBKDF2_ITERATIONS },
+    keyMaterial,
+    256
+  );
+  return toHex(derived);
+}
+
+export async function hashPassword(password: string, salt?: string): Promise<string> {
+  const saltHex =
+    salt ??
+    toHex(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
+  const hash = await deriveKey(password, saltHex);
+  return `pbkdf2:${saltHex}:${hash}`;
+}
+
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const parts = stored.split(':');
+  if (parts.length === 3 && parts[0] === 'pbkdf2') {
+    const [, saltHex, expectedHash] = parts as [string, string, string];
+    const derived = await deriveKey(password, saltHex);
+    return derived === expectedHash;
+  }
+  // Legacy SHA-256 (plain base64url) — one-way migration on next login handled in routes
+  const enc = new TextEncoder();
+  const hash = await crypto.subtle.digest('SHA-256', enc.encode(password));
+  return base64url(hash) === stored;
 }

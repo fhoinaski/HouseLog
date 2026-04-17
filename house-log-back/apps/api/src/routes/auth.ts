@@ -24,6 +24,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, 'Nova senha deve ter ao menos 8 caracteres'),
+});
+
 const updateProfileSchema = z.object({
   name: z.string().min(2, 'Nome deve ter ao menos 2 caracteres').optional(),
   phone: z.string().optional(),
@@ -111,10 +116,15 @@ auth.post('/login', async (c) => {
     return err(c, 'Credenciais inválidas', 'INVALID_CREDENTIALS', 401);
   }
 
-  // Update last_login
+  // Migrate legacy SHA-256 hash to PBKDF2 transparently on first login
+  const isLegacy = !user.password_hash.startsWith('pbkdf2:');
+  const updateFields = isLegacy
+    ? `password_hash = ?, last_login = datetime('now')`
+    : `last_login = datetime('now')`;
+  const newHash = isLegacy ? await hashPassword(password) : user.password_hash;
   await c.env.DB
-    .prepare(`UPDATE users SET last_login = datetime('now') WHERE id = ?`)
-    .bind(user.id)
+    .prepare(`UPDATE users SET ${updateFields} WHERE id = ?`)
+    .bind(...(isLegacy ? [newHash, user.id] : [user.id]))
     .run();
 
   const token = await signJwt(
@@ -198,6 +208,49 @@ auth.get('/me', authMiddleware, async (c) => {
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
   return ok(c, { user });
+});
+
+// ── PUT /auth/password ──────────────────────────────────────────────────────
+
+auth.put('/password', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
+
+  const parsed = changePasswordSchema.safeParse(body);
+  if (!parsed.success) {
+    return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  const user = await c.env.DB
+    .prepare('SELECT id, password_hash FROM users WHERE id = ? AND deleted_at IS NULL')
+    .bind(userId)
+    .first<Pick<User, 'id' | 'password_hash'>>();
+
+  if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
+
+  const valid = await verifyPassword(currentPassword, user.password_hash);
+  if (!valid) return err(c, 'Senha atual incorreta', 'INVALID_PASSWORD', 401);
+
+  const newHash = await hashPassword(newPassword);
+
+  await c.env.DB
+    .prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
+    .bind(newHash, userId)
+    .run();
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'user',
+    entityId: userId,
+    action: 'PASSWORD_CHANGE',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+  });
+
+  return ok(c, { message: 'Senha alterada com sucesso' });
 });
 
 // ── PUT /auth/profile ───────────────────────────────────────────────────────

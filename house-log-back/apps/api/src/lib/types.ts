@@ -8,6 +8,7 @@ export type Bindings = {
   JWT_SECRET: string;
   CORS_ORIGIN: string;
   ENVIRONMENT: string;
+  R2_PUBLIC_URL: string;
 };
 
 export type Variables = {
@@ -121,6 +122,10 @@ export type Expense = {
   created_at: string;
   deleted_at: string | null;
 };
+
+// Queue messages
+export type QueueMessage =
+  | { type: 'GENERATE_THUMBNAIL'; r2Key: string; itemId: string; itemType: string };
 
 // Pagination
 export type CursorPage<T> = {

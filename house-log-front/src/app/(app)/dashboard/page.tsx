@@ -3,13 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import useSWR from 'swr';
-import { Plus, Building2, MapPin, Activity, AlertTriangle, Wrench } from 'lucide-react';
-import { propertiesApi, type Property } from '@/lib/api';
+import { Loader2, Plus, Building2, MapPin } from 'lucide-react';
+import { type Property } from '@/lib/api';
+import { usePagination } from '@/hooks/usePagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { cn, scoreColor, scoreBg, PROPERTY_TYPE_LABELS, formatCurrency } from '@/lib/utils';
+import { cn, scoreColor, PROPERTY_TYPE_LABELS } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 
 function HealthScoreRing({ score }: { score: number }) {
@@ -82,12 +82,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
 
-  const { data, isLoading } = useSWR(
-    ['properties', search],
-    () => propertiesApi.list({ search: search || undefined })
-  );
-
-  const properties = data?.data ?? [];
+  const { data: properties, isLoading, isLoadingMore, hasMore, loadMore } =
+    usePagination<Property>('/properties', search ? { search } : undefined);
 
   return (
     <div className="space-y-6">
@@ -138,11 +134,25 @@ export default function DashboardPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {properties.map((p) => (
-            <PropertyCard key={p.id} property={p} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {properties.map((p) => (
+              <PropertyCard key={p.id} property={p} />
+            ))}
+          </div>
+
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" onClick={loadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Carregar mais'
+                )}
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
