@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, Loader2, Plus, Package, Filter, Search, AlertTriangle, QrCode } from 'lucide-react';
+import { Camera, Loader2, Plus, Package, Filter, Search, AlertTriangle, QrCode, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -28,6 +28,7 @@ const schema = z.object({
   unit: z.string().default('un'),
   reserve_qty: z.coerce.number().min(0).default(0),
   price_paid: z.coerce.number().positive().optional().or(z.literal('')),
+  warranty_until: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -96,6 +97,16 @@ function ItemCard({
               <AlertTriangle className="h-3 w-3" />
               Baixo estoque
             </Badge>
+          </div>
+        )}
+        {item.warranty_until && (
+          <div className="absolute top-2 right-2" title={`Garantia até ${item.warranty_until}`}>
+            <div className={cn(
+              'flex h-5 w-5 items-center justify-center rounded-full',
+              new Date(item.warranty_until) < new Date() ? 'bg-rose-500' : 'bg-emerald-500'
+            )}>
+              <ShieldCheck className="h-3 w-3 text-white" />
+            </div>
           </div>
         )}
         {/* QR button */}
@@ -177,6 +188,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       unit: item.unit,
       reserve_qty: item.reserve_qty,
       price_paid: item.price_paid ?? undefined,
+      warranty_until: item.warranty_until ?? undefined,
       notes: item.notes ?? undefined,
     });
     setApiError(null);
@@ -387,6 +399,14 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               <div className="space-y-1.5">
                 <Label htmlFor="price">Preço pago (R$)</Label>
                 <Input id="price" type="number" step="0.01" placeholder="0.00" {...register('price_paid')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="warranty" className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  Garantia até
+                </Label>
+                <Input id="warranty" type="date" {...register('warranty_until')} />
               </div>
             </div>
 

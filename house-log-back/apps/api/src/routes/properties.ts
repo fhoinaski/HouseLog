@@ -342,13 +342,27 @@ properties.get('/:id/dashboard', async (c) => {
     .prepare(
       `SELECT reference_month, SUM(amount) as total, category
        FROM expenses
-       WHERE property_id = ? AND deleted_at IS NULL
+       WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
          AND reference_month >= strftime('%Y-%m', 'now', '-5 months')
        GROUP BY reference_month, category
        ORDER BY reference_month ASC`
     )
     .bind(id)
     .all<{ reference_month: string; total: number; category: string }>();
+
+  // Warranties expiring within 30 days
+  const { results: warrantiesExpiring } = await c.env.DB
+    .prepare(
+      `SELECT id, name, warranty_until,
+              CAST(julianday(warranty_until) - julianday('now') AS INTEGER) as days_left
+       FROM inventory_items
+       WHERE property_id = ? AND deleted_at IS NULL AND warranty_until IS NOT NULL
+         AND julianday(warranty_until) - julianday('now') <= 30
+         AND julianday(warranty_until) - julianday('now') >= 0
+       ORDER BY warranty_until ASC LIMIT 10`
+    )
+    .bind(id)
+    .all<{ id: string; name: string; warranty_until: string; days_left: number }>();
 
   type ExpRow = { total: number; this_month: number };
   type SvcRow = { total: number; requested: number; in_progress: number; done: number; urgent_open: number };
@@ -366,6 +380,7 @@ properties.get('/:id/dashboard', async (c) => {
     services: svc,
     inventory: inv,
     monthly_expenses: monthlyExpenses,
+    warranties_expiring: warrantiesExpiring,
   });
 });
 

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Building2, MapPin, Ruler, Calendar, Activity,
   Wrench, Package, FileText, BarChart3,
-  CheckCircle2, Clock, Home, RefreshCw, Pencil, GitBranch,
+  CheckCircle2, Clock, Home, RefreshCw, Pencil, GitBranch, ShieldCheck, ShieldAlert,
 } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -160,6 +160,43 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             alert={d.inventory.low_stock > 0}
           />
         </div>
+      )}
+
+      {/* Warranties expiring card */}
+      {d?.warranties_expiring && d.warranties_expiring.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ShieldAlert className="h-4 w-4 text-amber-500" />
+              Garantias a Vencer (30 dias)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 pt-0">
+            <div className="space-y-2">
+              {d.warranties_expiring.map((w) => (
+                <Link
+                  key={w.id}
+                  href={`/properties/${id}/inventory`}
+                  className="flex items-center justify-between rounded-lg border border-amber-200 bg-white px-3 py-2 hover:bg-amber-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck className={cn(
+                      'h-4 w-4 flex-shrink-0',
+                      w.days_left <= 7 ? 'text-rose-500' : 'text-amber-500'
+                    )} />
+                    <span className="text-sm font-medium truncate">{w.name}</span>
+                  </div>
+                  <span className={cn(
+                    'text-xs font-medium ml-3 flex-shrink-0',
+                    w.days_left <= 7 ? 'text-rose-500' : 'text-amber-600'
+                  )}>
+                    {w.days_left === 0 ? 'Vence hoje' : `${w.days_left}d`}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Property details */}

@@ -455,4 +455,39 @@ services.delete('/:id', async (c) => {
   return ok(c, { success: true });
 });
 
+// ── PATCH /properties/:propertyId/services/:id/checklist ─────────────────────
+
+services.patch('/:id/checklist', async (c) => {
+  const { propertyId, id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const body = await c.req.json<{ checklist: { item: string; done: boolean }[] }>().catch(() => null);
+  if (!body?.checklist || !Array.isArray(body.checklist)) {
+    return err(c, 'Checklist inválido', 'INVALID_BODY');
+  }
+
+  const order = await c.env.DB
+    .prepare('SELECT id FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
+    .bind(id, propertyId)
+    .first<{ id: string }>();
+
+  if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
+
+  const sanitized = body.checklist.map((item) => ({
+    item: String(item.item ?? '').slice(0, 200),
+    done: Boolean(item.done),
+  }));
+
+  await c.env.DB
+    .prepare(`UPDATE service_orders SET checklist = ? WHERE id = ?`)
+    .bind(JSON.stringify(sanitized), id)
+    .run();
+
+  return ok(c, { checklist: sanitized });
+});
+
 export default services;
