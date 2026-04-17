@@ -24,6 +24,11 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const updateProfileSchema = z.object({
+  name: z.string().min(2, 'Nome deve ter ao menos 2 caracteres').optional(),
+  phone: z.string().optional(),
+});
+
 // ── POST /auth/register ─────────────────────────────────────────────────────
 
 auth.post('/register', async (c) => {
@@ -193,6 +198,60 @@ auth.get('/me', authMiddleware, async (c) => {
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
   return ok(c, { user });
+});
+
+// ── PUT /auth/profile ───────────────────────────────────────────────────────
+
+auth.put('/profile', authMiddleware, async (c) => {
+  const userId = c.get('userId');
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
+
+  const parsed = updateProfileSchema.safeParse(body);
+  if (!parsed.success) {
+    return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+  }
+
+  const { name, phone } = parsed.data;
+  if (name === undefined && phone === undefined) {
+    return err(c, 'Nenhum campo para atualizar', 'EMPTY_BODY', 400);
+  }
+
+  const current = await c.env.DB
+    .prepare('SELECT id, name, email, phone, role FROM users WHERE id = ? AND deleted_at IS NULL')
+    .bind(userId)
+    .first<Pick<User, 'id' | 'name' | 'email' | 'phone' | 'role'>>();
+
+  if (!current) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
+
+  const updatedName = name ?? current.name;
+  const updatedPhone = phone ?? current.phone;
+
+  await c.env.DB
+    .prepare(`UPDATE users SET name = ?, phone = ?, updated_at = datetime('now') WHERE id = ?`)
+    .bind(updatedName, updatedPhone ?? null, userId)
+    .run();
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'user',
+    entityId: userId,
+    action: 'UPDATE',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    oldData: { name: current.name, phone: current.phone },
+    newData: { name: updatedName, phone: updatedPhone },
+  });
+
+  return ok(c, {
+    user: {
+      id: current.id,
+      name: updatedName,
+      email: current.email,
+      phone: updatedPhone ?? null,
+      role: current.role,
+    },
+  });
 });
 
 export default auth;
