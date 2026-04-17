@@ -3,17 +3,17 @@
 /* ── HouseLog Design System ──────────────────────────────────────────────── */
 
 @theme inline {
-  /* Brand — azul industrial */
-  --color-primary-50:  #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+  /* Brand — Indigo premium */
+  --color-primary-50:  #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+  --color-primary-900: #312e81;
 
   /* Amber — construção */
   --color-amber-50:  #fffbeb;
@@ -21,6 +21,7 @@
   --color-amber-400: #fbbf24;
   --color-amber-500: #f59e0b;
   --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
 
   /* Emerald — sucesso */
   --color-emerald-50:  #ecfdf5;
@@ -31,6 +32,7 @@
 
   /* Rose — urgência */
   --color-rose-50:  #fff1f2;
+  --color-rose-100: #ffe4e6;
   --color-rose-400: #fb7185;
   --color-rose-500: #f43f5e;
   --color-rose-600: #e11d48;
@@ -41,7 +43,20 @@
   --color-violet-500: #8b5cf6;
   --color-violet-600: #7c3aed;
 
-  /* Slate — base neutra */
+  /* Zinc — neutros (substituindo slate) */
+  --color-zinc-50:  #fafafa;
+  --color-zinc-100: #f4f4f5;
+  --color-zinc-200: #e4e4e7;
+  --color-zinc-300: #d4d4d8;
+  --color-zinc-400: #a1a1aa;
+  --color-zinc-500: #71717a;
+  --color-zinc-600: #52525b;
+  --color-zinc-700: #3f3f46;
+  --color-zinc-800: #27272a;
+  --color-zinc-900: #18181b;
+  --color-zinc-950: #09090b;
+
+  /* Slate — mantido para compatibilidade */
   --color-slate-50:  #f8fafc;
   --color-slate-100: #f1f5f9;
   --color-slate-200: #e2e8f0;
@@ -72,40 +87,56 @@
   --radius:    0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
 }
 
 /* ── Light ───────────────────────────────────────────────────────────────── */
 :root {
-  --background:       #f8fafc;
-  --foreground:       #0f172a;
-  --muted:            #f1f5f9;
-  --muted-foreground: #64748b;
-  --border:           #e2e8f0;
+  --background:       #f9fafb;
+  --foreground:       #111827;
+  --muted:            #f3f4f6;
+  --muted-foreground: #6b7280;
+  --border:           #e5e7eb;
   --card:             #ffffff;
-  --card-foreground:  #0f172a;
+  --card-foreground:  #111827;
+  --sidebar-bg:       #0d1117;
+  --sidebar-border:   rgba(255,255,255,0.06);
+  --sidebar-active:   rgba(79,70,229,0.15);
+  --sidebar-active-border: #6366f1;
+  --shadow-color:     rgba(0,0,0,0.06);
 }
 
 /* ── Dark ────────────────────────────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background:       #0f172a;
-    --foreground:       #f1f5f9;
-    --muted:            #1e293b;
-    --muted-foreground: #94a3b8;
-    --border:           #334155;
-    --card:             #1e293b;
-    --card-foreground:  #f1f5f9;
+    --background:       #09090b;
+    --foreground:       #fafafa;
+    --muted:            #18181b;
+    --muted-foreground: #a1a1aa;
+    --border:           #27272a;
+    --card:             #18181b;
+    --card-foreground:  #fafafa;
+    --sidebar-bg:       #0a0a0c;
+    --sidebar-border:   rgba(255,255,255,0.05);
+    --sidebar-active:   rgba(99,102,241,0.18);
+    --sidebar-active-border: #818cf8;
+    --shadow-color:     rgba(0,0,0,0.4);
   }
 }
 
 .dark {
-  --background:       #0f172a;
-  --foreground:       #f1f5f9;
-  --muted:            #1e293b;
-  --muted-foreground: #94a3b8;
-  --border:           #334155;
-  --card:             #1e293b;
-  --card-foreground:  #f1f5f9;
+  --background:       #09090b;
+  --foreground:       #fafafa;
+  --muted:            #18181b;
+  --muted-foreground: #a1a1aa;
+  --border:           #27272a;
+  --card:             #18181b;
+  --card-foreground:  #fafafa;
+  --sidebar-bg:       #0a0a0c;
+  --sidebar-border:   rgba(255,255,255,0.05);
+  --sidebar-active:   rgba(99,102,241,0.18);
+  --sidebar-active-border: #818cf8;
+  --shadow-color:     rgba(0,0,0,0.4);
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -116,4 +147,59 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+
+/* ── Focus ───────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255,255,255,0.7);
+}
+.dark .glass {
+  background: rgba(24,24,27,0.8);
+}
+
+.gradient-primary {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #4f46e5, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 4px 20px var(--shadow-color);
+  transform: translateY(-1px);
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.2s ease both; }
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in { animation: slide-in-left 0.15s ease both; }
