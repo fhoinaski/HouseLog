@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Building2, LayoutDashboard, Package, Wrench, FileText,
-  BarChart3, Settings, LogOut, Menu, X, Home, RefreshCw, Activity, Search,
+  BarChart3, Settings, LogOut, Menu, X, Home, RefreshCw, Activity, Search, Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
@@ -25,6 +25,7 @@ const PROPERTY_NAV = (id: string) => [
   { href: `/properties/${id}/maintenance`, label: 'Manutenção',  icon: RefreshCw },
   { href: `/properties/${id}/documents`,   label: 'Documentos',  icon: FileText },
   { href: `/properties/${id}/financial`,   label: 'Financeiro',  icon: BarChart3 },
+  { href: `/properties/${id}/team`,        label: 'Equipe',      icon: Users },
   { href: `/properties/${id}/report`,      label: 'Relatório',   icon: Activity },
 ];
 

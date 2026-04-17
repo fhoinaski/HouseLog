@@ -86,9 +86,18 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
   const { propertyId } = c.req.param();
   const userId = c.get('userId');
 
-  const property = await c.env.DB.prepare(
-    `SELECT id FROM properties WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
-  ).bind(propertyId, userId, userId).first();
+  // Owner, manager_id, or collaborator with role='manager' can view team
+  const property = await c.env.DB.prepare(`
+    SELECT p.id FROM properties p
+    WHERE p.id = ? AND p.deleted_at IS NULL
+      AND (
+        p.owner_id = ? OR p.manager_id = ?
+        OR EXISTS (
+          SELECT 1 FROM property_collaborators
+          WHERE property_id = p.id AND user_id = ? AND role = 'manager'
+        )
+      )
+  `).bind(propertyId, userId, userId, userId).first();
   if (!property) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const { results } = await c.env.DB.prepare(`
@@ -100,11 +109,12 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
   `).bind(propertyId).all();
 
   const { results: collaborators } = await c.env.DB.prepare(`
-    SELECT pc.*, u.name, u.email, u.phone
+    SELECT pc.id, pc.user_id, pc.role, pc.can_open_os, pc.created_at,
+           u.name, u.email, u.phone, u.avatar_url
     FROM property_collaborators pc
     JOIN users u ON u.id = pc.user_id
     WHERE pc.property_id = ?
-    ORDER BY pc.created_at DESC
+    ORDER BY pc.role ASC, u.name ASC
   `).bind(propertyId).all();
 
   return ok(c, { invites: results, collaborators });
@@ -169,16 +179,19 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
 
   if (!invite) return err(c, 'Convite inválido ou expirado', 'INVALID_TOKEN', 404);
 
+  // Managers get can_open_os = 1 by default; providers/viewers start at 0
+  const defaultCanOpenOs = invite.role === 'manager' ? 1 : 0;
   const collabId = nanoid();
   try {
     await c.env.DB.prepare(
-      `INSERT INTO property_collaborators (id, property_id, user_id, role, invited_by) VALUES (?, ?, ?, ?, (SELECT invited_by FROM property_invites WHERE token = ?))`
-    ).bind(collabId, invite.property_id, userId, invite.role, token).run();
+      `INSERT INTO property_collaborators (id, property_id, user_id, role, can_open_os, invited_by)
+       VALUES (?, ?, ?, ?, ?, (SELECT invited_by FROM property_invites WHERE token = ?))`
+    ).bind(collabId, invite.property_id, userId, invite.role, defaultCanOpenOs, token).run();
   } catch {
-    // Already a collaborator — update role
+    // Already a collaborator — update role and reset can_open_os
     await c.env.DB.prepare(
-      `UPDATE property_collaborators SET role = ? WHERE property_id = ? AND user_id = ?`
-    ).bind(invite.role, invite.property_id, userId).run();
+      `UPDATE property_collaborators SET role = ?, can_open_os = ? WHERE property_id = ? AND user_id = ?`
+    ).bind(invite.role, defaultCanOpenOs, invite.property_id, userId).run();
   }
 
   await c.env.DB.prepare(
@@ -186,6 +199,61 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
   ).bind(token).run();
 
   return ok(c, { success: true, property_id: invite.property_id, role: invite.role });
+});
+
+// ── PATCH /properties/:propertyId/collaborators/:collabId — update permissions ─
+
+invites.patch('/properties/:propertyId/collaborators/:collabId', authMiddleware, async (c) => {
+  const { propertyId, collabId } = c.req.param();
+  const userId = c.get('userId');
+
+  // Only the property owner can change permissions
+  const property = await c.env.DB.prepare(
+    `SELECT id FROM properties WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`
+  ).bind(propertyId, userId).first();
+  if (!property) return err(c, 'Apenas o proprietário pode alterar permissões', 'FORBIDDEN', 403);
+
+  const body = await c.req.json().catch(() => null);
+  if (!body || typeof body !== 'object') return err(c, 'Body inválido', 'INVALID_BODY');
+
+  const { can_open_os } = body as { can_open_os?: boolean };
+  if (typeof can_open_os !== 'boolean') return err(c, 'can_open_os obrigatório', 'VALIDATION_ERROR', 422);
+
+  const collab = await c.env.DB.prepare(
+    `SELECT id FROM property_collaborators WHERE id = ? AND property_id = ?`
+  ).bind(collabId, propertyId).first();
+  if (!collab) return err(c, 'Colaborador não encontrado', 'NOT_FOUND', 404);
+
+  await c.env.DB.prepare(
+    `UPDATE property_collaborators SET can_open_os = ? WHERE id = ?`
+  ).bind(can_open_os ? 1 : 0, collabId).run();
+
+  return ok(c, { success: true });
+});
+
+// ── DELETE /properties/:propertyId/collaborators/:collabId — remove collaborator
+
+invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware, async (c) => {
+  const { propertyId, collabId } = c.req.param();
+  const userId = c.get('userId');
+
+  // Owner can remove anyone; a collaborator can remove themselves
+  const property = await c.env.DB.prepare(
+    `SELECT owner_id FROM properties WHERE id = ? AND deleted_at IS NULL`
+  ).bind(propertyId).first<{ owner_id: string }>();
+  if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
+
+  const collab = await c.env.DB.prepare(
+    `SELECT id, user_id FROM property_collaborators WHERE id = ? AND property_id = ?`
+  ).bind(collabId, propertyId).first<{ id: string; user_id: string }>();
+  if (!collab) return err(c, 'Colaborador não encontrado', 'NOT_FOUND', 404);
+
+  const isOwner = property.owner_id === userId;
+  const isSelf = collab.user_id === userId;
+  if (!isOwner && !isSelf) return err(c, 'Sem permissão para remover este colaborador', 'FORBIDDEN', 403);
+
+  await c.env.DB.prepare(`DELETE FROM property_collaborators WHERE id = ?`).bind(collabId).run();
+  return ok(c, { success: true });
 });
 
 export default invites;

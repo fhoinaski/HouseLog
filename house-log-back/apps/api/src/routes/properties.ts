@@ -31,52 +31,37 @@ const updateSchema = createSchema.partial().extend({
 });
 
 // ── GET /properties ─────────────────────────────────────────────────────────
+// All users (including admin) only see properties they own, manage, or are
+// collaborators on. Admins no longer have a blanket "see all" view.
 
 properties.get('/', async (c) => {
   const userId = c.get('userId');
-  const role = c.get('userRole');
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
   const cursor = c.req.query('cursor');
   const search = c.req.query('search');
 
-  let query: string;
-  let bindings: unknown[];
+  // Single query for all roles: owner_id, manager_id, or collaborator
+  const query = `
+    SELECT p.*, u.name as owner_name, u.email as owner_email
+    FROM properties p
+    JOIN users u ON u.id = p.owner_id
+    WHERE p.deleted_at IS NULL
+      AND (
+        p.owner_id = ? OR p.manager_id = ?
+        OR EXISTS (
+          SELECT 1 FROM property_collaborators
+          WHERE property_id = p.id AND user_id = ?
+        )
+      )
+    ${search ? "AND (p.name LIKE ? OR p.city LIKE ?)" : ''}
+    ${cursor ? "AND p.created_at < ?" : ''}
+    ORDER BY p.created_at DESC LIMIT ?
+  `;
 
-  if (role === 'admin') {
-    query = `
-      SELECT p.*, u.name as owner_name, u.email as owner_email
-      FROM properties p
-      JOIN users u ON u.id = p.owner_id
-      WHERE p.deleted_at IS NULL
-      ${search ? "AND (p.name LIKE ? OR p.city LIKE ?)" : ''}
-      ${cursor ? "AND p.created_at < ?" : ''}
-      ORDER BY p.created_at DESC LIMIT ?
-    `;
-    bindings = search
-      ? cursor
-        ? [`%${search}%`, `%${search}%`, cursor, limit + 1]
-        : [`%${search}%`, `%${search}%`, limit + 1]
-      : cursor
-        ? [cursor, limit + 1]
-        : [limit + 1];
-  } else {
-    query = `
-      SELECT p.*, u.name as owner_name, u.email as owner_email
-      FROM properties p
-      JOIN users u ON u.id = p.owner_id
-      WHERE p.deleted_at IS NULL AND (p.owner_id = ? OR p.manager_id = ?)
-      ${search ? "AND (p.name LIKE ? OR p.city LIKE ?)" : ''}
-      ${cursor ? "AND p.created_at < ?" : ''}
-      ORDER BY p.created_at DESC LIMIT ?
-    `;
-    bindings = search
-      ? cursor
-        ? [userId, userId, `%${search}%`, `%${search}%`, cursor, limit + 1]
-        : [userId, userId, `%${search}%`, `%${search}%`, limit + 1]
-      : cursor
-        ? [userId, userId, cursor, limit + 1]
-        : [userId, userId, limit + 1];
-  }
+  const bindings: unknown[] = [userId, userId, userId];
+  if (search) bindings.push(`%${search}%`, `%${search}%`);
+  if (cursor) bindings.push(cursor);
+  bindings.push(limit + 1);
 
   const { results } = await c.env.DB
     .prepare(query)
@@ -382,6 +367,32 @@ properties.get('/:id/dashboard', async (c) => {
     monthly_expenses: monthlyExpenses,
     warranties_expiring: warrantiesExpiring,
   });
+});
+
+// ── GET /properties/:id/providers ────────────────────────────────────────────
+// Returns collaborators with role='provider' — used to populate the OS assignment dropdown.
+
+properties.get('/:id/providers', async (c) => {
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT pc.id as collab_id, pc.user_id, pc.role, pc.can_open_os,
+           u.name, u.email, u.phone, u.avatar_url
+    FROM property_collaborators pc
+    JOIN users u ON u.id = pc.user_id
+    WHERE pc.property_id = ? AND pc.role = 'provider'
+    ORDER BY u.name ASC
+  `).bind(id).all<{
+    collab_id: string; user_id: string; role: string; can_open_os: number;
+    name: string; email: string; phone: string | null; avatar_url: string | null;
+  }>();
+
+  return ok(c, { providers: results });
 });
 
 // ── POST /properties/:id/apply-template ──────────────────────────────────────
