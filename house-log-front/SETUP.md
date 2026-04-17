@@ -2,6 +2,15 @@
 
 Passo a passo para criar todos os recursos na Cloudflare e rodar o projeto localmente e em produção.
 
+## Estrutura do repositório
+
+```
+HouseLog/
+├── house-log-front/   ← Next.js 16 (frontend)
+└── house-log-back/
+    └── apps/api/      ← Cloudflare Workers + Hono (backend)
+```
+
 ---
 
 ## Pré-requisitos
@@ -22,95 +31,96 @@ wrangler login
 
 ## 1. Banco de Dados — D1 (SQLite)
 
-### 1.1 Criar o banco
+### 1.1 Criar os bancos
 
 ```bash
+# Banco de produção
 wrangler d1 create houselog-db
+
+# Banco de desenvolvimento (já criado — ID real no wrangler.toml)
+wrangler d1 create houselog-db-dev
 ```
 
-O comando retorna algo como:
-```
-✅ Successfully created DB 'houselog-db'
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-```
-
-### 1.2 Copiar o ID no wrangler.toml
-
-Abra `apps/api/wrangler.toml` e substitua `REPLACE_WITH_YOUR_D1_DATABASE_ID` pelo ID retornado:
+Cada comando retorna um `database_id`. Abra `house-log-back/apps/api/wrangler.toml` e substitua os placeholders:
 
 ```toml
+# Produção
 [[d1_databases]]
-binding = "DB"
-database_name = "houselog-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # ← aqui
+database_id = "COLE_AQUI_O_ID_DA_PRODUCAO_QUANDO_CRIAR"  # ← aqui
 
-[[env.development.d1_databases]]
-binding = "DB"
-database_name = "houselog-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # ← e aqui também
+# Dev
+[[env.dev.d1_databases]]
+database_id = "SEU_ID_DEV_AQUI"                           # ← e aqui
 ```
 
-### 1.3 Rodar as migrations
+### 1.2 Rodar as migrations
 
 ```bash
-cd apps/api
+cd house-log-back/apps/api
 
-# Banco local (para dev sem internet — recomendado para desenvolvimento)
+# Dev local (offline, sem internet — para desenvolvimento)
 npm run db:migrate:local
-# equivalente a: wrangler d1 migrations apply houselog-db --local
+# equivale a: wrangler d1 migrations apply houselog-db-dev --local
 
-# Banco remoto (produção / staging na Cloudflare)
+# Dev remoto (banco dev na Cloudflare)
+npm run db:migrate:dev
+# equivale a: wrangler d1 migrations apply houselog-db-dev --env dev
+
+# Produção
 npm run db:migrate
-# equivalente a: wrangler d1 migrations apply houselog-db
+# equivale a: wrangler d1 migrations apply houselog-db
 ```
 
-### 1.4 Verificar as tabelas
+### 1.3 Verificar as tabelas
 
 ```bash
-# Listar tabelas no banco local
-wrangler d1 execute houselog-db --local --command "SELECT name FROM sqlite_master WHERE type='table'"
+# Banco local
+wrangler d1 execute houselog-db-dev --local \
+  --command "SELECT name FROM sqlite_master WHERE type='table'"
 
-# Listar tabelas no banco remoto
-wrangler d1 execute houselog-db --command "SELECT name FROM sqlite_master WHERE type='table'"
+# Banco remoto dev
+wrangler d1 execute houselog-db-dev --env dev \
+  --command "SELECT name FROM sqlite_master WHERE type='table'"
 ```
 
-Deve retornar:
-```
-users, properties, rooms, inventory_items, service_orders,
-audit_links, documents, expenses, maintenance_schedules, audit_log
-```
+Esperado: `users, properties, rooms, inventory_items, service_orders, audit_links, documents, expenses, maintenance_schedules, audit_log`
 
 ---
 
 ## 2. Armazenamento de Arquivos — R2
 
-### 2.1 Criar o bucket
+### 2.1 Criar os buckets
 
 ```bash
-# Bucket de produção
+# Produção
 wrangler r2 bucket create houselog-assets
 
-# Bucket de preview (para wrangler dev)
+# Dev
 wrangler r2 bucket create houselog-assets-dev
 ```
 
-O `wrangler.toml` já referencia esses nomes no binding — não é necessário copiar nenhum ID para R2, apenas garantir que os nomes batem:
+O `wrangler.toml` já referencia esses nomes — não é necessário copiar nenhum ID para R2.
 
 ```toml
+# Produção
 [[r2_buckets]]
 binding    = "STORAGE"
-bucket_name         = "houselog-assets"       # produção
-preview_bucket_name = "houselog-assets-dev"   # dev local
+bucket_name = "houselog-assets"
+
+# Dev
+[[env.dev.r2_buckets]]
+binding    = "STORAGE"
+bucket_name = "houselog-assets-dev"
 ```
 
-### 2.2 Configurar CORS no bucket (para upload direto do frontend)
+### 2.2 Configurar CORS no bucket
 
-Crie o arquivo `apps/api/r2-cors.json`:
+Crie `house-log-back/apps/api/r2-cors.json`:
 
 ```json
 [
   {
-    "AllowedOrigins": ["http://localhost:3000", "https://houselog.vercel.app"],
+    "AllowedOrigins": ["http://localhost:3000", "https://house-log.vercel.app"],
     "AllowedMethods": ["GET", "PUT", "POST", "DELETE"],
     "AllowedHeaders": ["*"],
     "MaxAgeSeconds": 3600
@@ -119,88 +129,73 @@ Crie o arquivo `apps/api/r2-cors.json`:
 ```
 
 Aplique:
-
 ```bash
-wrangler r2 bucket cors put houselog-assets --file apps/api/r2-cors.json
+wrangler r2 bucket cors put houselog-assets     --file house-log-back/apps/api/r2-cors.json
+wrangler r2 bucket cors put houselog-assets-dev --file house-log-back/apps/api/r2-cors.json
 ```
 
 ---
 
-## 3. Cache / Rate Limiting — KV (Workers KV)
+## 3. Cache / Rate Limiting — KV
 
 ### 3.1 Criar o namespace
 
 ```bash
-# Namespace de produção
+# Produção
 wrangler kv namespace create "houselog-kv"
 
-# Namespace de preview (para wrangler dev)
+# Dev (preview)
 wrangler kv namespace create "houselog-kv" --preview
 ```
 
-Cada comando retorna um `id`. Copie ambos no `wrangler.toml`:
+Copie os IDs retornados no `wrangler.toml`:
 
 ```toml
+# Produção
 [[kv_namespaces]]
-binding    = "KV"
-id         = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"          # ← id de produção
-preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"          # ← id de preview
+binding = "KV"
+id      = "ID_PRODUCAO_AQUI"
 
-[[env.development.kv_namespaces]]
-binding    = "KV"
-id         = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-preview_id = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+# Dev
+[[env.dev.kv_namespaces]]
+binding = "KV"
+id      = "ID_DEV_AQUI"     # ← já preenchido no arquivo
 ```
 
 ---
 
-## 4. Filas — Queues (Workers Queues)
-
-### 4.1 Criar a fila
+## 4. Filas — Queues
 
 ```bash
 wrangler queues create houselog-jobs
 ```
 
-O `wrangler.toml` já tem o binding configurado com esse nome — nada mais a fazer.
-
-```toml
-[[queues.producers]]
-binding = "QUEUE"
-queue   = "houselog-jobs"
-
-[[queues.consumers]]
-queue             = "houselog-jobs"
-max_batch_size    = 10
-max_batch_timeout = 30
-```
+O `wrangler.toml` já tem o binding configurado com esse nome.
 
 ---
 
 ## 5. Workers AI
 
-Não requer criação manual — o binding `[ai]` é ativado automaticamente na sua conta Cloudflare quando o wrangler.toml contém:
+Não requer criação manual. O binding `[ai]` é ativado automaticamente:
 
 ```toml
 [ai]
 binding = "AI"
 ```
 
-> **Atenção:** Workers AI tem custo por token. Em dev, prefira mockar ou só testar o OCR em produção.
+> **Atenção:** Workers AI tem custo por token. Em dev, o OCR de notas fiscais só funciona apontando para o ambiente remoto da Cloudflare.
 
 ---
 
 ## 6. Secrets do Worker
 
-As variáveis secretas **nunca** entram no `wrangler.toml`. São configuradas de duas formas:
-
 ### 6.1 Desenvolvimento local — `.dev.vars`
 
 ```bash
-cp apps/api/.dev.vars.example apps/api/.dev.vars
+cp house-log-back/apps/api/.dev.vars.example house-log-back/apps/api/.dev.vars
 ```
 
-Edite `apps/api/.dev.vars`:
+Edite `house-log-back/apps/api/.dev.vars`:
 
 ```dotenv
 JWT_SECRET=cole-aqui-uma-string-aleatoria-de-48-bytes
@@ -216,8 +211,9 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ### 6.2 Produção — `wrangler secret`
 
 ```bash
-# Executa interativamente — digite o valor e pressione Enter
+cd house-log-back/apps/api
 wrangler secret put JWT_SECRET
+# Digite o valor e pressione Enter
 ```
 
 ---
@@ -225,109 +221,129 @@ wrangler secret put JWT_SECRET
 ## 7. Frontend — Next.js
 
 ```bash
-cp .env.local.example .env.local
+cp house-log-front/.env.local.example house-log-front/.env.local
 ```
 
-Edite `.env.local`:
+Edite `house-log-front/.env.local`:
 
 ```dotenv
-# Em desenvolvimento local (wrangler dev rodando na 8787)
+# Dev local (wrangler dev na porta 8787)
 NEXT_PUBLIC_API_URL=http://localhost:8787/api/v1
 
-# Em produção (substitua pelo URL real do seu Worker)
+# Dev remoto (Worker dev na Cloudflare)
+# NEXT_PUBLIC_API_URL=https://houselog-api-dev.SEU-SUBDOMAIN.workers.dev/api/v1
+
+# Produção
 # NEXT_PUBLIC_API_URL=https://houselog-api.SEU-SUBDOMAIN.workers.dev/api/v1
 ```
 
 ---
 
-## 8. Rodar localmente (tudo junto)
+## 8. Instalar dependências
+
+```bash
+# Frontend
+cd house-log-front && npm install
+
+# Backend
+cd house-log-back/apps/api && npm install
+```
+
+---
+
+## 9. Rodar localmente
 
 ### Terminal 1 — Worker (API)
 
 ```bash
-cd apps/api
+cd house-log-back/apps/api
 npm run dev
-# Inicia em http://localhost:8787
-# Usa banco D1 local, R2 local (simulado), .dev.vars
+# → http://localhost:8787
+# Usa banco D1 local, R2 local simulado, .dev.vars
 ```
 
 ### Terminal 2 — Next.js (Frontend)
 
 ```bash
-# Na raiz do projeto
+cd house-log-front
 npm run dev
-# Inicia em http://localhost:3000
+# → http://localhost:3000
 ```
 
 ---
 
-## 9. Deploy em produção
+## 10. Deploy em produção
 
-### 9.1 Deploy do Worker
+### Backend
 
 ```bash
-cd apps/api
+cd house-log-back/apps/api
 
-# Rodar migrations no banco remoto primeiro
+# Aplicar migrations no banco remoto
 npm run db:migrate
 
-# Fazer deploy
+# Deploy
 npm run deploy
-# equivalente a: wrangler deploy
+# → https://houselog-api.SEU-SUBDOMAIN.workers.dev
 ```
 
-O Worker fica disponível em:
-`https://houselog-api.<seu-subdomain>.workers.dev`
-
-### 9.2 Deploy do Next.js (Vercel)
+### Frontend (Vercel)
 
 ```bash
-# Via CLI
+cd house-log-front
 npx vercel deploy --prod
 
 # Ou conecte o repositório no painel da Vercel e configure:
-# Environment Variable: NEXT_PUBLIC_API_URL = https://houselog-api.<subdomain>.workers.dev/api/v1
+# Build Command:  cd house-log-front && npm run build
+# Root Directory: house-log-front
+# Environment:    NEXT_PUBLIC_API_URL = https://houselog-api.<subdomain>.workers.dev/api/v1
 ```
 
 ---
 
-## 10. Checklist final
+## 11. Checklist final
 
 ```
 [ ] wrangler login
-[ ] D1 criado → ID copiado no wrangler.toml (2 lugares)
-[ ] Migrations aplicadas localmente (--local)
-[ ] R2 bucket criado (produção + preview)
-[ ] KV namespace criado → IDs copiados no wrangler.toml (id + preview_id)
-[ ] Queue criada
-[ ] apps/api/.dev.vars preenchido com JWT_SECRET forte
-[ ] .env.local preenchido com NEXT_PUBLIC_API_URL
-[ ] wrangler dev rodando na porta 8787
-[ ] next dev rodando na porta 3000
-[ ] POST /api/v1/auth/register funciona → retorna token JWT
+[ ] D1 prod criado → ID no wrangler.toml
+[ ] D1 dev criado  → ID no wrangler.toml  (ou usar o já existente)
+[ ] Migrations aplicadas: npm run db:migrate:local
+[ ] R2 buckets criados: houselog-assets + houselog-assets-dev
+[ ] KV namespace criado → IDs no wrangler.toml
+[ ] Queue criada: houselog-jobs
+[ ] house-log-back/apps/api/.dev.vars preenchido com JWT_SECRET forte
+[ ] house-log-front/.env.local com NEXT_PUBLIC_API_URL
+[ ] npm install em house-log-front/
+[ ] npm install em house-log-back/apps/api/
+[ ] wrangler dev rodando na 8787
+[ ] next dev rodando na 3000
+[ ] POST /api/v1/auth/register retorna token JWT ✓
 ```
 
 ---
 
-## Referência rápida — comandos úteis
+## Referência rápida
 
 ```bash
-# Ver todos os recursos criados na sua conta
+# Listar recursos criados na conta
 wrangler d1 list
 wrangler r2 bucket list
 wrangler kv namespace list
 wrangler queues list
 
 # Consultar banco local durante dev
-wrangler d1 execute houselog-db --local --command "SELECT * FROM users"
+wrangler d1 execute houselog-db-dev --local --command "SELECT * FROM users"
 
-# Consultar banco remoto
-wrangler d1 execute houselog-db --command "SELECT * FROM users"
+# Consultar banco remoto dev
+wrangler d1 execute houselog-db-dev --env dev --command "SELECT * FROM users"
 
-# Ver logs do Worker em produção (tail)
+# Logs em tempo real do Worker (produção)
 wrangler tail houselog-api
 
-# Recriar banco local do zero (útil para testar migrations)
-rm -rf .wrangler/state/v3/d1
-npm run db:migrate:local
+# Logs do Worker dev
+wrangler tail houselog-api-dev
+
+# Recriar banco local do zero
+rm -rf house-log-back/apps/api/.wrangler/state/v3/d1
+cd house-log-back/apps/api && npm run db:migrate:local
 ```

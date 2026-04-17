@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev --env development",
+    "dev": "wrangler dev --env dev",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
+    "deploy:dev": "wrangler deploy --env dev",
     "db:migrate": "wrangler d1 migrations apply houselog-db",
-    "db:migrate:local": "wrangler d1 migrations apply houselog-db --local",
+    "db:migrate:dev": "wrangler d1 migrations apply houselog-db-dev --env dev",
+    "db:migrate:local": "wrangler d1 migrations apply houselog-db-dev --local",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
