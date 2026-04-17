@@ -44,12 +44,12 @@ inventory.get('/', async (c) => {
   const category = c.req.query('category');
   const roomId = c.req.query('room_id');
 
-  const conditions: string[] = ['property_id = ?', 'deleted_at IS NULL'];
+  const conditions: string[] = ['i.property_id = ?', 'i.deleted_at IS NULL'];
   const bindings: unknown[] = [propertyId];
 
-  if (category) { conditions.push('category = ?'); bindings.push(category); }
-  if (roomId)   { conditions.push('room_id = ?');   bindings.push(roomId); }
-  if (cursor)   { conditions.push('created_at < ?'); bindings.push(cursor); }
+  if (category && category !== 'undefined') { conditions.push('i.category = ?'); bindings.push(category); }
+  if (roomId   && roomId   !== 'undefined') { conditions.push('i.room_id = ?');   bindings.push(roomId); }
+  if (cursor)                               { conditions.push('i.created_at < ?'); bindings.push(cursor); }
 
   bindings.push(limit + 1);
 
