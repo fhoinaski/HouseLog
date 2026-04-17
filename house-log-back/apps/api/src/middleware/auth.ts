@@ -59,11 +59,16 @@ export async function assertPropertyAccess(
     .first();
   if (owned) return true;
 
-  const collab = await db
-    .prepare(`SELECT id FROM property_collaborators WHERE property_id = ? AND user_id = ?`)
-    .bind(propertyId, userId)
-    .first();
-  return collab !== null;
+  try {
+    const collab = await db
+      .prepare(`SELECT id FROM property_collaborators WHERE property_id = ? AND user_id = ?`)
+      .bind(propertyId, userId)
+      .first();
+    return collab !== null;
+  } catch (e) {
+    if (String(e).includes('property_collaborators')) return false;
+    throw e;
+  }
 }
 
 // Returns whether a user is allowed to open (create) a service order on a property.
@@ -84,15 +89,20 @@ export async function canUserOpenOS(
     .first();
   if (owned) return true;
 
-  const collab = await db
-    .prepare(
-      `SELECT role, can_open_os FROM property_collaborators
-       WHERE property_id = ? AND user_id = ?`
-    )
-    .bind(propertyId, userId)
-    .first<{ role: string; can_open_os: number }>();
+  try {
+    const collab = await db
+      .prepare(
+        `SELECT role, can_open_os FROM property_collaborators
+         WHERE property_id = ? AND user_id = ?`
+      )
+      .bind(propertyId, userId)
+      .first<{ role: string; can_open_os: number }>();
 
-  if (!collab) return false;
-  if (collab.role === 'viewer') return false;
-  return collab.can_open_os === 1;
+    if (!collab) return false;
+    if (collab.role === 'viewer') return false;
+    return collab.can_open_os === 1;
+  } catch (e) {
+    if (String(e).includes('property_collaborators')) return false;
+    throw e;
+  }
 }
