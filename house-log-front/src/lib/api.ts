@@ -229,6 +229,12 @@ export const servicesApi = {
       `/properties/${propertyId}/services/${id}/audit-link`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+
+  patchChecklist: (propertyId: string, id: string, checklist: { item: string; done: boolean }[]) =>
+    request<{ checklist: { item: string; done: boolean }[] }>(
+      `/properties/${propertyId}/services/${id}/checklist`,
+      { method: 'PATCH', body: JSON.stringify({ checklist }) }
+    ),
 };
 
 // Documents
@@ -401,6 +407,7 @@ export type InventoryItem = {
   photo_url: string | null;
   price_paid: number | null;
   purchase_date: string | null;
+  warranty_until: string | null;
   notes: string | null;
   created_at: string;
 };
@@ -433,11 +440,14 @@ export type ServiceOrder = {
 export type Expense = {
   id: string;
   property_id: string;
+  type: 'expense' | 'revenue';
   category: string;
   amount: number;
   reference_month: string;
   receipt_url: string | null;
   notes: string | null;
+  is_recurring: number;
+  recurrence_group: string | null;
   created_by: string;
   created_at: string;
 };
@@ -454,12 +464,15 @@ export type PropertyDashboard = {
   services: { total: number; requested: number; in_progress: number; done: number; urgent_open: number };
   inventory: { total: number; low_stock: number };
   monthly_expenses: { reference_month: string; total: number; category: string }[];
+  warranties_expiring: { id: string; name: string; warranty_until: string; days_left: number }[];
 };
 
 export type ExpenseSummary = {
   total: number;
+  total_revenue: number;
   by_category: { category: string; total: number; count: number }[];
   by_month: { reference_month: string; total: number; count: number }[];
+  by_month_revenue: { reference_month: string; total: number }[];
   period: { from: string; to: string };
 };
 

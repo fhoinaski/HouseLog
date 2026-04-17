@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { servicesApi, propertiesApi, type ServiceOrder } from '@/lib/api';
 import { ServiceOrderPDF } from '@/components/pdf/ServiceOrderPDF';
+import { BeforeAfterSlider } from '@/components/ui/before-after-slider';
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
@@ -144,7 +145,21 @@ export default function ServiceDetailPage({
 
   const beforePhotos = JSON.parse(order.before_photos || '[]') as string[];
   const afterPhotos = JSON.parse(order.after_photos || '[]') as string[];
-  const checklist = JSON.parse(order.checklist || '[]') as { item: string; done: boolean }[];
+  const [checklist, setChecklist] = useState<{ item: string; done: boolean }[]>(
+    () => JSON.parse(order.checklist || '[]') as { item: string; done: boolean }[]
+  );
+
+  async function toggleChecklistItem(index: number) {
+    const updated = checklist.map((item, i) =>
+      i === index ? { ...item, done: !item.done } : item
+    );
+    setChecklist(updated);
+    try {
+      await servicesApi.patchChecklist(propertyId, serviceId, updated);
+    } catch {
+      setChecklist(checklist); // revert on error
+    }
+  }
   const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
 
   return (
@@ -245,16 +260,39 @@ export default function ServiceDetailPage({
         </CardContent>
       </Card>
 
-      {/* Checklist */}
+      {/* Checklist — interactive */}
       {checklist.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Checklist</CardTitle></CardHeader>
-          <CardContent className="p-6 pt-0 space-y-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Checklist</CardTitle>
+              <span className="text-xs text-[var(--muted-foreground)]">
+                {checklist.filter((i) => i.done).length}/{checklist.length} concluídos
+              </span>
+            </div>
+            {/* Progress bar */}
+            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-2">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                style={{ width: `${checklist.length ? (checklist.filter((i) => i.done).length / checklist.length) * 100 : 0}%` }}
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 pt-0 space-y-1">
             {checklist.map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className={cn('h-4 w-4 flex-shrink-0', item.done ? 'text-emerald-500' : 'text-slate-300')} />
-                <span className={item.done ? 'line-through text-[var(--muted-foreground)]' : ''}>{item.item}</span>
-              </div>
+              <button
+                key={i}
+                onClick={() => toggleChecklistItem(i)}
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-left hover:bg-[var(--muted)] transition-colors"
+              >
+                <CheckCircle2 className={cn(
+                  'h-4 w-4 flex-shrink-0 transition-colors',
+                  item.done ? 'text-emerald-500' : 'text-slate-300'
+                )} />
+                <span className={item.done ? 'line-through text-[var(--muted-foreground)]' : ''}>
+                  {item.item}
+                </span>
+              </button>
             ))}
           </CardContent>
         </Card>
@@ -326,6 +364,25 @@ export default function ServiceDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* Before/After slider — only when both sets have photos */}
+      {beforePhotos.length > 0 && afterPhotos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comparação Antes / Depois</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <BeforeAfterSlider
+              before={beforePhotos[beforePhotos.length - 1]}
+              after={afterPhotos[afterPhotos.length - 1]}
+              className="max-h-72"
+            />
+            <p className="text-xs text-center text-[var(--muted-foreground)] mt-2">
+              Arraste para comparar
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Video + audit link */}
       <div className="flex gap-3 flex-wrap">

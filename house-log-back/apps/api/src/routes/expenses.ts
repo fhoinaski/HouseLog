@@ -11,10 +11,12 @@ const expenses = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 expenses.use('*', authMiddleware);
 
 const createSchema = z.object({
-  category: z.enum(['water', 'electricity', 'gas', 'condo', 'iptu', 'insurance', 'cleaning', 'garden', 'security', 'other']),
+  type: z.enum(['expense', 'revenue']).default('expense'),
+  category: z.enum(['water', 'electricity', 'gas', 'condo', 'iptu', 'insurance', 'cleaning', 'garden', 'security', 'other', 'rent', 'service']),
   amount: z.number().positive(),
   reference_month: z.string().regex(/^\d{4}-\d{2}$/, 'Formato YYYY-MM'),
   notes: z.string().optional(),
+  is_recurring: z.boolean().default(false),
 });
 
 // ── GET /properties/:propertyId/expenses ─────────────────────────────────────
@@ -31,12 +33,14 @@ expenses.get('/', async (c) => {
   const cursor = c.req.query('cursor');
   const month = c.req.query('month');
   const category = c.req.query('category');
+  const type = c.req.query('type');
 
   const conditions = ['property_id = ?', 'deleted_at IS NULL'];
   const bindings: unknown[] = [propertyId];
 
   if (month)    { conditions.push('reference_month = ?'); bindings.push(month); }
   if (category) { conditions.push('category = ?');        bindings.push(category); }
+  if (type)     { conditions.push('type = ?');            bindings.push(type); }
   if (cursor)   { conditions.push('created_at < ?');      bindings.push(cursor); }
 
   bindings.push(limit + 1);
@@ -65,12 +69,12 @@ expenses.get('/summary', async (c) => {
   const from = c.req.query('from') ?? new Date(Date.now() - 6 * 30 * 86400000).toISOString().slice(0, 7);
   const to = c.req.query('to') ?? new Date().toISOString().slice(0, 7);
 
-  const [byCategory, byMonth] = await c.env.DB.batch([
+  const [byCategory, byMonth, byMonthRevenue] = await c.env.DB.batch([
     c.env.DB
       .prepare(
         `SELECT category, SUM(amount) as total, COUNT(*) as count
          FROM expenses
-         WHERE property_id = ? AND deleted_at IS NULL
+         WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
            AND reference_month BETWEEN ? AND ?
          GROUP BY category ORDER BY total DESC`
       )
@@ -79,7 +83,16 @@ expenses.get('/summary', async (c) => {
       .prepare(
         `SELECT reference_month, SUM(amount) as total, COUNT(*) as count
          FROM expenses
-         WHERE property_id = ? AND deleted_at IS NULL
+         WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
+           AND reference_month BETWEEN ? AND ?
+         GROUP BY reference_month ORDER BY reference_month ASC`
+      )
+      .bind(propertyId, from, to),
+    c.env.DB
+      .prepare(
+        `SELECT reference_month, SUM(amount) as total
+         FROM expenses
+         WHERE property_id = ? AND deleted_at IS NULL AND type = 'revenue'
            AND reference_month BETWEEN ? AND ?
          GROUP BY reference_month ORDER BY reference_month ASC`
       )
@@ -89,7 +102,16 @@ expenses.get('/summary', async (c) => {
   const totalRow = await c.env.DB
     .prepare(
       `SELECT SUM(amount) as total FROM expenses
-       WHERE property_id = ? AND deleted_at IS NULL
+       WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
+         AND reference_month BETWEEN ? AND ?`
+    )
+    .bind(propertyId, from, to)
+    .first<{ total: number }>();
+
+  const revenueRow = await c.env.DB
+    .prepare(
+      `SELECT SUM(amount) as total FROM expenses
+       WHERE property_id = ? AND deleted_at IS NULL AND type = 'revenue'
          AND reference_month BETWEEN ? AND ?`
     )
     .bind(propertyId, from, to)
@@ -97,8 +119,10 @@ expenses.get('/summary', async (c) => {
 
   return ok(c, {
     total: totalRow?.total ?? 0,
+    total_revenue: revenueRow?.total ?? 0,
     by_category: byCategory.results,
     by_month: byMonth.results,
+    by_month_revenue: byMonthRevenue.results,
     period: { from, to },
   });
 });
@@ -121,28 +145,44 @@ expenses.post('/', async (c) => {
     return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   }
 
-  const { category, amount, reference_month, notes } = parsed.data;
-  const id = nanoid();
+  const { type, category, amount, reference_month, notes, is_recurring } = parsed.data;
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO expenses (id, property_id, category, amount, reference_month, notes, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(id, propertyId, category, amount, reference_month, notes ?? null, userId)
-    .run();
+  // Build list of months to insert
+  const months: string[] = [reference_month];
+  const recurrenceGroup = is_recurring ? nanoid() : null;
+
+  if (is_recurring) {
+    const [year, month] = reference_month.split('-').map(Number);
+    for (let i = 1; i <= 11; i++) {
+      const d = new Date(year, month - 1 + i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+  }
+
+  const ids: string[] = [];
+  for (const m of months) {
+    const id = nanoid();
+    ids.push(id);
+    await c.env.DB
+      .prepare(
+        `INSERT INTO expenses (id, property_id, type, category, amount, reference_month, notes, is_recurring, recurrence_group, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      )
+      .bind(id, propertyId, type, category, amount, m, notes ?? null, is_recurring ? 1 : 0, recurrenceGroup, userId)
+      .run();
+  }
 
   const expense = await c.env.DB
     .prepare('SELECT * FROM expenses WHERE id = ?')
-    .bind(id)
+    .bind(ids[0])
     .first<Expense>();
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'expense', entityId: id, action: 'create',
+    entityType: 'expense', entityId: ids[0], action: 'create',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: expense,
   });
 
-  return ok(c, { expense }, 201);
+  return ok(c, { expense, generated: ids.length }, 201);
 });
 
 // ── PUT /properties/:propertyId/expenses/:id ─────────────────────────────────
@@ -173,6 +213,7 @@ expenses.put('/:id', async (c) => {
 
   const d = parsed.data;
   const pairs: [string, unknown][] = [];
+  if (d.type !== undefined)            pairs.push(['type', d.type]);
   if (d.category !== undefined)        pairs.push(['category', d.category]);
   if (d.amount !== undefined)          pairs.push(['amount', d.amount]);
   if (d.reference_month !== undefined) pairs.push(['reference_month', d.reference_month]);
@@ -216,10 +257,19 @@ expenses.delete('/:id', async (c) => {
 
   if (!old) return err(c, 'Despesa não encontrada', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  const deleteAll = c.req.query('all_recurring') === '1';
+
+  if (deleteAll && (old as Expense & { recurrence_group?: string }).recurrence_group) {
+    await c.env.DB
+      .prepare(`UPDATE expenses SET deleted_at = datetime('now') WHERE recurrence_group = ? AND property_id = ?`)
+      .bind((old as Expense & { recurrence_group?: string }).recurrence_group, propertyId)
+      .run();
+  } else {
+    await c.env.DB
+      .prepare(`UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?`)
+      .bind(id)
+      .run();
+  }
 
   await writeAuditLog(c.env.DB, {
     entityType: 'expense', entityId: id, action: 'delete',
