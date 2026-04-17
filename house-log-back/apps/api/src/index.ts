@@ -12,7 +12,7 @@ import documents from './routes/documents';
 import auditLinks from './routes/audit-links';
 import maintenance from './routes/maintenance';
 import reports from './routes/reports';
-import type { Bindings, Variables } from './lib/types';
+import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -64,25 +64,6 @@ api.route('/properties/:propertyId/services/:serviceId/audit-link', auditLinks);
 // Public audit endpoints (no auth required — handled inside the route)
 api.route('/audit', auditLinks);
 
-// ── Cron trigger — expire audit links ────────────────────────────────────────
-
-app.get('/__cron/expire-links', async (c) => {
-  // Only allow Cloudflare Cron Triggers (or internal calls in dev)
-  const cronSecret = c.req.header('X-Cron-Secret');
-  if (c.env.ENVIRONMENT === 'production' && cronSecret !== c.env.JWT_SECRET) {
-    return c.json({ error: 'Forbidden' }, 403);
-  }
-
-  const result = await c.env.DB
-    .prepare(
-      `UPDATE audit_links SET status = 'expired'
-       WHERE status = 'active' AND expires_at < datetime('now')`
-    )
-    .run();
-
-  return c.json({ expired: result.meta?.changes ?? 0 });
-});
-
 // ── 404 fallback ─────────────────────────────────────────────────────────────
 
 app.notFound((c) =>
@@ -94,4 +75,33 @@ app.onError((err, c) => {
   return c.json({ error: 'Erro interno', code: 'INTERNAL_ERROR' }, 500);
 });
 
-export default app;
+export default {
+  fetch: app.fetch.bind(app),
+
+  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    if (event.cron === '0 * * * *') {
+      await env.DB
+        .prepare(
+          `UPDATE audit_links SET status = 'expired'
+           WHERE status = 'active' AND expires_at < datetime('now')`
+        )
+        .run();
+    }
+  },
+
+  async queue(batch: MessageBatch<QueueMessage>, env: Bindings) {
+    for (const msg of batch.messages) {
+      if (msg.body.type === 'GENERATE_THUMBNAIL') {
+        const { r2Key, itemId, itemType } = msg.body;
+        const obj = await env.STORAGE.get(r2Key);
+        if (!obj) {
+          msg.ack();
+          continue;
+        }
+        // TODO: implement real resize when Workers Image Resizing is available
+        console.log(`Thumbnail queued for ${itemType}:${itemId}`);
+        msg.ack();
+      }
+    }
+  },
+};

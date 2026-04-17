@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   Building2, MapPin, Ruler, Calendar, Activity,
   Wrench, Package, FileText, BarChart3,
-  CheckCircle2, Clock, Home, RefreshCw, Pencil,
+  CheckCircle2, Clock, Home, RefreshCw, Pencil, GitBranch,
 } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -215,6 +215,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 { href: `/properties/${id}/rooms`, icon: Home, label: 'Cômodos', color: 'bg-slate-50 text-slate-600' },
                 { href: `/properties/${id}/inventory`, icon: Package, label: 'Inventário', color: 'bg-amber-50 text-amber-600' },
                 { href: `/properties/${id}/services`, icon: Wrench, label: 'Serviços', color: 'bg-primary-50 text-primary-600' },
+                { href: `/properties/${id}/timeline`, icon: GitBranch, label: 'Timeline', color: 'bg-teal-50 text-teal-600' },
                 { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', color: 'bg-orange-50 text-orange-600' },
                 { href: `/properties/${id}/documents`, icon: FileText, label: 'Documentos', color: 'bg-violet-50 text-violet-600' },
                 { href: `/properties/${id}/financial`, icon: BarChart3, label: 'Financeiro', color: 'bg-emerald-50 text-emerald-600' },

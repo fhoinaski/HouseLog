@@ -27,6 +27,11 @@ id = "COLE_AQUI_O_ID_DO_KV_PRODUCAO"
 binding = "QUEUE"
 queue = "houselog-jobs"
 
+[[queues.consumers]]
+queue = "houselog-queue"
+max_batch_size = 10
+max_retries = 3
+
 [ai]
 binding = "AI"
 

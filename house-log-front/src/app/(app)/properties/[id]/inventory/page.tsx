@@ -1,11 +1,11 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Package, Filter, Search, AlertTriangle, QrCode } from 'lucide-react';
+import { Camera, Loader2, Plus, Package, Filter, Search, AlertTriangle, QrCode } from 'lucide-react';
 import Link from 'next/link';
 import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,12 +33,24 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-function ItemCard({ item, propertyId, onClick }: { item: InventoryItem; propertyId: string; onClick: () => void }) {
+function ItemCard({
+  item,
+  propertyId,
+  uploading,
+  onPhotoClick,
+  onClick,
+}: {
+  item: InventoryItem;
+  propertyId: string;
+  uploading: boolean;
+  onPhotoClick: (e: React.MouseEvent) => void;
+  onClick: () => void;
+}) {
   const isLowStock = item.quantity <= item.reserve_qty;
 
   return (
     <Card
-      className="overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+      className="group overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
       onClick={onClick}
     >
       <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200">
@@ -50,6 +62,27 @@ function ItemCard({ item, propertyId, onClick }: { item: InventoryItem; property
             <Package className="h-8 w-8 text-slate-300" />
           </div>
         )}
+
+        {/* Upload overlay / spinner */}
+        {uploading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <Loader2 className="h-6 w-6 text-white animate-spin" />
+          </div>
+        ) : (
+          <button
+            onClick={onPhotoClick}
+            title="Alterar foto"
+            className={cn(
+              'absolute inset-0 flex items-center justify-center bg-black/0 transition-colors',
+              item.photo_url
+                ? 'opacity-0 group-hover:opacity-100 group-hover:bg-black/30'
+                : 'opacity-0 group-hover:opacity-100 group-hover:bg-black/10'
+            )}
+          >
+            <Camera className="h-6 w-6 text-white drop-shadow" />
+          </button>
+        )}
+
         {item.color_code && (
           <div
             className="absolute bottom-2 right-2 h-5 w-5 rounded-full border-2 border-white shadow"
@@ -96,13 +129,20 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [roomFilter, setRoomFilter] = useState<string>('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<string | null>(null);
 
   const { data, mutate } = useSWR(
-    ['inventory', id, categoryFilter],
-    () => inventoryApi.list(id, { category: categoryFilter || undefined })
+    ['inventory', id, categoryFilter, roomFilter],
+    () => inventoryApi.list(id, {
+      category: categoryFilter || undefined,
+      room_id: roomFilter || undefined,
+    })
   );
 
   const { data: roomsData } = useSWR(['rooms', id], () => roomsApi.list(id));
@@ -140,6 +180,31 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
     });
     setApiError(null);
     setDialogOpen(true);
+  }
+
+  function handlePhotoClick(e: React.MouseEvent, itemId: string) {
+    e.stopPropagation();
+    uploadTargetRef.current = itemId;
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const itemId = uploadTargetRef.current;
+    if (!file || !itemId) return;
+    // Reset so the same file can be re-selected later
+    e.target.value = '';
+
+    setUploadingId(itemId);
+    try {
+      await inventoryApi.uploadPhoto(id, itemId, file);
+      await mutate();
+    } catch {
+      // silently fail — user can retry by clicking again
+    } finally {
+      setUploadingId(null);
+      uploadTargetRef.current = null;
+    }
   }
 
   async function onSubmit(form: FormData) {
@@ -191,6 +256,18 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             ))}
           </SelectContent>
         </Select>
+
+        <Select value={roomFilter} onValueChange={setRoomFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Cômodo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Todos os cômodos</SelectItem>
+            {(roomsData?.rooms ?? []).map((r) => (
+              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Grid */}
@@ -205,10 +282,26 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {items.map((item) => (
-            <ItemCard key={item.id} item={item} propertyId={id} onClick={() => openEdit(item)} />
+            <ItemCard
+              key={item.id}
+              item={item}
+              propertyId={id}
+              uploading={uploadingId === item.id}
+              onPhotoClick={(e) => handlePhotoClick(e, item.id)}
+              onClick={() => openEdit(item)}
+            />
           ))}
         </div>
       )}
+
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
       {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

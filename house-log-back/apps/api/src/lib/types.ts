@@ -123,6 +123,10 @@ export type Expense = {
   deleted_at: string | null;
 };
 
+// Queue messages
+export type QueueMessage =
+  | { type: 'GENERATE_THUMBNAIL'; r2Key: string; itemId: string; itemType: string };
+
 // Pagination
 export type CursorPage<T> = {
   data: T[];

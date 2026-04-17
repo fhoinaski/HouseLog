@@ -45,6 +45,11 @@ async function request<T>(
   return res.json() as Promise<T>;
 }
 
+// Generic fetcher for useSWRInfinite (receives relative path, injects auth)
+export function apiFetcher<T>(path: string): Promise<T> {
+  return request<T>(path);
+}
+
 // Auth
 export const authApi = {
   register: (data: { email: string; name: string; password: string; role?: string; phone?: string }) =>
@@ -63,6 +68,12 @@ export const authApi = {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     }),
+
+  updateProfile: (data: { name?: string; phone?: string }) =>
+    request<{ user: User }>('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
+
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    request<{ message: string }>('/auth/password', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // Properties
@@ -129,9 +140,15 @@ export const inventoryApi = {
   delete: (propertyId: string, id: string) =>
     request<{ success: boolean }>(`/properties/${propertyId}/inventory/${id}`, { method: 'DELETE' }),
 
+  generateQr: (propertyId: string, id: string) =>
+    request<{ qr_value: string; item_id: string }>(
+      `/properties/${propertyId}/inventory/${id}/qr`,
+      { method: 'POST' }
+    ),
+
   uploadPhoto: (propertyId: string, id: string, file: File) => {
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('photo', file);
     const token = getToken();
     return fetch(`${BASE}/properties/${propertyId}/inventory/${id}/photo`, {
       method: 'POST',
