@@ -42,10 +42,10 @@ documents.get('/', async (c) => {
   const cursor = c.req.query('cursor');
   const type = c.req.query('type');
 
-  const conditions = ['property_id = ?', 'deleted_at IS NULL'];
+  const conditions = ['d.property_id = ?', 'd.deleted_at IS NULL'];
   const bindings: unknown[] = [propertyId];
-  if (type)   { conditions.push('type = ?');        bindings.push(type); }
-  if (cursor) { conditions.push('created_at < ?');  bindings.push(cursor); }
+  if (type   && type   !== 'undefined') { conditions.push('d.type = ?');        bindings.push(type); }
+  if (cursor)                           { conditions.push('d.created_at < ?');  bindings.push(cursor); }
   bindings.push(limit + 1);
 
   const { results } = await c.env.DB

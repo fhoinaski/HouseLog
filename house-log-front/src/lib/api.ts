@@ -1,6 +1,12 @@
 // API client for HouseLog backend (Cloudflare Workers)
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787/api/v1';
 
+function qs(params?: Record<string, string | number | undefined>): string {
+  if (!params) return '';
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== '');
+  return entries.length ? '?' + new URLSearchParams(entries as [string, string][]) : '';
+}
+
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('hl_token');
@@ -79,7 +85,7 @@ export const authApi = {
 // Properties
 export const propertiesApi = {
   list: (params?: { limit?: number; cursor?: string; search?: string }) =>
-    request<CursorPage<Property>>(`/properties?${new URLSearchParams(params as Record<string, string>)}`),
+    request<CursorPage<Property>>(`/properties${qs(params)}`),
 
   get: (id: string) => request<{ property: Property }>(`/properties/${id}`),
 
@@ -118,7 +124,7 @@ export const roomsApi = {
 export const inventoryApi = {
   list: (propertyId: string, params?: { category?: string; room_id?: string; cursor?: string }) =>
     request<CursorPage<InventoryItem>>(
-      `/properties/${propertyId}/inventory?${new URLSearchParams(params as Record<string, string>)}`
+      `/properties/${propertyId}/inventory${qs(params)}`
     ),
 
   colors: (propertyId: string) =>
@@ -162,7 +168,7 @@ export const inventoryApi = {
 export const servicesApi = {
   list: (propertyId: string, params?: { status?: string; priority?: string; cursor?: string }) =>
     request<CursorPage<ServiceOrder>>(
-      `/properties/${propertyId}/services?${new URLSearchParams(params as Record<string, string>)}`
+      `/properties/${propertyId}/services${qs(params)}`
     ),
 
   get: (propertyId: string, id: string) =>
@@ -224,7 +230,7 @@ export const servicesApi = {
 export const documentsApi = {
   list: (propertyId: string, params?: { type?: string; cursor?: string }) =>
     request<CursorPage<Document>>(
-      `/properties/${propertyId}/documents?${new URLSearchParams(params as Record<string, string>)}`
+      `/properties/${propertyId}/documents${qs(params)}`
     ),
 
   upload: (propertyId: string, file: File, meta: Partial<Document> & { type: string; title: string }) => {
@@ -307,12 +313,12 @@ export const reportsApi = {
 export const expensesApi = {
   list: (propertyId: string, params?: { month?: string; category?: string; cursor?: string }) =>
     request<CursorPage<Expense>>(
-      `/properties/${propertyId}/expenses?${new URLSearchParams(params as Record<string, string>)}`
+      `/properties/${propertyId}/expenses${qs(params)}`
     ),
 
   summary: (propertyId: string, params?: { from?: string; to?: string }) =>
     request<ExpenseSummary>(
-      `/properties/${propertyId}/expenses/summary?${new URLSearchParams(params as Record<string, string>)}`
+      `/properties/${propertyId}/expenses/summary${qs(params)}`
     ),
 
   create: (propertyId: string, data: Partial<Expense>) =>

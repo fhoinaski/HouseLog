@@ -100,20 +100,28 @@ services.post('/', async (c) => {
   const id = nanoid();
   const checklistJson = JSON.stringify(d.checklist ?? []);
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO service_orders
-       (id, property_id, room_id, system_type, requested_by, assigned_to,
-        title, description, priority, status, cost, warranty_until, scheduled_at, checklist, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(
-      id, propertyId, d.room_id ?? null, d.system_type, userId,
-      d.assigned_to ?? null, d.title, d.description ?? null,
-      d.priority, d.cost ?? null, d.warranty_until ?? null,
-      d.scheduled_at ?? null, checklistJson
-    )
-    .run();
+  try {
+    await c.env.DB
+      .prepare(
+        `INSERT INTO service_orders
+         (id, property_id, room_id, system_type, requested_by, assigned_to,
+          title, description, priority, status, cost, warranty_until, scheduled_at, checklist, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?, datetime('now'))`
+      )
+      .bind(
+        id, propertyId, d.room_id ?? null, d.system_type, userId,
+        d.assigned_to ?? null, d.title, d.description ?? null,
+        d.priority, d.cost ?? null, d.warranty_until ?? null,
+        d.scheduled_at ?? null, checklistJson
+      )
+      .run();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('FOREIGN KEY')) {
+      return err(c, 'Cômodo ou prestador não encontrado', 'REFERENCE_NOT_FOUND', 422);
+    }
+    throw e;
+  }
 
   const order = await c.env.DB
     .prepare('SELECT * FROM service_orders WHERE id = ?')
