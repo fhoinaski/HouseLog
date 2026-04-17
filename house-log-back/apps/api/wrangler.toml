@@ -8,6 +8,8 @@ compatibility_flags = ["nodejs_compat"]
 ENVIRONMENT = "production"
 CORS_ORIGIN = "https://house-log.vercel.app"
 R2_PUBLIC_URL = "https://assets.houselog.app"
+RESEND_API_KEY = ""
+APP_URL = "https://house-log.vercel.app"
 
 [[d1_databases]]
 binding = "DB"
@@ -47,6 +49,8 @@ name = "houselog-api-dev"
 ENVIRONMENT = "development"
 CORS_ORIGIN = "*"
 R2_PUBLIC_URL = "http://localhost:8787/r2"
+RESEND_API_KEY = ""
+APP_URL = "http://localhost:3000"
 
 [[env.dev.d1_databases]]
 binding = "DB"

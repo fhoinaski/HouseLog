@@ -40,6 +40,23 @@ type PasswordForm = z.infer<typeof passwordSchema>;
 export default function SettingsPage() {
   const { user } = useAuth();
 
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({
+    os_status: true, maintenance_due: true, new_bid: true,
+  });
+  const [savingNotifs, setSavingNotifs] = useState(false);
+
+  async function saveNotifPrefs() {
+    setSavingNotifs(true);
+    try {
+      await authApi.updateNotificationPrefs(notifPrefs);
+      toast.success('Preferências salvas');
+    } catch (e) {
+      toast.error('Erro ao salvar', { description: (e as Error).message });
+    } finally {
+      setSavingNotifs(false);
+    }
+  }
+
   const {
     register: regProfile,
     handleSubmit: handleProfile,
@@ -197,28 +214,33 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Preferências de Notificação</CardTitle>
-              <CardDescription>Escolha quando você quer ser notificado</CardDescription>
+              <CardDescription>Escolha quando você quer ser notificado por email</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { label: 'Nova OS solicitada', description: 'Quando uma nova ordem de serviço for criada', key: 'new_os' },
-                { label: 'OS concluída', description: 'Quando um serviço for marcado como concluído', key: 'os_done' },
-                { label: 'Manutenção pendente', description: 'Lembrete de manutenções preventivas próximas do vencimento', key: 'maint_due' },
-                { label: 'Documento vencido', description: 'Quando um documento (seguro, licença) estiver vencendo', key: 'doc_expiry' },
-                { label: 'Estoque baixo', description: 'Quando um item do inventário atingir o estoque mínimo', key: 'low_stock' },
-              ].map((n) => (
+              {([
+                { label: 'Mudança de status da OS', description: 'Quando uma OS mudar de status', key: 'os_status' },
+                { label: 'Manutenções pendentes', description: 'Lembrete diário de manutenções próximas do vencimento', key: 'maintenance_due' },
+                { label: 'Novo orçamento', description: 'Quando um prestador enviar um orçamento', key: 'new_bid' },
+              ] as const).map((n) => (
                 <div key={n.key} className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">{n.label}</p>
                     <p className="text-xs text-[var(--muted-foreground)]">{n.description}</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
-                    <input type="checkbox" defaultChecked className="peer sr-only" />
+                    <input
+                      type="checkbox"
+                      checked={notifPrefs[n.key] !== false}
+                      onChange={(e) => setNotifPrefs((p) => ({ ...p, [n.key]: e.target.checked }))}
+                      className="peer sr-only"
+                    />
                     <div className="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-600 peer-checked:after:translate-x-4" />
                   </label>
                 </div>
               ))}
-              <Button className="mt-2">Salvar preferências</Button>
+              <Button onClick={saveNotifPrefs} loading={savingNotifs} className="mt-2">
+                Salvar preferências
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

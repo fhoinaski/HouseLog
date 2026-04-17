@@ -80,6 +80,11 @@ export const authApi = {
 
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     request<{ message: string }>('/auth/password', { method: 'PUT', body: JSON.stringify(data) }),
+
+  updateNotificationPrefs: (prefs: Record<string, boolean>) =>
+    request<{ user: User }>('/auth/profile', {
+      method: 'PUT', body: JSON.stringify({ notification_prefs: JSON.stringify(prefs) }),
+    }),
 };
 
 // Properties
@@ -534,4 +539,53 @@ export type ValuationPayload = {
   inventory_items: number;
   recent_services: { title: string; system_type: string; status: string; completed_at: string | null; cost: number | null }[];
   generated_at: string;
+};
+
+export type ServiceBid = {
+  id: string;
+  service_id: string;
+  provider_id: string;
+  provider_name?: string;
+  provider_email?: string | null;
+  provider_phone?: string | null;
+  amount: number;
+  notes: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProviderServiceOrder = ServiceOrder & {
+  property_name: string;
+  property_address: string;
+  property_id: string;
+};
+
+// Bids
+export const bidsApi = {
+  list: (propertyId: string, serviceId: string) =>
+    request<{ bids: ServiceBid[] }>(`/properties/${propertyId}/services/${serviceId}/bids`),
+
+  create: (propertyId: string, serviceId: string, data: { amount: number; notes?: string }) =>
+    request<{ bid: ServiceBid }>(`/properties/${propertyId}/services/${serviceId}/bids`, {
+      method: 'POST', body: JSON.stringify(data),
+    }),
+
+  updateStatus: (propertyId: string, serviceId: string, bidId: string, status: 'accepted' | 'rejected') =>
+    request<{ success: boolean; status: string }>(
+      `/properties/${propertyId}/services/${serviceId}/bids/${bidId}/status`,
+      { method: 'PATCH', body: JSON.stringify({ status }) }
+    ),
+};
+
+// Provider portal
+export const providerApi = {
+  services: (params?: { status?: string; cursor?: string }) =>
+    request<CursorPage<ProviderServiceOrder>>(`/provider/services${qs(params)}`),
+
+  getService: (id: string) =>
+    request<{ order: ProviderServiceOrder; my_bids: ServiceBid[] }>(`/provider/services/${id}`),
+
+  stats: () =>
+    request<{ stats: Record<string, number>; total: number; recent_bids: ServiceBid[] }>('/provider/stats'),
 };
