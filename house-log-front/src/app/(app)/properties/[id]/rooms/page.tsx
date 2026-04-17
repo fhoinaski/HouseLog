@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 import { ROOM_TYPE_LABELS, cn } from '@/lib/utils';
 
 const ROOM_ICONS: Record<string, React.ElementType> = {
@@ -82,7 +82,6 @@ function RoomCard({
 
 export default function RoomsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const toast = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editRoom, setEditRoom] = useState<Room | null>(null);
   const [deleteRoom, setDeleteRoom] = useState<Room | null>(null);
@@ -129,10 +128,10 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
       const payload = { ...form, area_m2: form.area_m2 === '' ? undefined : Number(form.area_m2) };
       if (editRoom) {
         await roomsApi.update(id, editRoom.id, payload);
-        toast({ title: 'Cômodo atualizado', variant: 'success' });
+        toast.success('Cômodo atualizado');
       } else {
         await roomsApi.create(id, payload);
-        toast({ title: 'Cômodo criado', variant: 'success' });
+        toast.success('Cômodo criado');
       }
       await mutate();
       setDialogOpen(false);
@@ -146,9 +145,9 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
     try {
       await roomsApi.delete(id, deleteRoom.id);
       await mutate();
-      toast({ title: 'Cômodo removido', variant: 'success' });
+      toast.success('Cômodo removido');
     } catch (e) {
-      toast({ title: 'Erro ao remover', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro ao remover', { description: (e as Error).message });
     } finally {
       setDeleteRoom(null);
     }

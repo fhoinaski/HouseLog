@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 
 const schema = z.object({
   name: z.string().min(1, 'Nome obrigatório'),
@@ -31,7 +31,6 @@ type FormData = z.infer<typeof schema>;
 export default function EditPropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const toast = useToast();
   const coverRef = useRef<HTMLInputElement>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -99,7 +98,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         cover_url: coverUrl ?? undefined,
       });
 
-      toast({ title: 'Imóvel atualizado', variant: 'success' });
+      toast.success('Imóvel atualizado');
       router.push(`/properties/${id}`);
     } catch (e) {
       setApiError((e as Error).message || 'Erro ao salvar');
