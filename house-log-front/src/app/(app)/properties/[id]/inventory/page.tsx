@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useRef, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -127,9 +127,10 @@ function ItemCard({
 
 export default function InventoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { mutate: globalMutate } = useSWRConfig();
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
-  const [roomFilter, setRoomFilter] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [roomFilter, setRoomFilter] = useState<string>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -140,8 +141,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   const { data, mutate } = useSWR(
     ['inventory', id, categoryFilter, roomFilter],
     () => inventoryApi.list(id, {
-      category: categoryFilter || undefined,
-      room_id: roomFilter || undefined,
+      category: categoryFilter === 'all' ? undefined : categoryFilter,
+      room_id: roomFilter === 'all' ? undefined : roomFilter,
     })
   );
 
@@ -217,6 +218,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         await inventoryApi.create(id, payload);
       }
       await mutate();
+      void globalMutate(['dashboard', id]);
       setDialogOpen(false);
     } catch (e) {
       setApiError((e as Error).message);
@@ -250,7 +252,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             <SelectValue placeholder="Categoria" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todas</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
             {Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}
@@ -262,7 +264,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             <SelectValue placeholder="Cômodo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos os cômodos</SelectItem>
+            <SelectItem value="all">Todos os cômodos</SelectItem>
             {(roomsData?.rooms ?? []).map((r) => (
               <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
             ))}
@@ -354,12 +356,12 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               <div className="space-y-1.5">
                 <Label>Cômodo</Label>
                 <Select
-                  defaultValue={editItem?.room_id ?? ''}
-                  onValueChange={(v) => setValue('room_id', v || undefined)}
+                  defaultValue={editItem?.room_id ?? '__none__'}
+                  onValueChange={(v) => setValue('room_id', v === '__none__' ? undefined : v)}
                 >
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
                     {(roomsData?.rooms ?? []).map((r) => (
                       <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                     ))}

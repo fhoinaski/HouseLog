@@ -4,26 +4,28 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Building2, LayoutDashboard, Package, Wrench, FileText,
-  BarChart3, Settings, LogOut, Menu, X, Home, RefreshCw, Activity,
+  BarChart3, Settings, LogOut, Menu, X, Home, RefreshCw, Activity, Search,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { CommandPalette } from '@/components/ui/command-palette';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/dashboard',    label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/properties',   label: 'Imóveis',    icon: Building2 },
+  { href: '/dashboard',  label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/properties', label: 'Imóveis',   icon: Building2 },
 ];
 
 const PROPERTY_NAV = (id: string) => [
-  { href: `/properties/${id}`,               label: 'Visão Geral',  icon: Building2 },
-  { href: `/properties/${id}/rooms`,         label: 'Cômodos',      icon: Home },
-  { href: `/properties/${id}/inventory`,     label: 'Inventário',   icon: Package },
-  { href: `/properties/${id}/services`,      label: 'Serviços',     icon: Wrench },
-  { href: `/properties/${id}/maintenance`,   label: 'Manutenção',   icon: RefreshCw },
-  { href: `/properties/${id}/documents`,     label: 'Documentos',   icon: FileText },
-  { href: `/properties/${id}/financial`,     label: 'Financeiro',   icon: BarChart3 },
-  { href: `/properties/${id}/report`,        label: 'Relatório',    icon: Activity },
+  { href: `/properties/${id}`,             label: 'Visão Geral', icon: Building2 },
+  { href: `/properties/${id}/rooms`,       label: 'Cômodos',     icon: Home },
+  { href: `/properties/${id}/inventory`,   label: 'Inventário',  icon: Package },
+  { href: `/properties/${id}/services`,    label: 'Serviços',    icon: Wrench },
+  { href: `/properties/${id}/maintenance`, label: 'Manutenção',  icon: RefreshCw },
+  { href: `/properties/${id}/documents`,   label: 'Documentos',  icon: FileText },
+  { href: `/properties/${id}/financial`,   label: 'Financeiro',  icon: BarChart3 },
+  { href: `/properties/${id}/report`,      label: 'Relatório',   icon: Activity },
 ];
 
 export function Sidebar() {
@@ -31,7 +33,6 @@ export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  // Extract propertyId if on a property route
   const propertyMatch = pathname.match(/^\/properties\/([^/]+)/);
   const propertyId = propertyMatch?.[1];
 
@@ -47,19 +48,17 @@ export function Sidebar() {
 
       {/* Overlay */}
       {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={() => setOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setOpen(false)} />
       )}
 
+      {/* CommandPalette — mounted globally here */}
+      <CommandPalette />
+
       {/* Sidebar */}
-      <aside
-        className={cn(
-          'fixed top-0 left-0 z-40 h-full w-64 flex flex-col bg-slate-900 text-slate-100 transition-transform duration-200',
-          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        )}
-      >
+      <aside className={cn(
+        'fixed top-0 left-0 z-40 h-full w-64 flex flex-col bg-slate-900 text-slate-100 transition-transform duration-200',
+        open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-700">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
@@ -68,8 +67,25 @@ export function Sidebar() {
           <span className="font-bold text-lg tracking-tight">HouseLog</span>
         </div>
 
+        {/* Search shortcut */}
+        <div className="px-3 pt-3">
+          <button
+            className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-slate-300 transition-colors"
+            onClick={() => {
+              const event = new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true });
+              document.dispatchEvent(event);
+            }}
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="flex-1 text-left text-xs">Buscar...</span>
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-slate-700 px-1.5 py-0.5 text-[10px] font-mono">
+              <span>⌘</span>K
+            </kbd>
+          </button>
+        </div>
+
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
@@ -113,7 +129,7 @@ export function Sidebar() {
           )}
         </nav>
 
-        {/* User + Settings */}
+        {/* User + Settings + Theme */}
         <div className="border-t border-slate-700 p-3 space-y-1">
           <Link
             href="/settings"
@@ -122,13 +138,16 @@ export function Sidebar() {
             <Settings className="h-4 w-4" />
             Configurações
           </Link>
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-rose-400 transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </button>
+          <div className="flex items-center gap-1 px-1">
+            <button
+              onClick={logout}
+              className="flex-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-rose-400 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+            <ThemeToggle />
+          </div>
           {user && (
             <div className="px-3 py-2">
               <p className="text-xs font-medium text-white truncate">{user.name}</p>

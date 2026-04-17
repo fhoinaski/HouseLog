@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 import { SYSTEM_TYPE_LABELS, formatDate, cn } from '@/lib/utils';
 
 const FREQUENCY_LABELS: Record<string, string> = {
@@ -116,7 +116,6 @@ function ScheduleCard({
 
 export default function MaintenancePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const toast = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<MaintenanceSchedule | null>(null);
   const [deleteItem, setDeleteItem] = useState<MaintenanceSchedule | null>(null);
@@ -162,10 +161,10 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
     try {
       if (editItem) {
         await maintenanceApi.update(id, editItem.id, form);
-        toast({ title: 'Manutenção atualizada', variant: 'success' });
+        toast.success('Manutenção atualizada');
       } else {
         await maintenanceApi.create(id, form);
-        toast({ title: 'Manutenção criada', variant: 'success' });
+        toast.success('Manutenção criada');
       }
       await mutate();
       setDialogOpen(false);
@@ -179,9 +178,9 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
     try {
       await maintenanceApi.delete(id, deleteItem.id);
       await mutate();
-      toast({ title: 'Removido', variant: 'success' });
+      toast.success('Removido');
     } catch (e) {
-      toast({ title: 'Erro ao remover', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro ao remover', { description: (e as Error).message });
     } finally {
       setDeleteItem(null);
     }
@@ -192,9 +191,9 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
     try {
       await maintenanceApi.markDone(id, markDoneItem.id, autoCreateOs);
       await mutate();
-      toast({ title: 'Marcado como realizado!', variant: 'success' });
+      toast.success('Marcado como realizado!');
     } catch (e) {
-      toast({ title: 'Erro', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro', { description: (e as Error).message });
     } finally {
       setMarkDoneItem(null);
       setAutoCreateOs(false);

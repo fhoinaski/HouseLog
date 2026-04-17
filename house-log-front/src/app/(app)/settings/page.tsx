@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador', owner: 'Proprietário',
@@ -39,7 +39,6 @@ type PasswordForm = z.infer<typeof passwordSchema>;
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const toast = useToast();
 
   const {
     register: regProfile,
@@ -64,7 +63,7 @@ export default function SettingsPage() {
   async function onProfileSubmit(data: ProfileForm) {
     try {
       await authApi.updateProfile(data);
-      toast({ title: 'Perfil atualizado', variant: 'success' });
+      toast.success('Perfil atualizado');
     } catch (e) {
       setProfileError('root', { message: (e as Error).message ?? 'Erro ao atualizar perfil' });
     }
@@ -73,7 +72,7 @@ export default function SettingsPage() {
   async function onPasswordSubmit(data: PasswordForm) {
     try {
       await authApi.changePassword({ currentPassword: data.currentPassword, newPassword: data.newPassword });
-      toast({ title: 'Senha alterada com sucesso', variant: 'success' });
+      toast.success('Senha alterada com sucesso');
       resetPw();
     } catch (e) {
       setPwError('currentPassword', { message: (e as Error).message ?? 'Erro ao alterar senha' });

@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -107,6 +107,7 @@ function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void
 export default function ServicesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [statusFilter, setStatusFilter] = useState('');
+  const { mutate: globalMutate } = useSWRConfig();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -133,6 +134,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         cost: form.cost === '' ? undefined : Number(form.cost),
       });
       await mutate();
+      void globalMutate(['dashboard', id]);
       reset({ priority: 'normal' });
       setDialogOpen(false);
     } catch (e) {
@@ -144,6 +146,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
     try {
       await servicesApi.updateStatus(id, orderId, status);
       await mutate();
+      void globalMutate(['dashboard', id]);
       setDetailOpen(false);
     } catch (e) {
       alert((e as Error).message);
@@ -263,10 +266,10 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
               <div className="space-y-1.5">
                 <Label>Cômodo</Label>
-                <Select onValueChange={(v) => setValue('room_id', v || undefined)}>
+                <Select onValueChange={(v) => setValue('room_id', v === '__none__' ? undefined : v)}>
                   <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
                     {(roomsData?.rooms ?? []).map((r) => (
                       <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
                     ))}
