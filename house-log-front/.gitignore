@@ -44,3 +44,4 @@ apps/api/.dev.vars
 *.tsbuildinfo
 next-env.d.ts
 .claude
+.env.local
