@@ -100,11 +100,11 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
   return {
     score,
     breakdown: {
-      maintenance: maintScore,
-      services: svcScore,
+      maintenance_compliance: maintScore,
+      service_backlog: svcScore,
       preventive_ratio: prevScore,
-      age: ageScore,
-      documents: docScore,
+      age_penalty: ageScore,
+      document_completeness: docScore,
     },
   };
 }
@@ -151,7 +151,7 @@ reports.get('/valuation-pdf', async (c) => {
 
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
-  const [servicesSummary, expensesTotal, inventoryCount, recentServices] = await Promise.all([
+  const [servicesSummary, expensesTotal, servicesTotal, inventoryCount, recentServices] = await Promise.all([
     c.env.DB
       .prepare(
         `SELECT status, COUNT(*) as count FROM service_orders
@@ -164,6 +164,13 @@ reports.get('/valuation-pdf', async (c) => {
         `SELECT SUM(amount) as total FROM expenses
          WHERE property_id = ? AND deleted_at IS NULL
            AND reference_month >= strftime('%Y-%m','now','-12 months')`
+      )
+      .bind(propertyId)
+      .first<{ total: number }>(),
+    c.env.DB
+      .prepare(
+        `SELECT SUM(cost) as total FROM service_orders
+         WHERE property_id = ? AND deleted_at IS NULL AND cost IS NOT NULL`
       )
       .bind(propertyId)
       .first<{ total: number }>(),
@@ -184,9 +191,13 @@ reports.get('/valuation-pdf', async (c) => {
   return ok(c, {
     generated_at: new Date().toISOString(),
     property,
-    health: { score, label: score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 30 ? 'Atenção' : 'Crítico', breakdown },
+    health_score: score,
+    health_label: score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 30 ? 'Atenção' : 'Crítico',
+    health_breakdown: breakdown,
     services_summary: servicesSummary.results,
-    annual_expenses: expensesTotal?.total ?? 0,
+    expenses_total: expensesTotal?.total ?? 0,
+    services_total: servicesTotal?.total ?? 0,
+    maintenance_total: 0,
     inventory_items: inventoryCount?.count ?? 0,
     recent_services: recentServices.results,
   });

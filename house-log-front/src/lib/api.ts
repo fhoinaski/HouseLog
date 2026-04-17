@@ -505,5 +505,10 @@ export type ValuationPayload = {
   services_total: number;
   maintenance_total: number;
   health_score: number;
+  health_label: string;
+  health_breakdown: Record<string, number>;
+  services_summary: { status: string; count: number }[];
+  inventory_items: number;
+  recent_services: { title: string; system_type: string; status: string; completed_at: string | null; cost: number | null }[];
   generated_at: string;
 };
