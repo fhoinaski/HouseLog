@@ -36,7 +36,7 @@ max_retries = 3
 binding = "AI"
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "0 6 * * *"]
 
 # --- AMBIENTE DE DESENVOLVIMENTO (DEV) ---
 # Comando: npx wrangler deploy --env dev

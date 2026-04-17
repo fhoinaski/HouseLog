@@ -270,4 +270,100 @@ maintenance.delete('/:id', async (c) => {
   return ok(c, { success: true });
 });
 
+// ── POST /maintenance/auto-check ─────────────────────────────────────────────
+// Admin-only endpoint to trigger auto-creation of overdue service orders
+
+maintenance.post('/auto-check', async (c) => {
+  if (c.get('userRole') !== 'admin') return err(c, 'Forbidden', 'FORBIDDEN', 403);
+  const result = await autoCreateOverdueOS(c.env.DB);
+  return ok(c, result);
+});
+
 export default maintenance;
+
+// ── Standalone exported function (also called by cron) ───────────────────────
+
+type OverdueSchedule = {
+  id: string;
+  property_id: string;
+  system_type: string;
+  title: string;
+  description: string | null;
+  responsible: string | null;
+  next_due: string;
+};
+
+export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: number; created: number; skipped: number }> {
+  const { results: schedules } = await db
+    .prepare(
+      `SELECT ms.id, ms.property_id, ms.system_type, ms.title, ms.description,
+              ms.responsible, ms.next_due
+       FROM maintenance_schedules ms
+       WHERE ms.auto_create_os = 1
+         AND ms.next_due <= datetime('now')
+         AND ms.deleted_at IS NULL`
+    )
+    .all<OverdueSchedule>();
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const schedule of schedules) {
+    const autoTitle = `[Auto] ${schedule.title}`;
+
+    // Check if an OS with this title and scheduled_at already exists for the property
+    const existing = await db
+      .prepare(
+        `SELECT id FROM service_orders
+         WHERE property_id = ?
+           AND title = ?
+           AND scheduled_at = ?
+         LIMIT 1`
+      )
+      .bind(schedule.property_id, autoTitle, schedule.next_due)
+      .first();
+
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    // Determine requested_by: responsible field or first owner of the property
+    let requestedBy: string | null = schedule.responsible ?? null;
+    if (!requestedBy) {
+      const owner = await db
+        .prepare(
+          `SELECT owner_id FROM properties WHERE id = ? LIMIT 1`
+        )
+        .bind(schedule.property_id)
+        .first<{ owner_id: string }>();
+      requestedBy = owner?.owner_id ?? null;
+    }
+
+    const osId = nanoid();
+
+    await db
+      .prepare(
+        `INSERT INTO service_orders
+         (id, property_id, room_id, system_type, requested_by, assigned_to,
+          title, description, priority, status, cost, warranty_until,
+          scheduled_at, checklist, created_at)
+         VALUES (?, ?, NULL, ?, ?, NULL, ?, ?, 'preventive', 'requested',
+                 NULL, NULL, ?, '[]', datetime('now'))`
+      )
+      .bind(
+        osId,
+        schedule.property_id,
+        schedule.system_type,
+        requestedBy,
+        autoTitle,
+        schedule.description ?? null,
+        schedule.next_due
+      )
+      .run();
+
+    created++;
+  }
+
+  return { checked: schedules.length, created, skipped };
+}

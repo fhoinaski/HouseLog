@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useRef, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -124,17 +124,17 @@ function DocRow({
 
 export default function DocumentsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const toast = useToast();
+  const { mutate: globalMutate } = useSWRConfig();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [uploading, setUploading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState<string | null>(null);
 
   const { data, mutate } = useSWR(
     ['documents', id, typeFilter],
-    () => documentsApi.list(id, { type: typeFilter || undefined })
+    () => documentsApi.list(id, { type: typeFilter === 'all' ? undefined : typeFilter })
   );
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<MetaForm>({
@@ -163,12 +163,13 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         amount: form.amount === '' ? undefined : Number(form.amount),
       });
       await mutate();
-      toast({ title: 'Documento enviado', variant: 'success' });
+      void globalMutate(['dashboard', id]);
+      toast.success('Documento enviado');
       setDialogOpen(false);
       setUploadFile(null);
       reset();
     } catch (e) {
-      toast({ title: 'Erro ao enviar', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro ao enviar', { description: (e as Error).message });
     } finally {
       setUploading(false);
     }
@@ -178,9 +179,9 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     try {
       await documentsApi.delete(id, docId);
       await mutate();
-      toast({ title: 'Documento removido', variant: 'success' });
+      toast.success('Documento removido');
     } catch (e) {
-      toast({ title: 'Erro ao remover', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro ao remover', { description: (e as Error).message });
     }
   }
 
@@ -189,15 +190,13 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     try {
       const result = await documentsApi.ocr(id, docId);
       await mutate();
-      toast({
-        title: 'OCR concluído',
+      toast.success('OCR concluído', {
         description: result.ocr_data?.vendor_name
           ? `Fornecedor: ${String(result.ocr_data.vendor_name)}`
           : 'Dados extraídos com sucesso',
-        variant: 'success',
       });
     } catch (e) {
-      toast({ title: 'Erro no OCR', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro no OCR', { description: (e as Error).message });
     } finally {
       setOcrLoading(null);
     }
@@ -228,7 +227,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <SelectValue placeholder="Tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value="all">Todos</SelectItem>
             {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}

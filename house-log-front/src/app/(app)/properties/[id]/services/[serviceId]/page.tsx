@@ -2,7 +2,7 @@
 
 import { use, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   ArrowLeft, Camera, Video, Share2, CheckCircle2, Clock,
   Wrench, AlertTriangle, MapPin, User, DollarSign, Calendar,
@@ -13,7 +13,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useToast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 import {
   SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS,
   formatDate, formatCurrency, cn,
@@ -43,7 +43,7 @@ export default function ServiceDetailPage({
 }) {
   const { id: propertyId, serviceId } = use(params);
   const router = useRouter();
-  const toast = useToast();
+  const { mutate: globalMutate } = useSWRConfig();
   const photoRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
 
@@ -64,9 +64,10 @@ export default function ServiceDetailPage({
     try {
       await servicesApi.updateStatus(propertyId, serviceId, next);
       await mutate();
-      toast({ title: `Status: ${SERVICE_STATUS_LABELS[next]}`, variant: 'success' });
+      void globalMutate(['dashboard', propertyId]);
+      toast.success(`Status: ${SERVICE_STATUS_LABELS[next]}`);
     } catch (e) {
-      toast({ title: 'Erro ao atualizar status', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro ao atualizar status', { description: (e as Error).message });
     }
   }
 
@@ -77,9 +78,9 @@ export default function ServiceDetailPage({
     try {
       await servicesApi.uploadPhoto(propertyId, serviceId, file, photoType);
       await mutate();
-      toast({ title: `Foto "${photoType === 'before' ? 'antes' : 'depois'}" enviada`, variant: 'success' });
+      toast.success(`Foto "${photoType === 'before' ? 'antes' : 'depois'}" enviada`);
     } catch (e) {
-      toast({ title: 'Erro no upload', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro no upload', { description: (e as Error).message });
     } finally {
       setUploadingMedia(false);
       e.target.value = '';
@@ -93,9 +94,9 @@ export default function ServiceDetailPage({
     try {
       await servicesApi.uploadVideo(propertyId, serviceId, file);
       await mutate();
-      toast({ title: 'Vídeo enviado', variant: 'success' });
+      toast.success('Vídeo enviado');
     } catch (e) {
-      toast({ title: 'Erro no upload', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro no upload', { description: (e as Error).message });
     } finally {
       setUploadingMedia(false);
       e.target.value = '';
@@ -111,7 +112,7 @@ export default function ServiceDetailPage({
       });
       setAuditLink({ url: res.url, expires_at: res.expires_at });
     } catch (e) {
-      toast({ title: 'Erro ao gerar link', description: (e as Error).message, variant: 'destructive' });
+      toast.error('Erro ao gerar link', { description: (e as Error).message });
     } finally {
       setGeneratingLink(false);
     }
@@ -120,7 +121,7 @@ export default function ServiceDetailPage({
   async function copyAuditLink() {
     if (!auditLink) return;
     await navigator.clipboard.writeText(auditLink.url);
-    toast({ title: 'Link copiado!', variant: 'success' });
+    toast.success('Link copiado!');
   }
 
   if (!order) {

@@ -10,7 +10,7 @@ import services from './routes/services';
 import expenses from './routes/expenses';
 import documents from './routes/documents';
 import auditLinks from './routes/audit-links';
-import maintenance from './routes/maintenance';
+import maintenance, { autoCreateOverdueOS } from './routes/maintenance';
 import reports from './routes/reports';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 
@@ -80,12 +80,17 @@ export default {
 
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
     if (event.cron === '0 * * * *') {
+      // expire audit links
       await env.DB
         .prepare(
           `UPDATE audit_links SET status = 'expired'
            WHERE status = 'active' AND expires_at < datetime('now')`
         )
         .run();
+    }
+    if (event.cron === '0 6 * * *') {
+      // auto-create OS for overdue maintenance schedules
+      await autoCreateOverdueOS(env.DB);
     }
   },
 

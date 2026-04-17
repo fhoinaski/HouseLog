@@ -3,7 +3,6 @@
 import { SWRConfig } from 'swr';
 import { clearToken } from './api';
 
-// Module-level flag prevents multiple simultaneous 401s from causing a redirect storm
 let redirecting = false;
 
 export function handle401(): void {
@@ -17,6 +16,8 @@ export function SWRProvider({ children }: { children: React.ReactNode }) {
   return (
     <SWRConfig
       value={{
+        revalidateOnFocus: false,
+        dedupingInterval: 5000,
         onError(error: unknown) {
           if ((error as { status?: number })?.status === 401) {
             handle401();
