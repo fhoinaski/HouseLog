@@ -8,6 +8,7 @@ export type Bindings = {
   JWT_SECRET: string;
   CORS_ORIGIN: string;
   ENVIRONMENT: string;
+  R2_PUBLIC_URL: string;
 };
 
 export type Variables = {

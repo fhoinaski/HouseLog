@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, requireRole, assertPropertyAccess } from '../middleware/auth';
+import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
 import type { Bindings, Variables, Property } from '../lib/types';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -25,7 +26,9 @@ const createSchema = z.object({
   owner_id: z.string().optional(), // admin can set this
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = createSchema.partial().extend({
+  cover_url: z.string().url().optional().nullable(),
+});
 
 // ── GET /properties ─────────────────────────────────────────────────────────
 
@@ -192,6 +195,7 @@ properties.put('/:id', async (c) => {
   if (data.year_built !== undefined) { fields.push('year_built = ?');  values.push(data.year_built); }
   if (data.structure !== undefined)  { fields.push('structure = ?');   values.push(data.structure); }
   if (data.floors !== undefined)     { fields.push('floors = ?');      values.push(data.floors); }
+  if (data.cover_url !== undefined)  { fields.push('cover_url = ?');   values.push(data.cover_url); }
 
   if (fields.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
@@ -252,6 +256,45 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
   return ok(c, { success: true });
 });
 
+// ── POST /properties/:id/cover ───────────────────────────────────────────────
+
+properties.post('/:id/cover', async (c) => {
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
+
+  const formData = await c.req.formData().catch(() => null);
+  if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
+
+  const file = formData.get('file') as File | null;
+  if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
+
+  const validation = validateUpload(file.type, file.size);
+  if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
+
+  const key = buildR2Key({ propertyId: id, category: 'photos', filename: `cover.${file.name.split('.').pop()}` });
+  const buffer = await file.arrayBuffer();
+  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+
+  const coverUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
+
+  await c.env.DB
+    .prepare('UPDATE properties SET cover_url = ? WHERE id = ?')
+    .bind(coverUrl, id)
+    .run();
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'property', entityId: id, action: 'cover_upload',
+    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { cover_url: coverUrl },
+  });
+
+  return ok(c, { cover_url: coverUrl });
+});
+
 // ── GET /properties/:id/dashboard ────────────────────────────────────────────
 
 properties.get('/:id/dashboard', async (c) => {
@@ -307,11 +350,21 @@ properties.get('/:id/dashboard', async (c) => {
     .bind(id)
     .all<{ reference_month: string; total: number; category: string }>();
 
+  type ExpRow = { total: number; this_month: number };
+  type SvcRow = { total: number; requested: number; in_progress: number; done: number; urgent_open: number };
+  type InvRow = { total: number; low_stock: number };
+  type PropRow = { health_score: number };
+
+  const exp = (expensesRow as unknown as { results: ExpRow[] }).results[0] ?? { total: 0, this_month: 0 };
+  const svc = (servicesRow as unknown as { results: SvcRow[] }).results[0] ?? { total: 0, requested: 0, in_progress: 0, done: 0, urgent_open: 0 };
+  const inv = (inventoryRow as unknown as { results: InvRow[] }).results[0] ?? { total: 0, low_stock: 0 };
+  const prop = (propertyRow as unknown as { results: PropRow[] }).results[0];
+
   return ok(c, {
-    health_score: (propertyRow as { health_score: number } | null)?.health_score ?? 50,
-    expenses: expensesRow,
-    services: servicesRow,
-    inventory: inventoryRow,
+    health_score: prop?.health_score ?? 50,
+    expenses: exp,
+    services: svc,
+    inventory: inv,
     monthly_expenses: monthlyExpenses,
   });
 });
