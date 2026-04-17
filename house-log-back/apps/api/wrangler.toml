@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 # --- CONFIGURAÇÃO GLOBAL / PRODUÇÃO ---
 [vars]
 ENVIRONMENT = "production"
-CORS_ORIGIN = "https://houselog.vercel.app"
+CORS_ORIGIN = "https://house-log.vercel.app"
 
 [[d1_databases]]
 binding = "DB"
@@ -39,7 +39,7 @@ name = "houselog-api-dev"
 
 [env.dev.vars]
 ENVIRONMENT = "development"
-CORS_ORIGIN = "http://localhost:3000"
+CORS_ORIGIN = "*"
 
 [[env.dev.d1_databases]]
 binding = "DB"
