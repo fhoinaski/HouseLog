@@ -40,8 +40,18 @@ properties.get('/', async (c) => {
   const cursor = c.req.query('cursor');
   const search = c.req.query('search');
 
-  // Single query for all roles: owner_id, manager_id, or collaborator
-  const query = `
+  const searchClause = search ? "AND (p.name LIKE ? OR p.city LIKE ?)" : '';
+  const cursorClause = cursor ? "AND p.created_at < ?" : '';
+
+  const buildBindings = (base: unknown[]) => {
+    const b = [...base];
+    if (search) b.push(`%${search}%`, `%${search}%`);
+    if (cursor) b.push(cursor);
+    b.push(limit + 1);
+    return b;
+  };
+
+  const fullQuery = `
     SELECT p.*, u.name as owner_name, u.email as owner_email
     FROM properties p
     JOIN users u ON u.id = p.owner_id
@@ -53,20 +63,38 @@ properties.get('/', async (c) => {
           WHERE property_id = p.id AND user_id = ?
         )
       )
-    ${search ? "AND (p.name LIKE ? OR p.city LIKE ?)" : ''}
-    ${cursor ? "AND p.created_at < ?" : ''}
+    ${searchClause} ${cursorClause}
     ORDER BY p.created_at DESC LIMIT ?
   `;
 
-  const bindings: unknown[] = [userId, userId, userId];
-  if (search) bindings.push(`%${search}%`, `%${search}%`);
-  if (cursor) bindings.push(cursor);
-  bindings.push(limit + 1);
+  const fallbackQuery = `
+    SELECT p.*, u.name as owner_name, u.email as owner_email
+    FROM properties p
+    JOIN users u ON u.id = p.owner_id
+    WHERE p.deleted_at IS NULL
+      AND (p.owner_id = ? OR p.manager_id = ?)
+    ${searchClause} ${cursorClause}
+    ORDER BY p.created_at DESC LIMIT ?
+  `;
 
-  const { results } = await c.env.DB
-    .prepare(query)
-    .bind(...bindings)
-    .all<Property & { owner_name: string; owner_email: string }>();
+  let results: (Property & { owner_name: string; owner_email: string })[];
+  try {
+    const r = await c.env.DB
+      .prepare(fullQuery)
+      .bind(...buildBindings([userId, userId, userId]))
+      .all<Property & { owner_name: string; owner_email: string }>();
+    results = r.results;
+  } catch (e) {
+    if (String(e).includes('property_collaborators')) {
+      const r = await c.env.DB
+        .prepare(fallbackQuery)
+        .bind(...buildBindings([userId, userId]))
+        .all<Property & { owner_name: string; owner_email: string }>();
+      results = r.results;
+    } else {
+      throw e;
+    }
+  }
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
