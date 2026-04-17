@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Building2, LayoutDashboard, Package, Wrench, FileText,
   BarChart3, Settings, LogOut, Home, RefreshCw, Activity,
-  Search, Users, Download, X,
+  Search, Users, Download, X, KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
@@ -27,6 +27,7 @@ const PROPERTY_NAV = (id: string) => [
   { href: `/properties/${id}/documents`,   label: 'Documentos',  icon: FileText },
   { href: `/properties/${id}/financial`,   label: 'Financeiro',  icon: BarChart3 },
   { href: `/properties/${id}/team`,        label: 'Equipe',      icon: Users },
+  { href: `/properties/${id}/access`,      label: 'Acessos',     icon: KeyRound },
   { href: `/properties/${id}/report`,      label: 'Relatório',   icon: Activity },
 ];
 

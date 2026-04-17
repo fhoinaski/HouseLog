@@ -7,9 +7,9 @@ import dynamic from 'next/dynamic';
 import {
   ArrowLeft, Camera, Video, Share2, CheckCircle2, Clock,
   Wrench, AlertTriangle, MapPin, User, DollarSign, Calendar,
-  ShieldCheck, Trash2, Copy, Download,
+  ShieldCheck, Trash2, Copy, Download, Send, KeyRound,
 } from 'lucide-react';
-import { servicesApi, propertiesApi, type ServiceOrder } from '@/lib/api';
+import { servicesApi, propertiesApi, shareApi, type ServiceOrder } from '@/lib/api';
 import { ServiceOrderPDF } from '@/components/pdf/ServiceOrderPDF';
 import { BeforeAfterSlider } from '@/components/ui/before-after-slider';
 
@@ -60,6 +60,12 @@ export default function ServiceDetailPage({
   const [auditLink, setAuditLink] = useState<{ url: string; expires_at: string } | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<{ url: string; expires_at: string } | null>(null);
+  const [generatingShare, setGeneratingShare] = useState(false);
+  const [shareIncludeCreds, setShareIncludeCreds] = useState(false);
+  const [shareProviderName, setShareProviderName] = useState('');
+  const [shareProviderEmail, setShareProviderEmail] = useState('');
 
   const { data, mutate } = useSWR(
     ['service', propertyId, serviceId],
@@ -135,6 +141,28 @@ export default function ServiceDetailPage({
     toast.success('Link copiado!');
   }
 
+  async function generateShareLink() {
+    setGeneratingShare(true);
+    try {
+      const res = await shareApi.createLink(propertyId, serviceId, {
+        share_credentials: shareIncludeCreds,
+        provider_name: shareProviderName || undefined,
+        provider_email: shareProviderEmail || undefined,
+      });
+      setShareLink({ url: res.url, expires_at: res.expires_at });
+    } catch (e) {
+      toast.error('Erro ao gerar link', { description: (e as Error).message });
+    } finally {
+      setGeneratingShare(false);
+    }
+  }
+
+  async function copyShareLink() {
+    if (!shareLink) return;
+    await navigator.clipboard.writeText(shareLink.url);
+    toast.success('Link copiado!');
+  }
+
   if (!order) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -179,19 +207,25 @@ export default function ServiceDetailPage({
             <Badge variant={PRIORITY_VARIANT[order.priority]}>{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
           </div>
         </div>
-        {order && property && (
-          <PDFDownloadLink
-            document={<ServiceOrderPDF order={order} propertyName={property.name} />}
-            fileName={`os-${order.id.slice(0,8)}-${new Date().toISOString().slice(0,10)}.pdf`}
-          >
-            {({ loading }) => (
-              <Button variant="outline" size="sm" disabled={loading}>
-                <Download className="h-3.5 w-3.5" />
-                {loading ? 'Gerando...' : 'PDF'}
-              </Button>
-            )}
-          </PDFDownloadLink>
-        )}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShareDialogOpen(true)}>
+            <Send className="h-3.5 w-3.5" />
+            Enviar
+          </Button>
+          {order && property && (
+            <PDFDownloadLink
+              document={<ServiceOrderPDF order={order} propertyName={property.name} />}
+              fileName={`os-${order.id.slice(0,8)}-${new Date().toISOString().slice(0,10)}.pdf`}
+            >
+              {({ loading }) => (
+                <Button variant="outline" size="sm" disabled={loading}>
+                  <Download className="h-3.5 w-3.5" />
+                  {loading ? '...' : 'PDF'}
+                </Button>
+              )}
+            </PDFDownloadLink>
+          )}
+        </div>
       </div>
 
       {/* Meta */}
@@ -414,6 +448,95 @@ export default function ServiceDetailPage({
       {/* Hidden inputs */}
       <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
       <input ref={videoRef} type="file" accept="video/mp4" className="hidden" onChange={handleVideoUpload} />
+
+      {/* Share with provider dialog */}
+      <Dialog open={shareDialogOpen} onOpenChange={(o) => { setShareDialogOpen(o); if (!o) setShareLink(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary-500" /> Enviar OS ao Prestador
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Gere um link público. O prestador pode visualizar a OS, aceitar, iniciar e marcar como concluído — sem precisar de conta.
+          </p>
+          {!shareLink ? (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Nome do prestador (opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: João Silva — Elétrica"
+                  value={shareProviderName}
+                  onChange={(e) => setShareProviderName(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Email do prestador (opcional)</label>
+                <input
+                  type="email"
+                  placeholder="prestador@email.com"
+                  value={shareProviderEmail}
+                  onChange={(e) => setShareProviderEmail(e.target.value)}
+                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                />
+              </div>
+              <label className="flex items-start gap-2.5 rounded-lg border border-[var(--border)] p-3 cursor-pointer hover:bg-[var(--muted)] transition-colors">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded"
+                  checked={shareIncludeCreds}
+                  onChange={(e) => setShareIncludeCreds(e.target.checked)}
+                />
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-amber-500" />
+                    Incluir senhas de acesso
+                  </p>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Credenciais marcadas como &ldquo;incluir em OS&rdquo; serão visíveis no link.
+                  </p>
+                </div>
+              </label>
+              <Button onClick={generateShareLink} loading={generatingShare} className="w-full">
+                <Send className="h-4 w-4" /> Gerar Link
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-xl bg-[var(--muted)] border border-[var(--border)] px-3 py-2.5 text-xs font-mono break-all text-[var(--muted-foreground)]">
+                {shareLink.url}
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Expira: {new Date(shareLink.expires_at).toLocaleString('pt-BR')}
+              </p>
+              <div className="flex gap-2">
+                <Button onClick={copyShareLink} variant="outline" className="flex-1">
+                  <Copy className="h-4 w-4" /> Copiar Link
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    if (shareProviderEmail) {
+                      window.open(`mailto:${shareProviderEmail}?subject=Ordem de Serviço — ${order?.title}&body=Olá ${shareProviderName || ''},\n\nVocê tem uma OS para executar:\n\n${shareLink.url}\n\nAcesse o link para ver todos os detalhes.`);
+                    } else {
+                      copyShareLink();
+                    }
+                  }}
+                >
+                  {shareProviderEmail ? 'Enviar Email' : <Copy className="h-4 w-4" />}
+                  {shareProviderEmail ? '' : 'Copiar'}
+                </Button>
+              </div>
+              <Button variant="ghost" className="w-full text-xs" onClick={() => setShareLink(null)}>
+                Gerar novo link
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Audit link dialog */}
       <Dialog open={auditDialogOpen} onOpenChange={setAuditDialogOpen}>
