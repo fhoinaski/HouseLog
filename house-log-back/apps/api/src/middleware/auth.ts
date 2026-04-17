@@ -50,13 +50,18 @@ export async function assertPropertyAccess(
 ): Promise<boolean> {
   if (role === 'admin') return true;
 
-  const row = await db
+  const owned = await db
     .prepare(
       `SELECT id FROM properties
        WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
     )
     .bind(propertyId, userId, userId)
     .first();
+  if (owned) return true;
 
-  return row !== null;
+  const collab = await db
+    .prepare(`SELECT id FROM property_collaborators WHERE property_id = ? AND user_id = ?`)
+    .bind(propertyId, userId)
+    .first();
+  return collab !== null;
 }

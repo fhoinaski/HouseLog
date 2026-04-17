@@ -3,11 +3,18 @@
 import { use } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {
   ArrowLeft, Activity, Wrench, ShieldCheck, Clock, FileText,
   TrendingUp, Download, RefreshCw,
 } from 'lucide-react';
 import { reportsApi, propertiesApi } from '@/lib/api';
+import { HealthReportPDF } from '@/components/pdf/HealthReportPDF';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
+  { ssr: false, loading: () => <Button variant="outline" size="sm" disabled><Download className="h-3.5 w-3.5" />PDF</Button> }
+);
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn, scoreColor, scoreBg, formatCurrency, formatDate } from '@/lib/utils';
@@ -170,6 +177,25 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
             <Download className="h-3.5 w-3.5" />
             Exportar JSON
           </Button>
+          {scoreData && valuationData && (
+            <PDFDownloadLink
+              document={
+                <HealthReportPDF
+                  score={scoreData.score}
+                  breakdown={scoreData.breakdown}
+                  valuation={valuationData}
+                />
+              }
+              fileName={`relatorio-saude-${property?.name ?? id}-${new Date().toISOString().slice(0, 10)}.pdf`}
+            >
+              {({ loading }) => (
+                <Button variant="outline" size="sm" disabled={loading}>
+                  <Download className="h-3.5 w-3.5" />
+                  {loading ? 'Gerando...' : 'Exportar PDF'}
+                </Button>
+              )}
+            </PDFDownloadLink>
+          )}
         </div>
       </div>
 

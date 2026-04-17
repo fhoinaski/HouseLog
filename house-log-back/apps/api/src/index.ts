@@ -10,8 +10,10 @@ import services from './routes/services';
 import expenses from './routes/expenses';
 import documents from './routes/documents';
 import auditLinks from './routes/audit-links';
-import maintenance, { autoCreateOverdueOS } from './routes/maintenance';
+import maintenance, { autoCreateOverdueOS, sendMaintenanceDueEmails } from './routes/maintenance';
 import reports from './routes/reports';
+import bids from './routes/bids';
+import provider from './routes/provider';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -58,6 +60,12 @@ api.route('/properties/:propertyId/maintenance', maintenance);
 // Reports: /api/v1/properties/:propertyId/report/...
 api.route('/properties/:propertyId/report', reports);
 
+// Bids (nested under property+service)
+api.route('/properties/:propertyId/services/:serviceId/bids', bids);
+
+// Provider portal
+api.route('/provider', provider);
+
 // Audit link creation (nested under property+service)
 api.route('/properties/:propertyId/services/:serviceId/audit-link', auditLinks);
 
@@ -89,8 +97,9 @@ export default {
         .run();
     }
     if (event.cron === '0 6 * * *') {
-      // auto-create OS for overdue maintenance schedules
       await autoCreateOverdueOS(env.DB);
+      const appUrl = env.APP_URL ?? 'https://house-log.vercel.app';
+      await sendMaintenanceDueEmails(env.DB, env.RESEND_API_KEY ?? '', appUrl);
     }
   },
 

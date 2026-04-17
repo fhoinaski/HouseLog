@@ -9,6 +9,8 @@ export type Bindings = {
   CORS_ORIGIN: string;
   ENVIRONMENT: string;
   R2_PUBLIC_URL: string;
+  RESEND_API_KEY: string;
+  APP_URL: string;
 };
 
 export type Variables = {
@@ -139,4 +141,18 @@ export type ApiError = {
   error: string;
   code: string;
   details?: unknown;
+};
+
+export type ServiceBid = {
+  id: string;
+  service_id: string;
+  provider_id: string;
+  provider_name?: string;
+  provider_email?: string;
+  provider_phone?: string | null;
+  amount: number;
+  notes: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  updated_at: string;
 };

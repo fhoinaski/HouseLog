@@ -367,3 +367,63 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
 
   return { checked: schedules.length, created, skipped };
 }
+
+export async function sendMaintenanceDueEmails(
+  db: D1Database,
+  resendApiKey: string,
+  appUrl: string
+): Promise<void> {
+  if (!resendApiKey) return;
+
+  const { results } = await db.prepare(`
+    SELECT m.id, m.title, m.next_due, m.property_id,
+           CAST(julianday(m.next_due) - julianday('now') AS INTEGER) as days_until_due,
+           p.name as property_name,
+           u.id as user_id, u.email, u.name as user_name, u.notification_prefs
+    FROM maintenance_schedules m
+    JOIN properties p ON p.id = m.property_id
+    JOIN users u ON u.id = p.owner_id
+    WHERE m.deleted_at IS NULL
+      AND julianday(m.next_due) - julianday('now') <= 3
+      AND julianday(m.next_due) - julianday('now') > -7
+    ORDER BY m.property_id, m.next_due
+  `).all<{
+    id: string; title: string; next_due: string; days_until_due: number;
+    property_id: string; property_name: string;
+    user_id: string; email: string; user_name: string; notification_prefs: string;
+  }>();
+
+  if (results.length === 0) return;
+
+  // Group by user+property
+  const grouped = new Map<string, typeof results>();
+  for (const row of results) {
+    const key = `${row.user_id}::${row.property_id}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(row);
+  }
+
+  const { sendEmail, emailMaintenanceDue } = await import('../lib/email');
+
+  for (const [, schedules] of grouped) {
+    const first = schedules[0];
+    const prefs = JSON.parse(first.notification_prefs || '{}') as Record<string, boolean>;
+    if (prefs.maintenance_due === false) continue;
+
+    try {
+      await sendEmail(resendApiKey, {
+        to: first.email,
+        subject: `${schedules.length} manutenção${schedules.length !== 1 ? 'ões' : ''} pendente${schedules.length !== 1 ? 's' : ''} em ${first.property_name}`,
+        html: emailMaintenanceDue({
+          recipientName: first.user_name,
+          schedules: schedules.map(s => ({ title: s.title, days_until_due: s.days_until_due })),
+          propertyName: first.property_name,
+          appUrl,
+          maintenanceUrl: `${appUrl}/properties/${first.property_id}/maintenance`,
+        }),
+      });
+    } catch (e) {
+      console.error(`Maintenance email failed for ${first.email}:`, e);
+    }
+  }
+}

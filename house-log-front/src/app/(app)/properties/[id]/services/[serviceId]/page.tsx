@@ -3,12 +3,19 @@
 import { use, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
+import dynamic from 'next/dynamic';
 import {
   ArrowLeft, Camera, Video, Share2, CheckCircle2, Clock,
   Wrench, AlertTriangle, MapPin, User, DollarSign, Calendar,
-  ShieldCheck, Trash2, Copy,
+  ShieldCheck, Trash2, Copy, Download,
 } from 'lucide-react';
-import { servicesApi, type ServiceOrder } from '@/lib/api';
+import { servicesApi, propertiesApi, type ServiceOrder } from '@/lib/api';
+import { ServiceOrderPDF } from '@/components/pdf/ServiceOrderPDF';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
+  { ssr: false, loading: () => <Button variant="outline" size="sm" disabled><Download className="h-3.5 w-3.5" />PDF</Button> }
+);
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +64,9 @@ export default function ServiceDetailPage({
     ['service', propertyId, serviceId],
     () => servicesApi.get(propertyId, serviceId)
   );
+
+  const { data: propData } = useSWR(['property', propertyId], () => propertiesApi.get(propertyId));
+  const property = propData?.property;
 
   const order = data?.order;
 
@@ -154,6 +164,19 @@ export default function ServiceDetailPage({
             <Badge variant={PRIORITY_VARIANT[order.priority]}>{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
           </div>
         </div>
+        {order && property && (
+          <PDFDownloadLink
+            document={<ServiceOrderPDF order={order} propertyName={property.name} />}
+            fileName={`os-${order.id.slice(0,8)}-${new Date().toISOString().slice(0,10)}.pdf`}
+          >
+            {({ loading }) => (
+              <Button variant="outline" size="sm" disabled={loading}>
+                <Download className="h-3.5 w-3.5" />
+                {loading ? 'Gerando...' : 'PDF'}
+              </Button>
+            )}
+          </PDFDownloadLink>
+        )}
       </div>
 
       {/* Meta */}

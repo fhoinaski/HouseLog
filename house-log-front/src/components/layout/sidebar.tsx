@@ -35,6 +35,7 @@ export function Sidebar() {
 
   const propertyMatch = pathname.match(/^\/properties\/([^/]+)/);
   const propertyId = propertyMatch?.[1];
+  const isProvider = user?.role === 'provider';
 
   return (
     <>
@@ -131,6 +132,15 @@ export function Sidebar() {
 
         {/* User + Settings + Theme */}
         <div className="border-t border-slate-700 p-3 space-y-1">
+          {isProvider && (
+            <Link
+              href="/provider/dashboard"
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            >
+              <Wrench className="h-4 w-4" />
+              Portal Prestador
+            </Link>
+          )}
           <Link
             href="/settings"
             className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"

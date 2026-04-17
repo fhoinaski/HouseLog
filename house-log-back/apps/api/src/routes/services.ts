@@ -5,6 +5,7 @@ import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { sendEmail, emailOsStatusChanged } from '../lib/email';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -13,7 +14,8 @@ services.use('*', authMiddleware);
 
 // Valid status transitions
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  requested:   ['approved'],
+  requested:   ['approved', 'bidding'],
+  bidding:     ['approved', 'requested'],
   approved:    ['in_progress', 'requested'],
   in_progress: ['completed', 'approved'],
   completed:   ['verified', 'in_progress'],
@@ -287,6 +289,40 @@ services.patch('/:id/status', async (c) => {
     .prepare('SELECT * FROM service_orders WHERE id = ?')
     .bind(id)
     .first<ServiceOrder>();
+
+  // Send email notification to requester (non-blocking)
+  void (async () => {
+    try {
+      const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
+      const requester = await c.env.DB
+        .prepare(`SELECT u.email, u.name, u.notification_prefs, p.name as property_name
+                  FROM users u JOIN properties p ON p.id = ?
+                  WHERE u.id = ?`)
+        .bind(propertyId, order.requested_by)
+        .first<{ email: string; name: string; notification_prefs: string; property_name: string }>();
+
+      if (requester && c.env.RESEND_API_KEY) {
+        const prefs = JSON.parse(requester.notification_prefs || '{}') as Record<string, boolean>;
+        if (prefs.os_status !== false) {
+          await sendEmail(c.env.RESEND_API_KEY, {
+            to: requester.email,
+            subject: `OS "${order.title}" → ${body.status}`,
+            html: emailOsStatusChanged({
+              recipientName: requester.name,
+              orderTitle: order.title,
+              oldStatus: order.status,
+              newStatus: body.status,
+              propertyName: requester.property_name,
+              appUrl,
+              serviceUrl: `${appUrl}/properties/${propertyId}/services/${id}`,
+            }),
+          });
+        }
+      }
+    } catch (e) {
+      console.error('OS status email failed:', e);
+    }
+  })();
 
   return ok(c, { order: updated });
 });
