@@ -61,20 +61,48 @@ export function apiFetcher<T>(path: string): Promise<T> {
 // Auth
 export const authApi = {
   register: (data: { email: string; name: string; password: string; role?: string; phone?: string }) =>
-    request<{ token: string; user: User }>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+    request<AuthPairResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
 
   login: (email: string, password: string) =>
-    request<{ token: string; user: User }>('/auth/login', {
+    request<AuthPairResponse | MfaChallengeResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
 
-  me: () => request<{ user: User }>('/auth/me'),
-
-  refresh: (token: string) =>
-    request<{ token: string }>('/auth/refresh', {
+  mfaChallenge: (challenge_token: string, code: string) =>
+    request<AuthPairResponse>('/auth/mfa/challenge', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ challenge_token, code }),
+    }),
+
+  me: () => request<{ user: User & { mfa_enabled?: boolean } }>('/auth/me'),
+
+  // Rotaciona: envia refresh_token no body, recebe novo par.
+  refresh: (refresh_token: string) =>
+    request<AuthPairResponse>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token }),
+    }),
+
+  logout: (refresh_token?: string) =>
+    request<{ ok: true }>('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify(refresh_token ? { refresh_token } : {}),
+    }),
+
+  mfaSetup: () =>
+    request<{ secret: string; otpauth_uri: string }>('/auth/mfa/setup', { method: 'POST' }),
+
+  mfaVerify: (code: string) =>
+    request<{ enabled: true; backup_codes: string[] }>('/auth/mfa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+
+  mfaDisable: (password: string) =>
+    request<{ enabled: false }>('/auth/mfa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
     }),
 
   updateProfile: (data: { name?: string; phone?: string }) =>
@@ -87,6 +115,41 @@ export const authApi = {
     request<{ user: User }>('/auth/profile', {
       method: 'PUT', body: JSON.stringify({ notification_prefs: JSON.stringify(prefs) }),
     }),
+};
+
+export type AuthPairResponse = {
+  token: string;           // alias de access_token para compat
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  user: User;
+};
+
+export type MfaChallengeResponse = {
+  mfa_required: true;
+  challenge_token: string;
+};
+
+export function isMfaChallenge(
+  r: AuthPairResponse | MfaChallengeResponse
+): r is MfaChallengeResponse {
+  return 'mfa_required' in r && r.mfa_required === true;
+}
+
+// Web Push
+export const pushApi = {
+  publicKey: () => request<{ publicKey: string }>('/push/public-key'),
+  subscribe: (sub: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    request<{ id: string; created?: boolean; updated?: boolean }>('/push/subscribe', {
+      method: 'POST',
+      body: JSON.stringify(sub),
+    }),
+  unsubscribe: (endpoint: string) =>
+    request<{ ok: true }>('/push/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    }),
+  test: () => request<{ sent: number }>('/push/test', { method: 'POST' }),
 };
 
 // Properties

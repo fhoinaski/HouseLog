@@ -34,3 +34,25 @@ CORS_ORIGIN=http://localhost:3000
 
 # Valores possíveis: development | production
 ENVIRONMENT=development
+
+# -----------------------------------------------------------------------------
+# Observabilidade
+# -----------------------------------------------------------------------------
+# DSN do projeto Sentry (opcional). Sem isso, o logger cai só para console.
+# SENTRY_DSN=https://<publicKey>@<host>/<projectId>
+
+# -----------------------------------------------------------------------------
+# Web Push (VAPID)
+# -----------------------------------------------------------------------------
+# Gere com: npx web-push generate-vapid-keys
+# O backend usa as três. O frontend precisa apenas de VAPID_PUBLIC_KEY
+# (exposta via GET /api/v1/push/public-key).
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:ops@houselog.app
+
+# -----------------------------------------------------------------------------
+# Refresh tokens
+# -----------------------------------------------------------------------------
+# Dias até o refresh token expirar. Default: 30.
+# REFRESH_TOKEN_TTL_DAYS=30

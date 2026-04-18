@@ -15,12 +15,21 @@ export type Bindings = {
   R2_SECRET_ACCESS_KEY?: string;
   RESEND_API_KEY: string;
   APP_URL: string;
+  // Observabilidade (opcional)
+  SENTRY_DSN?: string;
+  // Web Push / VAPID
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  // Refresh tokens (opcional — default 30 dias)
+  REFRESH_TOKEN_TTL_DAYS?: string;
 };
 
 export type Variables = {
   userId: string;
   userRole: Role;
   userEmail: string;
+  requestId: string;
 };
 
 export type Role = 'admin' | 'owner' | 'provider' | 'temp_provider';
@@ -132,7 +141,17 @@ export type Expense = {
 
 // Queue messages
 export type QueueMessage =
-  | { type: 'GENERATE_THUMBNAIL'; r2Key: string; itemId: string; itemType: string };
+  | { type: 'GENERATE_THUMBNAIL'; r2Key: string; itemId: string; itemType: string }
+  | { type: 'SEND_PUSH'; userId: string; payload: PushPayload };
+
+export type PushPayload = {
+  title: string;
+  body: string;
+  url?: string;
+  icon?: string;
+  tag?: string;
+  data?: Record<string, unknown>;
+};
 
 // Pagination
 export type CursorPage<T> = {
