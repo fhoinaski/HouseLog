@@ -20,6 +20,11 @@ import invites from './routes/invites';
 import credentials from './routes/credentials';
 import share from './routes/share';
 import push from './routes/push';
+import ai from './routes/ai';
+import finance from './routes/finance';
+import marketplace from './routes/marketplace';
+import messagesRoute from './routes/messages';
+import timeline from './routes/timeline';
 import { requestLogger, reportError, log } from './lib/logger';
 import { generateThumbnails } from './lib/image';
 import { pushToUser } from './lib/webpush';
@@ -58,6 +63,15 @@ api.route('/auth', auth);
 // Web Push
 api.route('/push', push);
 
+// IA (diagnose / transcribe / classify)
+api.route('/ai', ai);
+
+// Marketplace (ratings, matchmaking, agenda)
+api.route('/marketplace', marketplace);
+
+// Chat por OS (nested)
+api.route('/services', messagesRoute);
+
 // Properties CRUD + dashboard
 api.route('/properties', properties);
 
@@ -70,6 +84,8 @@ api.route('/properties/:propertyId/service-requests/:serviceRequestId/bids', ser
 api.route('/properties/:propertyId/expenses',    expenses);
 api.route('/properties/:propertyId/documents',   documents);
 api.route('/properties/:propertyId/maintenance', maintenance);
+api.route('/properties/:propertyId/finance',     finance);
+api.route('/properties/:propertyId/timeline',    timeline);
 
 // Reports: /api/v1/properties/:propertyId/report/...
 api.route('/properties/:propertyId/report', reports);
