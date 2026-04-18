@@ -18,6 +18,8 @@ import bids from './routes/bids';
 import provider from './routes/provider';
 import search from './routes/search';
 import invites from './routes/invites';
+import credentials from './routes/credentials';
+import share from './routes/share';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -83,6 +85,12 @@ api.route('/audit', auditLinks);
 
 // Full-text search (services, documents/OCR, inventory, maintenance)
 api.route('/search', search);
+
+// Access credentials (wifi, alarm, smart lock, etc.)
+api.route('/properties/:propertyId/credentials', credentials);
+
+// Service order public share links (create + public read/update)
+app.route('/api/v1', share);
 
 // ── 404 fallback ─────────────────────────────────────────────────────────────
 
