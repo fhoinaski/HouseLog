@@ -1,35 +1,19 @@
 'use client';
 
 import { use, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Loader2, Plus, Wrench, ChevronRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
-import { servicesApi, roomsApi, type ServiceOrder } from '@/lib/api';
+import { servicesApi, type ServiceOrder } from '@/lib/api';
 import { usePagination } from '@/hooks/usePagination';
+import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatDate, cn
 } from '@/lib/utils';
-
-const schema = z.object({
-  title: z.string().min(1, 'Título obrigatório'),
-  system_type: z.string().min(1),
-  description: z.string().optional(),
-  room_id: z.string().optional(),
-  priority: z.enum(['urgent', 'normal', 'preventive']).default('normal'),
-  assigned_to: z.string().optional(),
-  scheduled_at: z.string().optional(),
-});
-
-type FormData = z.infer<typeof schema>;
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -52,6 +36,21 @@ const STATUS_ICON: Record<string, React.ElementType> = {
   completed: CheckCircle2,
   verified: CheckCircle2,
 };
+
+function safeParseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void }) {
   const StatusIcon = STATUS_ICON[order.status] ?? Clock;
@@ -105,40 +104,18 @@ function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void
 
 export default function ServicesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [statusFilter, setStatusFilter] = useState('');
   const { mutate: globalMutate } = useSWRConfig();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
 
   const { data: orders, isLoadingMore, hasMore, loadMore, mutate } =
     usePagination<ServiceOrder>(
       `/properties/${id}/services`,
       statusFilter ? { status: statusFilter } : undefined
     );
-
-  const { data: roomsData } = useSWR(['rooms', id], () => roomsApi.list(id));
-
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { priority: 'normal' },
-  });
-
-  async function onSubmit(form: FormData) {
-    setApiError(null);
-    try {
-      await servicesApi.create(id, {
-        ...form,
-      });
-      await mutate();
-      void globalMutate(['dashboard', id]);
-      reset({ priority: 'normal' });
-      setDialogOpen(false);
-    } catch (e) {
-      setApiError((e as Error).message);
-    }
-  }
 
   async function updateStatus(orderId: string, status: string) {
     try {
@@ -164,11 +141,18 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
     verified: [],
   };
 
+  const selectedBeforePhotos = selectedOrder
+    ? safeParseStringArray(selectedOrder.before_photos)
+    : [];
+  const selectedAfterPhotos = selectedOrder
+    ? safeParseStringArray(selectedOrder.after_photos)
+    : [];
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">Ordens de Serviço</h2>
-        <Button onClick={() => { reset({ priority: 'normal' }); setApiError(null); setDialogOpen(true); }}>
+        <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           Nova OS
         </Button>
@@ -197,7 +181,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Wrench className="h-10 w-10 text-slate-300 mb-3" />
           <p className="text-[var(--muted-foreground)] text-sm">Nenhuma OS encontrada</p>
-          <Button variant="outline" className="mt-3" onClick={() => setDialogOpen(true)}>
+          <Button variant="outline" className="mt-3" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" /> Criar OS
           </Button>
         </div>
@@ -223,91 +207,16 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         </>
       )}
 
-      {/* Create dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nova Ordem de Serviço</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2 max-h-[70vh] overflow-y-auto pr-1">
-            <div className="space-y-1.5">
-              <Label htmlFor="os-title">Título *</Label>
-              <Input id="os-title" placeholder="Reparo elétrico no quarto..." {...register('title')} />
-              {errors.title && <p className="text-xs text-rose-500">{errors.title.message}</p>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Sistema *</Label>
-                <Select onValueChange={(v) => setValue('system_type', v)}>
-                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SYSTEM_TYPE_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.system_type && <p className="text-xs text-rose-500">{errors.system_type.message}</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Prioridade</Label>
-                <Select defaultValue="normal" onValueChange={(v) => setValue('priority', v as FormData['priority'])}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="urgent">Urgente</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="preventive">Preventiva</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Cômodo</Label>
-                <Select onValueChange={(v) => setValue('room_id', v === '__none__' ? undefined : v)}>
-                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Nenhum</SelectItem>
-                    {(roomsData?.rooms ?? []).map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="os-desc">Descrição</Label>
-              <textarea
-                id="os-desc"
-                rows={3}
-                placeholder="Descreva o problema ou serviço..."
-                className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-                {...register('description')}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="os-scheduled">Agendado para</Label>
-              <Input id="os-scheduled" type="datetime-local" {...register('scheduled_at')} />
-            </div>
-
-            {apiError && (
-              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-700">
-                {apiError}
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
-                Cancelar
-              </Button>
-              <Button type="submit" loading={isSubmitting} className="flex-1">Criar OS</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <ServiceOrderCreateModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        propertyId={id}
+        onCreated={async (orderId) => {
+          await mutate();
+          void globalMutate(['dashboard', id]);
+          router.push(`/properties/${id}/services/${orderId}`);
+        }}
+      />
 
       {/* Detail dialog */}
       {selectedOrder && (
@@ -361,11 +270,11 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
               )}
 
               {/* Photos */}
-              {JSON.parse(selectedOrder.before_photos || '[]').length > 0 && (
+              {selectedBeforePhotos.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Fotos antes</p>
                   <div className="flex gap-2 flex-wrap">
-                    {(JSON.parse(selectedOrder.before_photos) as string[]).map((url, i) => (
+                    {selectedBeforePhotos.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img key={i} src={url} alt="antes" className="h-16 w-16 rounded object-cover" />
                     ))}
@@ -373,11 +282,11 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
                 </div>
               )}
 
-              {JSON.parse(selectedOrder.after_photos || '[]').length > 0 && (
+              {selectedAfterPhotos.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Fotos depois</p>
                   <div className="flex gap-2 flex-wrap">
-                    {(JSON.parse(selectedOrder.after_photos) as string[]).map((url, i) => (
+                    {selectedAfterPhotos.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img key={i} src={url} alt="depois" className="h-16 w-16 rounded object-cover" />
                     ))}

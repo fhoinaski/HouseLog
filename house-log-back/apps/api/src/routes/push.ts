@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, eq } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth';
 import { ok, err } from '../lib/response';
 import { hasVapid, pushToUser } from '../lib/webpush';
+import { getDb } from '../db/client';
+import { pushSubscriptions } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const push = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -25,6 +28,7 @@ push.get('/public-key', (c) => {
 
 push.post('/subscribe', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => null);
   const parsed = subscribeSchema.safeParse(body);
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
@@ -32,42 +36,47 @@ push.post('/subscribe', authMiddleware, async (c) => {
   const { endpoint, keys } = parsed.data;
 
   // Upsert por endpoint (um device = um endpoint)
-  const existing = await c.env.DB
-    .prepare(`SELECT id FROM push_subscriptions WHERE endpoint = ?`)
-    .bind(endpoint)
-    .first<{ id: string }>();
+  const [existing] = await db
+    .select({ id: pushSubscriptions.id })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.endpoint, endpoint))
+    .limit(1);
 
   if (existing) {
-    await c.env.DB
-      .prepare(
-        `UPDATE push_subscriptions SET user_id = ?, p256dh = ?, auth = ?, user_agent = ? WHERE id = ?`
-      )
-      .bind(userId, keys.p256dh, keys.auth, c.req.header('User-Agent') ?? null, existing.id)
-      .run();
+    await db
+      .update(pushSubscriptions)
+      .set({
+        userId,
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+        userAgent: c.req.header('User-Agent') ?? null,
+      })
+      .where(eq(pushSubscriptions.id, existing.id));
     return ok(c, { id: existing.id, updated: true });
   }
 
   const id = nanoid();
-  await c.env.DB
-    .prepare(
-      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    )
-    .bind(id, userId, endpoint, keys.p256dh, keys.auth, c.req.header('User-Agent') ?? null)
-    .run();
+  await db.insert(pushSubscriptions).values({
+    id,
+    userId,
+    endpoint,
+    p256dh: keys.p256dh,
+    auth: keys.auth,
+    userAgent: c.req.header('User-Agent') ?? null,
+  });
   return ok(c, { id, created: true }, 201);
 });
 
 push.post('/unsubscribe', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => ({}));
   const endpoint = typeof body?.endpoint === 'string' ? body.endpoint : null;
   if (!endpoint) return err(c, 'endpoint obrigatório', 'INVALID_BODY', 400);
 
-  await c.env.DB
-    .prepare(`DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?`)
-    .bind(userId, endpoint)
-    .run();
+  await db
+    .delete(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
   return ok(c, { ok: true });
 });
 

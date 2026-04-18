@@ -40,8 +40,30 @@ export type User = {
   email: string;
   name: string;
   role: Role;
+  provider_categories: string[] | null;
   password_hash: string;
   phone: string | null;
+  whatsapp: string | null;
+  service_area: string | null;
+  pix_key: string | null;
+  pix_key_type: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random' | null;
+  provider_bio: string | null;
+  provider_courses: string[] | null;
+  provider_specializations: string[] | null;
+  provider_portfolio: string[] | null;
+  provider_education: Array<{
+    institution: string;
+    title: string;
+    type: 'college' | 'technical' | 'course' | 'certification' | 'other';
+    status: 'in_progress' | 'completed';
+    certificationUrl?: string;
+  }> | null;
+  provider_portfolio_cases: Array<{
+    title: string;
+    description?: string;
+    beforeImageUrl?: string;
+    afterImageUrl?: string;
+  }> | null;
   avatar_url: string | null;
   created_at: string;
   last_login: string | null;

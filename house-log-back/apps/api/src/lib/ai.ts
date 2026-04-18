@@ -4,6 +4,9 @@
 // - classify: document text → { kind, fields }
 
 import type { Bindings } from './types';
+import { eq } from 'drizzle-orm';
+import { getDb } from '../db/client';
+import { aiCache } from '../db/schema';
 
 type AiBinding = Bindings['AI'];
 
@@ -19,10 +22,12 @@ async function sha256Hex(data: ArrayBuffer | Uint8Array | string): Promise<strin
 }
 
 async function cacheGet<T>(db: D1Database, key: string): Promise<T | null> {
-  const row = await db
-    .prepare(`SELECT result FROM ai_cache WHERE cache_key = ?`)
-    .bind(key)
-    .first<{ result: string }>();
+  const drizzle = getDb(db);
+  const [row] = await drizzle
+    .select({ result: aiCache.result })
+    .from(aiCache)
+    .where(eq(aiCache.cacheKey, key))
+    .limit(1);
   if (!row) return null;
   try {
     return JSON.parse(row.result) as T;
@@ -32,13 +37,18 @@ async function cacheGet<T>(db: D1Database, key: string): Promise<T | null> {
 }
 
 async function cacheSet(db: D1Database, key: string, kind: string, result: unknown): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR REPLACE INTO ai_cache (cache_key, kind, result, created_at)
-       VALUES (?, ?, ?, datetime('now'))`
-    )
-    .bind(key, kind, JSON.stringify(result))
-    .run();
+  const drizzle = getDb(db);
+  await drizzle
+    .insert(aiCache)
+    .values({ cacheKey: key, kind, result: JSON.stringify(result) })
+    .onConflictDoUpdate({
+      target: aiCache.cacheKey,
+      set: {
+        kind,
+        result: JSON.stringify(result),
+        createdAt: new Date().toISOString(),
+      },
+    });
 }
 
 const SEVERITY = ['low', 'medium', 'high', 'critical'] as const;

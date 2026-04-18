@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
 import dynamic from 'next/dynamic';
@@ -12,6 +12,7 @@ import {
 import { servicesApi, propertiesApi, shareApi, type ServiceOrder } from '@/lib/api';
 import { ServiceOrderPDF } from '@/components/pdf/ServiceOrderPDF';
 import { BeforeAfterSlider } from '@/components/ui/before-after-slider';
+import { ServiceChat } from '@/components/services/service-chat';
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
@@ -44,6 +45,35 @@ const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent', normal: 'normal', preventive: 'preventive',
 };
 
+function safeParseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function safeParseChecklist(value: unknown): { item: string; done: boolean }[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is { item: unknown; done: unknown } => typeof item === 'object' && item !== null)
+      .map((item) => ({ item: String(item.item ?? ''), done: Boolean(item.done) }));
+  }
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is { item: unknown; done: unknown } => typeof item === 'object' && item !== null)
+      .map((item) => ({ item: String(item.item ?? ''), done: Boolean(item.done) }));
+  } catch {
+    return [];
+  }
+}
+
 export default function ServiceDetailPage({
   params,
 }: {
@@ -66,6 +96,7 @@ export default function ServiceDetailPage({
   const [shareIncludeCreds, setShareIncludeCreds] = useState(false);
   const [shareProviderName, setShareProviderName] = useState('');
   const [shareProviderEmail, setShareProviderEmail] = useState('');
+  const [checklist, setChecklist] = useState<{ item: string; done: boolean }[]>([]);
 
   const { data, mutate } = useSWR(
     ['service', propertyId, serviceId],
@@ -76,6 +107,14 @@ export default function ServiceDetailPage({
   const property = propData?.property;
 
   const order = data?.order;
+
+  useEffect(() => {
+    if (!order) {
+      setChecklist([]);
+      return;
+    }
+    setChecklist(safeParseChecklist(order.checklist));
+  }, [order?.id, order?.checklist]);
 
   async function advanceStatus(next: string) {
     try {
@@ -171,11 +210,8 @@ export default function ServiceDetailPage({
     );
   }
 
-  const beforePhotos = JSON.parse(order.before_photos || '[]') as string[];
-  const afterPhotos = JSON.parse(order.after_photos || '[]') as string[];
-  const [checklist, setChecklist] = useState<{ item: string; done: boolean }[]>(
-    () => JSON.parse(order.checklist || '[]') as { item: string; done: boolean }[]
-  );
+  const beforePhotos = safeParseStringArray(order.before_photos);
+  const afterPhotos = safeParseStringArray(order.after_photos);
 
   async function toggleChecklistItem(index: number) {
     const updated = checklist.map((item, i) =>
@@ -431,6 +467,8 @@ export default function ServiceDetailPage({
           <Share2 className="h-4 w-4" /> Link de Auditoria
         </Button>
       </div>
+
+      <ServiceChat serviceOrderId={serviceId} title="Chat com prestador" />
 
       {/* Status actions */}
       {nextStatuses.length > 0 && (

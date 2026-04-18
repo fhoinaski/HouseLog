@@ -4,15 +4,14 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useState } from 'react';
-import { ArrowLeft, DoorOpen, Wrench } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, Building2, ImagePlus } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
-import { PROPERTY_TEMPLATES } from '@/lib/templates';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 
 const schema = z.object({
   name: z.string().min(1, 'Nome obrigatório'),
@@ -20,9 +19,6 @@ const schema = z.object({
   address: z.string().min(1, 'Endereço obrigatório'),
   city: z.string().min(1, 'Cidade obrigatória'),
   area_m2: z.coerce.number().positive().optional().or(z.literal('')),
-  year_built: z.coerce.number().int().min(1800).max(2100).optional().or(z.literal('')),
-  floors: z.coerce.number().int().min(1).default(1),
-  structure: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -30,14 +26,22 @@ type FormData = z.infer<typeof schema>;
 export default function NewPropertyPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
 
   const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { type: 'house', floors: 1 },
+    defaultValues: { type: 'house' },
   });
 
   const watchType = watch('type');
-  const template = PROPERTY_TEMPLATES[watchType ?? 'house'];
+
+  const typeLabel = useMemo(() => {
+    if (watchType === 'house') return 'Casa';
+    if (watchType === 'apt') return 'Apartamento';
+    if (watchType === 'commercial') return 'Comercial';
+    return 'Galpão';
+  }, [watchType]);
 
   async function onSubmit(data: FormData) {
     setError(null);
@@ -45,7 +49,6 @@ export default function NewPropertyPage() {
       const res = await propertiesApi.create({
         ...data,
         area_m2: data.area_m2 === '' ? undefined : Number(data.area_m2),
-        year_built: data.year_built === '' ? undefined : Number(data.year_built),
       });
       router.push(`/properties/${res.property.id}`);
     } catch (e) {
@@ -53,119 +56,123 @@ export default function NewPropertyPage() {
     }
   }
 
+  function onPickCover() {
+    coverInputRef.current?.click();
+  }
+
+  function onCoverChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setCoverPreview(url);
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-xl font-bold">Novo Imóvel</h1>
-      </div>
+    <div className="relative min-h-screen overflow-x-hidden pb-28 pt-20">
+      <div className="pointer-events-none fixed left-0 top-0 -z-10 h-96 w-full bg-linear-to-b from-zinc-800 to-transparent" />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Informações do Imóvel</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2 space-y-1.5">
-                <Label htmlFor="name">Nome / Apelido *</Label>
-                <Input id="name" placeholder="Casa da Praia, Apto 302..." {...register('name')} />
-                {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
+      <header className="fixed left-0 top-0 z-40 flex h-16 w-full items-center justify-between bg-background/80 px-6 shadow-[0px_40px_60px_rgba(6,14,32,0.4)] backdrop-blur-lg">
+        <button
+          aria-label="Voltar"
+          className="-ml-2 rounded-full p-2 text-primary-400 transition-all duration-300 hover:bg-zinc-600 active:scale-95"
+          onClick={() => router.back()}
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        <h1 className="pr-10 text-center text-xl font-semibold tracking-tight text-primary-400">Novo Imóvel</h1>
+      </header>
+
+      <main className="relative z-10 mx-auto mt-6 flex w-full max-w-3xl flex-col gap-8 px-6 pb-10">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-5xl font-extrabold tracking-tight text-primary-400">Adicionar Propriedade</h2>
+          <p className="max-w-lg text-xl leading-relaxed font-medium tracking-wide text-[#c4c5d9]">
+            Insira os dados fundamentais para integrar esta propriedade ao seu portfólio de gestão.
+          </p>
+        </div>
+
+        <form className="flex flex-col gap-6" onSubmit={handleSubmit(onSubmit)}>
+          <button
+            type="button"
+            onClick={onPickCover}
+            className="group relative flex min-h-55 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-zinc-500/10 bg-zinc-700 p-6 transition-all duration-300 hover:scale-[1.01] hover:bg-zinc-600"
+          >
+            <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-zinc-600/20 to-transparent" />
+            {coverPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPreview} alt="Prévia da capa" className="absolute inset-0 h-full w-full object-cover" />
+            ) : null}
+            <div className={cn('z-10 flex flex-col items-center gap-3 text-center', coverPreview ? 'bg-background/65 rounded-xl px-4 py-3 backdrop-blur-sm' : '')}>
+              <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-600/50 text-primary-400 shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur-md">
+                <ImagePlus className="h-8 w-8" />
+              </div>
+              <h3 className="text-2xl font-semibold text-[#dae2fd]">Imagem de Capa</h3>
+              <p className="max-w-55 text-sm leading-tight text-[#c4c5d9]">
+                Toque para fazer upload da foto principal do imóvel.
+              </p>
+            </div>
+            <input ref={coverInputRef} accept="image/*" className="hidden" type="file" onChange={onCoverChange} />
+          </button>
+
+          <Card className="rounded-xl border-zinc-500/20 bg-zinc-800/70 p-1 shadow-[0px_20px_40px_rgba(6,14,32,0.4)]">
+            <CardContent className="flex flex-col gap-4 p-0">
+              <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
+                <label className="mb-2 block text-label-caps text-primary-400">Nome da propriedade</label>
+                <Input id="name" placeholder="Ex: Edifício Aurora" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('name')} />
+                {errors.name && <p className="mt-2 text-xs text-[#ffb4ab]">{errors.name.message}</p>}
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Tipo *</Label>
-                <Select defaultValue="house" onValueChange={(v) => setValue('type', v as FormData['type'])}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="house">Casa</SelectItem>
-                    <SelectItem value="apt">Apartamento</SelectItem>
-                    <SelectItem value="commercial">Comercial</SelectItem>
-                    <SelectItem value="warehouse">Galpão</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
+                <label className="mb-2 block text-label-caps text-primary-400">Endereço completo</label>
+                <Input id="address" placeholder="Av. Paulista, 1000 - Bela Vista" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('address')} />
+                {errors.address && <p className="mt-2 text-xs text-[#ffb4ab]">{errors.address.message}</p>}
               </div>
 
-              {/* Template preview */}
-              {template && (
-                <div className="sm:col-span-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm">
-                  <p className="font-semibold text-primary-800 mb-1.5">Modelo sugerido: {template.label}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-xs font-medium text-primary-700 flex items-center gap-1 mb-1">
-                        <DoorOpen className="h-3.5 w-3.5" /> Cômodos
-                      </p>
-                      <ul className="text-xs text-primary-600 space-y-0.5">
-                        {template.rooms.map((r, i) => <li key={i}>· {r.name}</li>)}
-                      </ul>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-primary-700 flex items-center gap-1 mb-1">
-                        <Wrench className="h-3.5 w-3.5" /> Manutenções
-                      </p>
-                      <ul className="text-xs text-primary-600 space-y-0.5">
-                        {template.maintenance.map((m, i) => <li key={i}>· {m.title}</li>)}
-                      </ul>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-primary-500">
-                    Estes itens serão sugeridos após criar o imóvel.
-                  </p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="relative rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
+                  <label className="mb-2 block text-label-caps text-primary-400">Tipo de imóvel</label>
+                  <Select defaultValue="house" onValueChange={(value) => setValue('type', value as FormData['type'])}>
+                    <SelectTrigger className="h-auto border-0 bg-transparent p-0 text-4xl font-medium text-[#dae2fd] focus:ring-0">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="house">Casa</SelectItem>
+                      <SelectItem value="apt">Apartamento</SelectItem>
+                      <SelectItem value="commercial">Comercial</SelectItem>
+                      <SelectItem value="warehouse">Galpão</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-2 text-xs text-[#c4c5d9]">Selecionado: {typeLabel}</p>
                 </div>
-              )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="floors">Andares</Label>
-                <Input id="floors" type="number" min={1} defaultValue={1} {...register('floors')} />
+                <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
+                  <label className="mb-2 block text-label-caps text-primary-400">Área total (m²)</label>
+                  <div className="flex items-center gap-2">
+                    <Input id="area_m2" type="number" step="0.1" placeholder="0" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('area_m2')} />
+                    <span className="text-2xl font-medium text-[#c4c5d9]">m²</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="sm:col-span-2 space-y-1.5">
-                <Label htmlFor="address">Endereço *</Label>
-                <Input id="address" placeholder="Rua das Flores, 123" {...register('address')} />
-                {errors.address && <p className="text-xs text-rose-500">{errors.address.message}</p>}
+              <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
+                <label className="mb-2 block text-label-caps text-primary-400">Cidade</label>
+                <Input id="city" placeholder="São Paulo" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('city')} />
+                {errors.city && <p className="mt-2 text-xs text-[#ffb4ab]">{errors.city.message}</p>}
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="city">Cidade *</Label>
-                <Input id="city" placeholder="São Paulo" {...register('city')} />
-                {errors.city && <p className="text-xs text-rose-500">{errors.city.message}</p>}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="area_m2">Área (m²)</Label>
-                <Input id="area_m2" type="number" step="0.1" placeholder="120" {...register('area_m2')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="year_built">Ano de Construção</Label>
-                <Input id="year_built" type="number" min={1800} max={2100} placeholder="1990" {...register('year_built')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="structure">Estrutura</Label>
-                <Input id="structure" placeholder="Concreto armado, alvenaria..." {...register('structure')} />
-              </div>
+          {error && (
+            <div className="rounded-md bg-[#93000a]/30 px-4 py-3 text-sm text-[#ffdad6]">
+              {error}
             </div>
+          )}
 
-            {error && (
-              <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
-                {error}
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => router.back()}>
-                Cancelar
-              </Button>
-              <Button type="submit" loading={isSubmitting}>
-                Criar Imóvel
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+          <Button type="submit" size="lg" loading={isSubmitting} className="mt-8 w-full text-3xl font-bold">
+            Cadastrar Imóvel
+            <ArrowRight className="h-6 w-6" />
+          </Button>
+        </form>
+      </main>
     </div>
   );
 }

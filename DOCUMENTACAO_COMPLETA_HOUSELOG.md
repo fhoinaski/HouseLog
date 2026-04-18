@@ -1,357 +1,254 @@
-# Documentacao Completa do Projeto HouseLog
+# HouseLog - Documentacao Completa, Atualizada e Pronta para Google Stitch
 
-## 1. Visao geral do produto
-
-HouseLog e uma plataforma de gestao de imoveis com foco em operacao, manutencao, documentacao, financeiro e colaboracao entre proprietario, gestor e prestador.
-
-Objetivos principais:
-- Centralizar dados tecnicos e operacionais do imovel.
-- Organizar ordens de servico (OS), manutencao preventiva e historico.
-- Controlar inventario e documentos com anexos de midia.
-- Dar visibilidade financeira por periodo e categoria.
-- Viabilizar colaboracao com convites e permissoes.
-
-Perfis de usuario no sistema:
-- admin
-- owner
-- provider
-- temp_provider (usado em acessos temporarios e fluxos especiais)
+Data da atualizacao: 18/04/2026
+Escopo: produto, arquitetura, backend, frontend, dados, infraestrutura, melhorias recentes, padroes de UI e pacote de instrucoes para criar design contemporaneo no Google Stitch.
 
 ---
 
-## 2. Arquitetura geral
+## 1. Resumo executivo
 
-### Backend
+HouseLog e uma plataforma de gestao operacional de imoveis para owner, gestor e prestador, com foco em:
+- operacao de OS e manutencao preventiva;
+- historico tecnico do imovel;
+- inventario e documentos com anexos;
+- visao financeira e automacoes;
+- colaboracao segura entre papeis.
+
+Estado atual:
+- backend funcional em Cloudflare Workers com Hono + D1 + Drizzle;
+- frontend funcional em Next.js App Router + Tailwind;
+- portal do prestador ampliado com oportunidades de orcamento, chat integrado e perfil profissional estruturado;
+- design system com tokens e melhoria forte em campos/input para claro/escuro e mobile.
+
+---
+
+## 2. Novidades importantes implementadas
+
+### 2.1 Portal do prestador ampliado
+- Lista de oportunidades de orcamento para OS em aberto.
+- Detalhe da oportunidade com historico de bids do proprio prestador.
+- Navegacao dedicada no portal do prestador:
+  - Dashboard
+  - Orcamentos
+  - Minhas OS
+  - Configuracoes
+
+### 2.2 Chat integrado owner/provider em OS
+- Chat por OS em endpoint dedicado.
+- Regra de acesso ampliada para prestador com bid ativa (pending/accepted) mesmo antes de atribuicao final.
+- Envio de push para participantes relevantes ao publicar nova mensagem.
+
+### 2.3 Perfil profissional estruturado do prestador
+- Cadastro e atualizacao de:
+  - hard skills por categorias;
+  - apresentacao profissional (bio);
+  - cursos e especializacoes;
+  - formacao estruturada (instituicao, titulo, tipo, status cursando/concluido, comprovante);
+  - portfolio de casos com antes/depois (titulo, descricao, imagens).
+- Exposicao no perfil publico do marketplace para apoio a decisao do owner/gestor.
+
+### 2.4 Design system e usabilidade
+- Tokens semanticos para formularios (campo, borda, hover, texto, foco).
+- Harmonia clara/escura melhorada.
+- Inputs, textareas e selects com area de toque melhor em mobile.
+- Layout responsivo da pagina de configuracoes do prestador refinado.
+
+---
+
+## 3. Perfis de usuario e responsabilidades
+
+- admin:
+  - visao ampla e operacoes administrativas;
+  - suporte a moderacao e governanca.
+
+- owner:
+  - dono do imovel;
+  - cria OS, avalia prestador, gerencia equipe e custos.
+
+- provider:
+  - executa servicos;
+  - recebe atribuicoes, participa de orcamentos, atualiza perfil profissional.
+
+- temp_provider:
+  - perfil temporario com escopo restrito conforme regra de negocio.
+
+---
+
+## 4. Arquitetura geral
+
+### 4.1 Backend
 - Runtime: Cloudflare Workers
 - Framework HTTP: Hono
 - Banco: Cloudflare D1 (SQLite)
-- Storage de arquivos: Cloudflare R2
-- Rate limit: Cloudflare KV
+- ORM: Drizzle
+- Storage: Cloudflare R2
+- Cache/controle: KV
 - Filas: Cloudflare Queues
-- IA: Cloudflare Workers AI (OCR de cartao no fluxo de convite)
-- Email: Resend API
+- IA: Cloudflare Workers AI
+- Email: Resend
 
-Arquivos-chave:
-- house-log-back/apps/api/src/index.ts
-- house-log-back/apps/api/src/middleware/auth.ts
-- house-log-back/apps/api/src/lib/types.ts
-- house-log-back/apps/api/wrangler.toml
-
-### Frontend
-- Framework: Next.js App Router
-- UI: React + Tailwind + componentes UI internos
-- Formularios: React Hook Form + Zod
-- Dados: SWR
-- Notificacoes visuais: Sonner
-- PWA: manifest + service worker + tela offline
-
-Arquivos-chave:
-- house-log-front/src/app/layout.tsx
-- house-log-front/src/lib/api.ts
-- house-log-front/src/lib/auth-context.tsx
+### 4.2 Frontend
+- Next.js (App Router)
+- React + Tailwind
+- SWR para dados
+- RHF + Zod para formularios
+- Sonner para notificacao
+- PWA com manifest, service worker e pagina offline
 
 ---
 
-## 3. Estrutura do workspace
+## 5. Estrutura do workspace
 
-## 3.1 Pastas principais
+Pastas principais:
 - house-log-back
 - house-log-front
 
-## 3.2 Backend (resumo)
-- apps/api/src/index.ts: bootstrap da API
-- apps/api/src/routes: modulos de rotas
-- apps/api/src/middleware: auth e rate limit
-- apps/api/src/lib: utilitarios (jwt, r2, email, response, audit)
-- apps/api/src/db/migrations: schema SQL versionado
-- apps/api/src/db/schema.ts: schema Drizzle para fluxo service_requests/bids
+Backend (foco):
+- apps/api/src/index.ts
+- apps/api/src/routes/*
+- apps/api/src/middleware/*
+- apps/api/src/db/schema.ts
+- apps/api/src/db/migrations/*
 
-## 3.3 Frontend (resumo)
-- src/app/(auth): login e cadastro
-- src/app/(app): area autenticada principal
-- src/app/provider: portal do prestador
-- src/app/audit/[token]: acesso publico via token
-- src/app/invite/[token]: aceite de convite
-- src/components: componentes de layout e UI
-- src/lib: cliente API, auth-context, utilitarios
+Frontend (foco):
+- src/app/*
+- src/components/*
+- src/lib/api.ts
+- src/lib/auth-context.tsx
+- src/app/globals.css
 
 ---
 
-## 4. Rotas do backend e o que cada uma faz
-
-Base URL da API: /api/v1
-
-## 4.1 Saude e raiz
-
-### GET /
-- Retorna status basico do servico.
-
-### GET /health
-- Health check com timestamp.
-
-Arquivo:
-- house-log-back/apps/api/src/index.ts
-
-## 4.2 Autenticacao
-
-Arquivo:
-- house-log-back/apps/api/src/routes/auth.ts
-
-### POST /auth/register
-- Cria usuario novo.
-- Gera JWT e retorna user.
-
-### POST /auth/login
-- Autentica por email e senha.
-- Atualiza last_login.
-- Faz migracao transparente de hash legado para PBKDF2.
-
-### POST /auth/refresh
-- Renova token JWT (com pequena tolerancia para expiracao recente).
-
-### GET /auth/me
-- Retorna dados do usuario autenticado.
-
-### PUT /auth/password
-- Troca senha do usuario autenticado.
-
-### PUT /auth/profile
-- Atualiza nome e telefone.
-
-## 4.3 Propriedades
-
-Arquivo:
-- house-log-back/apps/api/src/routes/properties.ts
-
-### GET /properties
-- Lista propriedades com paginacao e busca.
-- Regras de acesso por owner, manager_id ou colaborador.
-
-### POST /properties
-- Cria propriedade (admin/owner).
-
-### GET /properties/:id
-- Busca detalhe da propriedade.
-
-### PUT /properties/:id
-- Atualiza dados da propriedade.
-
-### DELETE /properties/:id
-- Soft delete da propriedade.
-
-### POST /properties/:id/cover
-- Upload da capa do imovel para R2.
-
-### GET /properties/:id/dashboard
-- Consolida metricas do imovel para tela principal.
-
-### GET /properties/:id/providers
-- Lista colaboradores com role provider para atribuicao de OS.
-- Retorna dados de perfil como specialties e whatsapp.
-
-### POST /properties/:id/apply-template
-- Aplica template operacional no imovel (criacao inicial de estruturas padrao).
-
-## 4.4 Comodos
-
-Arquivo:
-- house-log-back/apps/api/src/routes/rooms.ts
-
-Rotas:
-- GET /properties/:propertyId/rooms
-- POST /properties/:propertyId/rooms
-- GET /properties/:propertyId/rooms/:id
-- PUT /properties/:propertyId/rooms/:id
-- DELETE /properties/:propertyId/rooms/:id
-
-## 4.5 Inventario
-
-Arquivo:
-- house-log-back/apps/api/src/routes/inventory.ts
-
-Rotas:
-- GET /properties/:propertyId/inventory
-- GET /properties/:propertyId/inventory/colors
-- POST /properties/:propertyId/inventory
-- GET /properties/:propertyId/inventory/:id
-- PUT /properties/:propertyId/inventory/:id
-- DELETE /properties/:propertyId/inventory/:id
-- POST /properties/:propertyId/inventory/:itemId/photo
-- POST /properties/:propertyId/inventory/:itemId/qr
-
-## 4.6 Ordens de servico (OS)
-
-Arquivo:
-- house-log-back/apps/api/src/routes/services.ts
-
-Rotas:
-- GET /properties/:propertyId/services
-- POST /properties/:propertyId/services
-- GET /properties/:propertyId/services/:id
-- PUT /properties/:propertyId/services/:id
-- PATCH /properties/:propertyId/services/:id/status
-- POST /properties/:propertyId/services/:id/photos
-- POST /properties/:propertyId/services/:id/video
-- POST /properties/:propertyId/services/:id/audio
-- PATCH /properties/:propertyId/services/:id/checklist
-- DELETE /properties/:propertyId/services/:id
-
-Observacoes:
-- Suporta anexos before/after, video e audio.
-- Tem regras de permissao para abertura de OS por colaborador.
-
-## 4.7 Orcamentos de OS (modelo legado de bids)
-
-Arquivo:
-- house-log-back/apps/api/src/routes/bids.ts
-
-Rotas:
-- GET /properties/:propertyId/services/:serviceId/bids
-- POST /properties/:propertyId/services/:serviceId/bids
-- PATCH /properties/:propertyId/services/:serviceId/bids/:bidId/status
-
-## 4.8 Service Requests (fluxo novo com Drizzle)
-
-Arquivo:
-- house-log-back/apps/api/src/routes/service-requests.ts
-
-Rota:
-- POST /properties/:propertyId/service-requests
-
-Funcao:
-- Cria solicitacao com media e gera presigned URLs para upload em R2.
-
-Arquivo:
-- house-log-back/apps/api/src/routes/service-request-bids.ts
-
-Rota:
-- PATCH /properties/:propertyId/service-requests/:serviceRequestId/bids/:bidId/accept
-
-Funcao:
-- Aceita uma proposta e rejeita as demais.
-
-## 4.9 Documentos
-
-Arquivo:
-- house-log-back/apps/api/src/routes/documents.ts
-
-Rotas:
-- GET /properties/:propertyId/documents
-- POST /properties/:propertyId/documents
-- GET /properties/:propertyId/documents/:id
-- DELETE /properties/:propertyId/documents/:id
-- POST /properties/:propertyId/documents/:id/ocr
-
-## 4.10 Financeiro
-
-Arquivo:
-- house-log-back/apps/api/src/routes/expenses.ts
-
-Rotas:
-- GET /properties/:propertyId/expenses
-- GET /properties/:propertyId/expenses/summary
-- POST /properties/:propertyId/expenses
-- PUT /properties/:propertyId/expenses/:id
-- DELETE /properties/:propertyId/expenses/:id
-
-Observacoes:
-- Suporta type expense/revenue.
-- Suporta recorrencia anual automatica (12 lancamentos).
-
-## 4.11 Manutencao
-
-Arquivo:
-- house-log-back/apps/api/src/routes/maintenance.ts
-
-Rotas:
-- GET /properties/:propertyId/maintenance
-- POST /properties/:propertyId/maintenance
-- PUT /properties/:propertyId/maintenance/:id
-- POST /properties/:propertyId/maintenance/:id/done
-- DELETE /properties/:propertyId/maintenance/:id
-- POST /properties/:propertyId/maintenance/auto-check
-
-Observacoes:
-- Existe rotina agendada para criar OS de manutencao vencida e envio de email.
-
-## 4.12 Relatorios
-
-Arquivo:
-- house-log-back/apps/api/src/routes/reports.ts
-
-Rotas:
-- GET /properties/:propertyId/report/health-score
-- GET /properties/:propertyId/report/valuation-pdf
-
-Funcao:
-- Calcula health score com breakdown.
-- Retorna payload consolidado para laudo/relatorio.
-
-## 4.13 Convites e equipe
-
-Arquivo:
-- house-log-back/apps/api/src/routes/invites.ts
-
-Rotas:
-- POST /properties/:propertyId/invites
-- POST /properties/:propertyId/invites/extract-card
-- GET /properties/:propertyId/invites
-- DELETE /properties/:propertyId/invites/:inviteId
-- GET /invite/:token
-- POST /invite/:token/accept
-- PATCH /properties/:propertyId/collaborators/:collabId
-- DELETE /properties/:propertyId/collaborators/:collabId
-
-Destaques:
-- Convite por email ou WhatsApp com pre-cadastro.
-- OCR de cartao para sugerir nome/email/telefone/especialidades.
-- Controle granular can_open_os.
-
-## 4.14 Portal do prestador
-
-Arquivo:
-- house-log-back/apps/api/src/routes/provider.ts
-
-Rotas:
+## 6. Backend - rotas montadas na API
+
+Base: /api/v1
+
+Montagem atual:
+- /auth
+- /push
+- /ai
+- /marketplace
+- /services (mensageria)
+- /properties
+- /properties/:propertyId/rooms
+- /properties/:propertyId/inventory
+- /properties/:propertyId/services
+- /properties/:propertyId/service-requests
+- /properties/:propertyId/service-requests/:serviceRequestId/bids
+- /properties/:propertyId/expenses
+- /properties/:propertyId/documents
+- /properties/:propertyId/maintenance
+- /properties/:propertyId/finance
+- /properties/:propertyId/timeline
+- /properties/:propertyId/report
+- /properties/:propertyId/services/:serviceId/bids
+- /provider
+- /properties/:propertyId/services/:serviceId/audit-link
+- / (invites)
+- /audit
+- /search
+- /properties/:propertyId/credentials
+- /api/v1 + share
+
+---
+
+## 7. Backend - catalogo funcional atualizado
+
+### 7.1 Auth e seguranca
+- POST /auth/register
+- POST /auth/login
+- POST /auth/refresh
+- POST /auth/logout
+- GET /auth/me
+- PUT /auth/password
+- PUT /auth/profile
+
+MFA:
+- POST /auth/mfa/challenge
+- POST /auth/mfa/setup
+- POST /auth/mfa/verify
+- POST /auth/mfa/disable
+
+### 7.2 OS e bids
+- GET/POST/PUT/PATCH/DELETE de OS
+- upload de fotos/video/audio
+- checklist de OS
+- bids por OS
+- service requests + aceite de bid
+
+### 7.3 Mensagens de OS
+- GET /services/:serviceOrderId/messages
+- POST /services/:serviceOrderId/messages
+- DELETE /services/:serviceOrderId/messages/:id
+
+Comportamento relevante:
+- mensagens internas ocultas para provider quando aplicavel;
+- provider com bid ativa pode acessar chat na fase de orcamento;
+- push notification para participantes.
+
+### 7.4 Provider portal
 - GET /provider/services
 - GET /provider/services/:id
 - GET /provider/stats
 - POST /provider/services/:id/invoice
+- GET /provider/opportunities
+- GET /provider/opportunities/:id
 
-Observacao importante:
-- O acesso foi ampliado para quem nao tem role global provider, mas e colaborador provider em algum imovel.
-
-## 4.15 Busca global
-
-Arquivo:
-- house-log-back/apps/api/src/routes/search.ts
-
-Rota:
-- GET /search
-
-Funcao:
-- Busca em OS, documentos, inventario e manutencao.
-
-## 4.16 Links de auditoria (acesso publico controlado)
-
-Arquivo:
-- house-log-back/apps/api/src/routes/audit-links.ts
-
-Rotas protegidas:
-- POST /properties/:propertyId/services/:serviceId/audit-link
-
-Rotas publicas:
-- GET /audit/public/:token
-- POST /audit/public/:token/submit
-
-Funcao:
-- Compartilhar acesso temporario para evidencias sem login.
+### 7.5 Marketplace
+- POST /marketplace/ratings
+- GET /marketplace/providers/:providerId/ratings
+- GET /marketplace/providers/:providerId/profile
+- POST /marketplace/providers/endorse
+- GET /marketplace/providers/match
+- POST /marketplace/availability
+- GET /marketplace/availability
+- GET /marketplace/availability/ical
 
 ---
 
-## 5. Modelo de dados (migrations)
+## 8. Modelo de dados e migrations
 
-Migrations existentes:
+### 8.1 Tabelas principais (recorte)
+- users
+- properties
+- rooms
+- inventoryItems
+- serviceOrders
+- serviceBids
+- serviceMessages
+- serviceRequests
+- bids
+- providerRatings
+- providerEndorsements
+- providerAvailability
+- propertyCollaborators
+- propertyInvites
+- documents
+- expenses
+- maintenanceSchedules
+- auditLinks
+- refreshTokens
+- userMfa
+- mfaChallenges
+- pushSubscriptions
+- pixCharges
+- aiCache
+- nfeImports
+
+### 8.2 Campos novos/relevantes em users (prestador)
+- providerCategories
+- whatsapp
+- serviceArea
+- pixKey
+- pixKeyType
+- providerBio
+- providerCourses (json array)
+- providerSpecializations (json array)
+- providerPortfolio (json array)
+- providerEducation (json estruturado)
+- providerPortfolioCases (json estruturado)
+
+### 8.3 Migrations SQL existentes
 - 0001_initial.sql
 - 0002_maintenance_fields.sql
 - 0003_provider_features.sql
@@ -359,274 +256,406 @@ Migrations existentes:
 - 0005_financial_warranty.sql
 - 0006_team_permissions.sql
 - 0007_provider_profiles_and_audio.sql
+- 0007_share_credentials.sql
 - 0008_invite_name.sql
+- 0009_service_requests_auth_push.sql
+- 0010_wave2_features.sql
+- 0011_provider_categories.sql
+- 0012_provider_profile_fields.sql
+- 0013_provider_profile_structured.sql
 
-Tabelas principais:
-- users
-- properties
-- rooms
-- inventory_items
-- service_orders
-- service_bids
-- documents
-- expenses
-- maintenance_schedules
-- property_collaborators
-- property_invites
-- audit_links
-- audit_log
-
-Campos adicionados nas migracoes recentes:
-- users.notification_prefs
-- expenses.type, expenses.is_recurring, expenses.recurrence_group
-- inventory_items.warranty_until
-- property_collaborators.can_open_os
-- property_invites.specialties, property_invites.whatsapp, property_invites.invite_name
-- property_collaborators.specialties, property_collaborators.whatsapp
-- service_orders.audio_url
+Observacao:
+- para novos ambientes, aplicar migrations em sequencia e validar colunas de perfil estruturado no users.
 
 ---
 
-## 6. Estrutura e fluxos do frontend
+## 9. Frontend - rotas principais
 
-Pasta base de paginas:
-- house-log-front/src/app
-
-## 6.1 Rotas de autenticacao
-- /(auth)/login
-- /(auth)/register
-
-Funcionalidades:
-- Login com email/senha.
-- Cadastro de conta.
-- Fluxo especial por convite:
-  - pre-preenchimento via query params
-  - aceite automatico do convite apos cadastro
-  - redirecionamento contextual
-
-## 6.2 Rotas principais autenticadas
+### 9.1 App autenticado
 - /(app)/dashboard
 - /(app)/settings
 - /(app)/properties
 - /(app)/properties/new
-- /(app)/properties/[id]
-- /(app)/properties/[id]/edit
-- /(app)/properties/[id]/rooms
-- /(app)/properties/[id]/inventory
-- /(app)/properties/[id]/inventory/[itemId]/qr
-- /(app)/properties/[id]/services
-- /(app)/properties/[id]/services/new
-- /(app)/properties/[id]/services/[serviceId]
-- /(app)/properties/[id]/maintenance
-- /(app)/properties/[id]/documents
-- /(app)/properties/[id]/financial
-- /(app)/properties/[id]/report
-- /(app)/properties/[id]/team
-- /(app)/properties/[id]/timeline
+- /(app)/properties/[id] e subrotas (access, documents, financial, inventory, maintenance, report, rooms, services, team, timeline etc)
 
-## 6.3 Portal do prestador
+### 9.2 Portal do prestador
 - /provider/dashboard
+- /provider/opportunities
+- /provider/opportunities/[serviceId]
 - /provider/services
 - /provider/services/[serviceId]
+- /provider/settings
 
-## 6.4 Rotas publicas especiais
+### 9.3 Rotas publicas
 - /invite/[token]
 - /audit/[token]
+- /share/service/[token]
 - /offline
 
-## 6.5 Cliente API e modulos
+---
 
-Arquivo:
-- house-log-front/src/lib/api.ts
+## 10. Frontend - cliente de API e contratos
 
-Modulos principais:
+Modulos de API exportados:
 - authApi
+- pushApi
 - propertiesApi
 - invitesApi
 - roomsApi
 - inventoryApi
 - servicesApi
 - documentsApi
-- expensesApi
+- auditApi
 - maintenanceApi
 - reportsApi
-- bidsApi
-- providerApi
-- auditApi
+- expensesApi
 - searchApi
+- bidsApi
+- credentialsApi
+- shareApi
+- providerApi
+- marketplaceApi
+- messagesApi
+
+Contratos relevantes de prestador:
+- User inclui provider_education e provider_portfolio_cases.
+- ProviderPublicProfile inclui provider, score e reviews anonimizadas.
 
 ---
 
-## 7. Funcionalidades implementadas (estado atual)
+## 11. Design System oficial: The Architectural Lens
 
-### 7.1 Operacao do imovel
-- Cadastro e edicao de imoveis.
-- Cadastro e gestao de comodos.
-- Aplicacao de template inicial.
+Visao criativa oficial:
+- transformar a experiencia de SaaS imobiliario em uma navegacao com linguagem de arquitetura premium;
+- evitar layout de dashboard "engessado" e visual "caixotado";
+- priorizar assimetria intencional, profundidade tonal, superficies de vidro e tipografia editorial;
+- cada bloco deve parecer espacial, com camadas, nunca plano.
 
-### 7.2 OS e manutencao
-- Abertura e acompanhamento de OS.
-- Checklist e upload de evidencias.
-- Controle de status da OS.
-- Agendamento e monitoramento de manutencao preventiva.
-- Auto criacao de OS por manutencao vencida (rotina agendada).
+### 11.1 Creative North Star
+- referencia conceitual: estrutura, transparencia e interacao de luz;
+- experiencia alvo: "architectural walkthrough", nao "painel burocratico";
+- principio: menos ruido visual, mais hierarquia, mais respiracao entre blocos.
 
-### 7.3 Inventario e documentos
-- Inventario com foto, QR e garantias.
-- Upload de documentos e OCR basico para invoices.
+### 11.2 Cores e profundidade atmosferica
 
-### 7.4 Financeiro e relatorios
-- Lancamentos de despesas e receitas.
-- Resumos por periodo/categoria.
-- Recorrencia de lancamentos.
-- Health score com breakdown.
-- Payload para relatorio de avaliacao.
+Paleta principal:
+- Finance (Primary): #b8c3ff
+- Health (Secondary): #4edea3
+- Maintenance (Tertiary): #ffb95f
+- Base noturna: #0b1326
+- Neutros de camada: #060e20 ate #31394d
 
-### 7.5 Colaboracao
-- Convites para equipe por role.
-- Controle de permissao can_open_os.
-- Convite por email e por WhatsApp com pre-cadastro.
-- Extração automatica por imagem de cartao de visita.
+Regra obrigatoria: No-Line Rule
+- proibido usar borda solida de 1px como divisor de secao por padrao;
+- separacao por mudanca tonal de superficie;
+- outline-variant so em "ghost border" com baixa opacidade quando necessario para acessibilidade.
 
-### 7.6 Prestadores
-- Portal de prestador com lista de OS e stats.
-- Upload de nota fiscal pelo prestador.
-- Fluxo de aceite de convite com onboarding simplificado.
+Hierarquia de superficies:
+- base: surface (#0b1326)
+- secao secundaria: surface-container-low (#131b2e)
+- card interativo: surface-container-high (#222a3d)
+- elemento flutuante/ativo: surface-container-highest (#2d3449) + blur (20px+)
 
-### 7.7 PWA e UX
-- Estrutura de PWA com rota offline.
-- Caching de dados via SWR.
+### 11.3 Tipografia editorial
+- fonte principal: Inter;
+- display-lg (3.5rem): numeros hero e metricas de impacto;
+- title-md (1.125rem): ancora de leitura (enderecos, titulos de bloco);
+- label-sm (0.6875rem + uppercase + tracking): metadata;
+- evitar blocos "apertados": espacamento vertical e line-height com respiracao.
+
+### 11.4 Elevacao e camadas
+- profundidade por camada tonal, nao por sombra pesada padrao;
+- "cloud shadow" para elementos flutuantes: blur amplo (40-60px), opacidade moderada;
+- glassmorphism em overlays: surface-variant com opacidade + backdrop blur;
+- alertas criticos com glow interno sutil (nao stroke agressivo).
+
+### 11.5 Componentes (DNA do sistema)
+
+Cards e containers:
+- raio externo: xl / 1.5rem;
+- raio interno: md / 0.75rem;
+- sem divisores duros; separar com espaco e tonalidade;
+- hover/tap: surface-container-high -> surface-bright + escala leve (~1.02).
+
+Botoes:
+- primario: gradiente primary -> primary-container;
+- secundario (glass): semitransparente + blur;
+- terciario: texto com destaque por sublinhado/estado de foco.
+
+Inputs:
+- fill de base em surface-container-lowest;
+- foco por "lift": sobe camada e recebe glow discreto;
+- sem foco agressivo por borda dura.
+
+Navegacao mobile:
+- floating dock no rodape;
+- nao encostar nas bordas da viewport;
+- borda/blur com linguagem de ilha flutuante.
+
+### 11.6 Do and Don't
+
+Do:
+- usar sobreposicao intencional entre imagem e conteudo quando fizer sentido;
+- usar secondary/tertiary como sinal de prioridade (nao colorir tudo);
+- preservar espaco em branco como elemento de luxo e leitura.
+
+Don't:
+- nao usar preto puro absoluto como base;
+- nao usar divisores tradicionais como muleta de layout;
+- nao usar sombra "default material" pesada;
+- nao usar icone sem contexto textual (exceto acao universal).
+
+### 11.7 Textura de assinatura
+- aplicar ruido sutil (aprox 2% opacidade) no background base;
+- objetivo: reduzir esterilidade digital e aumentar percepcao premium.
+
+### 11.8 Mapeamento para tokens atuais do projeto
+
+Arquivos referencia:
+- house-log-front/src/app/globals.css
+- house-log-front/src/components/ui/input.tsx
+- house-log-front/src/components/ui/textarea.tsx
+- house-log-front/src/components/ui/select.tsx
+- house-log-front/src/app/provider/layout.tsx
+- house-log-front/src/app/provider/settings/provider-settings.module.css
+
+Tokens ja ativos no projeto (utilizar como fonte unica):
+- --provider-accent
+- --provider-surface
+- --provider-surface-strong
+- --provider-divider
+- --field-bg
+- --field-bg-hover
+- --field-border
+- --field-border-strong
+- --field-text
+- --field-focus-ring
 
 ---
 
-## 8. O que ainda falta implementar / gaps
+## 12. Melhorias de UX mobile implementadas
 
-## 8.1 Gap critico de banco para fluxo Drizzle
-
-Arquivos:
-- house-log-back/apps/api/src/db/schema.ts
-- house-log-back/apps/api/src/routes/service-requests.ts
-- house-log-back/apps/api/src/routes/service-request-bids.ts
-
-Problema identificado:
-- O schema Drizzle usa tabelas service_requests, bids e provider_endorsements.
-- Essas tabelas nao aparecem nas migrations SQL atuais 0001-0008.
-
-Impacto:
-- Rotas de service-requests podem falhar em ambiente sem tabelas criadas manualmente.
-
-Acao recomendada:
-- Criar migration dedicada (ex.: 0009_service_requests_and_bids.sql) para alinhar com schema.ts.
-
-## 8.2 Melhorias de seguranca e autenticacao
-- Login por OTP em WhatsApp/SMS nao existe ainda.
-- MFA/2FA nao implementado.
-- Melhorar politicas de recuperacao de conta.
-
-## 8.3 Observabilidade e operacao
-- Falta centralizar logs e tracing (Sentry/OpenTelemetry).
-- Falta painel de monitoramento de jobs de fila.
-
-## 8.4 Midia e processamento
-- Existe TODO em house-log-back/apps/api/src/index.ts para resize real de imagens na queue.
-
-## 8.5 Produto e experiencia
-- Melhorar onboarding de prestador no primeiro acesso com wizard dedicado.
-- Notificacoes push in-app/WA ainda nao implementadas.
-- Melhorar trilha de auditoria visual no frontend para todos os eventos.
+- altura de campos ampliada no mobile;
+- tipografia de campo otimizada para leitura e toque;
+- botoes de acao com comportamento full-width em pontos criticos;
+- headers de secao com quebra responsiva;
+- grid de metricas do prestador sem compressao excessiva;
+- navegacao do portal do prestador refeita com dock mobile + sidebar desktop.
 
 ---
 
-## 9. Melhorias recomendadas (priorizadas)
+## 13. Infraestrutura Cloudflare
 
-## 9.1 Prioridade alta (P0/P1)
-1. Criar migration para service_requests, bids e provider_endorsements.
-2. Implementar OTP por WhatsApp/SMS para login rapido do prestador.
-3. Finalizar resize de imagens na queue.
-4. Garantir testes de regressao para fluxos de convite e aceite.
+Fonte: apps/api/wrangler.toml
 
-## 9.2 Prioridade media
-1. Adicionar painel de observabilidade e alertas.
-2. Melhorar estrategia de cache para dashboards pesados.
-3. Expandir OCR com fallback e validacao semantica.
+Bindings principais:
+- D1: houselog-db
+- R2: houselog-assets
+- KV
+- Queue producer: houselog-jobs
+- AI binding
 
-## 9.3 Prioridade baixa
-1. Dashboard administrativo com KPIs globais.
-2. Avaliacao de prestadores (rating/SLAs).
-3. Integracoes externas (calendar, mensageria, pagamentos).
+Queue consumer:
+- max_batch_size: 10
+- max_retries: 3
+
+Crons:
+- 0 * * * *
+- 0 6 * * *
+
+Ambientes:
+- prod/default: houselog-api
+- dev: houselog-api-dev
 
 ---
 
-## 10. Como executar e operar
+## 14. Como executar local/dev
 
-## 10.1 Backend
+### 14.1 Backend
+Diretorio: house-log-back/apps/api
+
 Scripts:
 - npm run dev
 - npm run build
 - npm run deploy
 - npm run deploy:dev
+- npm run db:generate
+- npm run db:check
+- npm run db:studio
 - npm run db:migrate
 - npm run db:migrate:dev
 - npm run db:migrate:local
 - npm run type-check
 
-Arquivo:
-- house-log-back/apps/api/package.json
+### 14.2 Frontend
+Diretorio: house-log-front
 
-## 10.2 Frontend
 Scripts:
 - npm run dev
 - npm run build
 - npm run start
 - npm run lint
 
-Arquivo:
-- house-log-front/package.json
+---
 
-## 10.3 Infra Cloudflare
-Arquivo:
-- house-log-back/apps/api/wrangler.toml
+## 15. Guia completo para Google Stitch (Design System The Architectural Lens)
 
-Recursos configurados:
-- D1 (DB)
-- R2 (STORAGE)
-- KV
-- Queue
-- AI binding
-- Crons (0 * * * * e 0 6 * * *)
+Objetivo:
+- gerar uma experiencia premium e contemporanea;
+- manter aderencia total aos fluxos reais do produto;
+- respeitar o Design System The Architectural Lens como regra de estilo.
+
+### 15.1 Contexto base para colar no Stitch
+
+"HouseLog e um SaaS de gestao de imoveis para owners, gestores e prestadores. O foco principal e operacao de ordens de servico, manutencao preventiva, financeiro e colaboracao. O modulo mais critico agora e o Portal do Prestador com oportunidades de orcamento, minhas OS, chat por OS, reputacao (avaliacoes/endossos) e perfil profissional estruturado com portfolio antes/depois. O estilo oficial do produto e The Architectural Lens: tonal depth, intentional asymmetry, glass surfaces, editorial typography e navegacao mobile com floating dock."
+
+### 15.2 Regras visuais obrigatorias para o Stitch
+- evitar grid rigido e blocos "caixa sobre caixa" sem hierarquia;
+- priorizar profundidade tonal em vez de bordas duras;
+- usar gradiente e blur com moderacao e intencao;
+- manter contraste alto para leitura operacional;
+- usar cores de sinal (secondary/tertiary) apenas em pontos de prioridade.
+
+### 15.3 Paleta obrigatoria
+- Finance/Primary: #b8c3ff
+- Health/Secondary: #4edea3
+- Maintenance/Tertiary: #ffb95f
+- Base: #0b1326
+- Camadas: #060e20 -> #31394d
+
+Mapeamento para tokens de implementacao:
+- provider-accent -> --provider-accent
+- provider-surface -> --provider-surface
+- provider-divider -> --provider-divider
+- field-bg -> --field-bg
+- field-border -> --field-border
+- field-focus-ring -> --field-focus-ring
+
+### 15.4 Estrutura minima de telas para gerar
+1. Login
+2. Dashboard owner
+3. Lista de propriedades
+4. Detalhe da propriedade
+5. Provider dashboard
+6. Provider opportunities (lista + filtros)
+7. Provider opportunity detail (resumo + proposta + chat)
+8. Provider services detail (execucao + chat + anexos)
+9. Provider settings (perfil estruturado completo)
+10. Marketplace provider profile publico
+
+### 15.5 Blocos obrigatorios no Provider Settings
+- cabecalho editorial de perfil;
+- bloco reputacao (media, total, endossos, top score);
+- hard skills com selecao visual;
+- contato + area + PIX;
+- formacao e certificacoes estruturadas;
+- portfolio antes/depois com comparacao visual;
+- troca de senha.
+
+### 15.6 Restricoes de qualidade
+- mobile-first;
+- min-height de controles >= 44px no mobile;
+- foco visivel em todos os controles;
+- contraste minimo WCAG AA;
+- estados de loading/empty/error em listas;
+- proibido criar fluxo novo que nao exista no backend atual.
 
 ---
 
-## 11. Analise tecnica especializada (resumo executivo)
+## 16. Prompt mestre pronto para Google Stitch
 
-Pontos fortes:
-- Arquitetura moderna e escalavel em edge.
-- Boa separacao por modulos no backend e frontend.
-- Cobertura funcional ampla para operacao imobiliaria.
-- Evolucao rapida do fluxo de convite e prestador.
+Copie e cole este prompt no Stitch:
 
-Riscos reais atuais:
-- Divergencia entre schema Drizzle e migrations SQL.
-- Dependencia de ambientes/segredos bem configurados para R2 presign e email.
-- Falta de OTP e observabilidade avancada para producao de alta escala.
+"Crie um design system e telas para um SaaS chamado HouseLog (gestao de imoveis). Direcao visual oficial: The Architectural Lens. Linguagem: contemporanea premium, tonal depth, intentional asymmetry, glass surfaces e tipografia editorial. Evite dashboard generico e blocos rigidos. Paleta obrigatoria: primary #b8c3ff, secondary #4edea3, tertiary #ffb95f, base #0b1326.
 
-Nivel de maturidade atual:
-- Produto funcional com boa base para producao controlada.
-- Recomendado fechar os gaps P0/P1 antes de escalar onboarding de prestadores em massa.
+Telas obrigatorias: Provider Dashboard, Provider Opportunities (lista e detalhe), Provider Service Detail com Chat, Provider Settings completo com hard skills selecionaveis, formacao estruturada, portfolio antes/depois, reputacao com metricas e reviews. Tambem incluir telas owner essenciais (dashboard e detalhe de propriedade).
+
+Regras: mobile-first, floating dock na navegacao mobile, inputs >=44px em mobile, foco visivel, contraste AA, estados de loading/empty/error. Regra No-Line: separar secoes por tonalidade e espacamento, nao por borda dura. Componentes em estilo modular reutilizavel (cards, chips, formularios, listas, cabecalhos de secao). Resultado deve ser implementavel em Next.js + Tailwind + Radix/shadcn sem divergir dos fluxos de API existentes." 
 
 ---
 
-## 12. Checklist de revisao (2x)
+## 17. Prompt de iteracao para melhorar resultado no Stitch
 
-Revisao 1 (consistencia de escopo):
-- Validada estrutura de pastas backend/frontend.
-- Validado catalogo de rotas pelos arquivos de routes e index.
-- Validado conjunto de migrations existente.
+Se a primeira geracao vier generica, usar:
 
-Revisao 2 (consistencia tecnica):
-- Conferidas rotas publicas/protegidas e base path final.
-- Conferida existencia de onboarding por convite no frontend.
-- Conferido gap de tabelas Drizzle nao migradas no SQL.
+"Refine com The Architectural Lens: aumente profundidade tonal, reduza bordas duras, use camadas com glass blur e cloud shadows suaves, destaque hard skills selecionadas e melhore antes/depois do portfolio com composicao editorial. Mantenha consistencia de tokens, contraste AA, mobile-first e floating dock." 
 
-Status:
-- Documento pronto para uso como base de arquitetura, onboarding tecnico e planejamento de roadmap.
+---
+
+## 18. Handoff para engenharia (implementacao)
+
+### 18.1 Stack alvo
+- Next.js App Router
+- Tailwind v4
+- class-variance-authority
+- Radix UI
+- lucide-react
+
+### 18.2 Arquivos referencia para aplicar design
+- house-log-front/src/app/globals.css
+- house-log-front/src/components/ui/input.tsx
+- house-log-front/src/components/ui/textarea.tsx
+- house-log-front/src/components/ui/select.tsx
+- house-log-front/src/app/provider/settings/page.tsx
+- house-log-front/src/app/provider/settings/provider-settings.module.css
+- house-log-front/src/components/services/service-chat.tsx
+
+### 18.3 Regras tecnicas
+- nao quebrar contratos de API em src/lib/api.ts;
+- manter componentes base de formulario como fonte unica de estilo de campo;
+- evitar duplicar classes de campo em paginas;
+- aplicar regra No-Line em novas telas (usar tonal shift + espacamento);
+- usar blur e glow com moderacao para nao degradar performance;
+- validar em claro e escuro;
+- validar em viewport mobile e desktop.
+
+---
+
+## 19. Checklist de aceite do design
+
+Marcar como pronto apenas se todos forem verdadeiros:
+- [ ] claro e escuro com harmonia visual real
+- [ ] linguagem visual alinhada ao The Architectural Lens
+- [ ] foco de campo visivel e consistente
+- [ ] campos confortaveis em mobile
+- [ ] reputacao do prestador legivel e priorizada
+- [ ] hard skills com estado claro de selecionado
+- [ ] portfolio antes/depois com comparacao facil
+- [ ] nenhuma divergencia com fluxos e endpoints reais
+- [ ] sem regressao visual em desktop
+
+---
+
+## 20. Riscos e atencoes
+
+- risco: design fugir do modelo de dados real (evitar no Stitch com prompt de restricao);
+- risco: excesso de efeito visual prejudicar performance mobile;
+- risco: inconsistencia entre componentes base e estilos locais;
+- risco: exagero de glass/blur reduzir legibilidade em telas densas;
+- risco: criar fluxos que exigem endpoints inexistentes.
+
+Mitigacao:
+- usar este documento como contrato unico de produto + UI + engenharia;
+- revisar sempre junto de src/lib/api.ts e rotas backend.
+
+---
+
+## 21. Proximos passos recomendados
+
+1. Gerar no Google Stitch com o Prompt Mestre.
+2. Iterar com Prompt de Refino ate fechar linguagem The Architectural Lens.
+3. Exportar design tokens e mapear 1:1 com globals.css.
+4. Implementar primeiro no Provider Settings e Provider Opportunities.
+5. Rodar validacao visual em mobile real e dark mode.
+6. Depois expandir para dashboard owner e detalhes de propriedade.
+
+---
+
+## 22. Registro de validade deste documento
+
+Este documento reflete o estado atual do codigo e melhorias recentes observadas no projeto HouseLog em 18/04/2026, incluindo:
+- ampliacao do portal do prestador;
+- chat integrado em contexto de bid/OS;
+- perfil estruturado e portfolio antes/depois;
+- evolucao do design system para claro/escuro e mobile;
+- adocao do guia visual oficial The Architectural Lens para produto, Stitch e engenharia.

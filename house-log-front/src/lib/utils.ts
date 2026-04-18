@@ -9,13 +9,25 @@ export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-export function formatDate(dateStr: string): string {
-  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(dateStr));
+export function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return 'Sem data';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return 'Sem data';
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
 }
 
-export function formatMonth(yyyyMm: string): string {
+export function formatMonth(yyyyMm?: string | null): string {
+  if (!yyyyMm) return 'Sem periodo';
+
   const [year, month] = yyyyMm.split('-');
-  const d = new Date(Number(year), Number(month) - 1, 1);
+  const y = Number(year);
+  const m = Number(month);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) {
+    return 'Sem periodo';
+  }
+
+  const d = new Date(y, m - 1, 1);
+  if (Number.isNaN(d.getTime())) return 'Sem periodo';
   return new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(d);
 }
 

@@ -7,6 +7,9 @@
 // Armazenamos apenas o HASH (SHA-256) do token — nunca o valor cru.
 
 import { nanoid } from 'nanoid';
+import { and, eq, isNull } from 'drizzle-orm';
+import { getDb } from '../db/client';
+import { refreshTokens } from '../db/schema';
 
 const DEFAULT_TTL_DAYS = 30;
 
@@ -42,6 +45,7 @@ export async function issueRefreshToken(
     ip?: string | null;
   } = {}
 ): Promise<{ token: string; jti: string; familyId: string; expiresAt: string }> {
+  const drizzle = getDb(db);
   const jti = nanoid(24);
   const raw = nanoid(48);
   const token = `${jti}.${raw}`;
@@ -50,13 +54,15 @@ export async function issueRefreshToken(
   const expiresAt = new Date(Date.now() + ttlDays * 86400_000).toISOString();
   const hash = await sha256Hex(raw);
 
-  await db
-    .prepare(
-      `INSERT INTO refresh_tokens (jti, user_id, family_id, token_hash, expires_at, user_agent, ip)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(jti, userId, familyId, hash, expiresAt, opts.userAgent ?? null, opts.ip ?? null)
-    .run();
+  await drizzle.insert(refreshTokens).values({
+    jti,
+    userId,
+    familyId,
+    tokenHash: hash,
+    expiresAt,
+    userAgent: opts.userAgent ?? null,
+    ip: opts.ip ?? null,
+  });
 
   return { token, jti, familyId, expiresAt };
 }
@@ -68,31 +74,38 @@ export async function rotateRefreshToken(
   presented: string,
   opts: { userAgent?: string | null; ip?: string | null } = {}
 ): Promise<{ userId: string; token: string; jti: string; familyId: string; expiresAt: string } | null> {
+  const drizzle = getDb(db);
   const dot = presented.indexOf('.');
   if (dot < 0) return null;
   const jti = presented.slice(0, dot);
   const raw = presented.slice(dot + 1);
   const hash = await sha256Hex(raw);
 
-  const row = await db
-    .prepare(
-      `SELECT jti, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by
-       FROM refresh_tokens WHERE jti = ?`
-    )
-    .bind(jti)
-    .first<RefreshRow>();
+  const rows = await drizzle
+    .select({
+      jti: refreshTokens.jti,
+      user_id: refreshTokens.userId,
+      family_id: refreshTokens.familyId,
+      token_hash: refreshTokens.tokenHash,
+      issued_at: refreshTokens.issuedAt,
+      expires_at: refreshTokens.expiresAt,
+      revoked_at: refreshTokens.revokedAt,
+      replaced_by: refreshTokens.replacedBy,
+    })
+    .from(refreshTokens)
+    .where(eq(refreshTokens.jti, jti))
+    .limit(1);
+
+  const row = rows[0] as RefreshRow | undefined;
 
   if (!row || row.token_hash !== hash) return null;
 
   // Já rotacionado → suspeita de reuso: revoga tudo da family
   if (row.replaced_by || row.revoked_at) {
-    await db
-      .prepare(
-        `UPDATE refresh_tokens SET revoked_at = datetime('now')
-         WHERE family_id = ? AND revoked_at IS NULL`
-      )
-      .bind(row.family_id)
-      .run();
+    await drizzle
+      .update(refreshTokens)
+      .set({ revokedAt: new Date().toISOString() })
+      .where(and(eq(refreshTokens.familyId, row.family_id), isNull(refreshTokens.revokedAt)));
     return null;
   }
 
@@ -104,29 +117,29 @@ export async function rotateRefreshToken(
     ip: opts.ip,
   });
 
-  await db
-    .prepare(
-      `UPDATE refresh_tokens SET revoked_at = datetime('now'), replaced_by = ? WHERE jti = ?`
-    )
-    .bind(next.jti, row.jti)
-    .run();
+  await drizzle
+    .update(refreshTokens)
+    .set({ revokedAt: new Date().toISOString(), replacedBy: next.jti })
+    .where(eq(refreshTokens.jti, row.jti));
 
   return { userId: row.user_id, ...next };
 }
 
 export async function revokeRefreshToken(db: D1Database, presented: string): Promise<void> {
+  const drizzle = getDb(db);
   const dot = presented.indexOf('.');
   if (dot < 0) return;
   const jti = presented.slice(0, dot);
-  await db
-    .prepare(`UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE jti = ? AND revoked_at IS NULL`)
-    .bind(jti)
-    .run();
+  await drizzle
+    .update(refreshTokens)
+    .set({ revokedAt: new Date().toISOString() })
+    .where(and(eq(refreshTokens.jti, jti), isNull(refreshTokens.revokedAt)));
 }
 
 export async function revokeAllForUser(db: D1Database, userId: string): Promise<void> {
-  await db
-    .prepare(`UPDATE refresh_tokens SET revoked_at = datetime('now') WHERE user_id = ? AND revoked_at IS NULL`)
-    .bind(userId)
-    .run();
+  const drizzle = getDb(db);
+  await drizzle
+    .update(refreshTokens)
+    .set({ revokedAt: new Date().toISOString() })
+    .where(and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt)));
 }

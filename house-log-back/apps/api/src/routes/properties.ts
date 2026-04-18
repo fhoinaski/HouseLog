@@ -1,10 +1,22 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, requireRole, assertPropertyAccess } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { getDb } from '../db/client';
+import {
+  expenses,
+  inventoryItems,
+  maintenanceSchedules,
+  properties as propertiesTable,
+  propertyCollaborators,
+  rooms,
+  serviceOrders,
+  users,
+} from '../db/schema';
 import type { Bindings, Variables, Property } from '../lib/types';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -35,66 +47,60 @@ const updateSchema = createSchema.partial().extend({
 // collaborators on. Admins no longer have a blanket "see all" view.
 
 properties.get('/', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
   const cursor = c.req.query('cursor');
   const search = c.req.query('search');
 
-  const searchClause = search ? "AND (p.name LIKE ? OR p.city LIKE ?)" : '';
-  const cursorClause = cursor ? "AND p.created_at < ?" : '';
+  const filters = [
+    isNull(propertiesTable.deletedAt),
+    or(
+      eq(propertiesTable.ownerId, userId),
+      eq(propertiesTable.managerId, userId),
+      sql`EXISTS (
+        SELECT 1 FROM property_collaborators pc
+        WHERE pc.property_id = ${propertiesTable.id} AND pc.user_id = ${userId}
+      )`
+    ),
+  ];
 
-  const buildBindings = (base: unknown[]) => {
-    const b = [...base];
-    if (search) b.push(`%${search}%`, `%${search}%`);
-    if (cursor) b.push(cursor);
-    b.push(limit + 1);
-    return b;
-  };
-
-  const fullQuery = `
-    SELECT p.*, u.name as owner_name, u.email as owner_email
-    FROM properties p
-    JOIN users u ON u.id = p.owner_id
-    WHERE p.deleted_at IS NULL
-      AND (
-        p.owner_id = ? OR p.manager_id = ?
-        OR EXISTS (
-          SELECT 1 FROM property_collaborators
-          WHERE property_id = p.id AND user_id = ?
-        )
+  if (search) {
+    filters.push(
+      or(
+        sql`${propertiesTable.name} LIKE ${`%${search}%`}`,
+        sql`${propertiesTable.city} LIKE ${`%${search}%`}`
       )
-    ${searchClause} ${cursorClause}
-    ORDER BY p.created_at DESC LIMIT ?
-  `;
-
-  const fallbackQuery = `
-    SELECT p.*, u.name as owner_name, u.email as owner_email
-    FROM properties p
-    JOIN users u ON u.id = p.owner_id
-    WHERE p.deleted_at IS NULL
-      AND (p.owner_id = ? OR p.manager_id = ?)
-    ${searchClause} ${cursorClause}
-    ORDER BY p.created_at DESC LIMIT ?
-  `;
-
-  let results: (Property & { owner_name: string; owner_email: string })[];
-  try {
-    const r = await c.env.DB
-      .prepare(fullQuery)
-      .bind(...buildBindings([userId, userId, userId]))
-      .all<Property & { owner_name: string; owner_email: string }>();
-    results = r.results;
-  } catch (e) {
-    if (String(e).includes('property_collaborators')) {
-      const r = await c.env.DB
-        .prepare(fallbackQuery)
-        .bind(...buildBindings([userId, userId]))
-        .all<Property & { owner_name: string; owner_email: string }>();
-      results = r.results;
-    } else {
-      throw e;
-    }
+    );
   }
+
+  if (cursor) filters.push(sql`${propertiesTable.createdAt} < ${cursor}`);
+
+  const results = await db
+    .select({
+      id: propertiesTable.id,
+      owner_id: propertiesTable.ownerId,
+      manager_id: propertiesTable.managerId,
+      name: propertiesTable.name,
+      type: propertiesTable.type,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      area_m2: propertiesTable.areaM2,
+      year_built: propertiesTable.yearBuilt,
+      structure: propertiesTable.structure,
+      floors: propertiesTable.floors,
+      cover_url: propertiesTable.coverUrl,
+      health_score: propertiesTable.healthScore,
+      created_at: propertiesTable.createdAt,
+      deleted_at: propertiesTable.deletedAt,
+      owner_name: users.name,
+      owner_email: users.email,
+    })
+    .from(propertiesTable)
+    .innerJoin(users, eq(users.id, propertiesTable.ownerId))
+    .where(and(...filters))
+    .orderBy(desc(propertiesTable.createdAt))
+    .limit(limit + 1) as Array<Property & { owner_name: string; owner_email: string }>;
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
@@ -102,6 +108,7 @@ properties.get('/', async (c) => {
 // ── POST /properties ────────────────────────────────────────────────────────
 
 properties.post('/', requireRole('admin', 'owner'), async (c) => {
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
 
@@ -119,21 +126,40 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
 
   const id = nanoid();
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO properties (id, owner_id, name, type, address, city, area_m2, year_built, structure, floors, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(
-      id, ownerId, data.name, data.type, data.address, data.city,
-      data.area_m2 ?? null, data.year_built ?? null, data.structure ?? null, data.floors
-    )
-    .run();
+  await db.insert(propertiesTable).values({
+    id,
+    ownerId,
+    name: data.name,
+    type: data.type,
+    address: data.address,
+    city: data.city,
+    areaM2: data.area_m2 ?? null,
+    yearBuilt: data.year_built ?? null,
+    structure: data.structure ?? null,
+    floors: data.floors,
+  });
 
-  const property = await c.env.DB
-    .prepare('SELECT * FROM properties WHERE id = ?')
-    .bind(id)
-    .first<Property>();
+  const [property] = await db
+    .select({
+      id: propertiesTable.id,
+      owner_id: propertiesTable.ownerId,
+      manager_id: propertiesTable.managerId,
+      name: propertiesTable.name,
+      type: propertiesTable.type,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      area_m2: propertiesTable.areaM2,
+      year_built: propertiesTable.yearBuilt,
+      structure: propertiesTable.structure,
+      floors: propertiesTable.floors,
+      cover_url: propertiesTable.coverUrl,
+      health_score: propertiesTable.healthScore,
+      created_at: propertiesTable.createdAt,
+      deleted_at: propertiesTable.deletedAt,
+    })
+    .from(propertiesTable)
+    .where(eq(propertiesTable.id, id))
+    .limit(1) as Array<Property>;
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property',
@@ -150,18 +176,34 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
 // ── GET /properties/:id ──────────────────────────────────────────────────────
 
 properties.get('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const property = await c.env.DB
-    .prepare(
-      `SELECT p.*, u.name as owner_name FROM properties p
-       JOIN users u ON u.id = p.owner_id
-       WHERE p.id = ? AND p.deleted_at IS NULL`
-    )
-    .bind(id)
-    .first<Property & { owner_name: string }>();
+  const [property] = await db
+    .select({
+      id: propertiesTable.id,
+      owner_id: propertiesTable.ownerId,
+      manager_id: propertiesTable.managerId,
+      name: propertiesTable.name,
+      type: propertiesTable.type,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      area_m2: propertiesTable.areaM2,
+      year_built: propertiesTable.yearBuilt,
+      structure: propertiesTable.structure,
+      floors: propertiesTable.floors,
+      cover_url: propertiesTable.coverUrl,
+      health_score: propertiesTable.healthScore,
+      created_at: propertiesTable.createdAt,
+      deleted_at: propertiesTable.deletedAt,
+      owner_name: users.name,
+    })
+    .from(propertiesTable)
+    .innerJoin(users, eq(users.id, propertiesTable.ownerId))
+    .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+    .limit(1) as Array<Property & { owner_name: string }>;
 
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
@@ -174,6 +216,7 @@ properties.get('/:id', async (c) => {
 // ── PUT /properties/:id ──────────────────────────────────────────────────────
 
 properties.put('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -189,38 +232,68 @@ properties.put('/:id', async (c) => {
     return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   }
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM properties WHERE id = ? AND deleted_at IS NULL')
-    .bind(id)
-    .first<Property>();
+  const [old] = await db
+    .select({
+      id: propertiesTable.id,
+      owner_id: propertiesTable.ownerId,
+      manager_id: propertiesTable.managerId,
+      name: propertiesTable.name,
+      type: propertiesTable.type,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      area_m2: propertiesTable.areaM2,
+      year_built: propertiesTable.yearBuilt,
+      structure: propertiesTable.structure,
+      floors: propertiesTable.floors,
+      cover_url: propertiesTable.coverUrl,
+      health_score: propertiesTable.healthScore,
+      created_at: propertiesTable.createdAt,
+      deleted_at: propertiesTable.deletedAt,
+    })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+    .limit(1) as Array<Property>;
 
   if (!old) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
   const data = parsed.data;
-  const fields: string[] = [];
-  const values: unknown[] = [];
+  const updateData: Partial<typeof propertiesTable.$inferInsert> = {};
 
-  if (data.name !== undefined)       { fields.push('name = ?');        values.push(data.name); }
-  if (data.type !== undefined)       { fields.push('type = ?');        values.push(data.type); }
-  if (data.address !== undefined)    { fields.push('address = ?');     values.push(data.address); }
-  if (data.city !== undefined)       { fields.push('city = ?');        values.push(data.city); }
-  if (data.area_m2 !== undefined)    { fields.push('area_m2 = ?');     values.push(data.area_m2); }
-  if (data.year_built !== undefined) { fields.push('year_built = ?');  values.push(data.year_built); }
-  if (data.structure !== undefined)  { fields.push('structure = ?');   values.push(data.structure); }
-  if (data.floors !== undefined)     { fields.push('floors = ?');      values.push(data.floors); }
-  if (data.cover_url !== undefined)  { fields.push('cover_url = ?');   values.push(data.cover_url); }
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.address !== undefined) updateData.address = data.address;
+  if (data.city !== undefined) updateData.city = data.city;
+  if (data.area_m2 !== undefined) updateData.areaM2 = data.area_m2;
+  if (data.year_built !== undefined) updateData.yearBuilt = data.year_built;
+  if (data.structure !== undefined) updateData.structure = data.structure ?? null;
+  if (data.floors !== undefined) updateData.floors = data.floors;
+  if (data.cover_url !== undefined) updateData.coverUrl = data.cover_url ?? null;
 
-  if (fields.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
+  if (Object.keys(updateData).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await c.env.DB
-    .prepare(`UPDATE properties SET ${fields.join(', ')} WHERE id = ?`)
-    .bind(...values, id)
-    .run();
+  await db.update(propertiesTable).set(updateData).where(eq(propertiesTable.id, id));
 
-  const updated = await c.env.DB
-    .prepare('SELECT * FROM properties WHERE id = ?')
-    .bind(id)
-    .first<Property>();
+  const [updated] = await db
+    .select({
+      id: propertiesTable.id,
+      owner_id: propertiesTable.ownerId,
+      manager_id: propertiesTable.managerId,
+      name: propertiesTable.name,
+      type: propertiesTable.type,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      area_m2: propertiesTable.areaM2,
+      year_built: propertiesTable.yearBuilt,
+      structure: propertiesTable.structure,
+      floors: propertiesTable.floors,
+      cover_url: propertiesTable.coverUrl,
+      health_score: propertiesTable.healthScore,
+      created_at: propertiesTable.createdAt,
+      deleted_at: propertiesTable.deletedAt,
+    })
+    .from(propertiesTable)
+    .where(eq(propertiesTable.id, id))
+    .limit(1) as Array<Property>;
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property',
@@ -238,6 +311,7 @@ properties.put('/:id', async (c) => {
 // ── DELETE /properties/:id (soft-delete) ─────────────────────────────────────
 
 properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -245,17 +319,31 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM properties WHERE id = ? AND deleted_at IS NULL')
-    .bind(id)
-    .first<Property>();
+  const [old] = await db
+    .select({
+      id: propertiesTable.id,
+      owner_id: propertiesTable.ownerId,
+      manager_id: propertiesTable.managerId,
+      name: propertiesTable.name,
+      type: propertiesTable.type,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      area_m2: propertiesTable.areaM2,
+      year_built: propertiesTable.yearBuilt,
+      structure: propertiesTable.structure,
+      floors: propertiesTable.floors,
+      cover_url: propertiesTable.coverUrl,
+      health_score: propertiesTable.healthScore,
+      created_at: propertiesTable.createdAt,
+      deleted_at: propertiesTable.deletedAt,
+    })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+    .limit(1) as Array<Property>;
 
   if (!old) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE properties SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  await db.update(propertiesTable).set({ deletedAt: sql`datetime('now')` }).where(eq(propertiesTable.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property',
@@ -272,6 +360,7 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
 // ── POST /properties/:id/cover ───────────────────────────────────────────────
 
 properties.post('/:id/cover', async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -294,10 +383,7 @@ properties.post('/:id/cover', async (c) => {
 
   const coverUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
-  await c.env.DB
-    .prepare('UPDATE properties SET cover_url = ? WHERE id = ?')
-    .bind(coverUrl, id)
-    .run();
+  await db.update(propertiesTable).set({ coverUrl }).where(eq(propertiesTable.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property', entityId: id, action: 'cover_upload',
@@ -311,6 +397,7 @@ properties.post('/:id/cover', async (c) => {
 // ── GET /properties/:id/dashboard ────────────────────────────────────────────
 
 properties.get('/:id/dashboard', async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -318,74 +405,81 @@ properties.get('/:id/dashboard', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
-  // Run all queries in parallel using batch
-  const [expensesRow, servicesRow, inventoryRow, propertyRow] = await c.env.DB.batch([
-    c.env.DB
-      .prepare(
-        `SELECT SUM(amount) as total,
-         SUM(CASE WHEN reference_month = strftime('%Y-%m', 'now') THEN amount ELSE 0 END) as this_month
-         FROM expenses WHERE property_id = ? AND deleted_at IS NULL`
-      )
-      .bind(id),
-    c.env.DB
-      .prepare(
-        `SELECT
-          COUNT(*) as total,
-          SUM(CASE WHEN status = 'requested' THEN 1 ELSE 0 END) as requested,
-          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress,
-          SUM(CASE WHEN status = 'completed' OR status = 'verified' THEN 1 ELSE 0 END) as done,
-          SUM(CASE WHEN priority = 'urgent' AND status NOT IN ('completed','verified') THEN 1 ELSE 0 END) as urgent_open
-         FROM service_orders WHERE property_id = ? AND deleted_at IS NULL`
-      )
-      .bind(id),
-    c.env.DB
-      .prepare(
-        `SELECT COUNT(*) as total,
-         SUM(CASE WHEN quantity <= reserve_qty THEN 1 ELSE 0 END) as low_stock
-         FROM inventory_items WHERE property_id = ? AND deleted_at IS NULL`
-      )
-      .bind(id),
-    c.env.DB
-      .prepare('SELECT health_score FROM properties WHERE id = ? AND deleted_at IS NULL')
-      .bind(id),
+  const [exp, svc, inv, prop] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`SUM(${expenses.amount})`,
+        this_month: sql<number>`SUM(CASE WHEN ${expenses.referenceMonth} = strftime('%Y-%m', 'now') THEN ${expenses.amount} ELSE 0 END)`,
+      })
+      .from(expenses)
+      .where(and(eq(expenses.propertyId, id), isNull(expenses.deletedAt)))
+      .then((r) => r[0] ?? { total: 0, this_month: 0 }),
+    db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        requested: sql<number>`SUM(CASE WHEN ${serviceOrders.status} = 'requested' THEN 1 ELSE 0 END)`,
+        in_progress: sql<number>`SUM(CASE WHEN ${serviceOrders.status} = 'in_progress' THEN 1 ELSE 0 END)`,
+        done: sql<number>`SUM(CASE WHEN ${serviceOrders.status} IN ('completed','verified') THEN 1 ELSE 0 END)`,
+        urgent_open: sql<number>`SUM(CASE WHEN ${serviceOrders.priority} = 'urgent' AND ${serviceOrders.status} NOT IN ('completed','verified') THEN 1 ELSE 0 END)`,
+      })
+      .from(serviceOrders)
+      .where(and(eq(serviceOrders.propertyId, id), isNull(serviceOrders.deletedAt)))
+      .then((r) => r[0] ?? { total: 0, requested: 0, in_progress: 0, done: 0, urgent_open: 0 }),
+    db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        low_stock: sql<number>`SUM(CASE WHEN ${inventoryItems.quantity} <= ${inventoryItems.reserveQty} THEN 1 ELSE 0 END)`,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.propertyId, id), isNull(inventoryItems.deletedAt)))
+      .then((r) => r[0] ?? { total: 0, low_stock: 0 }),
+    db
+      .select({ health_score: propertiesTable.healthScore })
+      .from(propertiesTable)
+      .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+      .limit(1)
+      .then((r) => r[0]),
   ]);
 
   // Monthly expenses for chart (last 6 months)
-  const { results: monthlyExpenses } = await c.env.DB
-    .prepare(
-      `SELECT reference_month, SUM(amount) as total, category
-       FROM expenses
-       WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
-         AND reference_month >= strftime('%Y-%m', 'now', '-5 months')
-       GROUP BY reference_month, category
-       ORDER BY reference_month ASC`
+  const monthlyExpenses = await db
+    .select({
+      reference_month: expenses.referenceMonth,
+      total: sql<number>`SUM(${expenses.amount})`,
+      category: expenses.category,
+    })
+    .from(expenses)
+    .where(
+      and(
+        eq(expenses.propertyId, id),
+        isNull(expenses.deletedAt),
+        eq(expenses.type, 'expense'),
+        gte(expenses.referenceMonth, sql`strftime('%Y-%m', 'now', '-5 months')`)
+      )
     )
-    .bind(id)
-    .all<{ reference_month: string; total: number; category: string }>();
+    .groupBy(expenses.referenceMonth, expenses.category)
+    .orderBy(asc(expenses.referenceMonth)) as Array<{ reference_month: string; total: number; category: string }>;
 
   // Warranties expiring within 30 days
-  const { results: warrantiesExpiring } = await c.env.DB
-    .prepare(
-      `SELECT id, name, warranty_until,
-              CAST(julianday(warranty_until) - julianday('now') AS INTEGER) as days_left
-       FROM inventory_items
-       WHERE property_id = ? AND deleted_at IS NULL AND warranty_until IS NOT NULL
-         AND julianday(warranty_until) - julianday('now') <= 30
-         AND julianday(warranty_until) - julianday('now') >= 0
-       ORDER BY warranty_until ASC LIMIT 10`
+  const warrantiesExpiring = await db
+    .select({
+      id: inventoryItems.id,
+      name: inventoryItems.name,
+      warranty_until: inventoryItems.warrantyUntil,
+      days_left: sql<number>`CAST(julianday(${inventoryItems.warrantyUntil}) - julianday('now') AS INTEGER)`,
+    })
+    .from(inventoryItems)
+    .where(
+      and(
+        eq(inventoryItems.propertyId, id),
+        isNull(inventoryItems.deletedAt),
+        isNotNull(inventoryItems.warrantyUntil),
+        lte(sql`julianday(${inventoryItems.warrantyUntil}) - julianday('now')`, 30),
+        gte(sql`julianday(${inventoryItems.warrantyUntil}) - julianday('now')`, 0)
+      )
     )
-    .bind(id)
-    .all<{ id: string; name: string; warranty_until: string; days_left: number }>();
-
-  type ExpRow = { total: number; this_month: number };
-  type SvcRow = { total: number; requested: number; in_progress: number; done: number; urgent_open: number };
-  type InvRow = { total: number; low_stock: number };
-  type PropRow = { health_score: number };
-
-  const exp = (expensesRow as unknown as { results: ExpRow[] }).results[0] ?? { total: 0, this_month: 0 };
-  const svc = (servicesRow as unknown as { results: SvcRow[] }).results[0] ?? { total: 0, requested: 0, in_progress: 0, done: 0, urgent_open: 0 };
-  const inv = (inventoryRow as unknown as { results: InvRow[] }).results[0] ?? { total: 0, low_stock: 0 };
-  const prop = (propertyRow as unknown as { results: PropRow[] }).results[0];
+    .orderBy(asc(inventoryItems.warrantyUntil))
+    .limit(10) as Array<{ id: string; name: string; warranty_until: string; days_left: number }>;
 
   return ok(c, {
     health_score: prop?.health_score ?? 50,
@@ -401,6 +495,7 @@ properties.get('/:id/dashboard', async (c) => {
 // Returns collaborators with role='provider' — used to populate the OS assignment dropdown.
 
 properties.get('/:id/providers', async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -408,18 +503,27 @@ properties.get('/:id/providers', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const { results } = await c.env.DB.prepare(`
-    SELECT pc.id as collab_id, pc.user_id, pc.role, pc.can_open_os, pc.specialties, pc.whatsapp,
-           u.name, u.email, u.phone, u.avatar_url
-    FROM property_collaborators pc
-    JOIN users u ON u.id = pc.user_id
-    WHERE pc.property_id = ? AND pc.role = 'provider'
-    ORDER BY u.name ASC
-  `).bind(id).all<{
+  const results = await db
+    .select({
+      collab_id: propertyCollaborators.id,
+      user_id: propertyCollaborators.userId,
+      role: propertyCollaborators.role,
+      can_open_os: propertyCollaborators.canOpenOs,
+      specialties: propertyCollaborators.specialties,
+      whatsapp: propertyCollaborators.whatsapp,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      avatar_url: users.avatarUrl,
+    })
+    .from(propertyCollaborators)
+    .innerJoin(users, eq(users.id, propertyCollaborators.userId))
+    .where(and(eq(propertyCollaborators.propertyId, id), eq(propertyCollaborators.role, 'provider')))
+    .orderBy(asc(users.name)) as Array<{
     collab_id: string; user_id: string; role: string; can_open_os: number;
     specialties: string | null; whatsapp: string | null;
     name: string; email: string; phone: string | null; avatar_url: string | null;
-  }>();
+  }>;
 
   return ok(c, { providers: results });
 });
@@ -491,6 +595,7 @@ const TEMPLATES: Record<string, {
 };
 
 properties.post('/:id/apply-template', async (c) => {
+  const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -513,21 +618,26 @@ properties.post('/:id/apply-template', async (c) => {
     return d.toISOString().slice(0, 10);
   }
 
-  const roomInserts = template.rooms.map((r) =>
-    c.env.DB.prepare(
-      `INSERT OR IGNORE INTO rooms (id, property_id, name, type, floor, created_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))`
-    ).bind(nanoid(), id, r.name, r.type, r.floor)
-  );
-
-  const maintInserts = template.maintenance.map((m) =>
-    c.env.DB.prepare(
-      `INSERT INTO maintenance_schedules (id, property_id, system_type, title, description, frequency, next_due, auto_create_os, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))`
-    ).bind(nanoid(), id, m.system_type, m.title, m.description ?? null, m.frequency, calcNextDue(m.frequency))
-  );
-
-  await c.env.DB.batch([...roomInserts, ...maintInserts]);
+  await Promise.all([
+    ...template.rooms.map((r) =>
+      db
+        .insert(rooms)
+        .values({ id: nanoid(), propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
+        .onConflictDoNothing()
+    ),
+    ...template.maintenance.map((m) =>
+      db.insert(maintenanceSchedules).values({
+        id: nanoid(),
+        propertyId: id,
+        systemType: m.system_type,
+        title: m.title,
+        description: m.description ?? null,
+        frequency: m.frequency as never,
+        nextDue: calcNextDue(m.frequency),
+        autoCreateOs: 0,
+      })
+    ),
+  ]);
 
   return ok(c, { created: { rooms: template.rooms.length, maintenance: template.maintenance.length } }, 201);
 });

@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { maintenanceSchedules, properties, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 type MaintenanceSchedule = {
@@ -43,21 +46,33 @@ function calcNextDue(frequency: string, lastDone?: string): string {
 // ── GET /properties/:propertyId/maintenance ───────────────────────────────────
 
 maintenance.get('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT * FROM maintenance_schedules
-       WHERE property_id = ? AND deleted_at IS NULL
-       ORDER BY next_due ASC NULLS LAST`
-    )
-    .bind(propertyId)
-    .all<MaintenanceSchedule>();
+  const results = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(and(eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .orderBy(asc(maintenanceSchedules.nextDue)) as MaintenanceSchedule[];
 
   // Flag overdue items
   const today = new Date().toISOString().slice(0, 10);
@@ -75,7 +90,8 @@ maintenance.get('/', async (c) => {
 // ── POST /properties/:propertyId/maintenance ──────────────────────────────────
 
 maintenance.post('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -94,23 +110,39 @@ maintenance.post('/', async (c) => {
   const next_due = calcNextDue(frequency, last_done);
   const id = nanoid();
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO maintenance_schedules
-       (id, property_id, system_type, title, description, frequency, responsible,
-        last_done, next_due, auto_create_os, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(
-      id, propertyId, system_type, title, description ?? null, frequency,
-      responsible ?? null, last_done ?? null, next_due, auto_create_os ? 1 : 0, notes ?? null
-    )
-    .run();
+  await db.insert(maintenanceSchedules).values({
+    id,
+    propertyId,
+    systemType: system_type,
+    title,
+    description: description ?? null,
+    frequency,
+    responsible: responsible ?? null,
+    lastDone: last_done ?? null,
+    nextDue: next_due,
+    autoCreateOs: auto_create_os ? 1 : 0,
+    notes: notes ?? null,
+  });
 
-  const schedule = await c.env.DB
-    .prepare('SELECT * FROM maintenance_schedules WHERE id = ?')
-    .bind(id)
-    .first<MaintenanceSchedule>();
+  const [schedule] = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(eq(maintenanceSchedules.id, id))
+    .limit(1) as MaintenanceSchedule[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'maintenance_schedule', entityId: id, action: 'create',
@@ -123,18 +155,34 @@ maintenance.post('/', async (c) => {
 // ── PUT /properties/:propertyId/maintenance/:id ───────────────────────────────
 
 maintenance.put('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM maintenance_schedules WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<MaintenanceSchedule>();
+  const [old] = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .limit(1) as MaintenanceSchedule[];
 
   if (!old) return err(c, 'Agendamento não encontrado', 'NOT_FOUND', 404);
 
@@ -147,31 +195,43 @@ maintenance.put('/:id', async (c) => {
   }
 
   const d = parsed.data;
-  const pairs: [string, unknown][] = [];
+  const patch: Partial<typeof maintenanceSchedules.$inferInsert> = {};
 
-  if (d.system_type !== undefined)    pairs.push(['system_type', d.system_type]);
-  if (d.title !== undefined)          pairs.push(['title', d.title]);
-  if (d.description !== undefined)    pairs.push(['description', d.description ?? null]);
-  if (d.frequency !== undefined)      pairs.push(['frequency', d.frequency]);
-  if (d.responsible !== undefined)    pairs.push(['responsible', d.responsible ?? null]);
-  if (d.notes !== undefined)          pairs.push(['notes', d.notes]);
-  if (d.auto_create_os !== undefined) pairs.push(['auto_create_os', d.auto_create_os ? 1 : 0]);
+  if (d.system_type !== undefined) patch.systemType = d.system_type;
+  if (d.title !== undefined) patch.title = d.title;
+  if (d.description !== undefined) patch.description = d.description ?? null;
+  if (d.frequency !== undefined) patch.frequency = d.frequency;
+  if (d.responsible !== undefined) patch.responsible = d.responsible ?? null;
+  if (d.notes !== undefined) patch.notes = d.notes;
+  if (d.auto_create_os !== undefined) patch.autoCreateOs = d.auto_create_os ? 1 : 0;
   if (d.last_done !== undefined) {
-    pairs.push(['last_done', d.last_done]);
-    pairs.push(['next_due', calcNextDue(d.frequency ?? old.frequency, d.last_done)]);
+    patch.lastDone = d.last_done;
+    patch.nextDue = calcNextDue(d.frequency ?? old.frequency, d.last_done);
   }
 
-  if (pairs.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
+  if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await c.env.DB
-    .prepare(`UPDATE maintenance_schedules SET ${pairs.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
-    .bind(...pairs.map(([, v]) => v), id)
-    .run();
+  await db.update(maintenanceSchedules).set(patch).where(eq(maintenanceSchedules.id, id));
 
-  const updated = await c.env.DB
-    .prepare('SELECT * FROM maintenance_schedules WHERE id = ?')
-    .bind(id)
-    .first<MaintenanceSchedule>();
+  const [updated] = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(eq(maintenanceSchedules.id, id))
+    .limit(1) as MaintenanceSchedule[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'maintenance_schedule', entityId: id, action: 'update',
@@ -185,45 +245,61 @@ maintenance.put('/:id', async (c) => {
 // Mark a maintenance as completed today → recalculate next_due
 
 maintenance.post('/:id/done', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const schedule = await c.env.DB
-    .prepare('SELECT * FROM maintenance_schedules WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<MaintenanceSchedule>();
+  const [schedule] = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .limit(1) as MaintenanceSchedule[];
 
   if (!schedule) return err(c, 'Agendamento não encontrado', 'NOT_FOUND', 404);
 
   const today = new Date().toISOString().slice(0, 10);
   const nextDue = calcNextDue(schedule.frequency, today);
 
-  await c.env.DB
-    .prepare('UPDATE maintenance_schedules SET last_done = ?, next_due = ? WHERE id = ?')
-    .bind(today, nextDue, id)
-    .run();
+  await db
+    .update(maintenanceSchedules)
+    .set({ lastDone: today, nextDue })
+    .where(eq(maintenanceSchedules.id, id));
 
   // If auto_create_os is enabled, create a service order
   if (schedule.auto_create_os) {
     const osId = nanoid();
-    await c.env.DB
-      .prepare(
-        `INSERT INTO service_orders
-         (id, property_id, system_type, requested_by, title, description, priority, status,
-          before_photos, after_photos, checklist, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'preventive', 'requested', '[]', '[]', '[]', datetime('now'))`
-      )
-      .bind(
-        osId, propertyId, schedule.system_type, userId,
-        `[Auto] ${schedule.title}`,
-        `Manutenção preventiva gerada automaticamente. Próxima: ${nextDue}`
-      )
-      .run();
+    await db.insert(serviceOrders).values({
+      id: osId,
+      propertyId,
+      systemType: schedule.system_type as typeof serviceOrders.$inferInsert.systemType,
+      requestedBy: userId,
+      title: `[Auto] ${schedule.title}`,
+      description: `Manutenção preventiva gerada automaticamente. Próxima: ${nextDue}`,
+      priority: 'preventive',
+      status: 'requested',
+      beforePhotos: [],
+      afterPhotos: [],
+      checklist: [],
+    });
 
     await writeAuditLog(c.env.DB, {
       entityType: 'service_order', entityId: osId, action: 'auto_create',
@@ -242,25 +318,41 @@ maintenance.post('/:id/done', async (c) => {
 // ── DELETE /properties/:propertyId/maintenance/:id ───────────────────────────
 
 maintenance.delete('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM maintenance_schedules WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first();
+  const [old] = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .limit(1);
 
   if (!old) return err(c, 'Agendamento não encontrado', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE maintenance_schedules SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  await db
+    .update(maintenanceSchedules)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(eq(maintenanceSchedules.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'maintenance_schedule', entityId: id, action: 'delete',
@@ -294,16 +386,19 @@ type OverdueSchedule = {
 };
 
 export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: number; created: number; skipped: number }> {
-  const { results: schedules } = await db
-    .prepare(
-      `SELECT ms.id, ms.property_id, ms.system_type, ms.title, ms.description,
-              ms.responsible, ms.next_due
-       FROM maintenance_schedules ms
-       WHERE ms.auto_create_os = 1
-         AND ms.next_due <= datetime('now')
-         AND ms.deleted_at IS NULL`
-    )
-    .all<OverdueSchedule>();
+  const drizzle = getDb(db);
+  const schedules = await drizzle
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      next_due: maintenanceSchedules.nextDue,
+    })
+    .from(maintenanceSchedules)
+    .where(and(eq(maintenanceSchedules.autoCreateOs, 1), lte(maintenanceSchedules.nextDue, sql`datetime('now')`), isNull(maintenanceSchedules.deletedAt))) as OverdueSchedule[];
 
   let created = 0;
   let skipped = 0;
@@ -312,16 +407,11 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
     const autoTitle = `[Auto] ${schedule.title}`;
 
     // Check if an OS with this title and scheduled_at already exists for the property
-    const existing = await db
-      .prepare(
-        `SELECT id FROM service_orders
-         WHERE property_id = ?
-           AND title = ?
-           AND scheduled_at = ?
-         LIMIT 1`
-      )
-      .bind(schedule.property_id, autoTitle, schedule.next_due)
-      .first();
+    const [existing] = await drizzle
+      .select({ id: serviceOrders.id })
+      .from(serviceOrders)
+      .where(and(eq(serviceOrders.propertyId, schedule.property_id), eq(serviceOrders.title, autoTitle), eq(serviceOrders.scheduledAt, schedule.next_due)))
+      .limit(1);
 
     if (existing) {
       skipped++;
@@ -331,36 +421,33 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
     // Determine requested_by: responsible field or first owner of the property
     let requestedBy: string | null = schedule.responsible ?? null;
     if (!requestedBy) {
-      const owner = await db
-        .prepare(
-          `SELECT owner_id FROM properties WHERE id = ? LIMIT 1`
-        )
-        .bind(schedule.property_id)
-        .first<{ owner_id: string }>();
+      const [owner] = await drizzle
+        .select({ owner_id: properties.ownerId })
+        .from(properties)
+        .where(eq(properties.id, schedule.property_id))
+        .limit(1) as Array<{ owner_id: string }>;
       requestedBy = owner?.owner_id ?? null;
+    }
+
+    if (!requestedBy) {
+      skipped++;
+      continue;
     }
 
     const osId = nanoid();
 
-    await db
-      .prepare(
-        `INSERT INTO service_orders
-         (id, property_id, room_id, system_type, requested_by, assigned_to,
-          title, description, priority, status, cost, warranty_until,
-          scheduled_at, checklist, created_at)
-         VALUES (?, ?, NULL, ?, ?, NULL, ?, ?, 'preventive', 'requested',
-                 NULL, NULL, ?, '[]', datetime('now'))`
-      )
-      .bind(
-        osId,
-        schedule.property_id,
-        schedule.system_type,
-        requestedBy,
-        autoTitle,
-        schedule.description ?? null,
-        schedule.next_due
-      )
-      .run();
+    await drizzle.insert(serviceOrders).values({
+      id: osId,
+      propertyId: schedule.property_id,
+      systemType: schedule.system_type as typeof serviceOrders.$inferInsert.systemType,
+      requestedBy,
+      title: autoTitle,
+      description: schedule.description ?? null,
+      priority: 'preventive',
+      status: 'requested',
+      scheduledAt: schedule.next_due,
+      checklist: [],
+    });
 
     created++;
   }
@@ -375,23 +462,35 @@ export async function sendMaintenanceDueEmails(
 ): Promise<void> {
   if (!resendApiKey) return;
 
-  const { results } = await db.prepare(`
-    SELECT m.id, m.title, m.next_due, m.property_id,
-           CAST(julianday(m.next_due) - julianday('now') AS INTEGER) as days_until_due,
-           p.name as property_name,
-           u.id as user_id, u.email, u.name as user_name, u.notification_prefs
-    FROM maintenance_schedules m
-    JOIN properties p ON p.id = m.property_id
-    JOIN users u ON u.id = p.owner_id
-    WHERE m.deleted_at IS NULL
-      AND julianday(m.next_due) - julianday('now') <= 3
-      AND julianday(m.next_due) - julianday('now') > -7
-    ORDER BY m.property_id, m.next_due
-  `).all<{
+  const drizzle = getDb(db);
+  const results = await drizzle
+    .select({
+      id: maintenanceSchedules.id,
+      title: maintenanceSchedules.title,
+      next_due: maintenanceSchedules.nextDue,
+      property_id: maintenanceSchedules.propertyId,
+      days_until_due: sql<number>`CAST(julianday(${maintenanceSchedules.nextDue}) - julianday('now') AS INTEGER)`,
+      property_name: properties.name,
+      user_id: users.id,
+      email: users.email,
+      user_name: users.name,
+      notification_prefs: users.notificationPrefs,
+    })
+    .from(maintenanceSchedules)
+    .innerJoin(properties, eq(properties.id, maintenanceSchedules.propertyId))
+    .innerJoin(users, eq(users.id, properties.ownerId))
+    .where(
+      and(
+        isNull(maintenanceSchedules.deletedAt),
+        lte(sql`julianday(${maintenanceSchedules.nextDue}) - julianday('now')`, 3),
+        sql`julianday(${maintenanceSchedules.nextDue}) - julianday('now') > -7`
+      )
+    )
+    .orderBy(maintenanceSchedules.propertyId, maintenanceSchedules.nextDue) as Array<{
     id: string; title: string; next_due: string; days_until_due: number;
     property_id: string; property_name: string;
     user_id: string; email: string; user_name: string; notification_prefs: string;
-  }>();
+  }>;
 
   if (results.length === 0) return;
 
@@ -407,6 +506,7 @@ export async function sendMaintenanceDueEmails(
 
   for (const [, schedules] of grouped) {
     const first = schedules[0];
+    if (!first) continue;
     const prefs = JSON.parse(first.notification_prefs || '{}') as Record<string, boolean>;
     if (prefs.maintenance_due === false) continue;
 

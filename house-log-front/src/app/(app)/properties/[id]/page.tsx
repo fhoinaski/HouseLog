@@ -1,14 +1,16 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Building2, MapPin, Ruler, Calendar, Activity,
   Wrench, Package, FileText, BarChart3,
   CheckCircle2, Clock, Home, RefreshCw, Pencil, GitBranch, ShieldCheck, ShieldAlert,
 } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
+import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,6 +56,8 @@ function ScoreBar({ score }: { score: number }) {
 
 export default function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data: propData, isLoading: propLoading } = useSWR(
     ['property', id],
@@ -96,11 +100,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" asChild>
-            <Link href={`/properties/${id}/services/new`}>
-              <Wrench className="h-4 w-4" />
-              Nova OS
-            </Link>
+          <Button variant="outline" onClick={() => setCreateOpen(true)}>
+            <Wrench className="h-4 w-4" />
+            Nova OS
           </Button>
           <Button variant="outline" asChild>
             <Link href={`/properties/${id}/edit`}>
@@ -273,6 +275,13 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </CardContent>
         </Card>
       </div>
+
+      <ServiceOrderCreateModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        propertyId={id}
+        onCreated={(orderId) => router.push(`/properties/${id}/services/${orderId}`)}
+      />
     </div>
   );
 }

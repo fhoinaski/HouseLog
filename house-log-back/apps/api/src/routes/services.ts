@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, canUserOpenOS } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
 import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/email';
+import { getDb } from '../db/client';
+import { properties, rooms, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -14,8 +17,7 @@ services.use('*', authMiddleware);
 
 // Valid status transitions
 const STATUS_TRANSITIONS: Record<string, string[]> = {
-  requested:   ['approved', 'bidding'],
-  bidding:     ['approved', 'requested'],
+  requested:   ['approved'],
   approved:    ['in_progress', 'requested'],
   in_progress: ['completed', 'approved'],
   completed:   ['verified', 'in_progress'],
@@ -37,6 +39,7 @@ const createSchema = z.object({
 // ── GET /properties/:propertyId/services ─────────────────────────────────────
 
 services.get('/', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -49,32 +52,46 @@ services.get('/', async (c) => {
   const status = c.req.query('status');
   const priority = c.req.query('priority');
 
-  const conditions = ['s.property_id = ?', 's.deleted_at IS NULL'];
-  const bindings: unknown[] = [propertyId];
+  let query = db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+      requested_by_name: sql<string>`u1.name`,
+      assigned_to_name: sql<string | null>`u2.name`,
+      room_name: rooms.name,
+    })
+    .from(serviceOrders)
+    .innerJoin(sql`${users} u1`, sql`u1.id = ${serviceOrders.requestedBy}`)
+    .leftJoin(sql`${users} u2`, sql`u2.id = ${serviceOrders.assignedTo}`)
+    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)));
 
-  if (status)   { conditions.push('s.status = ?');   bindings.push(status); }
-  if (priority) { conditions.push('s.priority = ?'); bindings.push(priority); }
-  if (cursor)   { conditions.push('s.created_at < ?'); bindings.push(cursor); }
+  if (status) query = query.where(eq(serviceOrders.status, status as never));
+  if (priority) query = query.where(eq(serviceOrders.priority, priority as never));
+  if (cursor) query = query.where(sql`${serviceOrders.createdAt} < ${cursor}`);
 
-  bindings.push(limit + 1);
-
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT s.*,
-              u1.name as requested_by_name,
-              u2.name as assigned_to_name,
-              r.name as room_name
-       FROM service_orders s
-       JOIN users u1 ON u1.id = s.requested_by
-       LEFT JOIN users u2 ON u2.id = s.assigned_to
-       LEFT JOIN rooms r ON r.id = s.room_id
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY
-         CASE s.priority WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-         s.created_at DESC LIMIT ?`
-    )
-    .bind(...bindings)
-    .all<ServiceOrder & { requested_by_name: string; assigned_to_name: string | null; room_name: string | null }>();
+  const results = await query
+    .orderBy(sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`, desc(serviceOrders.createdAt))
+    .limit(limit + 1) as Array<ServiceOrder & { requested_by_name: string; assigned_to_name: string | null; room_name: string | null }>;
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
@@ -82,6 +99,7 @@ services.get('/', async (c) => {
 // ── POST /properties/:propertyId/services ────────────────────────────────────
 
 services.post('/', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -102,23 +120,24 @@ services.post('/', async (c) => {
 
   const d = parsed.data;
   const id = nanoid();
-  const checklistJson = JSON.stringify(d.checklist ?? []);
 
   try {
-    await c.env.DB
-      .prepare(
-        `INSERT INTO service_orders
-         (id, property_id, room_id, system_type, requested_by, assigned_to,
-          title, description, priority, status, warranty_until, scheduled_at, checklist, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, datetime('now'))`
-      )
-      .bind(
-        id, propertyId, d.room_id ?? null, d.system_type, userId,
-        d.assigned_to ?? null, d.title, d.description ?? null,
-        d.priority, d.warranty_until ?? null,
-        d.scheduled_at ?? null, checklistJson
-      )
-      .run();
+    await db.insert(serviceOrders).values({
+      id,
+      propertyId,
+      roomId: d.room_id ?? null,
+      systemType: d.system_type,
+      requestedBy: userId,
+      assignedTo: d.assigned_to ?? null,
+      title: d.title,
+      description: d.description ?? null,
+      priority: d.priority,
+      // Assigned provider means direct execution workflow (no bidding).
+      status: d.assigned_to ? 'approved' : 'requested',
+      warrantyUntil: d.warranty_until ?? null,
+      scheduledAt: d.scheduled_at ?? null,
+      checklist: d.checklist ?? [],
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('FOREIGN KEY')) {
@@ -127,25 +146,50 @@ services.post('/', async (c) => {
     throw e;
   }
 
-  const order = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ?')
-    .bind(id)
-    .first<ServiceOrder>();
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(eq(serviceOrders.id, id))
+    .limit(1) as Array<ServiceOrder>;
 
   // Notify assigned provider (non-blocking)
   void (async () => {
     try {
       if (!d.assigned_to || !c.env.RESEND_API_KEY) return;
 
-      const provider = await c.env.DB
-        .prepare('SELECT name, email FROM users WHERE id = ?')
-        .bind(d.assigned_to)
-        .first<{ name: string; email: string }>();
+      const [provider] = await db
+        .select({ name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, d.assigned_to))
+        .limit(1) as Array<{ name: string; email: string }>;
 
-      const property = await c.env.DB
-        .prepare('SELECT name FROM properties WHERE id = ?')
-        .bind(propertyId)
-        .first<{ name: string }>();
+      const [property] = await db
+        .select({ name: properties.name })
+        .from(properties)
+        .where(eq(properties.id, propertyId))
+        .limit(1) as Array<{ name: string }>;
 
       if (!provider?.email) return;
 
@@ -179,6 +223,7 @@ services.post('/', async (c) => {
 // ── GET /properties/:propertyId/services/:id ─────────────────────────────────
 
 services.get('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -187,17 +232,39 @@ services.get('/:id', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const order = await c.env.DB
-    .prepare(
-      `SELECT s.*, u1.name as requested_by_name, u2.name as assigned_to_name, r.name as room_name
-       FROM service_orders s
-       JOIN users u1 ON u1.id = s.requested_by
-       LEFT JOIN users u2 ON u2.id = s.assigned_to
-       LEFT JOIN rooms r ON r.id = s.room_id
-       WHERE s.id = ? AND s.property_id = ? AND s.deleted_at IS NULL`
-    )
-    .bind(id, propertyId)
-    .first();
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+      requested_by_name: sql<string>`u1.name`,
+      assigned_to_name: sql<string | null>`u2.name`,
+      room_name: rooms.name,
+    })
+    .from(serviceOrders)
+    .innerJoin(sql`${users} u1`, sql`u1.id = ${serviceOrders.requestedBy}`)
+    .leftJoin(sql`${users} u2`, sql`u2.id = ${serviceOrders.assignedTo}`)
+    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1);
 
   if (!order) return err(c, 'Ordem de serviço não encontrada', 'NOT_FOUND', 404);
 
@@ -207,6 +274,7 @@ services.get('/:id', async (c) => {
 // ── PUT /properties/:propertyId/services/:id ─────────────────────────────────
 
 services.put('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -215,10 +283,33 @@ services.put('/:id', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<ServiceOrder>();
+  const [old] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1) as Array<ServiceOrder>;
 
   if (!old) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -231,29 +322,49 @@ services.put('/:id', async (c) => {
   }
 
   const d = parsed.data;
-  const pairs: [string, unknown][] = [];
+  const updateData: Partial<typeof serviceOrders.$inferInsert> = {};
 
-  if (d.title !== undefined)        pairs.push(['title', d.title]);
-  if (d.description !== undefined)  pairs.push(['description', d.description]);
-  if (d.system_type !== undefined)  pairs.push(['system_type', d.system_type]);
-  if (d.room_id !== undefined)      pairs.push(['room_id', d.room_id]);
-  if (d.priority !== undefined)     pairs.push(['priority', d.priority]);
-  if (d.assigned_to !== undefined)  pairs.push(['assigned_to', d.assigned_to]);
-  if (d.warranty_until !== undefined) pairs.push(['warranty_until', d.warranty_until]);
-  if (d.scheduled_at !== undefined) pairs.push(['scheduled_at', d.scheduled_at]);
-  if (d.checklist !== undefined)    pairs.push(['checklist', JSON.stringify(d.checklist)]);
+  if (d.title !== undefined) updateData.title = d.title;
+  if (d.description !== undefined) updateData.description = d.description ?? null;
+  if (d.system_type !== undefined) updateData.systemType = d.system_type;
+  if (d.room_id !== undefined) updateData.roomId = d.room_id ?? null;
+  if (d.priority !== undefined) updateData.priority = d.priority;
+  if (d.assigned_to !== undefined) updateData.assignedTo = d.assigned_to ?? null;
+  if (d.warranty_until !== undefined) updateData.warrantyUntil = d.warranty_until ?? null;
+  if (d.scheduled_at !== undefined) updateData.scheduledAt = d.scheduled_at ?? null;
+  if (d.checklist !== undefined) updateData.checklist = d.checklist;
 
-  if (pairs.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
+  if (Object.keys(updateData).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await c.env.DB
-    .prepare(`UPDATE service_orders SET ${pairs.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
-    .bind(...pairs.map(([, v]) => v), id)
-    .run();
+  await db.update(serviceOrders).set(updateData).where(eq(serviceOrders.id, id));
 
-  const updated = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ?')
-    .bind(id)
-    .first<ServiceOrder>();
+  const [updated] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(eq(serviceOrders.id, id))
+    .limit(1) as Array<ServiceOrder>;
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: 'update',
@@ -267,6 +378,7 @@ services.put('/:id', async (c) => {
 // ── PATCH /properties/:propertyId/services/:id/status ────────────────────────
 
 services.patch('/:id/status', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -278,10 +390,33 @@ services.patch('/:id/status', async (c) => {
   const body = await c.req.json<{ status: string }>().catch(() => null);
   if (!body?.status) return err(c, 'Status inválido', 'INVALID_BODY');
 
-  const order = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<ServiceOrder>();
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1) as Array<ServiceOrder>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -297,24 +432,21 @@ services.patch('/:id/status', async (c) => {
 
   // Rule: completing requires at least 1 after photo
   if (body.status === 'completed') {
-    const afterPhotos = JSON.parse(order.after_photos || '[]') as string[];
+    const afterPhotos = Array.isArray(order.after_photos)
+      ? order.after_photos
+      : JSON.parse((order.after_photos as string | null) || '[]') as string[];
     if (afterPhotos.length === 0) {
       return err(c, 'OS requer ao menos 1 foto "depois" para ser concluída', 'MISSING_AFTER_PHOTO', 422);
     }
   }
 
-  const extra: Record<string, string> = {};
-  if (body.status === 'completed') extra.completed_at = "datetime('now')";
-
-  const setClause = [
-    'status = ?',
-    ...Object.keys(extra).map((k) => `${k} = ${extra[k]}`),
-  ].join(', ');
-
-  await c.env.DB
-    .prepare(`UPDATE service_orders SET ${setClause} WHERE id = ?`)
-    .bind(body.status, id)
-    .run();
+  await db
+    .update(serviceOrders)
+    .set({
+      status: body.status as typeof serviceOrders.$inferInsert.status,
+      ...(body.status === 'completed' ? { completedAt: sql`datetime('now')` } : {}),
+    })
+    .where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: `status_${body.status}`,
@@ -322,21 +454,49 @@ services.patch('/:id/status', async (c) => {
     oldData: { status: order.status }, newData: { status: body.status },
   });
 
-  const updated = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ?')
-    .bind(id)
-    .first<ServiceOrder>();
+  const [updated] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(eq(serviceOrders.id, id))
+    .limit(1) as Array<ServiceOrder>;
 
   // Send email notification to requester (non-blocking)
   void (async () => {
     try {
       const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
-      const requester = await c.env.DB
-        .prepare(`SELECT u.email, u.name, u.notification_prefs, p.name as property_name
-                  FROM users u JOIN properties p ON p.id = ?
-                  WHERE u.id = ?`)
-        .bind(propertyId, order.requested_by)
-        .first<{ email: string; name: string; notification_prefs: string; property_name: string }>();
+      const [requester] = await db
+        .select({
+          email: users.email,
+          name: users.name,
+          notification_prefs: users.notificationPrefs,
+          property_name: properties.name,
+        })
+        .from(users)
+        .innerJoin(properties, eq(properties.id, sql`${propertyId}`))
+        .where(eq(users.id, order.requested_by))
+        .limit(1) as Array<{ email: string; name: string; notification_prefs: string; property_name: string }>;
 
       if (requester && c.env.RESEND_API_KEY) {
         const prefs = JSON.parse(requester.notification_prefs || '{}') as Record<string, boolean>;
@@ -367,6 +527,7 @@ services.patch('/:id/status', async (c) => {
 // ── POST /properties/:propertyId/services/:id/photos ─────────────────────────
 
 services.post('/:id/photos', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -375,10 +536,15 @@ services.post('/:id/photos', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const order = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<ServiceOrder>();
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+    })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1) as Array<{ id: string; before_photos: string[] | null; after_photos: string[] | null }>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -398,14 +564,15 @@ services.post('/:id/photos', async (c) => {
 
   const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
-  const field = photoType === 'after' ? 'after_photos' : 'before_photos';
-  const current = JSON.parse(order[field] || '[]') as string[];
+  const current = photoType === 'after'
+    ? [...(order.after_photos ?? [])]
+    : [...(order.before_photos ?? [])];
   current.push(fileUrl);
 
-  await c.env.DB
-    .prepare(`UPDATE service_orders SET ${field} = ? WHERE id = ?`)
-    .bind(JSON.stringify(current), id)
-    .run();
+  await db
+    .update(serviceOrders)
+    .set(photoType === 'after' ? { afterPhotos: current } : { beforePhotos: current })
+    .where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: `photo_upload_${photoType}`,
@@ -418,6 +585,7 @@ services.post('/:id/photos', async (c) => {
 // ── POST /properties/:propertyId/services/:id/video ──────────────────────────
 
 services.post('/:id/video', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -426,10 +594,11 @@ services.post('/:id/video', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const order = await c.env.DB
-    .prepare('SELECT id FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first();
+  const [order] = await db
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1);
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -448,10 +617,7 @@ services.post('/:id/video', async (c) => {
 
   const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
-  await c.env.DB
-    .prepare('UPDATE service_orders SET video_url = ? WHERE id = ?')
-    .bind(fileUrl, id)
-    .run();
+  await db.update(serviceOrders).set({ videoUrl: fileUrl }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: 'video_upload',
@@ -464,6 +630,7 @@ services.post('/:id/video', async (c) => {
 // ── POST /properties/:propertyId/services/:id/audio ──────────────────────────
 
 services.post('/:id/audio', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -472,10 +639,11 @@ services.post('/:id/audio', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const order = await c.env.DB
-    .prepare('SELECT id FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first();
+  const [order] = await db
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1);
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -495,10 +663,7 @@ services.post('/:id/audio', async (c) => {
 
   const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
-  await c.env.DB
-    .prepare('UPDATE service_orders SET audio_url = ? WHERE id = ?')
-    .bind(fileUrl, id)
-    .run();
+  await db.update(serviceOrders).set({ audioUrl: fileUrl }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: 'audio_upload',
@@ -511,6 +676,7 @@ services.post('/:id/audio', async (c) => {
 // ── DELETE /properties/:propertyId/services/:id ──────────────────────────────
 
 services.delete('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -519,17 +685,37 @@ services.delete('/:id', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<ServiceOrder>();
+  const [old] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1) as Array<ServiceOrder>;
 
   if (!old) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE service_orders SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  await db.update(serviceOrders).set({ deletedAt: sql`datetime('now')` }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: 'delete',
@@ -542,6 +728,7 @@ services.delete('/:id', async (c) => {
 // ── PATCH /properties/:propertyId/services/:id/checklist ─────────────────────
 
 services.patch('/:id/checklist', async (c) => {
+  const db = getDb(c.env.DB);
   const { propertyId, id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -554,10 +741,11 @@ services.patch('/:id/checklist', async (c) => {
     return err(c, 'Checklist inválido', 'INVALID_BODY');
   }
 
-  const order = await c.env.DB
-    .prepare('SELECT id FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<{ id: string }>();
+  const [order] = await db
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1) as Array<{ id: string }>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -566,10 +754,7 @@ services.patch('/:id/checklist', async (c) => {
     done: Boolean(item.done),
   }));
 
-  await c.env.DB
-    .prepare(`UPDATE service_orders SET checklist = ? WHERE id = ?`)
-    .bind(JSON.stringify(sanitized), id)
-    .run();
+  await db.update(serviceOrders).set({ checklist: sanitized }).where(eq(serviceOrders.id, id));
 
   return ok(c, { checklist: sanitized });
 });

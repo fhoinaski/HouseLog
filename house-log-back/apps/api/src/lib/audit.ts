@@ -1,5 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { nanoid } from 'nanoid';
+import { getDb } from '../db/client';
+import { auditLog } from '../db/schema';
 
 export async function writeAuditLog(
   db: D1Database,
@@ -13,20 +15,15 @@ export async function writeAuditLog(
     newData?: unknown;
   }
 ): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO audit_log (id, entity_type, entity_id, action, actor_id, actor_ip, old_data, new_data, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(
-      nanoid(),
-      opts.entityType,
-      opts.entityId,
-      opts.action,
-      opts.actorId,
-      opts.actorIp ?? null,
-      opts.oldData ? JSON.stringify(opts.oldData) : null,
-      opts.newData ? JSON.stringify(opts.newData) : null
-    )
-    .run();
+  const drizzle = getDb(db);
+  await drizzle.insert(auditLog).values({
+    id: nanoid(),
+    entityType: opts.entityType,
+    entityId: opts.entityId,
+    action: opts.action,
+    actorId: opts.actorId,
+    actorIp: opts.actorIp ?? null,
+    oldData: (opts.oldData as Record<string, unknown> | null | undefined) ?? null,
+    newData: (opts.newData as Record<string, unknown> | null | undefined) ?? null,
+  });
 }

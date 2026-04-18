@@ -28,13 +28,41 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+type ServiceFlow = 'quote' | 'direct';
 
 const PRIORITY_LABELS = { urgent: 'Urgente', normal: 'Normal', preventive: 'Preventiva' };
+
+const SPECIALTY_ALIASES: Record<string, string> = {
+  electrical: 'electrical',
+  eletrica: 'electrical',
+  'elétrica': 'electrical',
+  plumbing: 'plumbing',
+  hidraulica: 'plumbing',
+  'hidráulica': 'plumbing',
+  structural: 'structural',
+  estrutural: 'structural',
+  waterproofing: 'waterproofing',
+  impermeabilizacao: 'waterproofing',
+  'impermeabilização': 'waterproofing',
+  painting: 'painting',
+  pintura: 'painting',
+  flooring: 'flooring',
+  piso: 'flooring',
+  roofing: 'roofing',
+  telhado: 'roofing',
+  general: 'general',
+  geral: 'general',
+};
+
+function normalizeSpecialty(value: string): string {
+  return SPECIALTY_ALIASES[value.trim().toLowerCase()] ?? value.trim().toLowerCase();
+}
 
 export default function NewServicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [apiError, setApiError] = useState<string | null>(null);
+  const [serviceFlow, setServiceFlow] = useState<ServiceFlow>('quote');
   const [systemType, setSystemType] = useState('electrical');
   const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
   const [problemVideo, setProblemVideo] = useState<File | null>(null);
@@ -55,23 +83,29 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
         if (!p.specialties) return [] as string[];
         try {
           const parsed = JSON.parse(p.specialties) as string[];
-          return Array.isArray(parsed) ? parsed : [];
+          return Array.isArray(parsed) ? parsed.map(normalizeSpecialty) : [];
         } catch {
           return [] as string[];
         }
       })();
 
-      return specialties.length === 0 || specialties.includes(systemType);
+      return specialties.length === 0 || specialties.includes(normalizeSpecialty(systemType));
     });
   }, [providersData, systemType]);
 
   async function onSubmit(data: FormData) {
     setApiError(null);
+
+    if (serviceFlow === 'direct' && !data.assigned_to) {
+      setApiError('Selecione um prestador para execução direta.');
+      return;
+    }
+
     try {
       const res = await servicesApi.create(id, {
         ...data,
         room_id: data.room_id || undefined,
-        assigned_to: data.assigned_to || undefined,
+        assigned_to: serviceFlow === 'direct' ? data.assigned_to || undefined : undefined,
         warranty_until: data.warranty_until || undefined,
         scheduled_at: data.scheduled_at || undefined,
       });
@@ -116,6 +150,29 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Tipo da OS *</Label>
+                <Select
+                  defaultValue="quote"
+                  onValueChange={(v) => {
+                    const flow = v as ServiceFlow;
+                    setServiceFlow(flow);
+                    if (flow === 'quote') setValue('assigned_to', undefined);
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="quote">Solicitar orçamentos (aberta)</SelectItem>
+                    <SelectItem value="direct">Execução direta (prestador da equipe)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {serviceFlow === 'quote'
+                    ? 'Prestadores orçam esta OS; nenhum prestador é definido agora.'
+                    : 'A OS é enviada direto ao prestador selecionado para execução.'}
+                </p>
+              </div>
+
               <div className="space-y-1.5">
                 <Label>Sistema *</Label>
                 <Select
@@ -209,9 +266,9 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
                 <Label>Atribuir para prestador</Label>
                 {providerOptions.length > 0 ? (
                   <Select onValueChange={(v) => setValue('assigned_to', v === '__none__' ? undefined : v)}>
-                    <SelectTrigger><SelectValue placeholder="Nenhum (deixar em aberto)" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={serviceFlow === 'direct' ? 'Selecione o prestador' : 'Nenhum (deixar em aberto)'} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__none__">Nenhum (deixar em aberto)</SelectItem>
+                      {serviceFlow === 'quote' && <SelectItem value="__none__">Nenhum (deixar em aberto)</SelectItem>}
                       {providerOptions.map((p) => (
                         <SelectItem key={p.user_id} value={p.user_id}>
                           {p.name}

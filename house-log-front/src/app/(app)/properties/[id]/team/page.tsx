@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { cn, formatDate } from '@/lib/utils';
+import { cn, formatDate, SYSTEM_TYPE_LABELS } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -78,6 +78,8 @@ const inviteSchema = z.object({
 });
 
 type InviteForm = z.infer<typeof inviteSchema>;
+
+const SPECIALTY_OPTIONS = Object.entries(SYSTEM_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
 function CollaboratorRow({
   collab,
@@ -206,10 +208,23 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
   const isManagerCollaborator = collaborators.some((c) => c.user_id === user?.id && c.role === 'manager');
   const canManageTeam = user?.role === 'owner' || user?.role === 'admin' || isManagerCollaborator;
 
-  const { register, handleSubmit, setValue, reset, formState: { errors, isSubmitting } } = useForm<InviteForm>({
+  const { register, handleSubmit, setValue, watch, reset, formState: { errors, isSubmitting } } = useForm<InviteForm>({
     resolver: zodResolver(inviteSchema),
     defaultValues: { role: 'manager' },
   });
+
+  const selectedRole = watch('role');
+  const selectedSpecialties = (watch('specialties') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  function toggleSpecialty(value: string) {
+    const current = new Set(selectedSpecialties);
+    if (current.has(value)) current.delete(value);
+    else current.add(value);
+    setValue('specialties', Array.from(current).join(', '));
+  }
 
   async function onInvite(form: InviteForm) {
     try {
@@ -473,17 +488,32 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               <Label htmlFor="inv-whatsapp">WhatsApp</Label>
               <Input id="inv-whatsapp" placeholder="5511999999999" {...register('whatsapp')} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="inv-specialties">Especialidades (prestador)</Label>
-              <Input
-                id="inv-specialties"
-                placeholder="eletrica, hidraulica, pintura"
-                {...register('specialties')}
-              />
-              <p className="text-xs text-muted-foreground">
-                Separe por vírgula. Ex.: eletrica, hidraulica, pintura.
-              </p>
-            </div>
+            {selectedRole === 'provider' && (
+              <div className="space-y-1.5">
+                <Label>Especialidades (prestador)</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {SPECIALTY_OPTIONS.map((opt) => {
+                    const active = selectedSpecialties.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => toggleSpecialty(opt.value)}
+                        className={cn(
+                          'rounded-md border px-2 py-1.5 text-xs text-left transition-colors',
+                          active ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-border hover:bg-muted/50'
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Se não selecionar nada, o prestador poderá receber OS de qualquer sistema.
+                </p>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               Com e-mail: envio automático. Sem e-mail: o sistema cria pré-cadastro e gera link para enviar no WhatsApp.
             </p>

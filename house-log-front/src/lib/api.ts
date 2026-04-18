@@ -60,7 +60,7 @@ export function apiFetcher<T>(path: string): Promise<T> {
 
 // Auth
 export const authApi = {
-  register: (data: { email: string; name: string; password: string; role?: string; phone?: string }) =>
+  register: (data: { email: string; name: string; password: string; role?: string; phone?: string; provider_categories?: string[] }) =>
     request<AuthPairResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
 
   login: (email: string, password: string) =>
@@ -105,7 +105,32 @@ export const authApi = {
       body: JSON.stringify({ password }),
     }),
 
-  updateProfile: (data: { name?: string; phone?: string }) =>
+  updateProfile: (data: {
+    name?: string;
+    phone?: string;
+    whatsapp?: string;
+    service_area?: string;
+    pix_key?: string;
+    pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+    provider_bio?: string;
+    provider_courses?: string[];
+    provider_specializations?: string[];
+    provider_portfolio?: string[];
+    provider_education?: Array<{
+      institution: string;
+      title: string;
+      type: 'college' | 'technical' | 'course' | 'certification' | 'other';
+      status: 'in_progress' | 'completed';
+      certificationUrl?: string;
+    }>;
+    provider_portfolio_cases?: Array<{
+      title: string;
+      description?: string;
+      beforeImageUrl?: string;
+      afterImageUrl?: string;
+    }>;
+    provider_categories?: string[];
+  }) =>
     request<{ user: User }>('/auth/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
@@ -502,10 +527,80 @@ export type User = {
   email: string;
   name: string;
   role: 'admin' | 'owner' | 'provider' | 'temp_provider';
+  provider_categories?: string[];
   phone: string | null;
+  whatsapp?: string | null;
+  service_area?: string | null;
+  pix_key?: string | null;
+  pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random' | null;
+  provider_bio?: string | null;
+  provider_courses?: string[];
+  provider_specializations?: string[];
+  provider_portfolio?: string[];
+  provider_education?: Array<{
+    institution: string;
+    title: string;
+    type: 'college' | 'technical' | 'course' | 'certification' | 'other';
+    status: 'in_progress' | 'completed';
+    certificationUrl?: string;
+  }>;
+  provider_portfolio_cases?: Array<{
+    title: string;
+    description?: string;
+    beforeImageUrl?: string;
+    afterImageUrl?: string;
+  }>;
   avatar_url: string | null;
   created_at: string;
   last_login: string | null;
+};
+
+export type ProviderPublicProfile = {
+  provider: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string | null;
+    whatsapp: string | null;
+    service_area: string | null;
+    provider_bio: string | null;
+    provider_courses: string[];
+    provider_specializations: string[];
+    provider_portfolio: string[];
+    provider_education: Array<{
+      institution: string;
+      title: string;
+      type: 'college' | 'technical' | 'course' | 'certification' | 'other';
+      status: 'in_progress' | 'completed';
+      certificationUrl?: string;
+    }>;
+    provider_portfolio_cases: Array<{
+      title: string;
+      description?: string;
+      beforeImageUrl?: string;
+      afterImageUrl?: string;
+    }>;
+    provider_categories: string[];
+  };
+  score: {
+    total_ratings: number;
+    avg_stars: number | null;
+    avg_quality: number | null;
+    avg_punctuality: number | null;
+    avg_communication: number | null;
+    avg_price: number | null;
+    endorsements: number;
+    top_score: number;
+  };
+  reviews: Array<{
+    stars: number;
+    quality: number | null;
+    punctuality: number | null;
+    communication: number | null;
+    price: number | null;
+    comment: string | null;
+    created_at: string;
+  }>;
 };
 
 export type Property = {
@@ -796,6 +891,51 @@ export type ProviderServiceOrder = ServiceOrder & {
   property_id: string;
 };
 
+export type ProviderOpportunity = ProviderServiceOrder & {
+  my_bid: { id: string; amount: number; status: 'pending' | 'accepted' | 'rejected'; created_at: string } | null;
+};
+
+export type ServiceMessage = {
+  id: string;
+  author_id: string;
+  author_name: string;
+  body: string;
+  internal: number;
+  attachments: string[];
+  created_at: string;
+};
+
+export const PROVIDER_CATEGORY_OPTIONS = [
+  { value: 'electrical', label: 'Elétrica' },
+  { value: 'plumbing', label: 'Hidráulica' },
+  { value: 'structural', label: 'Estrutural' },
+  { value: 'waterproofing', label: 'Impermeabilização' },
+  { value: 'painting', label: 'Pintura' },
+  { value: 'flooring', label: 'Pisos e revestimentos' },
+  { value: 'roofing', label: 'Telhado e cobertura' },
+  { value: 'hvac', label: 'Climatização (HVAC)' },
+  { value: 'solar', label: 'Energia solar' },
+  { value: 'pool', label: 'Piscinas' },
+  { value: 'gardening', label: 'Jardinagem' },
+  { value: 'cleaning', label: 'Limpeza' },
+  { value: 'locksmith', label: 'Chaveiro' },
+  { value: 'carpentry', label: 'Marcenaria' },
+  { value: 'masonry', label: 'Alvenaria' },
+  { value: 'automation', label: 'Automação' },
+  { value: 'alarm_cctv', label: 'Alarme e CFTV' },
+  { value: 'internet_network', label: 'Internet e rede' },
+  { value: 'appliances', label: 'Eletrodomésticos' },
+  { value: 'pest_control', label: 'Controle de pragas' },
+  { value: 'glazing', label: 'Vidracaria' },
+  { value: 'welding', label: 'Serralheria' },
+  { value: 'drywall', label: 'Drywall' },
+  { value: 'drainage', label: 'Drenagem' },
+  { value: 'gas', label: 'Gás' },
+  { value: 'elevator', label: 'Elevador' },
+  { value: 'facade', label: 'Fachada' },
+  { value: 'general', label: 'Serviços gerais' },
+] as const;
+
 // Full-text search
 export const searchApi = {
   search: (q: string, propertyId?: string) =>
@@ -924,9 +1064,40 @@ export const providerApi = {
   services: (params?: { status?: string; cursor?: string }) =>
     request<CursorPage<ProviderServiceOrder>>(`/provider/services${qs(params)}`),
 
+  opportunities: (params?: { system_type?: string; cursor?: string }) =>
+    request<CursorPage<ProviderOpportunity>>(`/provider/opportunities${qs(params)}`),
+
+  getOpportunity: (id: string) =>
+    request<{ order: ProviderServiceOrder; my_bids: ServiceBid[] }>(`/provider/opportunities/${id}`),
+
   getService: (id: string) =>
     request<{ order: ProviderServiceOrder; my_bids: ServiceBid[] }>(`/provider/services/${id}`),
 
   stats: () =>
     request<{ stats: Record<string, number>; total: number; recent_bids: ServiceBid[] }>('/provider/stats'),
+};
+
+export const marketplaceApi = {
+  providerProfile: (providerId: string) =>
+    request<ProviderPublicProfile>(`/marketplace/providers/${providerId}/profile`),
+
+  endorseProvider: (providerId: string, notes?: string) =>
+    request<{ id: string; provider_id: string; status: 'APPROVED' }>('/marketplace/providers/endorse', {
+      method: 'POST',
+      body: JSON.stringify({ provider_id: providerId, notes }),
+    }),
+};
+
+export const messagesApi = {
+  list: (serviceOrderId: string) =>
+    request<{ data: ServiceMessage[] }>(`/services/${serviceOrderId}/messages`),
+
+  create: (serviceOrderId: string, data: { body: string; internal?: boolean; attachments?: string[] }) =>
+    request<{ id: string; created_at: string }>(`/services/${serviceOrderId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  remove: (serviceOrderId: string, id: string) =>
+    request<{ id: string }>(`/services/${serviceOrderId}/messages/${id}`, { method: 'DELETE' }),
 };

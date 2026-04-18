@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-// Root redirects to dashboard; auth guard in (app)/layout.tsx handles unauthenticated users
+// Root redirects to splash; CTA leva ao dashboard/login conforme auth guard
 export default function RootPage() {
-  redirect('/dashboard');
+  redirect('/splash');
 }

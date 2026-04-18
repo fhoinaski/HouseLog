@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { expenses as expensesTable } from '../db/schema';
 import type { Bindings, Variables, Expense } from '../lib/types';
 
 const expenses = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -12,7 +15,7 @@ expenses.use('*', authMiddleware);
 
 const createSchema = z.object({
   type: z.enum(['expense', 'revenue']).default('expense'),
-  category: z.enum(['water', 'electricity', 'gas', 'condo', 'iptu', 'insurance', 'cleaning', 'garden', 'security', 'other', 'rent', 'service']),
+  category: z.enum(['water', 'electricity', 'gas', 'condo', 'iptu', 'insurance', 'cleaning', 'garden', 'security', 'other']),
   amount: z.number().positive(),
   reference_month: z.string().regex(/^\d{4}-\d{2}$/, 'Formato YYYY-MM'),
   notes: z.string().optional(),
@@ -22,7 +25,8 @@ const createSchema = z.object({
 // ── GET /properties/:propertyId/expenses ─────────────────────────────────────
 
 expenses.get('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -35,23 +39,32 @@ expenses.get('/', async (c) => {
   const category = c.req.query('category');
   const type = c.req.query('type');
 
-  const conditions = ['property_id = ?', 'deleted_at IS NULL'];
-  const bindings: unknown[] = [propertyId];
+  const filters = [eq(expensesTable.propertyId, propertyId), isNull(expensesTable.deletedAt)];
+  if (month) filters.push(eq(expensesTable.referenceMonth, month));
+  if (category) filters.push(eq(expensesTable.category, category as typeof expensesTable.$inferSelect.category));
+  if (type) filters.push(eq(expensesTable.type, type as typeof expensesTable.$inferSelect.type));
+  if (cursor) filters.push(lt(expensesTable.createdAt, cursor));
 
-  if (month)    { conditions.push('reference_month = ?'); bindings.push(month); }
-  if (category) { conditions.push('category = ?');        bindings.push(category); }
-  if (type)     { conditions.push('type = ?');            bindings.push(type); }
-  if (cursor)   { conditions.push('created_at < ?');      bindings.push(cursor); }
-
-  bindings.push(limit + 1);
-
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT * FROM expenses WHERE ${conditions.join(' AND ')}
-       ORDER BY reference_month DESC, created_at DESC LIMIT ?`
-    )
-    .bind(...bindings)
-    .all<Expense>();
+  const results = await db
+    .select({
+      id: expensesTable.id,
+      property_id: expensesTable.propertyId,
+      category: expensesTable.category,
+      amount: expensesTable.amount,
+      type: expensesTable.type,
+      reference_month: expensesTable.referenceMonth,
+      is_recurring: expensesTable.isRecurring,
+      recurrence_group: expensesTable.recurrenceGroup,
+      receipt_url: expensesTable.receiptUrl,
+      notes: expensesTable.notes,
+      created_by: expensesTable.createdBy,
+      created_at: expensesTable.createdAt,
+      deleted_at: expensesTable.deletedAt,
+    })
+    .from(expensesTable)
+    .where(and(...filters))
+    .orderBy(desc(expensesTable.referenceMonth), desc(expensesTable.createdAt))
+    .limit(limit + 1) as Expense[];
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
@@ -59,7 +72,8 @@ expenses.get('/', async (c) => {
 // ── GET /properties/:propertyId/expenses/summary ─────────────────────────────
 
 expenses.get('/summary', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -69,60 +83,60 @@ expenses.get('/summary', async (c) => {
   const from = c.req.query('from') ?? new Date(Date.now() - 6 * 30 * 86400000).toISOString().slice(0, 7);
   const to = c.req.query('to') ?? new Date().toISOString().slice(0, 7);
 
-  const [byCategory, byMonth, byMonthRevenue] = await c.env.DB.batch([
-    c.env.DB
-      .prepare(
-        `SELECT category, SUM(amount) as total, COUNT(*) as count
-         FROM expenses
-         WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
-           AND reference_month BETWEEN ? AND ?
-         GROUP BY category ORDER BY total DESC`
-      )
-      .bind(propertyId, from, to),
-    c.env.DB
-      .prepare(
-        `SELECT reference_month, SUM(amount) as total, COUNT(*) as count
-         FROM expenses
-         WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
-           AND reference_month BETWEEN ? AND ?
-         GROUP BY reference_month ORDER BY reference_month ASC`
-      )
-      .bind(propertyId, from, to),
-    c.env.DB
-      .prepare(
-        `SELECT reference_month, SUM(amount) as total
-         FROM expenses
-         WHERE property_id = ? AND deleted_at IS NULL AND type = 'revenue'
-           AND reference_month BETWEEN ? AND ?
-         GROUP BY reference_month ORDER BY reference_month ASC`
-      )
-      .bind(propertyId, from, to),
-  ]);
+  const baseFilters = [
+    eq(expensesTable.propertyId, propertyId),
+    isNull(expensesTable.deletedAt),
+    sql`${expensesTable.referenceMonth} BETWEEN ${from} AND ${to}`,
+  ];
 
-  const totalRow = await c.env.DB
-    .prepare(
-      `SELECT SUM(amount) as total FROM expenses
-       WHERE property_id = ? AND deleted_at IS NULL AND type = 'expense'
-         AND reference_month BETWEEN ? AND ?`
-    )
-    .bind(propertyId, from, to)
-    .first<{ total: number }>();
+  const byCategory = await db
+    .select({
+      category: expensesTable.category,
+      total: sql<number>`SUM(${expensesTable.amount})`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(expensesTable)
+    .where(and(...baseFilters, eq(expensesTable.type, 'expense')))
+    .groupBy(expensesTable.category)
+    .orderBy(sql`SUM(${expensesTable.amount}) DESC`);
 
-  const revenueRow = await c.env.DB
-    .prepare(
-      `SELECT SUM(amount) as total FROM expenses
-       WHERE property_id = ? AND deleted_at IS NULL AND type = 'revenue'
-         AND reference_month BETWEEN ? AND ?`
-    )
-    .bind(propertyId, from, to)
-    .first<{ total: number }>();
+  const byMonth = await db
+    .select({
+      reference_month: expensesTable.referenceMonth,
+      total: sql<number>`SUM(${expensesTable.amount})`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(expensesTable)
+    .where(and(...baseFilters, eq(expensesTable.type, 'expense')))
+    .groupBy(expensesTable.referenceMonth)
+    .orderBy(expensesTable.referenceMonth);
+
+  const byMonthRevenue = await db
+    .select({
+      reference_month: expensesTable.referenceMonth,
+      total: sql<number>`SUM(${expensesTable.amount})`,
+    })
+    .from(expensesTable)
+    .where(and(...baseFilters, eq(expensesTable.type, 'revenue')))
+    .groupBy(expensesTable.referenceMonth)
+    .orderBy(expensesTable.referenceMonth);
+
+  const [totalRow] = await db
+    .select({ total: sql<number>`SUM(${expensesTable.amount})` })
+    .from(expensesTable)
+    .where(and(...baseFilters, eq(expensesTable.type, 'expense')));
+
+  const [revenueRow] = await db
+    .select({ total: sql<number>`SUM(${expensesTable.amount})` })
+    .from(expensesTable)
+    .where(and(...baseFilters, eq(expensesTable.type, 'revenue')));
 
   return ok(c, {
     total: totalRow?.total ?? 0,
     total_revenue: revenueRow?.total ?? 0,
-    by_category: byCategory.results,
-    by_month: byMonth.results,
-    by_month_revenue: byMonthRevenue.results,
+    by_category: byCategory,
+    by_month: byMonth,
+    by_month_revenue: byMonthRevenue,
     period: { from, to },
   });
 });
@@ -130,7 +144,8 @@ expenses.get('/summary', async (c) => {
 // ── POST /properties/:propertyId/expenses ────────────────────────────────────
 
 expenses.post('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -152,7 +167,12 @@ expenses.post('/', async (c) => {
   const recurrenceGroup = is_recurring ? nanoid() : null;
 
   if (is_recurring) {
-    const [year, month] = reference_month.split('-').map(Number);
+    const [yearStr, monthStr] = reference_month.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!Number.isFinite(year) || !Number.isFinite(month)) {
+      return err(c, 'Mês de referência inválido', 'VALIDATION_ERROR', 422);
+    }
     for (let i = 1; i <= 11; i++) {
       const d = new Date(year, month - 1 + i, 1);
       months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
@@ -163,22 +183,51 @@ expenses.post('/', async (c) => {
   for (const m of months) {
     const id = nanoid();
     ids.push(id);
-    await c.env.DB
-      .prepare(
-        `INSERT INTO expenses (id, property_id, type, category, amount, reference_month, notes, is_recurring, recurrence_group, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-      )
-      .bind(id, propertyId, type, category, amount, m, notes ?? null, is_recurring ? 1 : 0, recurrenceGroup, userId)
-      .run();
+    await db.insert(expensesTable).values({
+      id,
+      propertyId,
+      type,
+      category,
+      amount,
+      referenceMonth: m,
+      notes: notes ?? null,
+      isRecurring: is_recurring ? 1 : 0,
+      recurrenceGroup,
+      createdBy: userId,
+    });
   }
 
-  const expense = await c.env.DB
-    .prepare('SELECT * FROM expenses WHERE id = ?')
-    .bind(ids[0])
-    .first<Expense>();
+  const firstId = ids[0];
+  if (!firstId) {
+    return err(c, 'Falha ao criar despesa', 'INTERNAL_ERROR', 500);
+  }
+
+  const [expense] = await db
+    .select({
+      id: expensesTable.id,
+      property_id: expensesTable.propertyId,
+      category: expensesTable.category,
+      amount: expensesTable.amount,
+      type: expensesTable.type,
+      reference_month: expensesTable.referenceMonth,
+      is_recurring: expensesTable.isRecurring,
+      recurrence_group: expensesTable.recurrenceGroup,
+      receipt_url: expensesTable.receiptUrl,
+      notes: expensesTable.notes,
+      created_by: expensesTable.createdBy,
+      created_at: expensesTable.createdAt,
+      deleted_at: expensesTable.deletedAt,
+    })
+    .from(expensesTable)
+    .where(eq(expensesTable.id, firstId))
+    .limit(1) as Expense[];
+
+  if (!expense) {
+    return err(c, 'Falha ao criar despesa', 'INTERNAL_ERROR', 500);
+  }
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'expense', entityId: ids[0], action: 'create',
+    entityType: 'expense', entityId: firstId, action: 'create',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: expense,
   });
 
@@ -188,18 +237,34 @@ expenses.post('/', async (c) => {
 // ── PUT /properties/:propertyId/expenses/:id ─────────────────────────────────
 
 expenses.put('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM expenses WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Expense>();
+  const [old] = await db
+    .select({
+      id: expensesTable.id,
+      property_id: expensesTable.propertyId,
+      category: expensesTable.category,
+      amount: expensesTable.amount,
+      type: expensesTable.type,
+      reference_month: expensesTable.referenceMonth,
+      is_recurring: expensesTable.isRecurring,
+      recurrence_group: expensesTable.recurrenceGroup,
+      receipt_url: expensesTable.receiptUrl,
+      notes: expensesTable.notes,
+      created_by: expensesTable.createdBy,
+      created_at: expensesTable.createdAt,
+      deleted_at: expensesTable.deletedAt,
+    })
+    .from(expensesTable)
+    .where(and(eq(expensesTable.id, id), eq(expensesTable.propertyId, propertyId), isNull(expensesTable.deletedAt)))
+    .limit(1) as Expense[];
 
   if (!old) return err(c, 'Despesa não encontrada', 'NOT_FOUND', 404);
 
@@ -212,24 +277,36 @@ expenses.put('/:id', async (c) => {
   }
 
   const d = parsed.data;
-  const pairs: [string, unknown][] = [];
-  if (d.type !== undefined)            pairs.push(['type', d.type]);
-  if (d.category !== undefined)        pairs.push(['category', d.category]);
-  if (d.amount !== undefined)          pairs.push(['amount', d.amount]);
-  if (d.reference_month !== undefined) pairs.push(['reference_month', d.reference_month]);
-  if (d.notes !== undefined)           pairs.push(['notes', d.notes]);
+  const patch: Partial<typeof expensesTable.$inferInsert> = {};
+  if (d.type !== undefined) patch.type = d.type;
+  if (d.category !== undefined) patch.category = d.category;
+  if (d.amount !== undefined) patch.amount = d.amount;
+  if (d.reference_month !== undefined) patch.referenceMonth = d.reference_month;
+  if (d.notes !== undefined) patch.notes = d.notes;
 
-  if (pairs.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
+  if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await c.env.DB
-    .prepare(`UPDATE expenses SET ${pairs.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
-    .bind(...pairs.map(([, v]) => v), id)
-    .run();
+  await db.update(expensesTable).set(patch).where(eq(expensesTable.id, id));
 
-  const updated = await c.env.DB
-    .prepare('SELECT * FROM expenses WHERE id = ?')
-    .bind(id)
-    .first<Expense>();
+  const [updated] = await db
+    .select({
+      id: expensesTable.id,
+      property_id: expensesTable.propertyId,
+      category: expensesTable.category,
+      amount: expensesTable.amount,
+      type: expensesTable.type,
+      reference_month: expensesTable.referenceMonth,
+      is_recurring: expensesTable.isRecurring,
+      recurrence_group: expensesTable.recurrenceGroup,
+      receipt_url: expensesTable.receiptUrl,
+      notes: expensesTable.notes,
+      created_by: expensesTable.createdBy,
+      created_at: expensesTable.createdAt,
+      deleted_at: expensesTable.deletedAt,
+    })
+    .from(expensesTable)
+    .where(eq(expensesTable.id, id))
+    .limit(1) as Expense[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'expense', entityId: id, action: 'update',
@@ -242,33 +319,49 @@ expenses.put('/:id', async (c) => {
 // ── DELETE /properties/:propertyId/expenses/:id ──────────────────────────────
 
 expenses.delete('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM expenses WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Expense>();
+  const [old] = await db
+    .select({
+      id: expensesTable.id,
+      property_id: expensesTable.propertyId,
+      category: expensesTable.category,
+      amount: expensesTable.amount,
+      type: expensesTable.type,
+      reference_month: expensesTable.referenceMonth,
+      is_recurring: expensesTable.isRecurring,
+      recurrence_group: expensesTable.recurrenceGroup,
+      receipt_url: expensesTable.receiptUrl,
+      notes: expensesTable.notes,
+      created_by: expensesTable.createdBy,
+      created_at: expensesTable.createdAt,
+      deleted_at: expensesTable.deletedAt,
+    })
+    .from(expensesTable)
+    .where(and(eq(expensesTable.id, id), eq(expensesTable.propertyId, propertyId), isNull(expensesTable.deletedAt)))
+    .limit(1) as Array<Expense & { recurrence_group?: string | null }>;
 
   if (!old) return err(c, 'Despesa não encontrada', 'NOT_FOUND', 404);
 
   const deleteAll = c.req.query('all_recurring') === '1';
 
-  if (deleteAll && (old as Expense & { recurrence_group?: string }).recurrence_group) {
-    await c.env.DB
-      .prepare(`UPDATE expenses SET deleted_at = datetime('now') WHERE recurrence_group = ? AND property_id = ?`)
-      .bind((old as Expense & { recurrence_group?: string }).recurrence_group, propertyId)
-      .run();
+  if (deleteAll && old.recurrence_group) {
+    await db
+      .update(expensesTable)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(and(eq(expensesTable.recurrenceGroup, old.recurrence_group), eq(expensesTable.propertyId, propertyId)));
   } else {
-    await c.env.DB
-      .prepare(`UPDATE expenses SET deleted_at = datetime('now') WHERE id = ?`)
-      .bind(id)
-      .run();
+    await db
+      .update(expensesTable)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(eq(expensesTable.id, id));
   }
 
   await writeAuditLog(c.env.DB, {

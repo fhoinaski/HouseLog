@@ -17,7 +17,35 @@ type AuthState = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   completeMfa: (challengeToken: string, code: string) => Promise<void>;
-  register: (data: { email: string; name: string; password: string; role?: string; phone?: string }) => Promise<void>;
+  register: (data: {
+    email: string;
+    name: string;
+    password: string;
+    role?: string;
+    phone?: string;
+    whatsapp?: string;
+    service_area?: string;
+    pix_key?: string;
+    pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+    provider_bio?: string;
+    provider_courses?: string[];
+    provider_specializations?: string[];
+    provider_portfolio?: string[];
+    provider_education?: Array<{
+      institution: string;
+      title: string;
+      type: 'college' | 'technical' | 'course' | 'certification' | 'other';
+      status: 'in_progress' | 'completed';
+      certificationUrl?: string;
+    }>;
+    provider_portfolio_cases?: Array<{
+      title: string;
+      description?: string;
+      beforeImageUrl?: string;
+      afterImageUrl?: string;
+    }>;
+    provider_categories?: string[];
+  }) => Promise<void>;
   logout: () => void;
 };
 
@@ -128,7 +156,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (data: { email: string; name: string; password: string; role?: string; phone?: string }) => {
+    async (data: {
+      email: string;
+      name: string;
+      password: string;
+      role?: string;
+      phone?: string;
+      whatsapp?: string;
+      service_area?: string;
+      pix_key?: string;
+      pix_key_type?: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+      provider_bio?: string;
+      provider_courses?: string[];
+      provider_specializations?: string[];
+      provider_portfolio?: string[];
+      provider_education?: Array<{
+        institution: string;
+        title: string;
+        type: 'college' | 'technical' | 'course' | 'certification' | 'other';
+        status: 'in_progress' | 'completed';
+        certificationUrl?: string;
+      }>;
+      provider_portfolio_cases?: Array<{
+        title: string;
+        description?: string;
+        beforeImageUrl?: string;
+        afterImageUrl?: string;
+      }>;
+      provider_categories?: string[];
+    }) => {
       const resp = await authApi.register(data);
       storePair(resp.access_token, resp.refresh_token, resp.user);
       setUser(resp.user);

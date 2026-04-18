@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { propertyAccessCredentials } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const credentials = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -40,27 +43,42 @@ type Credential = {
 // ── GET /properties/:propertyId/credentials ──────────────────────────────────
 
 credentials.get('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT id, property_id, category, label, username, secret, notes,
-              integration_type, integration_config, share_with_os, created_at, updated_at
-       FROM property_access_credentials
-       WHERE property_id = ? AND deleted_at IS NULL
-       ORDER BY category, label`
+  const results = await db
+    .select({
+      id: propertyAccessCredentials.id,
+      property_id: propertyAccessCredentials.propertyId,
+      created_by: propertyAccessCredentials.createdBy,
+      category: propertyAccessCredentials.category,
+      label: propertyAccessCredentials.label,
+      username: propertyAccessCredentials.username,
+      secret: propertyAccessCredentials.secret,
+      notes: propertyAccessCredentials.notes,
+      integration_type: propertyAccessCredentials.integrationType,
+      integration_config: propertyAccessCredentials.integrationConfig,
+      share_with_os: propertyAccessCredentials.shareWithOs,
+      created_at: propertyAccessCredentials.createdAt,
+      updated_at: propertyAccessCredentials.updatedAt,
+    })
+    .from(propertyAccessCredentials)
+    .where(
+      and(
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
     )
-    .bind(propertyId)
-    .all<Credential>();
+    .orderBy(asc(propertyAccessCredentials.category), asc(propertyAccessCredentials.label)) as Credential[];
 
   const items = results.map((r) => ({
     ...r,
-    integration_config: r.integration_config ? JSON.parse(r.integration_config) : null,
+    integration_config: r.integration_config ?? null,
     share_with_os: r.share_with_os === 1,
   }));
 
@@ -70,7 +88,8 @@ credentials.get('/', async (c) => {
 // ── POST /properties/:propertyId/credentials ─────────────────────────────────
 
 credentials.post('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -86,32 +105,44 @@ credentials.post('/', async (c) => {
   const { category, label, username, secret, notes, integration_type, integration_config, share_with_os } = parsed.data;
   const id = nanoid();
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO property_access_credentials
-         (id, property_id, created_by, category, label, username, secret, notes,
-          integration_type, integration_config, share_with_os)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .bind(
-      id, propertyId, userId, category, label,
-      username ?? null, secret,
-      notes ?? null,
-      integration_type ?? null,
-      integration_config ? JSON.stringify(integration_config) : null,
-      share_with_os ? 1 : 0
-    )
-    .run();
+  await db.insert(propertyAccessCredentials).values({
+    id,
+    propertyId,
+    createdBy: userId,
+    category,
+    label,
+    username: username ?? null,
+    secret,
+    notes: notes ?? null,
+    integrationType: integration_type ?? null,
+    integrationConfig: integration_config ?? null,
+    shareWithOs: share_with_os ? 1 : 0,
+  });
 
-  const row = await c.env.DB
-    .prepare(`SELECT * FROM property_access_credentials WHERE id = ?`)
-    .bind(id)
-    .first<Credential>();
+  const [row] = await db
+    .select({
+      id: propertyAccessCredentials.id,
+      property_id: propertyAccessCredentials.propertyId,
+      created_by: propertyAccessCredentials.createdBy,
+      category: propertyAccessCredentials.category,
+      label: propertyAccessCredentials.label,
+      username: propertyAccessCredentials.username,
+      secret: propertyAccessCredentials.secret,
+      notes: propertyAccessCredentials.notes,
+      integration_type: propertyAccessCredentials.integrationType,
+      integration_config: propertyAccessCredentials.integrationConfig,
+      share_with_os: propertyAccessCredentials.shareWithOs,
+      created_at: propertyAccessCredentials.createdAt,
+      updated_at: propertyAccessCredentials.updatedAt,
+    })
+    .from(propertyAccessCredentials)
+    .where(eq(propertyAccessCredentials.id, id))
+    .limit(1) as Credential[];
 
   return ok(c, {
     credential: {
       ...row,
-      integration_config: row?.integration_config ? JSON.parse(row.integration_config) : null,
+      integration_config: row?.integration_config ?? null,
       share_with_os: row?.share_with_os === 1,
     }
   }, 201);
@@ -120,8 +151,9 @@ credentials.post('/', async (c) => {
 // ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────
 
 credentials.put('/:credId', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const credId = c.req.param('credId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const credId = c.req.param('credId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -134,42 +166,63 @@ credentials.put('/:credId', async (c) => {
   const parsed = createSchema.partial().safeParse(body);
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
 
-  const existing = await c.env.DB
-    .prepare(`SELECT id FROM property_access_credentials WHERE id = ? AND property_id = ? AND deleted_at IS NULL`)
-    .bind(credId, propertyId)
-    .first();
+  const [existing] = await db
+    .select({ id: propertyAccessCredentials.id })
+    .from(propertyAccessCredentials)
+    .where(
+      and(
+        eq(propertyAccessCredentials.id, credId),
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
+    )
+    .limit(1);
   if (!existing) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
 
   const { category, label, username, secret, notes, integration_type, integration_config, share_with_os } = parsed.data;
 
-  const fields: string[] = ['updated_at = datetime(\'now\')'];
-  const vals: unknown[] = [];
+  const patch: Partial<typeof propertyAccessCredentials.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
 
-  if (category          !== undefined) { fields.push('category = ?');           vals.push(category); }
-  if (label             !== undefined) { fields.push('label = ?');              vals.push(label); }
-  if (username          !== undefined) { fields.push('username = ?');           vals.push(username ?? null); }
-  if (secret            !== undefined) { fields.push('secret = ?');             vals.push(secret); }
-  if (notes             !== undefined) { fields.push('notes = ?');              vals.push(notes ?? null); }
-  if (integration_type  !== undefined) { fields.push('integration_type = ?');   vals.push(integration_type ?? null); }
-  if (integration_config !== undefined) { fields.push('integration_config = ?'); vals.push(integration_config ? JSON.stringify(integration_config) : null); }
-  if (share_with_os     !== undefined) { fields.push('share_with_os = ?');      vals.push(share_with_os ? 1 : 0); }
+  if (category !== undefined) patch.category = category;
+  if (label !== undefined) patch.label = label;
+  if (username !== undefined) patch.username = username ?? null;
+  if (secret !== undefined) patch.secret = secret;
+  if (notes !== undefined) patch.notes = notes ?? null;
+  if (integration_type !== undefined) patch.integrationType = integration_type ?? null;
+  if (integration_config !== undefined) patch.integrationConfig = integration_config ?? null;
+  if (share_with_os !== undefined) patch.shareWithOs = share_with_os ? 1 : 0;
 
-  vals.push(credId);
+  await db
+    .update(propertyAccessCredentials)
+    .set(patch)
+    .where(eq(propertyAccessCredentials.id, credId));
 
-  await c.env.DB
-    .prepare(`UPDATE property_access_credentials SET ${fields.join(', ')} WHERE id = ?`)
-    .bind(...vals)
-    .run();
-
-  const row = await c.env.DB
-    .prepare(`SELECT * FROM property_access_credentials WHERE id = ?`)
-    .bind(credId)
-    .first<Credential>();
+  const [row] = await db
+    .select({
+      id: propertyAccessCredentials.id,
+      property_id: propertyAccessCredentials.propertyId,
+      created_by: propertyAccessCredentials.createdBy,
+      category: propertyAccessCredentials.category,
+      label: propertyAccessCredentials.label,
+      username: propertyAccessCredentials.username,
+      secret: propertyAccessCredentials.secret,
+      notes: propertyAccessCredentials.notes,
+      integration_type: propertyAccessCredentials.integrationType,
+      integration_config: propertyAccessCredentials.integrationConfig,
+      share_with_os: propertyAccessCredentials.shareWithOs,
+      created_at: propertyAccessCredentials.createdAt,
+      updated_at: propertyAccessCredentials.updatedAt,
+    })
+    .from(propertyAccessCredentials)
+    .where(eq(propertyAccessCredentials.id, credId))
+    .limit(1) as Credential[];
 
   return ok(c, {
     credential: {
       ...row,
-      integration_config: row?.integration_config ? JSON.parse(row.integration_config) : null,
+      integration_config: row?.integration_config ?? null,
       share_with_os: row?.share_with_os === 1,
     }
   });
@@ -178,22 +231,25 @@ credentials.put('/:credId', async (c) => {
 // ── DELETE /properties/:propertyId/credentials/:credId ───────────────────────
 
 credentials.delete('/:credId', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const credId = c.req.param('credId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const credId = c.req.param('credId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  await c.env.DB
-    .prepare(
-      `UPDATE property_access_credentials
-       SET deleted_at = datetime('now')
-       WHERE id = ? AND property_id = ? AND deleted_at IS NULL`
-    )
-    .bind(credId, propertyId)
-    .run();
+  await db
+    .update(propertyAccessCredentials)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(
+      and(
+        eq(propertyAccessCredentials.id, credId),
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
+    );
 
   return ok(c, { deleted: true });
 });
@@ -203,8 +259,9 @@ credentials.delete('/:credId', async (c) => {
 // or via a dedicated worker; here we demonstrate the flow).
 
 credentials.post('/:credId/generate-temp-code', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const credId = c.req.param('credId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const credId = c.req.param('credId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -214,10 +271,31 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const body = await c.req.json().catch(() => ({})) as { expires_hours?: number; provider_name?: string };
   const expiresHours = body.expires_hours ?? 24;
 
-  const cred = await c.env.DB
-    .prepare(`SELECT * FROM property_access_credentials WHERE id = ? AND property_id = ? AND deleted_at IS NULL`)
-    .bind(credId, propertyId)
-    .first<Credential>();
+  const [cred] = await db
+    .select({
+      id: propertyAccessCredentials.id,
+      property_id: propertyAccessCredentials.propertyId,
+      created_by: propertyAccessCredentials.createdBy,
+      category: propertyAccessCredentials.category,
+      label: propertyAccessCredentials.label,
+      username: propertyAccessCredentials.username,
+      secret: propertyAccessCredentials.secret,
+      notes: propertyAccessCredentials.notes,
+      integration_type: propertyAccessCredentials.integrationType,
+      integration_config: propertyAccessCredentials.integrationConfig,
+      share_with_os: propertyAccessCredentials.shareWithOs,
+      created_at: propertyAccessCredentials.createdAt,
+      updated_at: propertyAccessCredentials.updatedAt,
+    })
+    .from(propertyAccessCredentials)
+    .where(
+      and(
+        eq(propertyAccessCredentials.id, credId),
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
+    )
+    .limit(1) as Credential[];
 
   if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
   if (cred.integration_type !== 'intelbras') {

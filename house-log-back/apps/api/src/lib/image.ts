@@ -12,6 +12,8 @@
 
 import type { Bindings } from './types';
 import { log } from './logger';
+import { getDb } from '../db/client';
+import { imageVariants } from '../db/schema';
 
 type Variant = { key: string; width: number; bytes: Uint8Array };
 
@@ -88,17 +90,23 @@ export async function generateThumbnails(
   const thumbKey = variants.find((v) => v.key.includes('.thumb.'))?.key ?? null;
   const mediumKey = variants.find((v) => v.key.includes('.medium.'))?.key ?? null;
 
-  await env.DB
-    .prepare(
-      `INSERT INTO image_variants (r2_key, thumb_key, medium_key, processed_at)
-       VALUES (?, ?, ?, datetime('now'))
-       ON CONFLICT(r2_key) DO UPDATE SET
-         thumb_key = excluded.thumb_key,
-         medium_key = excluded.medium_key,
-         processed_at = excluded.processed_at`
-    )
-    .bind(origKey, thumbKey, mediumKey)
-    .run();
+  const db = getDb(env.DB);
+  await db
+    .insert(imageVariants)
+    .values({
+      r2Key: origKey,
+      thumbKey,
+      mediumKey,
+      processedAt: new Date().toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: imageVariants.r2Key,
+      set: {
+        thumbKey,
+        mediumKey,
+        processedAt: new Date().toISOString(),
+      },
+    });
 
   log.info('image_variants_ready', { origKey, thumbKey, mediumKey });
   return { thumb_key: thumbKey, medium_key: mediumKey };

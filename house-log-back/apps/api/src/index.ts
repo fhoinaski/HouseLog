@@ -28,6 +28,9 @@ import timeline from './routes/timeline';
 import { requestLogger, reportError, log } from './lib/logger';
 import { generateThumbnails } from './lib/image';
 import { pushToUser } from './lib/webpush';
+import { getDb } from './db/client';
+import { auditLinks as auditLinksTable, mfaChallenges, refreshTokens } from './db/schema';
+import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -133,27 +136,21 @@ export default {
 
   async scheduled(event: ScheduledEvent, env: Bindings, _ctx: ExecutionContext) {
     try {
+      const db = getDb(env.DB);
+      const now = new Date().toISOString();
       if (event.cron === '0 * * * *') {
-        await env.DB
-          .prepare(
-            `UPDATE audit_links SET status = 'expired'
-             WHERE status = 'active' AND expires_at < datetime('now')`
-          )
-          .run();
+        await db
+          .update(auditLinksTable)
+          .set({ status: 'expired' })
+          .where(and(eq(auditLinksTable.status, 'active'), lt(auditLinksTable.expiresAt, now)));
         // Limpa refresh tokens expirados há mais de 7 dias
-        await env.DB
-          .prepare(
-            `DELETE FROM refresh_tokens
-             WHERE expires_at < datetime('now', '-7 days')`
-          )
-          .run();
+        await db
+          .delete(refreshTokens)
+          .where(lt(refreshTokens.expiresAt, sql`datetime('now', '-7 days')`));
         // Limpa mfa_challenges consumidos/expirados
-        await env.DB
-          .prepare(
-            `DELETE FROM mfa_challenges
-             WHERE expires_at < datetime('now', '-1 day')`
-          )
-          .run();
+        await db
+          .delete(mfaChallenges)
+          .where(lt(mfaChallenges.expiresAt, sql`datetime('now', '-1 day')`));
       }
       if (event.cron === '0 6 * * *') {
         await autoCreateOverdueOS(env.DB);

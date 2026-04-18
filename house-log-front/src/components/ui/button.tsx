@@ -4,22 +4,22 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[12px] text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary-700/30 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default:     'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-sm shadow-primary-600/25 hover:from-primary-600 hover:to-primary-700 hover:shadow-primary-600/30 active:scale-[0.98]',
+        default:     'bg-linear-to-r from-primary-400 to-primary-700 text-white shadow-[0_10px_30px_-10px_rgba(46,91,255,0.25)] hover:scale-[1.02] hover:brightness-110 active:scale-95',
         destructive: 'bg-rose-500 text-white shadow-sm hover:bg-rose-600 active:scale-[0.98]',
-        outline:     'border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)] text-[var(--foreground)] hover:border-[var(--muted-foreground)]/30',
+        outline:     'border border-zinc-600 bg-transparent text-[var(--foreground)] hover:bg-zinc-700/20 hover:scale-[1.02] active:scale-95',
         secondary:   'bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--border)]',
-        ghost:       'hover:bg-[var(--muted)] text-[var(--foreground)]',
-        link:        'text-primary-500 underline-offset-4 hover:underline',
+        ghost:       'border border-zinc-600 bg-transparent text-[var(--foreground)] hover:bg-zinc-700/20 hover:shadow-[0_0_20px_rgba(46,91,255,0.08)] hover:scale-[1.02] active:scale-95',
+        link:        'text-primary-700 underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-9 px-4 py-2',
-        sm:      'h-8 rounded-[var(--radius-sm)] px-3 text-xs',
-        lg:      'h-11 rounded-[var(--radius-lg)] px-6 text-base',
-        icon:    'h-9 w-9',
+        default: 'h-[52px] px-4 py-2',
+        sm:      'h-10 rounded-[12px] px-3 text-xs',
+        lg:      'h-[52px] rounded-[12px] px-6 text-base',
+        icon:    'h-10 w-10 rounded-[12px]',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

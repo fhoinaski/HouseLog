@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { providerApi, bidsApi, type ServiceBid } from '@/lib/api';
+import { ServiceChat } from '@/components/services/service-chat';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,17 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
   completed: 'completed', verified: 'verified',
 };
 
+function safeParseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function ProviderServiceDetailPage({ params }: { params: Promise<{ serviceId: string }> }) {
   const { serviceId } = use(params);
   const router = useRouter();
@@ -47,6 +59,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
   const order = data?.order;
   const myBids = data?.my_bids ?? [];
   const hasPendingBid = myBids.some((b: ServiceBid) => b.status === 'pending');
+  const isDirectExecution = Boolean(order?.assigned_to);
 
   async function onBidSubmit(form: BidForm) {
     if (!order) return;
@@ -71,7 +84,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
     );
   }
 
-  const beforePhotos = JSON.parse(order.before_photos || '[]') as string[];
+  const beforePhotos = safeParseStringArray(order.before_photos);
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -173,7 +186,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
       )}
 
       {/* Bid form */}
-      {!hasPendingBid && order.status !== 'verified' && (
+      {!isDirectExecution && !hasPendingBid && order.status !== 'verified' && (
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><Send className="h-4 w-4" />Enviar Orçamento</CardTitle></CardHeader>
           <CardContent className="p-5 pt-0">
@@ -200,6 +213,19 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
           </CardContent>
         </Card>
       )}
+
+      {isDirectExecution && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Execução Direta</CardTitle></CardHeader>
+          <CardContent className="p-5 pt-0">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Esta OS foi atribuída diretamente para execução. Não é necessário enviar orçamento.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <ServiceChat serviceOrderId={serviceId} title="Chat com proprietário" />
     </div>
   );
 }

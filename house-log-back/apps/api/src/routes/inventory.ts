@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, asc, desc, eq, isNotNull, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { uploadToR2, getPublicUrl } from '../lib/r2';
+import { getDb } from '../db/client';
+import { inventoryItems, rooms } from '../db/schema';
 import type { Bindings, Variables, InventoryItem } from '../lib/types';
 
 const inventory = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -32,7 +35,8 @@ const createSchema = z.object({
 // ── GET /properties/:propertyId/inventory ────────────────────────────────────
 
 inventory.get('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -44,25 +48,44 @@ inventory.get('/', async (c) => {
   const category = c.req.query('category');
   const roomId = c.req.query('room_id');
 
-  const conditions: string[] = ['i.property_id = ?', 'i.deleted_at IS NULL'];
-  const bindings: unknown[] = [propertyId];
+  const filters = [eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)];
+  if (category && category !== 'undefined') {
+    filters.push(eq(inventoryItems.category, category as typeof inventoryItems.$inferSelect.category));
+  }
+  if (roomId && roomId !== 'undefined') filters.push(eq(inventoryItems.roomId, roomId));
+  if (cursor) filters.push(lt(inventoryItems.createdAt, cursor));
 
-  if (category && category !== 'undefined') { conditions.push('i.category = ?'); bindings.push(category); }
-  if (roomId   && roomId   !== 'undefined') { conditions.push('i.room_id = ?');   bindings.push(roomId); }
-  if (cursor)                               { conditions.push('i.created_at < ?'); bindings.push(cursor); }
-
-  bindings.push(limit + 1);
-
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT i.*, r.name as room_name
-       FROM inventory_items i
-       LEFT JOIN rooms r ON r.id = i.room_id
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY i.created_at DESC LIMIT ?`
-    )
-    .bind(...bindings)
-    .all<InventoryItem & { room_name: string | null }>();
+  const results = await db
+    .select({
+      id: inventoryItems.id,
+      property_id: inventoryItems.propertyId,
+      room_id: inventoryItems.roomId,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      model: inventoryItems.model,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      quantity: inventoryItems.quantity,
+      unit: inventoryItems.unit,
+      reserve_qty: inventoryItems.reserveQty,
+      storage_loc: inventoryItems.storageLoc,
+      photo_url: inventoryItems.photoUrl,
+      qr_code: inventoryItems.qrCode,
+      price_paid: inventoryItems.pricePaid,
+      purchase_date: inventoryItems.purchaseDate,
+      warranty_until: inventoryItems.warrantyUntil,
+      notes: inventoryItems.notes,
+      created_at: inventoryItems.createdAt,
+      deleted_at: inventoryItems.deletedAt,
+      room_name: rooms.name,
+    })
+    .from(inventoryItems)
+    .leftJoin(rooms, eq(rooms.id, inventoryItems.roomId))
+    .where(and(...filters))
+    .orderBy(desc(inventoryItems.createdAt))
+    .limit(limit + 1) as Array<InventoryItem & { room_name: string | null }>;
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
@@ -70,23 +93,35 @@ inventory.get('/', async (c) => {
 // ── GET /properties/:propertyId/inventory/colors ─────────────────────────────
 
 inventory.get('/colors', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT DISTINCT name, brand, color_code, lot_number, supplier, room_id, r.name as room_name
-       FROM inventory_items i
-       LEFT JOIN rooms r ON r.id = i.room_id
-       WHERE i.property_id = ? AND i.category = 'paint' AND i.color_code IS NOT NULL AND i.deleted_at IS NULL
-       ORDER BY i.name`
+  const results = await db
+    .selectDistinct({
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      room_id: inventoryItems.roomId,
+      room_name: rooms.name,
+    })
+    .from(inventoryItems)
+    .leftJoin(rooms, eq(rooms.id, inventoryItems.roomId))
+    .where(
+      and(
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.category, 'paint'),
+        isNotNull(inventoryItems.colorCode),
+        isNull(inventoryItems.deletedAt)
+      )
     )
-    .bind(propertyId)
-    .all();
+    .orderBy(asc(inventoryItems.name));
 
   return ok(c, { colors: results });
 });
@@ -94,7 +129,8 @@ inventory.get('/colors', async (c) => {
 // ── POST /properties/:propertyId/inventory ───────────────────────────────────
 
 inventory.post('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -112,25 +148,54 @@ inventory.post('/', async (c) => {
   const d = parsed.data;
   const id = nanoid();
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO inventory_items
-       (id, property_id, room_id, category, name, brand, model, color_code, lot_number,
-        supplier, quantity, unit, reserve_qty, storage_loc, price_paid, purchase_date, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(
-      id, propertyId, d.room_id ?? null, d.category, d.name,
-      d.brand ?? null, d.model ?? null, d.color_code ?? null, d.lot_number ?? null,
-      d.supplier ?? null, d.quantity, d.unit, d.reserve_qty, d.storage_loc ?? null,
-      d.price_paid ?? null, d.purchase_date ?? null, d.notes ?? null
-    )
-    .run();
+  await db.insert(inventoryItems).values({
+    id,
+    propertyId,
+    roomId: d.room_id ?? null,
+    category: d.category,
+    name: d.name,
+    brand: d.brand ?? null,
+    model: d.model ?? null,
+    colorCode: d.color_code ?? null,
+    lotNumber: d.lot_number ?? null,
+    supplier: d.supplier ?? null,
+    quantity: d.quantity,
+    unit: d.unit,
+    reserveQty: d.reserve_qty,
+    storageLoc: d.storage_loc ?? null,
+    pricePaid: d.price_paid ?? null,
+    purchaseDate: d.purchase_date ?? null,
+    notes: d.notes ?? null,
+  });
 
-  const item = await c.env.DB
-    .prepare('SELECT * FROM inventory_items WHERE id = ?')
-    .bind(id)
-    .first<InventoryItem>();
+  const [item] = await db
+    .select({
+      id: inventoryItems.id,
+      property_id: inventoryItems.propertyId,
+      room_id: inventoryItems.roomId,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      model: inventoryItems.model,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      quantity: inventoryItems.quantity,
+      unit: inventoryItems.unit,
+      reserve_qty: inventoryItems.reserveQty,
+      storage_loc: inventoryItems.storageLoc,
+      photo_url: inventoryItems.photoUrl,
+      qr_code: inventoryItems.qrCode,
+      price_paid: inventoryItems.pricePaid,
+      purchase_date: inventoryItems.purchaseDate,
+      warranty_until: inventoryItems.warrantyUntil,
+      notes: inventoryItems.notes,
+      created_at: inventoryItems.createdAt,
+      deleted_at: inventoryItems.deletedAt,
+    })
+    .from(inventoryItems)
+    .where(eq(inventoryItems.id, id))
+    .limit(1) as InventoryItem[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item', entityId: id, action: 'create',
@@ -143,22 +208,45 @@ inventory.post('/', async (c) => {
 // ── GET /properties/:propertyId/inventory/:id ────────────────────────────────
 
 inventory.get('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const item = await c.env.DB
-    .prepare(
-      `SELECT i.*, r.name as room_name FROM inventory_items i
-       LEFT JOIN rooms r ON r.id = i.room_id
-       WHERE i.id = ? AND i.property_id = ? AND i.deleted_at IS NULL`
-    )
-    .bind(id, propertyId)
-    .first<InventoryItem & { room_name: string | null }>();
+  const [item] = await db
+    .select({
+      id: inventoryItems.id,
+      property_id: inventoryItems.propertyId,
+      room_id: inventoryItems.roomId,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      model: inventoryItems.model,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      quantity: inventoryItems.quantity,
+      unit: inventoryItems.unit,
+      reserve_qty: inventoryItems.reserveQty,
+      storage_loc: inventoryItems.storageLoc,
+      photo_url: inventoryItems.photoUrl,
+      qr_code: inventoryItems.qrCode,
+      price_paid: inventoryItems.pricePaid,
+      purchase_date: inventoryItems.purchaseDate,
+      warranty_until: inventoryItems.warrantyUntil,
+      notes: inventoryItems.notes,
+      created_at: inventoryItems.createdAt,
+      deleted_at: inventoryItems.deletedAt,
+      room_name: rooms.name,
+    })
+    .from(inventoryItems)
+    .leftJoin(rooms, eq(rooms.id, inventoryItems.roomId))
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .limit(1) as Array<InventoryItem & { room_name: string | null }>;
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
@@ -168,18 +256,43 @@ inventory.get('/:id', async (c) => {
 // ── PUT /properties/:propertyId/inventory/:id ────────────────────────────────
 
 inventory.put('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<InventoryItem>();
+  const [old] = await db
+    .select({
+      id: inventoryItems.id,
+      property_id: inventoryItems.propertyId,
+      room_id: inventoryItems.roomId,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      model: inventoryItems.model,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      quantity: inventoryItems.quantity,
+      unit: inventoryItems.unit,
+      reserve_qty: inventoryItems.reserveQty,
+      storage_loc: inventoryItems.storageLoc,
+      photo_url: inventoryItems.photoUrl,
+      qr_code: inventoryItems.qrCode,
+      price_paid: inventoryItems.pricePaid,
+      purchase_date: inventoryItems.purchaseDate,
+      warranty_until: inventoryItems.warrantyUntil,
+      notes: inventoryItems.notes,
+      created_at: inventoryItems.createdAt,
+      deleted_at: inventoryItems.deletedAt,
+    })
+    .from(inventoryItems)
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .limit(1) as InventoryItem[];
 
   if (!old) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
@@ -192,25 +305,55 @@ inventory.put('/:id', async (c) => {
   }
 
   const d = parsed.data;
-  const pairs: [string, unknown][] = Object.entries({
-    room_id: d.room_id, category: d.category, name: d.name,
-    brand: d.brand, model: d.model, color_code: d.color_code,
-    lot_number: d.lot_number, supplier: d.supplier, quantity: d.quantity,
-    unit: d.unit, reserve_qty: d.reserve_qty, storage_loc: d.storage_loc,
-    price_paid: d.price_paid, purchase_date: d.purchase_date, notes: d.notes,
-  }).filter(([, v]) => v !== undefined);
+  const patch: Partial<typeof inventoryItems.$inferInsert> = {};
+  if (d.room_id !== undefined) patch.roomId = d.room_id;
+  if (d.category !== undefined) patch.category = d.category;
+  if (d.name !== undefined) patch.name = d.name;
+  if (d.brand !== undefined) patch.brand = d.brand;
+  if (d.model !== undefined) patch.model = d.model;
+  if (d.color_code !== undefined) patch.colorCode = d.color_code;
+  if (d.lot_number !== undefined) patch.lotNumber = d.lot_number;
+  if (d.supplier !== undefined) patch.supplier = d.supplier;
+  if (d.quantity !== undefined) patch.quantity = d.quantity;
+  if (d.unit !== undefined) patch.unit = d.unit;
+  if (d.reserve_qty !== undefined) patch.reserveQty = d.reserve_qty;
+  if (d.storage_loc !== undefined) patch.storageLoc = d.storage_loc;
+  if (d.price_paid !== undefined) patch.pricePaid = d.price_paid;
+  if (d.purchase_date !== undefined) patch.purchaseDate = d.purchase_date;
+  if (d.notes !== undefined) patch.notes = d.notes;
 
-  if (pairs.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
+  if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await c.env.DB
-    .prepare(`UPDATE inventory_items SET ${pairs.map(([k]) => `${k} = ?`).join(', ')} WHERE id = ?`)
-    .bind(...pairs.map(([, v]) => v), id)
-    .run();
+  await db.update(inventoryItems).set(patch).where(eq(inventoryItems.id, id));
 
-  const updated = await c.env.DB
-    .prepare('SELECT * FROM inventory_items WHERE id = ?')
-    .bind(id)
-    .first<InventoryItem>();
+  const [updated] = await db
+    .select({
+      id: inventoryItems.id,
+      property_id: inventoryItems.propertyId,
+      room_id: inventoryItems.roomId,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      model: inventoryItems.model,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      quantity: inventoryItems.quantity,
+      unit: inventoryItems.unit,
+      reserve_qty: inventoryItems.reserveQty,
+      storage_loc: inventoryItems.storageLoc,
+      photo_url: inventoryItems.photoUrl,
+      qr_code: inventoryItems.qrCode,
+      price_paid: inventoryItems.pricePaid,
+      purchase_date: inventoryItems.purchaseDate,
+      warranty_until: inventoryItems.warrantyUntil,
+      notes: inventoryItems.notes,
+      created_at: inventoryItems.createdAt,
+      deleted_at: inventoryItems.deletedAt,
+    })
+    .from(inventoryItems)
+    .where(eq(inventoryItems.id, id))
+    .limit(1) as InventoryItem[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item', entityId: id, action: 'update',
@@ -224,25 +367,50 @@ inventory.put('/:id', async (c) => {
 // ── DELETE /properties/:propertyId/inventory/:id ─────────────────────────────
 
 inventory.delete('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<InventoryItem>();
+  const [old] = await db
+    .select({
+      id: inventoryItems.id,
+      property_id: inventoryItems.propertyId,
+      room_id: inventoryItems.roomId,
+      category: inventoryItems.category,
+      name: inventoryItems.name,
+      brand: inventoryItems.brand,
+      model: inventoryItems.model,
+      color_code: inventoryItems.colorCode,
+      lot_number: inventoryItems.lotNumber,
+      supplier: inventoryItems.supplier,
+      quantity: inventoryItems.quantity,
+      unit: inventoryItems.unit,
+      reserve_qty: inventoryItems.reserveQty,
+      storage_loc: inventoryItems.storageLoc,
+      photo_url: inventoryItems.photoUrl,
+      qr_code: inventoryItems.qrCode,
+      price_paid: inventoryItems.pricePaid,
+      purchase_date: inventoryItems.purchaseDate,
+      warranty_until: inventoryItems.warrantyUntil,
+      notes: inventoryItems.notes,
+      created_at: inventoryItems.createdAt,
+      deleted_at: inventoryItems.deletedAt,
+    })
+    .from(inventoryItems)
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .limit(1) as InventoryItem[];
 
   if (!old) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE inventory_items SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  await db
+    .update(inventoryItems)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(eq(inventoryItems.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item', entityId: id, action: 'delete',
@@ -258,18 +426,20 @@ const PHOTO_ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 inventory.post('/:itemId/photo', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const itemId = c.req.param('itemId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const itemId = c.req.param('itemId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const item = await c.env.DB
-    .prepare('SELECT id FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(itemId, propertyId)
-    .first();
+  const [item] = await db
+    .select({ id: inventoryItems.id })
+    .from(inventoryItems)
+    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .limit(1);
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
@@ -294,10 +464,10 @@ inventory.post('/:itemId/photo', async (c) => {
 
   const photoUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
-  await c.env.DB
-    .prepare(`UPDATE inventory_items SET photo_url = ?, updated_at = datetime('now') WHERE id = ?`)
-    .bind(photoUrl, itemId)
-    .run();
+  await db
+    .update(inventoryItems)
+    .set({ photoUrl })
+    .where(eq(inventoryItems.id, itemId));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item',
@@ -314,27 +484,29 @@ inventory.post('/:itemId/photo', async (c) => {
 // ── POST /properties/:propertyId/inventory/:itemId/qr ────────────────────────
 
 inventory.post('/:itemId/qr', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const itemId = c.req.param('itemId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const itemId = c.req.param('itemId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const item = await c.env.DB
-    .prepare('SELECT id FROM inventory_items WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(itemId, propertyId)
-    .first();
+  const [item] = await db
+    .select({ id: inventoryItems.id })
+    .from(inventoryItems)
+    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .limit(1);
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
   const qrValue = `houselog://inventory/${itemId}`;
 
-  await c.env.DB
-    .prepare(`UPDATE inventory_items SET qr_code = ?, updated_at = datetime('now') WHERE id = ?`)
-    .bind(qrValue, itemId)
-    .run();
+  await db
+    .update(inventoryItems)
+    .set({ qrCode: qrValue })
+    .where(eq(inventoryItems.id, itemId));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item',

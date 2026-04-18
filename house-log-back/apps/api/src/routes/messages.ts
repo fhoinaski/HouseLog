@@ -8,8 +8,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { err, ok } from '../lib/response';
+import { getDb } from '../db/client';
+import { properties, serviceBids, serviceMessages, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, QueueMessage } from '../lib/types';
 
 const messages = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -24,25 +27,21 @@ type Participants = {
 };
 
 async function loadParticipants(
-  db: D1Database,
+  db: ReturnType<typeof getDb>,
   serviceOrderId: string
 ): Promise<Participants | null> {
-  const row = await db
-    .prepare(
-      `SELECT s.property_id, s.assigned_to, s.requested_by,
-              p.owner_id, p.manager_id
-       FROM service_orders s
-       JOIN properties p ON p.id = s.property_id
-       WHERE s.id = ? AND s.deleted_at IS NULL`
-    )
-    .bind(serviceOrderId)
-    .first<{
-      property_id: string;
-      assigned_to: string | null;
-      requested_by: string;
-      owner_id: string;
-      manager_id: string | null;
-    }>();
+  const [row] = await db
+    .select({
+      property_id: serviceOrders.propertyId,
+      assigned_to: serviceOrders.assignedTo,
+      requested_by: serviceOrders.requestedBy,
+      owner_id: properties.ownerId,
+      manager_id: properties.managerId,
+    })
+    .from(serviceOrders)
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(and(eq(serviceOrders.id, serviceOrderId), isNull(serviceOrders.deletedAt)))
+    .limit(1);
   if (!row) return null;
   return {
     propertyId: row.property_id,
@@ -67,34 +66,65 @@ function isInternalRole(p: Participants, userId: string): boolean {
   return userId !== p.assignedTo;
 }
 
+async function hasActiveBidAccess(
+  db: ReturnType<typeof getDb>,
+  serviceOrderId: string,
+  userId: string
+): Promise<boolean> {
+  const [bid] = await db
+    .select({ id: serviceBids.id })
+    .from(serviceBids)
+    .where(
+      and(
+        eq(serviceBids.serviceId, serviceOrderId),
+        eq(serviceBids.providerId, userId),
+        sql`${serviceBids.status} IN ('pending', 'accepted')`
+      )
+    )
+    .limit(1);
+  return !!bid;
+}
+
 // GET /services/:serviceOrderId/messages
 messages.get('/:serviceOrderId/messages', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  const soId = c.req.param('serviceOrderId');
+  const soId = c.req.param('serviceOrderId')!;
 
-  const p = await loadParticipants(c.env.DB, soId);
+  const p = await loadParticipants(db, soId);
   if (!p) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
   if (!isParticipant(p, userId)) {
-    const hasAccess = await assertPropertyAccess(c.env.DB, p.propertyId, userId, role);
-    if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+    const bidderAccess = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
+    if (!bidderAccess) {
+      const hasAccess = await assertPropertyAccess(c.env.DB, p.propertyId, userId, role);
+      if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+    }
   }
 
   const canSeeInternal = isInternalRole(p, userId);
-  const rows = await c.env.DB
-    .prepare(
-      `SELECT m.id, m.author_id, u.name AS author_name, m.body, m.internal,
-              m.attachments, m.created_at
-       FROM service_messages m
-       JOIN users u ON u.id = m.author_id
-       WHERE m.service_order_id = ? AND m.deleted_at IS NULL
-         ${canSeeInternal ? '' : 'AND m.internal = 0'}
-       ORDER BY m.created_at ASC
-       LIMIT 500`
+  const rows = await db
+    .select({
+      id: serviceMessages.id,
+      author_id: serviceMessages.authorId,
+      author_name: users.name,
+      body: serviceMessages.body,
+      internal: serviceMessages.internal,
+      attachments: serviceMessages.attachments,
+      created_at: serviceMessages.createdAt,
+    })
+    .from(serviceMessages)
+    .innerJoin(users, eq(users.id, serviceMessages.authorId))
+    .where(
+      and(
+        eq(serviceMessages.serviceOrderId, soId),
+        isNull(serviceMessages.deletedAt),
+        canSeeInternal ? sql`1=1` : eq(serviceMessages.internal, 0)
+      )
     )
-    .bind(soId)
-    .all();
-  return ok(c, { data: rows.results ?? [] });
+    .orderBy(asc(serviceMessages.createdAt))
+    .limit(500);
+  return ok(c, { data: rows });
 });
 
 const createSchema = z.object({
@@ -105,15 +135,19 @@ const createSchema = z.object({
 
 // POST /services/:serviceOrderId/messages
 messages.post('/:serviceOrderId/messages', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  const soId = c.req.param('serviceOrderId');
+  const soId = c.req.param('serviceOrderId')!;
 
-  const p = await loadParticipants(c.env.DB, soId);
+  const p = await loadParticipants(db, soId);
   if (!p) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
   if (!isParticipant(p, userId)) {
-    const hasAccess = await assertPropertyAccess(c.env.DB, p.propertyId, userId, role);
-    if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+    const bidderAccess = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
+    if (!bidderAccess) {
+      const hasAccess = await assertPropertyAccess(c.env.DB, p.propertyId, userId, role);
+      if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+    }
   }
 
   const parsed = createSchema.safeParse(await c.req.json().catch(() => ({})));
@@ -126,20 +160,31 @@ messages.post('/:serviceOrderId/messages', async (c) => {
   }
 
   const id = nanoid();
-  await c.env.DB
-    .prepare(
-      `INSERT INTO service_messages
-       (id, service_order_id, author_id, body, internal, attachments)
-       VALUES (?,?,?,?,?,?)`
-    )
-    .bind(id, soId, userId, b.body, b.internal ? 1 : 0, JSON.stringify(b.attachments))
-    .run();
+  await db.insert(serviceMessages).values({
+    id,
+    serviceOrderId: soId,
+    authorId: userId,
+    body: b.body,
+    internal: b.internal ? 1 : 0,
+    attachments: b.attachments,
+  });
 
   // Notifica o outro lado (provider se internal=0; dono/manager caso contrário)
   const recipients = new Set<string>();
   const candidates = [p.ownerId, p.managerId, p.assignedTo, p.requestedBy].filter(
     (x): x is string => Boolean(x) && x !== userId
   );
+
+  if (!p.assignedTo) {
+    const activeBidders = await db
+      .select({ provider_id: serviceBids.providerId })
+      .from(serviceBids)
+      .where(and(eq(serviceBids.serviceId, soId), sql`${serviceBids.status} IN ('pending', 'accepted')`));
+    for (const b of activeBidders) {
+      if (b.provider_id !== userId) candidates.push(b.provider_id);
+    }
+  }
+
   for (const uid of candidates) {
     if (b.internal && uid === p.assignedTo) continue;
     recipients.add(uid);
@@ -169,16 +214,14 @@ messages.post('/:serviceOrderId/messages', async (c) => {
 
 // DELETE /services/:serviceOrderId/messages/:id — soft delete (autor somente)
 messages.delete('/:serviceOrderId/messages/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
-  const id = c.req.param('id');
-  const res = await c.env.DB
-    .prepare(
-      `UPDATE service_messages
-       SET deleted_at = datetime('now')
-       WHERE id = ? AND author_id = ? AND deleted_at IS NULL`
-    )
-    .bind(id, userId)
-    .run();
+  const id = c.req.param('id')!;
+  const res = await db.run(
+    sql`UPDATE service_messages
+        SET deleted_at = datetime('now')
+        WHERE id = ${id} AND author_id = ${userId} AND deleted_at IS NULL`
+  );
   if (!res.meta.changes) return err(c, 'Não encontrado', 'NOT_FOUND', 404);
   return ok(c, { id });
 });

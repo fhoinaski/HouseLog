@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { getDb } from '../db/client';
+import { documents as documentsTable, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 type Document = {
@@ -31,7 +34,8 @@ const metaSchema = z.object({
 // ── GET /properties/:propertyId/documents ────────────────────────────────────
 
 documents.get('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -42,21 +46,34 @@ documents.get('/', async (c) => {
   const cursor = c.req.query('cursor');
   const type = c.req.query('type');
 
-  const conditions = ['d.property_id = ?', 'd.deleted_at IS NULL'];
-  const bindings: unknown[] = [propertyId];
-  if (type   && type   !== 'undefined') { conditions.push('d.type = ?');        bindings.push(type); }
-  if (cursor)                           { conditions.push('d.created_at < ?');  bindings.push(cursor); }
-  bindings.push(limit + 1);
+  const filters = [eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)];
+  if (type && type !== 'undefined') filters.push(eq(documentsTable.type, type as typeof documentsTable.$inferSelect.type));
+  if (cursor) filters.push(lt(documentsTable.createdAt, cursor));
 
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT d.*, u.name as uploader_name FROM documents d
-       JOIN users u ON u.id = d.uploaded_by
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY d.created_at DESC LIMIT ?`
-    )
-    .bind(...bindings)
-    .all<Document & { uploader_name: string }>();
+  const results = await db
+    .select({
+      id: documentsTable.id,
+      property_id: documentsTable.propertyId,
+      service_id: documentsTable.serviceId,
+      type: documentsTable.type,
+      title: documentsTable.title,
+      file_url: documentsTable.fileUrl,
+      file_size: documentsTable.fileSize,
+      ocr_data: documentsTable.ocrData,
+      vendor_cnpj: documentsTable.vendorCnpj,
+      amount: documentsTable.amount,
+      issue_date: documentsTable.issueDate,
+      expiry_date: documentsTable.expiryDate,
+      uploaded_by: documentsTable.uploadedBy,
+      created_at: documentsTable.createdAt,
+      deleted_at: documentsTable.deletedAt,
+      uploader_name: users.name,
+    })
+    .from(documentsTable)
+    .innerJoin(users, eq(users.id, documentsTable.uploadedBy))
+    .where(and(...filters))
+    .orderBy(desc(documentsTable.createdAt))
+    .limit(limit + 1) as Array<Document & { uploader_name: string }>;
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
@@ -64,7 +81,8 @@ documents.get('/', async (c) => {
 // ── POST /properties/:propertyId/documents — multipart upload ────────────────
 
 documents.post('/', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -94,24 +112,42 @@ documents.post('/', async (c) => {
   const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
   const id = nanoid();
-  await c.env.DB
-    .prepare(
-      `INSERT INTO documents
-       (id, property_id, service_id, type, title, file_url, file_size,
-        vendor_cnpj, amount, issue_date, expiry_date, uploaded_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(
-      id, propertyId, meta.service_id ?? null, meta.type, meta.title,
-      fileUrl, file.size, meta.vendor_cnpj ?? null, meta.amount ?? null,
-      meta.issue_date ?? null, meta.expiry_date ?? null, userId
-    )
-    .run();
+  await db.insert(documentsTable).values({
+    id,
+    propertyId,
+    serviceId: meta.service_id ?? null,
+    type: meta.type,
+    title: meta.title,
+    fileUrl,
+    fileSize: file.size,
+    vendorCnpj: meta.vendor_cnpj ?? null,
+    amount: meta.amount ?? null,
+    issueDate: meta.issue_date ?? null,
+    expiryDate: meta.expiry_date ?? null,
+    uploadedBy: userId,
+  });
 
-  const doc = await c.env.DB
-    .prepare('SELECT * FROM documents WHERE id = ?')
-    .bind(id)
-    .first<Document>();
+  const [doc] = await db
+    .select({
+      id: documentsTable.id,
+      property_id: documentsTable.propertyId,
+      service_id: documentsTable.serviceId,
+      type: documentsTable.type,
+      title: documentsTable.title,
+      file_url: documentsTable.fileUrl,
+      file_size: documentsTable.fileSize,
+      ocr_data: documentsTable.ocrData,
+      vendor_cnpj: documentsTable.vendorCnpj,
+      amount: documentsTable.amount,
+      issue_date: documentsTable.issueDate,
+      expiry_date: documentsTable.expiryDate,
+      uploaded_by: documentsTable.uploadedBy,
+      created_at: documentsTable.createdAt,
+      deleted_at: documentsTable.deletedAt,
+    })
+    .from(documentsTable)
+    .where(eq(documentsTable.id, id))
+    .limit(1) as Document[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'document', entityId: id, action: 'upload',
@@ -124,22 +160,38 @@ documents.post('/', async (c) => {
 // ── GET /properties/:propertyId/documents/:id ────────────────────────────────
 
 documents.get('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const doc = await c.env.DB
-    .prepare(
-      `SELECT d.*, u.name as uploader_name FROM documents d
-       JOIN users u ON u.id = d.uploaded_by
-       WHERE d.id = ? AND d.property_id = ? AND d.deleted_at IS NULL`
-    )
-    .bind(id, propertyId)
-    .first();
+  const [doc] = await db
+    .select({
+      id: documentsTable.id,
+      property_id: documentsTable.propertyId,
+      service_id: documentsTable.serviceId,
+      type: documentsTable.type,
+      title: documentsTable.title,
+      file_url: documentsTable.fileUrl,
+      file_size: documentsTable.fileSize,
+      ocr_data: documentsTable.ocrData,
+      vendor_cnpj: documentsTable.vendorCnpj,
+      amount: documentsTable.amount,
+      issue_date: documentsTable.issueDate,
+      expiry_date: documentsTable.expiryDate,
+      uploaded_by: documentsTable.uploadedBy,
+      created_at: documentsTable.createdAt,
+      deleted_at: documentsTable.deletedAt,
+      uploader_name: users.name,
+    })
+    .from(documentsTable)
+    .innerJoin(users, eq(users.id, documentsTable.uploadedBy))
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .limit(1);
 
   if (!doc) return err(c, 'Documento não encontrado', 'NOT_FOUND', 404);
   return ok(c, { document: doc });
@@ -148,25 +200,43 @@ documents.get('/:id', async (c) => {
 // ── DELETE /properties/:propertyId/documents/:id ─────────────────────────────
 
 documents.delete('/:id', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const doc = await c.env.DB
-    .prepare('SELECT * FROM documents WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Document>();
+  const [doc] = await db
+    .select({
+      id: documentsTable.id,
+      property_id: documentsTable.propertyId,
+      service_id: documentsTable.serviceId,
+      type: documentsTable.type,
+      title: documentsTable.title,
+      file_url: documentsTable.fileUrl,
+      file_size: documentsTable.fileSize,
+      ocr_data: documentsTable.ocrData,
+      vendor_cnpj: documentsTable.vendorCnpj,
+      amount: documentsTable.amount,
+      issue_date: documentsTable.issueDate,
+      expiry_date: documentsTable.expiryDate,
+      uploaded_by: documentsTable.uploadedBy,
+      created_at: documentsTable.createdAt,
+      deleted_at: documentsTable.deletedAt,
+    })
+    .from(documentsTable)
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .limit(1) as Document[];
 
   if (!doc) return err(c, 'Documento não encontrado', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE documents SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  await db
+    .update(documentsTable)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(eq(documentsTable.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'document', entityId: id, action: 'delete',
@@ -179,18 +249,36 @@ documents.delete('/:id', async (c) => {
 // ── POST /properties/:propertyId/documents/:id/ocr ───────────────────────────
 
 documents.post('/:id/ocr', async (c) => {
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const doc = await c.env.DB
-    .prepare('SELECT * FROM documents WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Document>();
+  const [doc] = await db
+    .select({
+      id: documentsTable.id,
+      property_id: documentsTable.propertyId,
+      service_id: documentsTable.serviceId,
+      type: documentsTable.type,
+      title: documentsTable.title,
+      file_url: documentsTable.fileUrl,
+      file_size: documentsTable.fileSize,
+      ocr_data: documentsTable.ocrData,
+      vendor_cnpj: documentsTable.vendorCnpj,
+      amount: documentsTable.amount,
+      issue_date: documentsTable.issueDate,
+      expiry_date: documentsTable.expiryDate,
+      uploaded_by: documentsTable.uploadedBy,
+      created_at: documentsTable.createdAt,
+      deleted_at: documentsTable.deletedAt,
+    })
+    .from(documentsTable)
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .limit(1) as Document[];
 
   if (!doc) return err(c, 'Documento não encontrado', 'NOT_FOUND', 404);
   if (doc.type !== 'invoice') return err(c, 'OCR disponível apenas para notas fiscais', 'INVALID_TYPE', 422);
@@ -225,17 +313,18 @@ documents.post('/:id/ocr', async (c) => {
   }
 
   // Patch the document with OCR data and extracted fields
-  const updates: string[] = ['ocr_data = ?'];
-  const vals: unknown[] = [JSON.stringify(ocrResult)];
+  const patch: Partial<typeof documentsTable.$inferInsert> = {
+    ocrData: ocrResult,
+  };
 
-  if (ocrResult.vendor_cnpj) { updates.push('vendor_cnpj = ?'); vals.push(ocrResult.vendor_cnpj); }
-  if (ocrResult.amount)      { updates.push('amount = ?');       vals.push(Number(ocrResult.amount)); }
-  if (ocrResult.issue_date)  { updates.push('issue_date = ?');   vals.push(ocrResult.issue_date); }
+  if (ocrResult.vendor_cnpj) patch.vendorCnpj = String(ocrResult.vendor_cnpj);
+  if (ocrResult.amount) patch.amount = Number(ocrResult.amount);
+  if (ocrResult.issue_date) patch.issueDate = String(ocrResult.issue_date);
 
-  await c.env.DB
-    .prepare(`UPDATE documents SET ${updates.join(', ')} WHERE id = ?`)
-    .bind(...vals, id)
-    .run();
+  await db
+    .update(documentsTable)
+    .set(patch)
+    .where(eq(documentsTable.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'document', entityId: id, action: 'ocr',

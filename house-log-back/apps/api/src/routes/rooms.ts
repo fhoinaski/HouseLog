@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { rooms as roomsTable } from '../db/schema';
 import type { Bindings, Variables, Room } from '../lib/types';
 
 const rooms = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -21,6 +24,7 @@ const schema = z.object({
 // ── GET /properties/:propertyId/rooms ────────────────────────────────────────
 
 rooms.get('/', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -28,12 +32,21 @@ rooms.get('/', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
-  const { results } = await c.env.DB
-    .prepare(
-      `SELECT * FROM rooms WHERE property_id = ? AND deleted_at IS NULL ORDER BY floor ASC, name ASC`
-    )
-    .bind(propertyId)
-    .all<Room>();
+  const results = await db
+    .select({
+      id: roomsTable.id,
+      property_id: roomsTable.propertyId,
+      name: roomsTable.name,
+      type: roomsTable.type,
+      floor: roomsTable.floor,
+      area_m2: roomsTable.areaM2,
+      notes: roomsTable.notes,
+      created_at: roomsTable.createdAt,
+      deleted_at: roomsTable.deletedAt,
+    })
+    .from(roomsTable)
+    .where(and(eq(roomsTable.propertyId, propertyId), isNull(roomsTable.deletedAt)))
+    .orderBy(asc(roomsTable.floor), asc(roomsTable.name)) as Room[];
 
   return ok(c, { rooms: results });
 });
@@ -41,6 +54,7 @@ rooms.get('/', async (c) => {
 // ── POST /properties/:propertyId/rooms ───────────────────────────────────────
 
 rooms.post('/', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -59,18 +73,31 @@ rooms.post('/', async (c) => {
   const { name, type, floor, area_m2, notes } = parsed.data;
   const id = nanoid();
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO rooms (id, property_id, name, type, floor, area_m2, notes, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(id, propertyId, name, type, floor, area_m2 ?? null, notes ?? null)
-    .run();
+  await db.insert(roomsTable).values({
+    id,
+    propertyId,
+    name,
+    type,
+    floor,
+    areaM2: area_m2 ?? null,
+    notes: notes ?? null,
+  });
 
-  const room = await c.env.DB
-    .prepare('SELECT * FROM rooms WHERE id = ?')
-    .bind(id)
-    .first<Room>();
+  const [room] = await db
+    .select({
+      id: roomsTable.id,
+      property_id: roomsTable.propertyId,
+      name: roomsTable.name,
+      type: roomsTable.type,
+      floor: roomsTable.floor,
+      area_m2: roomsTable.areaM2,
+      notes: roomsTable.notes,
+      created_at: roomsTable.createdAt,
+      deleted_at: roomsTable.deletedAt,
+    })
+    .from(roomsTable)
+    .where(eq(roomsTable.id, id))
+    .limit(1) as Room[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'room',
@@ -87,6 +114,7 @@ rooms.post('/', async (c) => {
 // ── GET /properties/:propertyId/rooms/:id ────────────────────────────────────
 
 rooms.get('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -95,10 +123,27 @@ rooms.get('/:id', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const room = await c.env.DB
-    .prepare('SELECT * FROM rooms WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Room>();
+  const [room] = await db
+    .select({
+      id: roomsTable.id,
+      property_id: roomsTable.propertyId,
+      name: roomsTable.name,
+      type: roomsTable.type,
+      floor: roomsTable.floor,
+      area_m2: roomsTable.areaM2,
+      notes: roomsTable.notes,
+      created_at: roomsTable.createdAt,
+      deleted_at: roomsTable.deletedAt,
+    })
+    .from(roomsTable)
+    .where(
+      and(
+        eq(roomsTable.id, id),
+        eq(roomsTable.propertyId, propertyId),
+        isNull(roomsTable.deletedAt)
+      )
+    )
+    .limit(1) as Room[];
 
   if (!room) return err(c, 'Cômodo não encontrado', 'NOT_FOUND', 404);
 
@@ -108,6 +153,7 @@ rooms.get('/:id', async (c) => {
 // ── PUT /properties/:propertyId/rooms/:id ────────────────────────────────────
 
 rooms.put('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -116,10 +162,27 @@ rooms.put('/:id', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM rooms WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Room>();
+  const [old] = await db
+    .select({
+      id: roomsTable.id,
+      property_id: roomsTable.propertyId,
+      name: roomsTable.name,
+      type: roomsTable.type,
+      floor: roomsTable.floor,
+      area_m2: roomsTable.areaM2,
+      notes: roomsTable.notes,
+      created_at: roomsTable.createdAt,
+      deleted_at: roomsTable.deletedAt,
+    })
+    .from(roomsTable)
+    .where(
+      and(
+        eq(roomsTable.id, id),
+        eq(roomsTable.propertyId, propertyId),
+        isNull(roomsTable.deletedAt)
+      )
+    )
+    .limit(1) as Room[];
 
   if (!old) return err(c, 'Cômodo não encontrado', 'NOT_FOUND', 404);
 
@@ -132,23 +195,33 @@ rooms.put('/:id', async (c) => {
   }
 
   const data = parsed.data;
-  const fields: string[] = [];
-  const values: unknown[] = [];
+  const patch: Partial<typeof roomsTable.$inferInsert> = {};
 
-  if (data.name !== undefined)   { fields.push('name = ?');    values.push(data.name); }
-  if (data.type !== undefined)   { fields.push('type = ?');    values.push(data.type); }
-  if (data.floor !== undefined)  { fields.push('floor = ?');   values.push(data.floor); }
-  if (data.area_m2 !== undefined){ fields.push('area_m2 = ?'); values.push(data.area_m2); }
-  if (data.notes !== undefined)  { fields.push('notes = ?');   values.push(data.notes); }
+  if (data.name !== undefined) patch.name = data.name;
+  if (data.type !== undefined) patch.type = data.type;
+  if (data.floor !== undefined) patch.floor = data.floor;
+  if (data.area_m2 !== undefined) patch.areaM2 = data.area_m2;
+  if (data.notes !== undefined) patch.notes = data.notes;
 
-  if (fields.length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
+  if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await c.env.DB
-    .prepare(`UPDATE rooms SET ${fields.join(', ')} WHERE id = ?`)
-    .bind(...values, id)
-    .run();
+  await db.update(roomsTable).set(patch).where(eq(roomsTable.id, id));
 
-  const updated = await c.env.DB.prepare('SELECT * FROM rooms WHERE id = ?').bind(id).first<Room>();
+  const [updated] = await db
+    .select({
+      id: roomsTable.id,
+      property_id: roomsTable.propertyId,
+      name: roomsTable.name,
+      type: roomsTable.type,
+      floor: roomsTable.floor,
+      area_m2: roomsTable.areaM2,
+      notes: roomsTable.notes,
+      created_at: roomsTable.createdAt,
+      deleted_at: roomsTable.deletedAt,
+    })
+    .from(roomsTable)
+    .where(eq(roomsTable.id, id))
+    .limit(1) as Room[];
 
   await writeAuditLog(c.env.DB, {
     entityType: 'room', entityId: id, action: 'update',
@@ -162,6 +235,7 @@ rooms.put('/:id', async (c) => {
 // ── DELETE /properties/:propertyId/rooms/:id ─────────────────────────────────
 
 rooms.delete('/:id', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const { id } = c.req.param();
   const userId = c.get('userId');
@@ -170,17 +244,34 @@ rooms.delete('/:id', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const old = await c.env.DB
-    .prepare('SELECT * FROM rooms WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
-    .bind(id, propertyId)
-    .first<Room>();
+  const [old] = await db
+    .select({
+      id: roomsTable.id,
+      property_id: roomsTable.propertyId,
+      name: roomsTable.name,
+      type: roomsTable.type,
+      floor: roomsTable.floor,
+      area_m2: roomsTable.areaM2,
+      notes: roomsTable.notes,
+      created_at: roomsTable.createdAt,
+      deleted_at: roomsTable.deletedAt,
+    })
+    .from(roomsTable)
+    .where(
+      and(
+        eq(roomsTable.id, id),
+        eq(roomsTable.propertyId, propertyId),
+        isNull(roomsTable.deletedAt)
+      )
+    )
+    .limit(1) as Room[];
 
   if (!old) return err(c, 'Cômodo não encontrado', 'NOT_FOUND', 404);
 
-  await c.env.DB
-    .prepare(`UPDATE rooms SET deleted_at = datetime('now') WHERE id = ?`)
-    .bind(id)
-    .run();
+  await db
+    .update(roomsTable)
+    .set({ deletedAt: new Date().toISOString() })
+    .where(eq(roomsTable.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'room', entityId: id, action: 'delete',

@@ -1,24 +1,31 @@
 import { Hono } from 'hono';
+import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { documents, properties, propertyCollaborators, rooms, serviceBids, serviceOrders, users } from '../db/schema';
+import { normalizeProviderCategories } from '../lib/provider-categories';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 
 const provider = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 provider.use('*', authMiddleware);
 
-async function canAccessProviderPortal(db: D1Database, userId: string, role: string): Promise<boolean> {
+async function canAccessProviderPortal(db: ReturnType<typeof getDb>, userId: string, role: string): Promise<boolean> {
   if (role === 'provider' || role === 'admin') return true;
-  const collaborator = await db.prepare(
-    `SELECT id FROM property_collaborators WHERE user_id = ? AND role = 'provider' LIMIT 1`
-  ).bind(userId).first();
-  return collaborator !== null;
+  const [collaborator] = await db
+    .select({ id: propertyCollaborators.id })
+    .from(propertyCollaborators)
+    .where(and(eq(propertyCollaborators.userId, userId), eq(propertyCollaborators.role, 'provider')))
+    .limit(1);
+  return !!collaborator;
 }
 
 // GET /provider/services
 provider.get('/services', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+  if (!(await canAccessProviderPortal(db, userId, role))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
@@ -26,113 +33,357 @@ provider.get('/services', async (c) => {
   const cursor = c.req.query('cursor');
   const status = c.req.query('status');
 
-  const conditions = ['s.assigned_to = ?', 's.deleted_at IS NULL'];
-  const bindings: unknown[] = [userId];
+  const filters = [eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)];
+  if (status) filters.push(eq(serviceOrders.status, status as typeof serviceOrders.$inferSelect.status));
+  if (cursor) filters.push(lt(serviceOrders.createdAt, cursor));
 
-  if (status) { conditions.push('s.status = ?'); bindings.push(status); }
-  if (cursor) { conditions.push('s.created_at < ?'); bindings.push(cursor); }
-  bindings.push(limit + 1);
-
-  const { results } = await c.env.DB.prepare(`
-    SELECT s.*,
-           u1.name as requested_by_name,
-           r.name  as room_name,
-           p.name  as property_name,
-           p.address as property_address,
-           p.id    as property_id
-    FROM service_orders s
-    JOIN users u1      ON u1.id = s.requested_by
-    LEFT JOIN rooms r  ON r.id  = s.room_id
-    JOIN properties p  ON p.id  = s.property_id
-    WHERE ${conditions.join(' AND ')}
-    ORDER BY
-      CASE s.priority WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END,
-      s.created_at DESC LIMIT ?
-  `).bind(...bindings).all<ServiceOrder & {
+  const results = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+      requested_by_name: users.name,
+      room_name: rooms.name,
+      property_name: properties.name,
+      property_address: properties.address,
+    })
+    .from(serviceOrders)
+    .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
+    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(and(...filters))
+    .orderBy(
+      sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`,
+      desc(serviceOrders.createdAt)
+    )
+    .limit(limit + 1) as Array<ServiceOrder & {
     requested_by_name: string; room_name: string | null;
-    property_name: string; property_address: string; property_id: string;
-  }>();
+    property_name: string; property_address: string;
+  }>;
 
   return ok(c, paginate(results, limit, 'created_at'));
 });
 
-// GET /provider/services/:id
-provider.get('/services/:id', async (c) => {
+// GET /provider/opportunities
+provider.get('/opportunities', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  const { id } = c.req.param();
-  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+  if (!(await canAccessProviderPortal(db, userId, role))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
-  const order = await c.env.DB.prepare(`
-    SELECT s.*,
-           u1.name as requested_by_name,
-           r.name  as room_name,
-           p.name  as property_name,
-           p.address as property_address,
-           p.id    as property_id
-    FROM service_orders s
-    JOIN users u1      ON u1.id = s.requested_by
-    LEFT JOIN rooms r  ON r.id  = s.room_id
-    JOIN properties p  ON p.id  = s.property_id
-    WHERE s.id = ? AND (s.assigned_to = ? OR ? = 'admin') AND s.deleted_at IS NULL
-  `).bind(id, userId, role).first();
+  const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
+  const cursor = c.req.query('cursor');
+  const systemType = c.req.query('system_type');
+
+  const [me] = await db
+    .select({ provider_categories: users.providerCategories })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1) as Array<{ provider_categories: string[] | null }>;
+
+  const categories = normalizeProviderCategories(me?.provider_categories ?? []);
+
+  const filters = [
+    eq(serviceOrders.status, 'requested'),
+    isNull(serviceOrders.assignedTo),
+    isNull(serviceOrders.deletedAt),
+  ];
+
+  if (systemType) {
+    filters.push(eq(serviceOrders.systemType, systemType as typeof serviceOrders.$inferSelect.systemType));
+  }
+
+  if (categories.length > 0 && !systemType) {
+    filters.push(sql`${serviceOrders.systemType} IN ${categories}`);
+  }
+
+  if (cursor) filters.push(lt(serviceOrders.createdAt, cursor));
+
+  const results = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+      requested_by_name: users.name,
+      room_name: rooms.name,
+      property_name: properties.name,
+      property_address: properties.address,
+    })
+    .from(serviceOrders)
+    .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
+    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(and(...filters))
+    .orderBy(
+      sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`,
+      desc(serviceOrders.createdAt)
+    )
+    .limit(limit + 1) as Array<ServiceOrder & {
+    requested_by_name: string;
+    room_name: string | null;
+    property_name: string;
+    property_address: string;
+  }>;
+
+  const serviceIds = results.map((r) => r.id);
+  const myBids = serviceIds.length
+    ? await db
+      .select({
+        id: serviceBids.id,
+        service_id: serviceBids.serviceId,
+        amount: serviceBids.amount,
+        status: serviceBids.status,
+        created_at: serviceBids.createdAt,
+      })
+      .from(serviceBids)
+      .where(and(sql`${serviceBids.serviceId} IN ${serviceIds}`, eq(serviceBids.providerId, userId)))
+      .orderBy(desc(serviceBids.createdAt))
+    : [];
+
+  const bidByService = new Map<string, { id: string; amount: number; status: string; created_at: string }>();
+  for (const bid of myBids) {
+    if (!bidByService.has(bid.service_id)) {
+      bidByService.set(bid.service_id, {
+        id: bid.id,
+        amount: bid.amount,
+        status: bid.status,
+        created_at: bid.created_at,
+      });
+    }
+  }
+
+  const enriched = results.map((row) => ({
+    ...row,
+    my_bid: bidByService.get(row.id) ?? null,
+  }));
+
+  return ok(c, paginate(enriched, limit, 'created_at'));
+});
+
+// GET /provider/opportunities/:id
+provider.get('/opportunities/:id', async (c) => {
+  const db = getDb(c.env.DB);
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const id = c.req.param('id')!;
+  if (!(await canAccessProviderPortal(db, userId, role))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
+
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+      requested_by_name: users.name,
+      room_name: rooms.name,
+      property_name: properties.name,
+      property_address: properties.address,
+    })
+    .from(serviceOrders)
+    .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
+    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.status, 'requested'), isNull(serviceOrders.assignedTo), isNull(serviceOrders.deletedAt)))
+    .limit(1);
+
+  if (!order) return err(c, 'Oportunidade não encontrada', 'NOT_FOUND', 404);
+
+  const myBids = await db
+    .select({
+      id: serviceBids.id,
+      service_id: serviceBids.serviceId,
+      provider_id: serviceBids.providerId,
+      amount: serviceBids.amount,
+      notes: serviceBids.notes,
+      status: serviceBids.status,
+      created_at: serviceBids.createdAt,
+      updated_at: serviceBids.updatedAt,
+    })
+    .from(serviceBids)
+    .where(and(eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
+    .orderBy(desc(serviceBids.createdAt));
+
+  return ok(c, { order, my_bids: myBids });
+});
+
+// GET /provider/services/:id
+provider.get('/services/:id', async (c) => {
+  const db = getDb(c.env.DB);
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const id = c.req.param('id')!;
+  if (!(await canAccessProviderPortal(db, userId, role))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
+
+  const whereClause = role === 'admin'
+    ? and(eq(serviceOrders.id, id), isNull(serviceOrders.deletedAt))
+    : and(eq(serviceOrders.id, id), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
+
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+      requested_by_name: users.name,
+      room_name: rooms.name,
+      property_name: properties.name,
+      property_address: properties.address,
+    })
+    .from(serviceOrders)
+    .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
+    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(whereClause)
+    .limit(1);
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
   // Fetch bids for this order submitted by this provider
-  const { results: myBids } = await c.env.DB.prepare(
-    `SELECT * FROM service_bids WHERE service_id = ? AND provider_id = ? ORDER BY created_at DESC`
-  ).bind(id, userId).all();
+  const myBids = await db
+    .select()
+    .from(serviceBids)
+    .where(and(eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
+    .orderBy(desc(serviceBids.createdAt));
 
   return ok(c, { order, my_bids: myBids });
 });
 
 // GET /provider/stats
 provider.get('/stats', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+  if (!(await canAccessProviderPortal(db, userId, role))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
-  const { results: statusCounts } = await c.env.DB.prepare(`
-    SELECT status, COUNT(*) as count
-    FROM service_orders
-    WHERE assigned_to = ? AND deleted_at IS NULL
-    GROUP BY status
-  `).bind(userId).all<{ status: string; count: number }>();
+  const statusCounts = await db
+    .select({ status: serviceOrders.status, count: sql<number>`COUNT(*)` })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)))
+    .groupBy(serviceOrders.status) as Array<{ status: string; count: number }>;
 
   const stats = statusCounts.reduce((acc, r) => ({ ...acc, [r.status]: r.count }), {} as Record<string, number>);
   const total = Object.values(stats).reduce((a, b) => a + b, 0);
 
-  const { results: recentBids } = await c.env.DB.prepare(`
-    SELECT b.*, s.title as service_title, p.name as property_name
-    FROM service_bids b
-    JOIN service_orders s ON s.id = b.service_id
-    JOIN properties p     ON p.id = s.property_id
-    WHERE b.provider_id = ?
-    ORDER BY b.created_at DESC LIMIT 5
-  `).bind(userId).all();
+  const recentBids = await db
+    .select({
+      id: serviceBids.id,
+      service_id: serviceBids.serviceId,
+      provider_id: serviceBids.providerId,
+      amount: serviceBids.amount,
+      notes: serviceBids.notes,
+      status: serviceBids.status,
+      created_at: serviceBids.createdAt,
+      updated_at: serviceBids.updatedAt,
+      service_title: serviceOrders.title,
+      property_name: properties.name,
+    })
+    .from(serviceBids)
+    .innerJoin(serviceOrders, eq(serviceOrders.id, serviceBids.serviceId))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(eq(serviceBids.providerId, userId))
+    .orderBy(desc(serviceBids.createdAt))
+    .limit(5);
 
   return ok(c, { stats, total, recent_bids: recentBids });
 });
 
 // POST /provider/services/:id/invoice — provider uploads nota fiscal
 provider.post('/services/:id/invoice', async (c) => {
+  const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  const { id } = c.req.param();
-  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+  const id = c.req.param('id')!;
+  if (!(await canAccessProviderPortal(db, userId, role))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
-  const order = await c.env.DB.prepare(`
-    SELECT s.id, s.property_id
-    FROM service_orders s
-    WHERE s.id = ? AND (s.assigned_to = ? OR ? = 'admin') AND s.deleted_at IS NULL
-  `).bind(id, userId, role).first<{ id: string; property_id: string }>();
+  const whereClause = role === 'admin'
+    ? and(eq(serviceOrders.id, id), isNull(serviceOrders.deletedAt))
+    : and(eq(serviceOrders.id, id), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
+
+  const [order] = await db
+    .select({ id: serviceOrders.id, property_id: serviceOrders.propertyId })
+    .from(serviceOrders)
+    .where(whereClause)
+    .limit(1) as Array<{ id: string; property_id: string }>;
 
   if (!order) return err(c, 'OS não encontrada ou sem acesso', 'NOT_FOUND', 404);
 
@@ -155,10 +406,16 @@ provider.post('/services/:id/invoice', async (c) => {
   // Create a document record linked to this service
   const { nanoid } = await import('nanoid');
   const docId = nanoid();
-  await c.env.DB.prepare(`
-    INSERT INTO documents (id, property_id, service_id, type, title, file_url, file_size, uploaded_by, created_at)
-    VALUES (?, ?, ?, 'invoice', 'Nota Fiscal — ' || ?, ?, ?, ?, datetime('now'))
-  `).bind(docId, order.property_id, id, id.slice(0, 8).toUpperCase(), fileUrl, file.size, userId).run();
+  await db.insert(documents).values({
+    id: docId,
+    propertyId: order.property_id,
+    serviceId: id,
+    type: 'invoice',
+    title: `Nota Fiscal - ${id.slice(0, 8).toUpperCase()}`,
+    fileUrl,
+    fileSize: file.size,
+    uploadedBy: userId,
+  });
 
   return ok(c, { invoice_url: fileUrl, document_id: docId });
 });

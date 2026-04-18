@@ -1,5 +1,13 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Design System
+
+This project follows **The Architectural Lens** as the official visual language.
+
+- Canonical spec: `DESIGN.md`
+- Agent/developer guardrails: `AGENTS.md`
+- Global tokens and shared visual utilities: `src/app/globals.css`
+
 ## Getting Started
 
 First, run the development server:

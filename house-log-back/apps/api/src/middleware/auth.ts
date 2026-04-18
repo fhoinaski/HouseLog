@@ -1,5 +1,8 @@
 import { createMiddleware } from 'hono/factory';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { verifyJwt } from '../lib/jwt';
+import { getDb } from '../db/client';
+import { properties, propertyCollaborators } from '../db/schema';
 import type { Bindings, Variables, Role } from '../lib/types';
 
 // Extracts JWT from Authorization header and sets userId/userRole in context
@@ -48,23 +51,38 @@ export async function assertPropertyAccess(
   db: D1Database,
   propertyId: string,
   userId: string,
-  _role: Role
+  role: Role
 ): Promise<boolean> {
-  const owned = await db
-    .prepare(
-      `SELECT id FROM properties
-       WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
+  // Providers must use provider portal/public share flows only.
+  // They cannot access property-level owner/manager dashboards.
+  if (role === 'provider' || role === 'temp_provider') return false;
+
+  const drizzle = getDb(db);
+  const [owned] = await drizzle
+    .select({ id: properties.id })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        or(eq(properties.ownerId, userId), eq(properties.managerId, userId)),
+        isNull(properties.deletedAt)
+      )
     )
-    .bind(propertyId, userId, userId)
-    .first();
+    .limit(1);
   if (owned) return true;
 
   try {
-    const collab = await db
-      .prepare(`SELECT id FROM property_collaborators WHERE property_id = ? AND user_id = ?`)
-      .bind(propertyId, userId)
-      .first();
-    return collab !== null;
+    const [collab] = await drizzle
+      .select({ id: propertyCollaborators.id })
+      .from(propertyCollaborators)
+      .where(
+        and(
+          eq(propertyCollaborators.propertyId, propertyId),
+          eq(propertyCollaborators.userId, userId)
+        )
+      )
+      .limit(1);
+    return !!collab;
   } catch (e) {
     if (String(e).includes('property_collaborators')) return false;
     throw e;
@@ -80,27 +98,38 @@ export async function canUserOpenOS(
   propertyId: string,
   userId: string
 ): Promise<boolean> {
-  const owned = await db
-    .prepare(
-      `SELECT id FROM properties
-       WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
+  const drizzle = getDb(db);
+  const [owned] = await drizzle
+    .select({ id: properties.id })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        or(eq(properties.ownerId, userId), eq(properties.managerId, userId)),
+        isNull(properties.deletedAt)
+      )
     )
-    .bind(propertyId, userId, userId)
-    .first();
+    .limit(1);
   if (owned) return true;
 
   try {
-    const collab = await db
-      .prepare(
-        `SELECT role, can_open_os FROM property_collaborators
-         WHERE property_id = ? AND user_id = ?`
+    const [collab] = await drizzle
+      .select({
+        role: propertyCollaborators.role,
+        canOpenOs: propertyCollaborators.canOpenOs,
+      })
+      .from(propertyCollaborators)
+      .where(
+        and(
+          eq(propertyCollaborators.propertyId, propertyId),
+          eq(propertyCollaborators.userId, userId)
+        )
       )
-      .bind(propertyId, userId)
-      .first<{ role: string; can_open_os: number }>();
+      .limit(1);
 
     if (!collab) return false;
     if (collab.role === 'viewer') return false;
-    return collab.can_open_os === 1;
+    return collab.canOpenOs === 1;
   } catch (e) {
     if (String(e).includes('property_collaborators')) return false;
     throw e;

@@ -1,10 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { signJwt, verifyJwt, hashPassword, verifyPassword } from '../lib/jwt';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { mfaChallenges, userMfa, users } from '../db/schema';
 import {
   issueRefreshToken,
   rotateRefreshToken,
@@ -12,11 +15,27 @@ import {
   revokeAllForUser,
 } from '../lib/refresh';
 import { generateSecret, otpauthUri, totpVerify, generateBackupCodes } from '../lib/totp';
+import { normalizeProviderCategories } from '../lib/provider-categories';
 import type { Bindings, Variables, User } from '../lib/types';
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const ACCESS_TOKEN_TTL = 60 * 60; // 1h
+
+const educationEntrySchema = z.object({
+  institution: z.string().min(2).max(160),
+  title: z.string().min(2).max(160),
+  type: z.enum(['college', 'technical', 'course', 'certification', 'other']),
+  status: z.enum(['in_progress', 'completed']),
+  certificationUrl: z.string().url().optional(),
+});
+
+const portfolioCaseSchema = z.object({
+  title: z.string().min(2).max(160),
+  description: z.string().max(1500).optional(),
+  beforeImageUrl: z.string().url().optional(),
+  afterImageUrl: z.string().url().optional(),
+});
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -26,6 +45,17 @@ const registerSchema = z.object({
   password: z.string().min(8, 'Senha deve ter ao menos 8 caracteres'),
   role: z.enum(['admin', 'owner', 'provider']).default('owner'),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  service_area: z.string().max(200).optional(),
+  pix_key: z.string().max(140).optional(),
+  pix_key_type: z.enum(['cpf', 'cnpj', 'email', 'phone', 'random']).optional(),
+  provider_bio: z.string().max(2000).optional(),
+  provider_courses: z.array(z.string().min(2).max(120)).max(50).optional(),
+  provider_specializations: z.array(z.string().min(2).max(120)).max(50).optional(),
+  provider_portfolio: z.array(z.string().min(2).max(200)).max(100).optional(),
+  provider_education: z.array(educationEntrySchema).max(50).optional(),
+  provider_portfolio_cases: z.array(portfolioCaseSchema).max(100).optional(),
+  provider_categories: z.array(z.string().min(2)).max(40).optional(),
 });
 
 const loginSchema = z.object({
@@ -41,6 +71,17 @@ const changePasswordSchema = z.object({
 const updateProfileSchema = z.object({
   name: z.string().min(2, 'Nome deve ter ao menos 2 caracteres').optional(),
   phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  service_area: z.string().max(200).optional(),
+  pix_key: z.string().max(140).optional(),
+  pix_key_type: z.enum(['cpf', 'cnpj', 'email', 'phone', 'random']).optional(),
+  provider_bio: z.string().max(2000).optional(),
+  provider_courses: z.array(z.string().min(2).max(120)).max(50).optional(),
+  provider_specializations: z.array(z.string().min(2).max(120)).max(50).optional(),
+  provider_portfolio: z.array(z.string().min(2).max(200)).max(100).optional(),
+  provider_education: z.array(educationEntrySchema).max(50).optional(),
+  provider_portfolio_cases: z.array(portfolioCaseSchema).max(100).optional(),
+  provider_categories: z.array(z.string().min(2)).max(40).optional(),
 });
 
 const mfaVerifySchema = z.object({ code: z.string().min(6).max(8) });
@@ -76,6 +117,7 @@ async function issueTokenPair(
 // ── POST /auth/register ─────────────────────────────────────────────────────
 
 auth.post('/register', async (c) => {
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
 
@@ -85,26 +127,47 @@ auth.post('/register', async (c) => {
   }
 
   const { email, name, password, role, phone } = parsed.data;
+  const providerCategories = role === 'provider'
+    ? normalizeProviderCategories(parsed.data.provider_categories ?? [])
+    : [];
+  const providerCourses = role === 'provider' ? (parsed.data.provider_courses ?? []) : [];
+  const providerSpecializations = role === 'provider' ? (parsed.data.provider_specializations ?? []) : [];
+  const providerPortfolio = role === 'provider' ? (parsed.data.provider_portfolio ?? []) : [];
+  const providerEducation = role === 'provider' ? (parsed.data.provider_education ?? []) : [];
+  const providerPortfolioCases = role === 'provider' ? (parsed.data.provider_portfolio_cases ?? []) : [];
 
-  const existing = await c.env.DB
-    .prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL')
-    .bind(email)
-    .first();
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.email, email), isNull(users.deletedAt)))
+    .limit(1);
 
   if (existing) {
     return err(c, 'Email já cadastrado', 'EMAIL_TAKEN', 409);
   }
 
   const id = nanoid();
-  const password_hash = await hashPassword(password);
+  const passwordHash = await hashPassword(password);
 
-  await c.env.DB
-    .prepare(
-      `INSERT INTO users (id, email, name, role, password_hash, phone, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-    )
-    .bind(id, email, name, role, password_hash, phone ?? null)
-    .run();
+  await db.insert(users).values({
+    id,
+    email,
+    name,
+    role,
+    providerCategories,
+    passwordHash,
+    phone: phone ?? null,
+    whatsapp: parsed.data.whatsapp ?? null,
+    serviceArea: parsed.data.service_area ?? null,
+    pixKey: parsed.data.pix_key ?? null,
+    pixKeyType: parsed.data.pix_key_type ?? null,
+    providerBio: parsed.data.provider_bio ?? null,
+    providerCourses,
+    providerSpecializations,
+    providerPortfolio,
+    providerEducation,
+    providerPortfolioCases,
+  });
 
   const pair = await issueTokenPair(c, { id, email, role });
 
@@ -124,7 +187,25 @@ auth.post('/register', async (c) => {
       access_token: pair.access,
       refresh_token: pair.refresh.token,
       expires_in: ACCESS_TOKEN_TTL,
-      user: { id, email, name, role, phone: phone ?? null, created_at: new Date().toISOString() },
+      user: {
+        id,
+        email,
+        name,
+        role,
+        phone: phone ?? null,
+        whatsapp: parsed.data.whatsapp ?? null,
+        service_area: parsed.data.service_area ?? null,
+        pix_key: parsed.data.pix_key ?? null,
+        pix_key_type: parsed.data.pix_key_type ?? null,
+        provider_bio: parsed.data.provider_bio ?? null,
+        provider_courses: providerCourses,
+        provider_specializations: providerSpecializations,
+        provider_portfolio: providerPortfolio,
+        provider_education: providerEducation,
+        provider_portfolio_cases: providerPortfolioCases,
+        provider_categories: providerCategories,
+        created_at: new Date().toISOString(),
+      },
     },
     201
   );
@@ -133,6 +214,7 @@ auth.post('/register', async (c) => {
 // ── POST /auth/login ────────────────────────────────────────────────────────
 
 auth.post('/login', async (c) => {
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
 
@@ -141,10 +223,30 @@ auth.post('/login', async (c) => {
 
   const { email, password } = parsed.data;
 
-  const user = await c.env.DB
-    .prepare('SELECT * FROM users WHERE email = ? AND deleted_at IS NULL')
-    .bind(email)
-    .first<User>();
+  const [user] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      provider_categories: users.providerCategories,
+      password_hash: users.passwordHash,
+      phone: users.phone,
+      whatsapp: users.whatsapp,
+      service_area: users.serviceArea,
+      pix_key: users.pixKey,
+      pix_key_type: users.pixKeyType,
+      provider_bio: users.providerBio,
+      provider_courses: users.providerCourses,
+      provider_specializations: users.providerSpecializations,
+      provider_portfolio: users.providerPortfolio,
+      provider_education: users.providerEducation,
+      provider_portfolio_cases: users.providerPortfolioCases,
+      avatar_url: users.avatarUrl,
+    })
+    .from(users)
+    .where(and(eq(users.email, email), isNull(users.deletedAt)))
+    .limit(1) as User[];
 
   if (!user) return err(c, 'Credenciais inválidas', 'INVALID_CREDENTIALS', 401);
 
@@ -157,24 +259,30 @@ auth.post('/login', async (c) => {
   const updateFields = isLegacy
     ? `password_hash = ?, last_login = datetime('now')`
     : `last_login = datetime('now')`;
-  await c.env.DB
-    .prepare(`UPDATE users SET ${updateFields} WHERE id = ?`)
-    .bind(...(isLegacy ? [newHash, user.id] : [user.id]))
-    .run();
+  await db
+    .update(users)
+    .set(
+      isLegacy
+        ? { passwordHash: newHash, lastLogin: new Date().toISOString() }
+        : { lastLogin: new Date().toISOString() }
+    )
+    .where(eq(users.id, user.id));
 
   // MFA habilitado? Emite challenge em vez do token final.
-  const mfa = await c.env.DB
-    .prepare(`SELECT user_id FROM user_mfa WHERE user_id = ? AND enabled_at IS NOT NULL`)
-    .bind(user.id)
-    .first<{ user_id: string }>();
+  const [mfa] = await db
+    .select({ user_id: userMfa.userId })
+    .from(userMfa)
+    .where(and(eq(userMfa.userId, user.id), sql`${userMfa.enabledAt} IS NOT NULL`))
+    .limit(1) as Array<{ user_id: string }>;
 
   if (mfa) {
     const challengeToken = nanoid(32);
     const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
-    await c.env.DB
-      .prepare(`INSERT INTO mfa_challenges (id, user_id, expires_at) VALUES (?, ?, ?)`)
-      .bind(challengeToken, user.id, expiresAt)
-      .run();
+    await db.insert(mfaChallenges).values({
+      id: challengeToken,
+      userId: user.id,
+      expiresAt,
+    });
     return ok(c, { mfa_required: true, challenge_token: challengeToken });
   }
 
@@ -198,7 +306,18 @@ auth.post('/login', async (c) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      provider_categories: user.provider_categories ?? [],
       phone: user.phone,
+      whatsapp: user.whatsapp,
+      service_area: user.service_area,
+      pix_key: user.pix_key,
+      pix_key_type: user.pix_key_type,
+      provider_bio: user.provider_bio,
+      provider_courses: user.provider_courses ?? [],
+      provider_specializations: user.provider_specializations ?? [],
+      provider_portfolio: user.provider_portfolio ?? [],
+      provider_education: user.provider_education ?? [],
+      provider_portfolio_cases: user.provider_portfolio_cases ?? [],
       avatar_url: user.avatar_url,
     },
   });
@@ -213,12 +332,17 @@ auth.post('/mfa/challenge', async (c) => {
 
   const { challenge_token, code } = parsed.data;
 
-  const challenge = await c.env.DB
-    .prepare(
-      `SELECT id, user_id, expires_at, consumed_at FROM mfa_challenges WHERE id = ?`
-    )
-    .bind(challenge_token)
-    .first<{ id: string; user_id: string; expires_at: string; consumed_at: string | null }>();
+  const db = getDb(c.env.DB);
+  const [challenge] = await db
+    .select({
+      id: mfaChallenges.id,
+      user_id: mfaChallenges.userId,
+      expires_at: mfaChallenges.expiresAt,
+      consumed_at: mfaChallenges.consumedAt,
+    })
+    .from(mfaChallenges)
+    .where(eq(mfaChallenges.id, challenge_token))
+    .limit(1) as Array<{ id: string; user_id: string; expires_at: string; consumed_at: string | null }>;
 
   if (!challenge || challenge.consumed_at) {
     return err(c, 'Desafio inválido', 'INVALID_CHALLENGE', 401);
@@ -227,17 +351,18 @@ auth.post('/mfa/challenge', async (c) => {
     return err(c, 'Desafio expirado', 'CHALLENGE_EXPIRED', 401);
   }
 
-  const mfa = await c.env.DB
-    .prepare(`SELECT secret, backup_codes FROM user_mfa WHERE user_id = ?`)
-    .bind(challenge.user_id)
-    .first<{ secret: string; backup_codes: string }>();
+  const [mfa] = await db
+    .select({ secret: userMfa.secret, backup_codes: userMfa.backupCodes })
+    .from(userMfa)
+    .where(eq(userMfa.userId, challenge.user_id))
+    .limit(1) as Array<{ secret: string; backup_codes: string[] }>;
   if (!mfa) return err(c, 'MFA não configurado', 'MFA_MISSING', 400);
 
   let passed = await totpVerify(mfa.secret, code);
   let usedBackup: string | null = null;
 
   if (!passed) {
-    const codes = JSON.parse(mfa.backup_codes) as string[];
+    const codes = mfa.backup_codes;
     const normalized = code.replace(/\s+/g, '').toUpperCase();
     for (const hash of codes) {
       const candidate = await hashPassword(normalized, hash.split(':')[1]);
@@ -252,28 +377,45 @@ auth.post('/mfa/challenge', async (c) => {
   if (!passed) return err(c, 'Código inválido', 'INVALID_MFA_CODE', 401);
 
   const remainingCodes = usedBackup
-    ? (JSON.parse(mfa.backup_codes) as string[]).filter((h) => h !== usedBackup)
+    ? mfa.backup_codes.filter((h) => h !== usedBackup)
     : null;
 
-  await c.env.DB
-    .prepare(`UPDATE mfa_challenges SET consumed_at = datetime('now') WHERE id = ?`)
-    .bind(challenge.id)
-    .run();
-  await c.env.DB
-    .prepare(
+  await db
+    .update(mfaChallenges)
+    .set({ consumedAt: new Date().toISOString() })
+    .where(eq(mfaChallenges.id, challenge.id));
+  await db
+    .update(userMfa)
+    .set(
       remainingCodes
-        ? `UPDATE user_mfa SET last_used_at = datetime('now'), backup_codes = ? WHERE user_id = ?`
-        : `UPDATE user_mfa SET last_used_at = datetime('now') WHERE user_id = ?`
+        ? { lastUsedAt: new Date().toISOString(), backupCodes: remainingCodes }
+        : { lastUsedAt: new Date().toISOString() }
     )
-    .bind(...(remainingCodes ? [JSON.stringify(remainingCodes), challenge.user_id] : [challenge.user_id]))
-    .run();
+    .where(eq(userMfa.userId, challenge.user_id));
 
-  const user = await c.env.DB
-    .prepare(
-      `SELECT id, email, name, role, phone, avatar_url FROM users WHERE id = ? AND deleted_at IS NULL`
-    )
-    .bind(challenge.user_id)
-    .first<Pick<User, 'id' | 'email' | 'name' | 'role' | 'phone' | 'avatar_url'>>();
+  const [user] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      provider_categories: users.providerCategories,
+      phone: users.phone,
+      whatsapp: users.whatsapp,
+      service_area: users.serviceArea,
+      pix_key: users.pixKey,
+      pix_key_type: users.pixKeyType,
+      provider_bio: users.providerBio,
+      provider_courses: users.providerCourses,
+      provider_specializations: users.providerSpecializations,
+      provider_portfolio: users.providerPortfolio,
+      provider_education: users.providerEducation,
+      provider_portfolio_cases: users.providerPortfolioCases,
+      avatar_url: users.avatarUrl,
+    })
+    .from(users)
+    .where(and(eq(users.id, challenge.user_id), isNull(users.deletedAt)))
+    .limit(1) as Array<Pick<User, 'id' | 'email' | 'name' | 'role' | 'provider_categories' | 'phone' | 'whatsapp' | 'service_area' | 'pix_key' | 'pix_key_type' | 'provider_bio' | 'provider_courses' | 'provider_specializations' | 'provider_portfolio' | 'provider_education' | 'provider_portfolio_cases' | 'avatar_url'>>;
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
   const pair = await issueTokenPair(c, user);
@@ -310,10 +452,12 @@ auth.post('/refresh', async (c) => {
     });
     if (!rotated) return err(c, 'Refresh token inválido', 'UNAUTHORIZED', 401);
 
-    const user = await c.env.DB
-      .prepare(`SELECT id, email, role FROM users WHERE id = ? AND deleted_at IS NULL`)
-      .bind(rotated.userId)
-      .first<Pick<User, 'id' | 'email' | 'role'>>();
+    const db = getDb(c.env.DB);
+    const [user] = await db
+      .select({ id: users.id, email: users.email, role: users.role })
+      .from(users)
+      .where(and(eq(users.id, rotated.userId), isNull(users.deletedAt)))
+      .limit(1) as Array<Pick<User, 'id' | 'email' | 'role'>>;
     if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
     const access = await signJwt(
@@ -345,10 +489,12 @@ auth.post('/refresh', async (c) => {
       return decoded;
     });
 
-    const user = await c.env.DB
-      .prepare('SELECT id, email, role FROM users WHERE id = ? AND deleted_at IS NULL')
-      .bind(payload.sub)
-      .first<Pick<User, 'id' | 'email' | 'role'>>();
+    const db = getDb(c.env.DB);
+    const [user] = await db
+      .select({ id: users.id, email: users.email, role: users.role })
+      .from(users)
+      .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
+      .limit(1) as Array<Pick<User, 'id' | 'email' | 'role'>>;
     if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
     const newToken = await signJwt(
@@ -379,17 +525,35 @@ auth.post('/logout', authMiddleware, async (c) => {
 
 auth.get('/me', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
 
-  const user = await c.env.DB
-    .prepare(
-      `SELECT u.id, u.email, u.name, u.role, u.phone, u.avatar_url, u.created_at, u.last_login,
-              CASE WHEN m.enabled_at IS NOT NULL THEN 1 ELSE 0 END AS mfa_enabled
-       FROM users u
-       LEFT JOIN user_mfa m ON m.user_id = u.id
-       WHERE u.id = ? AND u.deleted_at IS NULL`
-    )
-    .bind(userId)
-    .first<Omit<User, 'password_hash' | 'deleted_at'> & { mfa_enabled: number }>();
+  const [user] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      provider_categories: users.providerCategories,
+      phone: users.phone,
+      whatsapp: users.whatsapp,
+      service_area: users.serviceArea,
+      pix_key: users.pixKey,
+      pix_key_type: users.pixKeyType,
+      provider_bio: users.providerBio,
+      provider_courses: users.providerCourses,
+      provider_specializations: users.providerSpecializations,
+      provider_portfolio: users.providerPortfolio,
+      provider_education: users.providerEducation,
+      provider_portfolio_cases: users.providerPortfolioCases,
+      avatar_url: users.avatarUrl,
+      created_at: users.createdAt,
+      last_login: users.lastLogin,
+      mfa_enabled: sql<number>`CASE WHEN ${userMfa.enabledAt} IS NOT NULL THEN 1 ELSE 0 END`,
+    })
+    .from(users)
+    .leftJoin(userMfa, eq(userMfa.userId, users.id))
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    .limit(1) as Array<Omit<User, 'password_hash' | 'deleted_at'> & { mfa_enabled: number }>;
 
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
@@ -401,11 +565,13 @@ auth.get('/me', authMiddleware, async (c) => {
 auth.post('/mfa/setup', authMiddleware, async (c) => {
   const userId = c.get('userId');
   const userEmail = c.get('userEmail');
+  const db = getDb(c.env.DB);
 
-  const existing = await c.env.DB
-    .prepare(`SELECT enabled_at FROM user_mfa WHERE user_id = ?`)
-    .bind(userId)
-    .first<{ enabled_at: string | null }>();
+  const [existing] = await db
+    .select({ enabled_at: userMfa.enabledAt })
+    .from(userMfa)
+    .where(eq(userMfa.userId, userId))
+    .limit(1) as Array<{ enabled_at: string | null }>;
   if (existing?.enabled_at) {
     return err(c, 'MFA já está habilitado', 'MFA_ALREADY_ENABLED', 409);
   }
@@ -414,15 +580,12 @@ auth.post('/mfa/setup', authMiddleware, async (c) => {
   const uri = otpauthUri({ accountName: userEmail, issuer: 'HouseLog', secret });
 
   if (existing) {
-    await c.env.DB
-      .prepare(`UPDATE user_mfa SET secret = ?, enabled_at = NULL WHERE user_id = ?`)
-      .bind(secret, userId)
-      .run();
+    await db
+      .update(userMfa)
+      .set({ secret, enabledAt: null })
+      .where(eq(userMfa.userId, userId));
   } else {
-    await c.env.DB
-      .prepare(`INSERT INTO user_mfa (user_id, secret) VALUES (?, ?)`)
-      .bind(userId, secret)
-      .run();
+    await db.insert(userMfa).values({ userId, secret });
   }
 
   return ok(c, { secret, otpauth_uri: uri });
@@ -430,14 +593,16 @@ auth.post('/mfa/setup', authMiddleware, async (c) => {
 
 auth.post('/mfa/verify', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => null);
   const parsed = mfaVerifySchema.safeParse(body);
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422);
 
-  const row = await c.env.DB
-    .prepare(`SELECT secret, enabled_at FROM user_mfa WHERE user_id = ?`)
-    .bind(userId)
-    .first<{ secret: string; enabled_at: string | null }>();
+  const [row] = await db
+    .select({ secret: userMfa.secret, enabled_at: userMfa.enabledAt })
+    .from(userMfa)
+    .where(eq(userMfa.userId, userId))
+    .limit(1) as Array<{ secret: string; enabled_at: string | null }>;
   if (!row) return err(c, 'MFA não iniciado', 'MFA_NOT_INITIATED', 400);
   if (row.enabled_at) return err(c, 'MFA já habilitado', 'MFA_ALREADY_ENABLED', 409);
 
@@ -448,12 +613,10 @@ auth.post('/mfa/verify', authMiddleware, async (c) => {
   const rawCodes = generateBackupCodes(10);
   const hashedCodes = await Promise.all(rawCodes.map((c0) => hashPassword(c0)));
 
-  await c.env.DB
-    .prepare(
-      `UPDATE user_mfa SET enabled_at = datetime('now'), backup_codes = ? WHERE user_id = ?`
-    )
-    .bind(JSON.stringify(hashedCodes), userId)
-    .run();
+  await db
+    .update(userMfa)
+    .set({ enabledAt: new Date().toISOString(), backupCodes: hashedCodes })
+    .where(eq(userMfa.userId, userId));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'user',
@@ -468,20 +631,22 @@ auth.post('/mfa/verify', authMiddleware, async (c) => {
 
 auth.post('/mfa/disable', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
   const body = await c.req.json().catch(() => null);
   const parsed = z.object({ password: z.string().min(1) }).safeParse(body);
   if (!parsed.success) return err(c, 'Senha obrigatória', 'VALIDATION_ERROR', 422);
 
-  const user = await c.env.DB
-    .prepare(`SELECT password_hash FROM users WHERE id = ? AND deleted_at IS NULL`)
-    .bind(userId)
-    .first<Pick<User, 'password_hash'>>();
+  const [user] = await db
+    .select({ password_hash: users.passwordHash })
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    .limit(1) as Array<Pick<User, 'password_hash'>>;
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
   const valid = await verifyPassword(parsed.data.password, user.password_hash);
   if (!valid) return err(c, 'Senha incorreta', 'INVALID_PASSWORD', 401);
 
-  await c.env.DB.prepare(`DELETE FROM user_mfa WHERE user_id = ?`).bind(userId).run();
+  await db.delete(userMfa).where(eq(userMfa.userId, userId));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'user',
@@ -498,6 +663,7 @@ auth.post('/mfa/disable', authMiddleware, async (c) => {
 
 auth.put('/password', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
@@ -509,10 +675,11 @@ auth.put('/password', authMiddleware, async (c) => {
 
   const { currentPassword, newPassword } = parsed.data;
 
-  const user = await c.env.DB
-    .prepare('SELECT id, password_hash FROM users WHERE id = ? AND deleted_at IS NULL')
-    .bind(userId)
-    .first<Pick<User, 'id' | 'password_hash'>>();
+  const [user] = await db
+    .select({ id: users.id, password_hash: users.passwordHash })
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    .limit(1) as Array<Pick<User, 'id' | 'password_hash'>>;
 
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
@@ -521,10 +688,10 @@ auth.put('/password', authMiddleware, async (c) => {
 
   const newHash = await hashPassword(newPassword);
 
-  await c.env.DB
-    .prepare(`UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`)
-    .bind(newHash, userId)
-    .run();
+  await db
+    .update(users)
+    .set({ passwordHash: newHash, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, userId));
 
   // Revoga todos os refresh tokens: força re-login em todos os devices
   await revokeAllForUser(c.env.DB, userId);
@@ -544,6 +711,7 @@ auth.put('/password', authMiddleware, async (c) => {
 
 auth.put('/profile', authMiddleware, async (c) => {
   const userId = c.get('userId');
+  const db = getDb(c.env.DB);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
@@ -554,24 +722,95 @@ auth.put('/profile', authMiddleware, async (c) => {
   }
 
   const { name, phone } = parsed.data;
-  if (name === undefined && phone === undefined) {
+  const parsedProviderCategories = parsed.data.provider_categories !== undefined
+    ? normalizeProviderCategories(parsed.data.provider_categories)
+    : undefined;
+  const parsedCourses = parsed.data.provider_courses;
+  const parsedSpecializations = parsed.data.provider_specializations;
+  const parsedPortfolio = parsed.data.provider_portfolio;
+  const parsedEducation = parsed.data.provider_education;
+  const parsedPortfolioCases = parsed.data.provider_portfolio_cases;
+
+  if (
+    name === undefined &&
+    phone === undefined &&
+    parsed.data.whatsapp === undefined &&
+    parsed.data.service_area === undefined &&
+    parsed.data.pix_key === undefined &&
+    parsed.data.pix_key_type === undefined &&
+    parsed.data.provider_bio === undefined &&
+    parsedCourses === undefined &&
+    parsedSpecializations === undefined &&
+    parsedPortfolio === undefined &&
+    parsedEducation === undefined &&
+    parsedPortfolioCases === undefined &&
+    parsedProviderCategories === undefined
+  ) {
     return err(c, 'Nenhum campo para atualizar', 'EMPTY_BODY', 400);
   }
 
-  const current = await c.env.DB
-    .prepare('SELECT id, name, email, phone, role FROM users WHERE id = ? AND deleted_at IS NULL')
-    .bind(userId)
-    .first<Pick<User, 'id' | 'name' | 'email' | 'phone' | 'role'>>();
+  const [current] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      role: users.role,
+      provider_categories: users.providerCategories,
+      whatsapp: users.whatsapp,
+      service_area: users.serviceArea,
+      pix_key: users.pixKey,
+      pix_key_type: users.pixKeyType,
+      provider_bio: users.providerBio,
+      provider_courses: users.providerCourses,
+      provider_specializations: users.providerSpecializations,
+      provider_portfolio: users.providerPortfolio,
+      provider_education: users.providerEducation,
+      provider_portfolio_cases: users.providerPortfolioCases,
+    })
+    .from(users)
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    .limit(1) as Array<Pick<User, 'id' | 'name' | 'email' | 'phone' | 'role' | 'provider_categories' | 'whatsapp' | 'service_area' | 'pix_key' | 'pix_key_type' | 'provider_bio' | 'provider_courses' | 'provider_specializations' | 'provider_portfolio' | 'provider_education' | 'provider_portfolio_cases'>>;
 
   if (!current) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
+  if (parsedProviderCategories !== undefined && current.role !== 'provider' && current.role !== 'admin') {
+    return err(c, 'Apenas prestadores podem definir categorias de serviço', 'FORBIDDEN', 403);
+  }
+
   const updatedName = name ?? current.name;
   const updatedPhone = phone ?? current.phone;
+  const updatedProviderCategories = parsedProviderCategories ?? (current.provider_categories ?? []);
+  const updatedWhatsapp = parsed.data.whatsapp ?? current.whatsapp;
+  const updatedServiceArea = parsed.data.service_area ?? current.service_area;
+  const updatedPixKey = parsed.data.pix_key ?? current.pix_key;
+  const updatedPixKeyType = parsed.data.pix_key_type ?? current.pix_key_type;
+  const updatedProviderBio = parsed.data.provider_bio ?? current.provider_bio;
+  const updatedProviderCourses = parsedCourses ?? (current.provider_courses ?? []);
+  const updatedProviderSpecializations = parsedSpecializations ?? (current.provider_specializations ?? []);
+  const updatedProviderPortfolio = parsedPortfolio ?? (current.provider_portfolio ?? []);
+  const updatedProviderEducation = parsedEducation ?? (current.provider_education ?? []);
+  const updatedProviderPortfolioCases = parsedPortfolioCases ?? (current.provider_portfolio_cases ?? []);
 
-  await c.env.DB
-    .prepare(`UPDATE users SET name = ?, phone = ?, updated_at = datetime('now') WHERE id = ?`)
-    .bind(updatedName, updatedPhone ?? null, userId)
-    .run();
+  await db
+    .update(users)
+    .set({
+      name: updatedName,
+      phone: updatedPhone ?? null,
+      whatsapp: updatedWhatsapp ?? null,
+      serviceArea: updatedServiceArea ?? null,
+      pixKey: updatedPixKey ?? null,
+      pixKeyType: updatedPixKeyType ?? null,
+      providerBio: updatedProviderBio ?? null,
+      providerCourses: updatedProviderCourses,
+      providerSpecializations: updatedProviderSpecializations,
+      providerPortfolio: updatedProviderPortfolio,
+      providerEducation: updatedProviderEducation,
+      providerPortfolioCases: updatedProviderPortfolioCases,
+      providerCategories: updatedProviderCategories,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(users.id, userId));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'user',
@@ -579,8 +818,36 @@ auth.put('/profile', authMiddleware, async (c) => {
     action: 'UPDATE',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
-    oldData: { name: current.name, phone: current.phone },
-    newData: { name: updatedName, phone: updatedPhone },
+    oldData: {
+      name: current.name,
+      phone: current.phone,
+      whatsapp: current.whatsapp,
+      service_area: current.service_area,
+      pix_key: current.pix_key,
+      pix_key_type: current.pix_key_type,
+      provider_bio: current.provider_bio,
+      provider_courses: current.provider_courses ?? [],
+      provider_specializations: current.provider_specializations ?? [],
+      provider_portfolio: current.provider_portfolio ?? [],
+      provider_education: current.provider_education ?? [],
+      provider_portfolio_cases: current.provider_portfolio_cases ?? [],
+      provider_categories: current.provider_categories ?? [],
+    },
+    newData: {
+      name: updatedName,
+      phone: updatedPhone,
+      whatsapp: updatedWhatsapp,
+      service_area: updatedServiceArea,
+      pix_key: updatedPixKey,
+      pix_key_type: updatedPixKeyType,
+      provider_bio: updatedProviderBio,
+      provider_courses: updatedProviderCourses,
+      provider_specializations: updatedProviderSpecializations,
+      provider_portfolio: updatedProviderPortfolio,
+      provider_education: updatedProviderEducation,
+      provider_portfolio_cases: updatedProviderPortfolioCases,
+      provider_categories: updatedProviderCategories,
+    },
   });
 
   return ok(c, {
@@ -589,7 +856,18 @@ auth.put('/profile', authMiddleware, async (c) => {
       name: updatedName,
       email: current.email,
       phone: updatedPhone ?? null,
+      whatsapp: updatedWhatsapp ?? null,
+      service_area: updatedServiceArea ?? null,
+      pix_key: updatedPixKey ?? null,
+      pix_key_type: updatedPixKeyType ?? null,
+      provider_bio: updatedProviderBio ?? null,
+      provider_courses: updatedProviderCourses,
+      provider_specializations: updatedProviderSpecializations,
+      provider_portfolio: updatedProviderPortfolio,
+      provider_education: updatedProviderEducation,
+      provider_portfolio_cases: updatedProviderPortfolioCases,
       role: current.role,
+      provider_categories: updatedProviderCategories,
     },
   });
 });

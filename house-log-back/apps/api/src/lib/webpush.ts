@@ -5,6 +5,9 @@
 // Limitações: payload máximo ~4KB após criptografia. Suficiente para título+corpo+URL.
 
 import type { PushPayload } from './types';
+import { and, eq } from 'drizzle-orm';
+import { getDb } from '../db/client';
+import { pushSubscriptions } from '../db/schema';
 
 type VapidKeys = { publicKey: string; privateKey: string; subject: string };
 
@@ -198,13 +201,19 @@ export async function pushToUser(
   payload: PushPayload
 ): Promise<number> {
   if (!hasVapid(env)) return 0;
-  const subs = await db
-    .prepare(`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?`)
-    .bind(userId)
-    .all<{ id: string; endpoint: string; p256dh: string; auth: string }>();
+  const drizzle = getDb(db);
+  const subs = await drizzle
+    .select({
+      id: pushSubscriptions.id,
+      endpoint: pushSubscriptions.endpoint,
+      p256dh: pushSubscriptions.p256dh,
+      auth: pushSubscriptions.auth,
+    })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, userId));
 
   let sent = 0;
-  for (const row of subs.results ?? []) {
+  for (const row of subs) {
     try {
       const r = await sendWebPush(
         { endpoint: row.endpoint, p256dh: row.p256dh, auth: row.auth },
@@ -216,13 +225,13 @@ export async function pushToUser(
         }
       );
       if (r.status === 404 || r.status === 410) {
-        await db.prepare(`DELETE FROM push_subscriptions WHERE id = ?`).bind(row.id).run();
+        await drizzle.delete(pushSubscriptions).where(eq(pushSubscriptions.id, row.id));
       } else if (r.status >= 200 && r.status < 300) {
         sent++;
-        await db
-          .prepare(`UPDATE push_subscriptions SET last_used_at = datetime('now') WHERE id = ?`)
-          .bind(row.id)
-          .run();
+        await drizzle
+          .update(pushSubscriptions)
+          .set({ lastUsedAt: new Date().toISOString() })
+          .where(and(eq(pushSubscriptions.id, row.id), eq(pushSubscriptions.userId, userId)));
       }
     } catch {
       // ignore individual failures

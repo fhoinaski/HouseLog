@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { properties, serviceBids, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const bids = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -15,27 +18,42 @@ const bidSchema = z.object({
 
 // GET /properties/:propertyId/services/:serviceId/bids
 bids.get('/', async (c) => {
-  const { propertyId, serviceId } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const serviceId = c.req.param('serviceId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const { results } = await c.env.DB.prepare(`
-    SELECT b.*, u.name as provider_name, u.email as provider_email, u.phone as provider_phone
-    FROM service_bids b
-    JOIN users u ON u.id = b.provider_id
-    WHERE b.service_id = ?
-    ORDER BY b.created_at DESC
-  `).bind(serviceId).all();
+  const results = await db
+    .select({
+      id: serviceBids.id,
+      service_id: serviceBids.serviceId,
+      provider_id: serviceBids.providerId,
+      amount: serviceBids.amount,
+      notes: serviceBids.notes,
+      status: serviceBids.status,
+      created_at: serviceBids.createdAt,
+      updated_at: serviceBids.updatedAt,
+      provider_name: users.name,
+      provider_email: users.email,
+      provider_phone: users.phone,
+    })
+    .from(serviceBids)
+    .innerJoin(users, eq(users.id, serviceBids.providerId))
+    .where(eq(serviceBids.serviceId, serviceId))
+    .orderBy(desc(serviceBids.createdAt));
 
   return ok(c, { bids: results });
 });
 
 // POST /properties/:propertyId/services/:serviceId/bids
 bids.post('/', async (c) => {
-  const { propertyId, serviceId } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const serviceId = c.req.param('serviceId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -51,30 +69,54 @@ bids.post('/', async (c) => {
     return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   }
 
-  const order = await c.env.DB.prepare(`
-    SELECT s.id, s.title, s.requested_by, p.name as property_name, p.owner_id
-    FROM service_orders s JOIN properties p ON p.id = s.property_id
-    WHERE s.id = ? AND s.property_id = ? AND s.deleted_at IS NULL
-  `).bind(serviceId, propertyId).first<{
-    id: string; title: string; requested_by: string; property_name: string; owner_id: string;
-  }>();
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      title: serviceOrders.title,
+      status: serviceOrders.status,
+      assigned_to: serviceOrders.assignedTo,
+      requested_by: serviceOrders.requestedBy,
+      property_name: properties.name,
+      owner_id: properties.ownerId,
+    })
+    .from(serviceOrders)
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(and(eq(serviceOrders.id, serviceId), eq(serviceOrders.propertyId, propertyId), sql`${serviceOrders.deletedAt} IS NULL`))
+    .limit(1) as Array<{
+    id: string;
+    title: string;
+    status: string;
+    assigned_to: string | null;
+    requested_by: string;
+    property_name: string;
+    owner_id: string;
+  }>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
-  const existing = await c.env.DB.prepare(
-    `SELECT id FROM service_bids WHERE service_id = ? AND provider_id = ? AND status = 'pending'`
-  ).bind(serviceId, userId).first();
+  if (order.assigned_to) {
+    return err(c, 'Esta OS é de execução direta e não aceita orçamentos', 'DIRECT_EXECUTION', 409);
+  }
+
+  if (order.status !== 'requested') {
+    return err(c, 'Esta OS não está aberta para orçamento', 'BIDDING_CLOSED', 409);
+  }
+
+  const [existing] = await db
+    .select({ id: serviceBids.id })
+    .from(serviceBids)
+    .where(and(eq(serviceBids.serviceId, serviceId), eq(serviceBids.providerId, userId), eq(serviceBids.status, 'pending')))
+    .limit(1);
   if (existing) return err(c, 'Já existe um orçamento pendente seu para esta OS', 'DUPLICATE_BID', 409);
 
   const id = nanoid();
-  await c.env.DB.prepare(
-    `INSERT INTO service_bids (id, service_id, provider_id, amount, notes) VALUES (?, ?, ?, ?, ?)`
-  ).bind(id, serviceId, userId, parsed.data.amount, parsed.data.notes ?? null).run();
-
-  // Auto-transition OS to 'bidding' when first bid arrives
-  await c.env.DB.prepare(
-    `UPDATE service_orders SET status = 'bidding' WHERE id = ? AND status = 'requested'`
-  ).bind(serviceId).run();
+  await db.insert(serviceBids).values({
+    id,
+    serviceId,
+    providerId: userId,
+    amount: parsed.data.amount,
+    notes: parsed.data.notes ?? null,
+  });
 
   // Notify owner (non-blocking)
   void (async () => {
@@ -82,9 +124,13 @@ bids.post('/', async (c) => {
       if (!c.env.RESEND_API_KEY) return;
       const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
       const [provider, owner] = await Promise.all([
-        c.env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(userId).first<{ name: string }>(),
-        c.env.DB.prepare('SELECT email, name, notification_prefs FROM users WHERE id = ?')
-          .bind(order.owner_id).first<{ email: string; name: string; notification_prefs: string }>(),
+        db.select({ name: users.name }).from(users).where(eq(users.id, userId)).limit(1).then((r) => r[0]),
+        db
+          .select({ email: users.email, name: users.name, notification_prefs: users.notificationPrefs })
+          .from(users)
+          .where(eq(users.id, order.owner_id))
+          .limit(1)
+          .then((r) => r[0] as { email: string; name: string; notification_prefs: string }),
       ]);
       if (owner) {
         const prefs = JSON.parse(owner.notification_prefs || '{}') as Record<string, boolean>;
@@ -111,16 +157,32 @@ bids.post('/', async (c) => {
     }
   })();
 
-  const bid = await c.env.DB.prepare(
-    `SELECT b.*, u.name as provider_name FROM service_bids b JOIN users u ON u.id = b.provider_id WHERE b.id = ?`
-  ).bind(id).first();
+  const [bid] = await db
+    .select({
+      id: serviceBids.id,
+      service_id: serviceBids.serviceId,
+      provider_id: serviceBids.providerId,
+      amount: serviceBids.amount,
+      notes: serviceBids.notes,
+      status: serviceBids.status,
+      created_at: serviceBids.createdAt,
+      updated_at: serviceBids.updatedAt,
+      provider_name: users.name,
+    })
+    .from(serviceBids)
+    .innerJoin(users, eq(users.id, serviceBids.providerId))
+    .where(eq(serviceBids.id, id))
+    .limit(1);
 
   return ok(c, { bid }, 201);
 });
 
 // PATCH /properties/:propertyId/services/:serviceId/bids/:bidId/status
 bids.patch('/:bidId/status', async (c) => {
-  const { propertyId, serviceId, bidId } = c.req.param();
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const serviceId = c.req.param('serviceId')!;
+  const bidId = c.req.param('bidId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -132,36 +194,31 @@ bids.patch('/:bidId/status', async (c) => {
     return err(c, 'Status deve ser accepted ou rejected', 'INVALID_BODY');
   }
 
-  const bid = await c.env.DB.prepare(
-    `SELECT * FROM service_bids WHERE id = ? AND service_id = ?`
-  ).bind(bidId, serviceId).first<{ id: string; provider_id: string; amount: number; status: string }>();
+  const [bid] = await db
+    .select({
+      id: serviceBids.id,
+      provider_id: serviceBids.providerId,
+      amount: serviceBids.amount,
+      status: serviceBids.status,
+    })
+    .from(serviceBids)
+    .where(and(eq(serviceBids.id, bidId), eq(serviceBids.serviceId, serviceId)))
+    .limit(1) as Array<{ id: string; provider_id: string; amount: number; status: string }>;
 
   if (!bid) return err(c, 'Orçamento não encontrado', 'NOT_FOUND', 404);
   if (bid.status !== 'pending') return err(c, 'Orçamento já foi processado', 'ALREADY_PROCESSED', 409);
 
-  await c.env.DB.prepare(
-    `UPDATE service_bids SET status = ?, updated_at = datetime('now') WHERE id = ?`
-  ).bind(body.status, bidId).run();
+  await db
+    .update(serviceBids)
+    .set({ status: body.status as 'accepted' | 'rejected', updatedAt: new Date().toISOString() })
+    .where(eq(serviceBids.id, bidId));
 
   if (body.status === 'accepted') {
-    await c.env.DB.prepare(
-      `UPDATE service_orders SET assigned_to = ?, cost = ?, status = 'approved' WHERE id = ?`
-    ).bind(bid.provider_id, bid.amount, serviceId).run();
-    await c.env.DB.prepare(
-      `UPDATE service_bids SET status = 'rejected', updated_at = datetime('now') WHERE service_id = ? AND id != ? AND status = 'pending'`
-    ).bind(serviceId, bidId).run();
-  }
-
-  // If rejected, check if no more pending bids → revert OS to 'requested'
-  if (body.status === 'rejected') {
-    const { results: remaining } = await c.env.DB.prepare(
-      `SELECT id FROM service_bids WHERE service_id = ? AND status = 'pending'`
-    ).bind(serviceId).all();
-    if (remaining.length === 0) {
-      await c.env.DB.prepare(
-        `UPDATE service_orders SET status = 'requested' WHERE id = ? AND status = 'bidding'`
-      ).bind(serviceId).run();
-    }
+    await db
+      .update(serviceOrders)
+      .set({ assignedTo: bid.provider_id, cost: bid.amount, status: 'approved' })
+      .where(eq(serviceOrders.id, serviceId));
+    await db.run(sql`UPDATE service_bids SET status = 'rejected', updated_at = datetime('now') WHERE service_id = ${serviceId} AND id != ${bidId} AND status = 'pending'`);
   }
 
   return ok(c, { success: true, status: body.status });

@@ -7,6 +7,9 @@
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "deploy:dev": "wrangler deploy --env dev",
+    "db:generate": "drizzle-kit generate",
+    "db:check": "drizzle-kit check",
+    "db:studio": "drizzle-kit studio",
     "db:migrate": "wrangler d1 migrations apply houselog-db",
     "db:migrate:dev": "wrangler d1 migrations apply houselog-db-dev --env dev",
     "db:migrate:local": "wrangler d1 migrations apply houselog-db-dev --local",
@@ -20,6 +23,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250409.0",
+    "drizzle-kit": "^0.31.4",
     "typescript": "^5",
     "wrangler": "^3.106.0"
   }

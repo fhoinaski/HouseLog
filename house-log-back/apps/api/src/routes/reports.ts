@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { getDb } from '../db/client';
+import { documents, expenses, inventoryItems, properties, serviceOrders, users, maintenanceSchedules } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const reports = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -18,39 +21,49 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
   score: number;
   breakdown: Record<string, number>;
 }> {
+  const drizzle = getDb(db);
   const today = new Date().toISOString().slice(0, 10);
 
-  const [maintRow, serviceRow, ageRow, docRow] = await db.batch([
-    db.prepare(
-      `SELECT COUNT(*) as total,
-       SUM(CASE WHEN next_due < ? THEN 1 ELSE 0 END) as overdue
-       FROM maintenance_schedules WHERE property_id = ? AND deleted_at IS NULL`
-    ).bind(today, propertyId),
-    db.prepare(
-      `SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN status NOT IN ('completed','verified') THEN 1 ELSE 0 END) as open,
-        SUM(CASE WHEN priority = 'urgent' AND status NOT IN ('completed','verified') THEN 1 ELSE 0 END) as urgent,
-        SUM(CASE WHEN priority = 'preventive' THEN 1 ELSE 0 END) as preventive
-       FROM service_orders WHERE property_id = ? AND deleted_at IS NULL`
-    ).bind(propertyId),
-    db.prepare(
-      'SELECT year_built FROM properties WHERE id = ? AND deleted_at IS NULL'
-    ).bind(propertyId),
-    db.prepare(
-      `SELECT
-        MAX(CASE WHEN type = 'insurance' THEN 1 ELSE 0 END) as has_insurance,
-        MAX(CASE WHEN type = 'deed' THEN 1 ELSE 0 END) as has_deed
-       FROM documents WHERE property_id = ? AND deleted_at IS NULL`
-    ).bind(propertyId),
+  const [maint, svc, age, doc] = await Promise.all([
+    drizzle
+      .select({
+        total: sql<number>`COUNT(*)`,
+        overdue: sql<number>`SUM(CASE WHEN ${maintenanceSchedules.nextDue} < ${today} THEN 1 ELSE 0 END)`,
+      })
+      .from(maintenanceSchedules)
+      .where(and(eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+      .then((r) => r[0] as { total: number; overdue: number } | undefined),
+    drizzle
+      .select({
+        total: sql<number>`COUNT(*)`,
+        open: sql<number>`SUM(CASE WHEN ${serviceOrders.status} NOT IN ('completed','verified') THEN 1 ELSE 0 END)`,
+        urgent: sql<number>`SUM(CASE WHEN ${serviceOrders.priority} = 'urgent' AND ${serviceOrders.status} NOT IN ('completed','verified') THEN 1 ELSE 0 END)`,
+        preventive: sql<number>`SUM(CASE WHEN ${serviceOrders.priority} = 'preventive' THEN 1 ELSE 0 END)`,
+      })
+      .from(serviceOrders)
+      .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+      .then((r) => r[0] as {
+        total: number; open: number; urgent: number; preventive: number;
+      } | undefined),
+    drizzle
+      .select({ year_built: properties.yearBuilt })
+      .from(properties)
+      .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+      .limit(1)
+      .then((r) => r[0] as { year_built: number | null } | undefined),
+    drizzle
+      .select({
+        has_insurance: sql<number>`MAX(CASE WHEN ${documents.type} = 'insurance' THEN 1 ELSE 0 END)`,
+        has_deed: sql<number>`MAX(CASE WHEN ${documents.type} = 'deed' THEN 1 ELSE 0 END)`,
+      })
+      .from(documents)
+      .where(and(eq(documents.propertyId, propertyId), isNull(documents.deletedAt)))
+      .then((r) => r[0] as { has_insurance: number; has_deed: number } | undefined),
   ]);
 
-  const maint = maintRow.results[0] as { total: number; overdue: number } | undefined;
-  const svc = serviceRow.results[0] as {
+  const serviceStats = svc as {
     total: number; open: number; urgent: number; preventive: number;
   } | undefined;
-  const age = ageRow.results[0] as { year_built: number | null } | undefined;
-  const doc = docRow.results[0] as { has_insurance: number; has_deed: number } | undefined;
 
   // 1. Maintenance compliance (30 pts)
   let maintScore = 30;
@@ -61,16 +74,16 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
 
   // 2. Service backlog (20 pts)
   let svcScore = 20;
-  if (svc && svc.total > 0) {
-    const openRatio = (svc.open || 0) / svc.total;
-    const urgentPenalty = Math.min((svc.urgent || 0) * 3, 10);
+  if (serviceStats && serviceStats.total > 0) {
+    const openRatio = (serviceStats.open || 0) / serviceStats.total;
+    const urgentPenalty = Math.min((serviceStats.urgent || 0) * 3, 10);
     svcScore = Math.max(0, Math.round(20 * (1 - openRatio)) - urgentPenalty);
   }
 
   // 3. Preventive ratio (20 pts)
   let prevScore = 10; // base if no data
-  if (svc && svc.total > 5) {
-    const ratio = (svc.preventive || 0) / svc.total;
+  if (serviceStats && serviceStats.total > 5) {
+    const ratio = (serviceStats.preventive || 0) / serviceStats.total;
     prevScore = Math.round(20 * Math.min(ratio * 2, 1));
   }
 
@@ -92,10 +105,10 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
   const score = Math.min(Math.max(total, 0), 100);
 
   // Persist updated score
-  await db
-    .prepare('UPDATE properties SET health_score = ? WHERE id = ?')
-    .bind(score, propertyId)
-    .run();
+  await drizzle
+    .update(properties)
+    .set({ healthScore: score })
+    .where(eq(properties.id, propertyId));
 
   return {
     score,
@@ -130,6 +143,7 @@ reports.get('/health-score', async (c) => {
 // Generates a JSON "laudo" payload — PDF rendering happens client-side
 
 reports.get('/valuation-pdf', async (c) => {
+  const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -138,54 +152,81 @@ reports.get('/valuation-pdf', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [property, { score, breakdown }] = await Promise.all([
-    c.env.DB
-      .prepare(
-        `SELECT p.*, u.name as owner_name, u.email as owner_email
-         FROM properties p JOIN users u ON u.id = p.owner_id
-         WHERE p.id = ? AND p.deleted_at IS NULL`
-      )
-      .bind(propertyId)
-      .first(),
+    db
+      .select({
+        id: properties.id,
+        owner_id: properties.ownerId,
+        manager_id: properties.managerId,
+        name: properties.name,
+        type: properties.type,
+        address: properties.address,
+        city: properties.city,
+        area_m2: properties.areaM2,
+        year_built: properties.yearBuilt,
+        structure: properties.structure,
+        floors: properties.floors,
+        cover_url: properties.coverUrl,
+        health_score: properties.healthScore,
+        created_at: properties.createdAt,
+        deleted_at: properties.deletedAt,
+        owner_name: users.name,
+        owner_email: users.email,
+      })
+      .from(properties)
+      .innerJoin(users, eq(users.id, properties.ownerId))
+      .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+      .limit(1)
+      .then((r) => r[0]),
     computeHealthScore(c.env.DB, propertyId),
   ]);
 
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
   const [servicesSummary, expensesTotal, servicesTotal, inventoryCount, recentServices] = await Promise.all([
-    c.env.DB
-      .prepare(
-        `SELECT status, COUNT(*) as count FROM service_orders
-         WHERE property_id = ? AND deleted_at IS NULL GROUP BY status`
+    db
+      .select({ status: serviceOrders.status, count: sql<number>`COUNT(*)` })
+      .from(serviceOrders)
+      .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+      .groupBy(serviceOrders.status),
+    db
+      .select({ total: sql<number>`SUM(${expenses.amount})` })
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.propertyId, propertyId),
+          isNull(expenses.deletedAt),
+          sql`${expenses.referenceMonth} >= strftime('%Y-%m','now','-12 months')`
+        )
       )
-      .bind(propertyId)
-      .all(),
-    c.env.DB
-      .prepare(
-        `SELECT SUM(amount) as total FROM expenses
-         WHERE property_id = ? AND deleted_at IS NULL
-           AND reference_month >= strftime('%Y-%m','now','-12 months')`
+      .then((r) => r[0] as { total: number } | undefined),
+    db
+      .select({ total: sql<number>`SUM(${serviceOrders.cost})` })
+      .from(serviceOrders)
+      .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt), sql`${serviceOrders.cost} IS NOT NULL`))
+      .then((r) => r[0] as { total: number } | undefined),
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+      .then((r) => r[0] as { count: number } | undefined),
+    db
+      .select({
+        title: serviceOrders.title,
+        system_type: serviceOrders.systemType,
+        status: serviceOrders.status,
+        completed_at: serviceOrders.completedAt,
+        cost: serviceOrders.cost,
+      })
+      .from(serviceOrders)
+      .where(
+        and(
+          eq(serviceOrders.propertyId, propertyId),
+          inArray(serviceOrders.status, ['completed', 'verified']),
+          isNull(serviceOrders.deletedAt)
+        )
       )
-      .bind(propertyId)
-      .first<{ total: number }>(),
-    c.env.DB
-      .prepare(
-        `SELECT SUM(cost) as total FROM service_orders
-         WHERE property_id = ? AND deleted_at IS NULL AND cost IS NOT NULL`
-      )
-      .bind(propertyId)
-      .first<{ total: number }>(),
-    c.env.DB
-      .prepare('SELECT COUNT(*) as count FROM inventory_items WHERE property_id = ? AND deleted_at IS NULL')
-      .bind(propertyId)
-      .first<{ count: number }>(),
-    c.env.DB
-      .prepare(
-        `SELECT title, system_type, status, completed_at, cost
-         FROM service_orders WHERE property_id = ? AND status IN ('completed','verified')
-         AND deleted_at IS NULL ORDER BY completed_at DESC LIMIT 10`
-      )
-      .bind(propertyId)
-      .all(),
+      .orderBy(sql`${serviceOrders.completedAt} DESC`)
+      .limit(10),
   ]);
 
   return ok(c, {
@@ -194,12 +235,12 @@ reports.get('/valuation-pdf', async (c) => {
     health_score: score,
     health_label: score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 30 ? 'Atenção' : 'Crítico',
     health_breakdown: breakdown,
-    services_summary: servicesSummary.results,
+    services_summary: servicesSummary,
     expenses_total: expensesTotal?.total ?? 0,
     services_total: servicesTotal?.total ?? 0,
     maintenance_total: 0,
     inventory_items: inventoryCount?.count ?? 0,
-    recent_services: recentServices.results,
+    recent_services: recentServices,
   });
 });
 
