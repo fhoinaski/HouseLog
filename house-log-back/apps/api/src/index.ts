@@ -7,6 +7,8 @@ import properties from './routes/properties';
 import rooms from './routes/rooms';
 import inventory from './routes/inventory';
 import services from './routes/services';
+import serviceRequests from './routes/service-requests';
+import serviceRequestBids from './routes/service-request-bids';
 import expenses from './routes/expenses';
 import documents from './routes/documents';
 import auditLinks from './routes/audit-links';
@@ -15,6 +17,7 @@ import reports from './routes/reports';
 import bids from './routes/bids';
 import provider from './routes/provider';
 import search from './routes/search';
+import invites from './routes/invites';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -54,6 +57,8 @@ api.route('/properties', properties);
 api.route('/properties/:propertyId/rooms',       rooms);
 api.route('/properties/:propertyId/inventory',   inventory);
 api.route('/properties/:propertyId/services',    services);
+api.route('/properties/:propertyId/service-requests', serviceRequests);
+api.route('/properties/:propertyId/service-requests/:serviceRequestId/bids', serviceRequestBids);
 api.route('/properties/:propertyId/expenses',    expenses);
 api.route('/properties/:propertyId/documents',   documents);
 api.route('/properties/:propertyId/maintenance', maintenance);
@@ -69,6 +74,9 @@ api.route('/provider', provider);
 
 // Audit link creation (nested under property+service)
 api.route('/properties/:propertyId/services/:serviceId/audit-link', auditLinks);
+
+// Team invites and acceptance links
+api.route('/', invites);
 
 // Public audit endpoints (no auth required — handled inside the route)
 api.route('/audit', auditLinks);

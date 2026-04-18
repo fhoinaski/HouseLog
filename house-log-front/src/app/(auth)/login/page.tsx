@@ -31,6 +31,8 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') ?? '/dashboard';
+  const inviteMatch = redirect.match(/^\/invite\/([^/?#]+)/);
+  const inviteToken = inviteMatch?.[1];
   const [error, setError] = useState<string | null>(null);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
@@ -60,7 +62,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-700/40">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-700/40">
             <Building2 className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold text-white tracking-tight">HouseLog</span>
@@ -97,10 +99,10 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — form */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 bg-[var(--background)]">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 bg-background">
         {/* Mobile logo */}
         <div className="mb-8 flex items-center gap-3 lg:hidden">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linear-to-br from-primary-500 to-primary-700">
             <Building2 className="h-5 w-5 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight">HouseLog</span>
@@ -109,12 +111,18 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8">
             <h1 className="text-2xl font-bold">Entrar na conta</h1>
-            <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-              Bem-vindo de volta ao HouseLog
+            <p className="mt-1 text-sm text-muted-foreground">
+              {inviteToken ? 'Entre para aceitar seu convite' : 'Bem-vindo de volta ao HouseLog'}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-[0_4px_24px_var(--shadow-color)]">
+          {inviteToken && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              Não tem conta ainda? Você pode criar uma conta rápida e aceitar o convite em seguida.
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_4px_24px_var(--shadow-color)]">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
@@ -155,9 +163,9 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <div className="mt-5 pt-5 border-t border-[var(--border)] text-center text-sm text-[var(--muted-foreground)]">
+            <div className="mt-5 pt-5 border-t border-border text-center text-sm text-muted-foreground">
               Não tem conta?{' '}
-              <Link href="/register" className="font-semibold text-primary-500 hover:text-primary-600 transition-colors">
+              <Link href={inviteToken ? `/register?invite=${inviteToken}&redirect=${encodeURIComponent(redirect)}` : '/register'} className="font-semibold text-primary-500 hover:text-primary-600 transition-colors">
                 Criar conta grátis
               </Link>
             </div>

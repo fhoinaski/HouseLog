@@ -7,9 +7,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   UserPlus, Trash2, Mail, Clock, ShieldCheck, Wrench, Eye,
-  ToggleLeft, ToggleRight, Users,
+  ToggleLeft, ToggleRight, Users, ScanLine,
 } from 'lucide-react';
-import { invitesApi, type PropertyCollaborator, type PropertyInvite } from '@/lib/api';
+import { invitesApi, type PropertyCollaborator, type PropertyInvite, type InviteCardSuggestion } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,28 +40,61 @@ const ROLE_ICONS: Record<string, React.ElementType> = {
 };
 
 const inviteSchema = z.object({
-  email: z.string().email('Email inválido'),
+  name: z.string().optional(),
+  email: z.string().optional(),
   role: z.enum(['viewer', 'provider', 'manager']),
+  specialties: z.string().optional(),
+  whatsapp: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const hasEmail = !!data.email?.trim();
+  const hasWhatsapp = !!data.whatsapp?.trim();
+
+  if (!hasEmail && !hasWhatsapp) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Informe e-mail ou WhatsApp para convidar',
+      path: ['email'],
+    });
+  }
+
+  if (hasEmail) {
+    const emailResult = z.string().email('Email inválido').safeParse(data.email?.trim());
+    if (!emailResult.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Email inválido',
+        path: ['email'],
+      });
+    }
+  }
+
+  if (!hasEmail && !data.name?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'No pré-cadastro sem e-mail, informe o nome',
+      path: ['name'],
+    });
+  }
 });
 
 type InviteForm = z.infer<typeof inviteSchema>;
 
 function CollaboratorRow({
   collab,
-  isOwner,
+  canManageTeam,
   onToggleOS,
   onRemove,
 }: {
   collab: PropertyCollaborator;
-  isOwner: boolean;
+  canManageTeam: boolean;
   onToggleOS: (c: PropertyCollaborator) => void;
   onRemove: (c: PropertyCollaborator) => void;
 }) {
   const Icon = ROLE_ICONS[collab.role] ?? Eye;
-  const canToggle = isOwner && collab.role !== 'viewer';
+  const canToggle = canManageTeam && collab.role !== 'viewer';
 
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-0">
+    <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
       {/* Avatar */}
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 font-semibold text-sm uppercase">
         {collab.name.charAt(0)}
@@ -70,7 +103,7 @@ function CollaboratorRow({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{collab.name}</p>
-        <p className="text-xs text-[var(--muted-foreground)] truncate">{collab.email}</p>
+        <p className="text-xs text-muted-foreground truncate">{collab.email}</p>
       </div>
 
       {/* Role badge */}
@@ -84,7 +117,7 @@ function CollaboratorRow({
         <button
           onClick={() => canToggle && onToggleOS(collab)}
           title={canToggle ? 'Alternar permissão de abrir OS' : 'Sem permissão para alterar'}
-          className={cn('flex items-center gap-1 text-xs rounded px-2 py-1 transition-colors', canToggle && 'hover:bg-[var(--muted)]')}
+          className={cn('flex items-center gap-1 text-xs rounded px-2 py-1 transition-colors', canToggle && 'hover:bg-muted')}
           disabled={!canToggle}
         >
           {collab.can_open_os ? (
@@ -96,7 +129,7 @@ function CollaboratorRow({
       )}
 
       {/* Remove */}
-      {isOwner && (
+      {canManageTeam && (
         <Button
           variant="ghost" size="icon"
           className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 shrink-0"
@@ -119,14 +152,17 @@ function InviteRow({
   onCancel: (i: PropertyInvite) => void;
 }) {
   const Icon = ROLE_ICONS[invite.role] ?? Eye;
+  const mainLabel = invite.invite_name?.trim() || invite.email;
+  const contactLabel = invite.whatsapp?.trim() || invite.email;
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-[var(--border)] last:border-0">
+    <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
         <Mail className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{invite.email}</p>
-        <p className="text-xs text-[var(--muted-foreground)] flex items-center gap-1">
+        <p className="text-sm font-medium truncate">{mainLabel}</p>
+        <p className="text-xs text-muted-foreground truncate">{contactLabel}</p>
+        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
           <Clock className="h-3 w-3" /> Expira {formatDate(invite.expires_at)}
         </p>
       </div>
@@ -152,6 +188,11 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params);
   const { user } = useAuth();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+  const [lastInviteWhatsapp, setLastInviteWhatsapp] = useState<string | null>(null);
+  const [cardFile, setCardFile] = useState<File | null>(null);
+  const [extractingCard, setExtractingCard] = useState(false);
+  const [cardSuggestion, setCardSuggestion] = useState<InviteCardSuggestion | null>(null);
   const [removingCollab, setRemovingCollab] = useState<PropertyCollaborator | null>(null);
 
   const { data, mutate } = useSWR(['team', id], () => invitesApi.list(id));
@@ -162,7 +203,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
   // Determine if current user is the owner (can see manager options)
   // We approximate: owner can change permissions and remove others
   // The backend enforces this check too
-  const isOwner = user?.role === 'owner' || user?.role === 'admin';
+  const isManagerCollaborator = collaborators.some((c) => c.user_id === user?.id && c.role === 'manager');
+  const canManageTeam = user?.role === 'owner' || user?.role === 'admin' || isManagerCollaborator;
 
   const { register, handleSubmit, setValue, reset, formState: { errors, isSubmitting } } = useForm<InviteForm>({
     resolver: zodResolver(inviteSchema),
@@ -171,13 +213,75 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
 
   async function onInvite(form: InviteForm) {
     try {
-      await invitesApi.create(id, form);
+      const specialties = (form.specialties ?? '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+
+      const created = await invitesApi.create(id, {
+        name: form.name?.trim() || undefined,
+        email: form.email?.trim() || undefined,
+        role: form.role,
+        whatsapp: form.whatsapp?.trim() || undefined,
+        specialties: form.role === 'provider' ? specialties : undefined,
+      });
+
+      setLastInviteLink(created.invite_url);
+      setLastInviteWhatsapp(form.whatsapp?.trim() || null);
+      if (created.delivery === 'whatsapp_link') {
+        await navigator.clipboard.writeText(created.invite_url);
+      }
+
       await mutate();
       reset();
-      setInviteOpen(false);
-      toast.success(`Convite enviado para ${form.email}`);
+      if (created.delivery === 'email') {
+        setInviteOpen(false);
+        toast.success(`Convite enviado por e-mail para ${form.email}`);
+      } else {
+        toast.success('Pré-cadastro criado. Link copiado para envio no WhatsApp.');
+      }
     } catch (e) {
       toast.error('Erro ao enviar convite', { description: (e as Error).message });
+    }
+  }
+
+  async function handleCopyInviteLink() {
+    if (!lastInviteLink) return;
+    try {
+      await navigator.clipboard.writeText(lastInviteLink);
+      toast.success('Link copiado');
+    } catch {
+      toast.error('Não foi possível copiar o link');
+    }
+  }
+
+  function buildWhatsappUrl(link: string, whatsapp: string) {
+    const digits = whatsapp.replace(/\D/g, '');
+    const text = encodeURIComponent(`Olá! Segue seu link para completar o cadastro no HouseLog: ${link}`);
+    return `https://wa.me/${digits}?text=${text}`;
+  }
+
+  async function handleExtractCardData() {
+    if (!cardFile) {
+      toast.error('Selecione uma imagem do cartão antes de extrair');
+      return;
+    }
+    setExtractingCard(true);
+    try {
+      const result = await invitesApi.extractFromCard(id, cardFile);
+      const suggestion = result.suggestion;
+      setCardSuggestion(suggestion);
+
+      if (suggestion.name) setValue('name', suggestion.name);
+      if (suggestion.email) setValue('email', suggestion.email);
+      if (suggestion.whatsapp) setValue('whatsapp', suggestion.whatsapp);
+      if (suggestion.specialties.length > 0) setValue('specialties', suggestion.specialties.join(', '));
+
+      toast.success('Dados sugeridos preenchidos. Revise antes de enviar.');
+    } catch (e) {
+      toast.error('Não foi possível extrair os dados', { description: (e as Error).message });
+    } finally {
+      setExtractingCard(false);
     }
   }
 
@@ -222,12 +326,12 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold">Equipe</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-muted-foreground">
             {collaborators.length} membro{collaborators.length !== 1 ? 's' : ''} ·{' '}
             {invites.length} convite{invites.length !== 1 ? 's' : ''} pendente{invites.length !== 1 ? 's' : ''}
           </p>
         </div>
-        {isOwner && (
+        {canManageTeam && (
           <Button onClick={() => setInviteOpen(true)}>
             <UserPlus className="h-4 w-4" />
             Convidar
@@ -249,7 +353,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               </div>
               <div>
                 <p className={cn('text-xl font-bold', s.color)}>{s.count}</p>
-                <p className="text-xs text-[var(--muted-foreground)]">{s.label}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
               </div>
             </CardContent>
           </Card>
@@ -257,8 +361,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Permission legend */}
-      <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-xs text-[var(--muted-foreground)] space-y-1">
-        <p className="font-semibold text-[var(--foreground)]">Permissões por papel</p>
+      <div className="rounded-lg border border-border bg-card px-4 py-3 text-xs text-muted-foreground space-y-1">
+        <p className="font-semibold text-foreground">Permissões por papel</p>
         <p><span className="font-medium text-primary-700">Gestor</span> — visualiza tudo + abre OS (se habilitado pelo proprietário)</p>
         <p><span className="font-medium text-amber-700">Prestador</span> — recebe OS atribuídas + pode abrir OS (se habilitado)</p>
         <p><span className="font-medium text-slate-600">Visualizador</span> — apenas leitura, não pode abrir OS</p>
@@ -278,7 +382,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               <CollaboratorRow
                 key={c.id}
                 collab={c}
-                isOwner={isOwner}
+                canManageTeam={canManageTeam}
                 onToggleOS={handleToggleOS}
                 onRemove={setRemovingCollab}
               />
@@ -288,8 +392,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Users className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-[var(--muted-foreground)] text-sm">Nenhum membro na equipe</p>
-          {isOwner && (
+          <p className="text-muted-foreground text-sm">Nenhum membro na equipe</p>
+          {canManageTeam && (
             <Button variant="outline" className="mt-3" onClick={() => setInviteOpen(true)}>
               <UserPlus className="h-4 w-4" /> Convidar primeiro membro
             </Button>
@@ -308,7 +412,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           </CardHeader>
           <CardContent className="px-6 pb-2">
             {invites.map((inv) => (
-              <InviteRow key={inv.id} invite={inv} isOwner={isOwner} onCancel={handleCancelInvite} />
+              <InviteRow key={inv.id} invite={inv} isOwner={canManageTeam} onCancel={handleCancelInvite} />
             ))}
           </CardContent>
         </Card>
@@ -324,8 +428,33 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onInvite)} className="space-y-4 mt-2">
+            <div className="space-y-2 rounded-lg border border-border p-3">
+              <p className="text-xs font-medium flex items-center gap-1.5">
+                <ScanLine className="h-3.5 w-3.5 text-primary-600" />
+                Cadastro automático por imagem
+              </p>
+              <Input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCardFile(e.target.files?.[0] ?? null)}
+              />
+              <Button type="button" variant="outline" className="w-full" loading={extractingCard} onClick={handleExtractCardData}>
+                Extrair dados do cartão
+              </Button>
+              {cardSuggestion && (
+                <p className="text-xs text-muted-foreground">
+                  Confiança da extração: {Math.round(cardSuggestion.confidence * 100)}%.
+                </p>
+              )}
+            </div>
+
             <div className="space-y-1.5">
-              <Label htmlFor="inv-email">Email *</Label>
+              <Label htmlFor="inv-name">Nome (pré-cadastro)</Label>
+              <Input id="inv-name" placeholder="Nome do prestador" {...register('name')} />
+              {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-email">Email</Label>
               <Input id="inv-email" type="email" placeholder="prestador@email.com" {...register('email')} />
               {errors.email && <p className="text-xs text-rose-500">{errors.email.message}</p>}
             </div>
@@ -340,9 +469,44 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Um email com link de convite será enviado. Gestores recebem permissão de abrir OS por padrão.
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-whatsapp">WhatsApp</Label>
+              <Input id="inv-whatsapp" placeholder="5511999999999" {...register('whatsapp')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inv-specialties">Especialidades (prestador)</Label>
+              <Input
+                id="inv-specialties"
+                placeholder="eletrica, hidraulica, pintura"
+                {...register('specialties')}
+              />
+              <p className="text-xs text-muted-foreground">
+                Separe por vírgula. Ex.: eletrica, hidraulica, pintura.
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Com e-mail: envio automático. Sem e-mail: o sistema cria pré-cadastro e gera link para enviar no WhatsApp.
             </p>
+
+            {lastInviteLink && (
+              <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 space-y-2">
+                <p className="text-xs font-medium">Link do convite para WhatsApp</p>
+                <p className="text-xs break-all text-muted-foreground">{lastInviteLink}</p>
+                <Button type="button" variant="outline" className="w-full" onClick={handleCopyInviteLink}>
+                  Copiar link
+                </Button>
+                {lastInviteWhatsapp && (
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() => window.open(buildWhatsappUrl(lastInviteLink, lastInviteWhatsapp), '_blank', 'noopener,noreferrer')}
+                  >
+                    Abrir WhatsApp com convite
+                  </Button>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setInviteOpen(false)}>
                 Cancelar
@@ -361,7 +525,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           <DialogHeader>
             <DialogTitle>Remover membro</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-muted-foreground">
             Tem certeza que deseja remover <strong>{removingCollab?.name}</strong> da equipe?
             O acesso ao imóvel será revogado imediatamente.
           </p>

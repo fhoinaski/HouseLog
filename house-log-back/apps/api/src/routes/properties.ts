@@ -409,7 +409,7 @@ properties.get('/:id/providers', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const { results } = await c.env.DB.prepare(`
-    SELECT pc.id as collab_id, pc.user_id, pc.role, pc.can_open_os,
+    SELECT pc.id as collab_id, pc.user_id, pc.role, pc.can_open_os, pc.specialties, pc.whatsapp,
            u.name, u.email, u.phone, u.avatar_url
     FROM property_collaborators pc
     JOIN users u ON u.id = pc.user_id
@@ -417,6 +417,7 @@ properties.get('/:id/providers', async (c) => {
     ORDER BY u.name ASC
   `).bind(id).all<{
     collab_id: string; user_id: string; role: string; can_open_os: number;
+    specialties: string | null; whatsapp: string | null;
     name: string; email: string; phone: string | null; avatar_url: string | null;
   }>();
 

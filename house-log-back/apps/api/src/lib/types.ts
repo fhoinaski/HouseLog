@@ -9,6 +9,10 @@ export type Bindings = {
   CORS_ORIGIN: string;
   ENVIRONMENT: string;
   R2_PUBLIC_URL: string;
+  R2_ACCOUNT_ID?: string;
+  R2_BUCKET_NAME?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
   RESEND_API_KEY: string;
   APP_URL: string;
 };
@@ -104,6 +108,7 @@ export type ServiceOrder = {
   before_photos: string;
   after_photos: string;
   video_url: string | null;
+  audio_url: string | null;
   checklist: string;
   warranty_until: string | null;
   scheduled_at: string | null;

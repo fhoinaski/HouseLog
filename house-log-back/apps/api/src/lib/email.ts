@@ -124,3 +124,25 @@ export function emailNewBid(p: {
     <a href="${p.serviceUrl}" style="display:block;background:#3b82f6;color:#fff;text-align:center;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Ver Orçamento</a>
   `, p.appUrl);
 }
+
+export function emailServiceAssigned(p: {
+  providerName: string;
+  orderTitle: string;
+  propertyName: string;
+  priorityLabel: string;
+  scheduledAt?: string | null;
+  serviceUrl: string;
+  appUrl: string;
+}): string {
+  return base('Nova OS atribuida para voce', `
+    <p style="color:#475569;margin:0 0 4px;font-size:14px">Olá, ${p.providerName}</p>
+    <h1 style="color:#0f172a;font-size:20px;font-weight:700;margin:0 0 20px">Você recebeu uma nova ordem de serviço</h1>
+    <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:20px">
+      <p style="margin:0 0 6px;color:#0f172a;font-size:16px;font-weight:600">${p.orderTitle}</p>
+      <p style="margin:0;color:#64748b;font-size:13px">${p.propertyName}</p>
+    </div>
+    <p style="margin:0 0 10px;color:#475569;font-size:14px"><strong>Prioridade:</strong> ${p.priorityLabel}</p>
+    ${p.scheduledAt ? `<p style="margin:0 0 20px;color:#475569;font-size:14px"><strong>Agendamento:</strong> ${new Date(p.scheduledAt).toLocaleString('pt-BR')}</p>` : ''}
+    <a href="${p.serviceUrl}" style="display:block;background:#3b82f6;color:#fff;text-align:center;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Abrir OS no app</a>
+  `, p.appUrl);
+}

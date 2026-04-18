@@ -26,7 +26,6 @@ const schema = z.object({
   room_id: z.string().optional(),
   priority: z.enum(['urgent', 'normal', 'preventive']).default('normal'),
   assigned_to: z.string().optional(),
-  cost: z.coerce.number().positive().optional().or(z.literal('')),
   scheduled_at: z.string().optional(),
 });
 
@@ -131,7 +130,6 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
     try {
       await servicesApi.create(id, {
         ...form,
-        cost: form.cost === '' ? undefined : Number(form.cost),
       });
       await mutate();
       void globalMutate(['dashboard', id]);
@@ -277,10 +275,6 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="os-cost">Custo estimado (R$)</Label>
-                <Input id="os-cost" type="number" step="0.01" placeholder="0.00" {...register('cost')} />
-              </div>
             </div>
 
             <div className="space-y-1.5">

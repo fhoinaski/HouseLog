@@ -5,7 +5,7 @@ import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, canUserOpenOS } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
-import { sendEmail, emailOsStatusChanged } from '../lib/email';
+import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/email';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -29,7 +29,6 @@ const createSchema = z.object({
   room_id: z.string().optional(),
   priority: z.enum(['urgent', 'normal', 'preventive']).default('normal'),
   assigned_to: z.string().optional(),
-  cost: z.number().positive().optional(),
   warranty_until: z.string().optional(),
   scheduled_at: z.string().optional(),
   checklist: z.array(z.object({ item: z.string(), done: z.boolean() })).optional(),
@@ -110,13 +109,13 @@ services.post('/', async (c) => {
       .prepare(
         `INSERT INTO service_orders
          (id, property_id, room_id, system_type, requested_by, assigned_to,
-          title, description, priority, status, cost, warranty_until, scheduled_at, checklist, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, ?, datetime('now'))`
+          title, description, priority, status, warranty_until, scheduled_at, checklist, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?, ?, datetime('now'))`
       )
       .bind(
         id, propertyId, d.room_id ?? null, d.system_type, userId,
         d.assigned_to ?? null, d.title, d.description ?? null,
-        d.priority, d.cost ?? null, d.warranty_until ?? null,
+        d.priority, d.warranty_until ?? null,
         d.scheduled_at ?? null, checklistJson
       )
       .run();
@@ -132,6 +131,42 @@ services.post('/', async (c) => {
     .prepare('SELECT * FROM service_orders WHERE id = ?')
     .bind(id)
     .first<ServiceOrder>();
+
+  // Notify assigned provider (non-blocking)
+  void (async () => {
+    try {
+      if (!d.assigned_to || !c.env.RESEND_API_KEY) return;
+
+      const provider = await c.env.DB
+        .prepare('SELECT name, email FROM users WHERE id = ?')
+        .bind(d.assigned_to)
+        .first<{ name: string; email: string }>();
+
+      const property = await c.env.DB
+        .prepare('SELECT name FROM properties WHERE id = ?')
+        .bind(propertyId)
+        .first<{ name: string }>();
+
+      if (!provider?.email) return;
+
+      const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
+      await sendEmail(c.env.RESEND_API_KEY, {
+        to: provider.email,
+        subject: `Nova OS atribuída: ${d.title}`,
+        html: emailServiceAssigned({
+          providerName: provider.name,
+          orderTitle: d.title,
+          propertyName: property?.name ?? 'Imóvel',
+          priorityLabel: d.priority,
+          scheduledAt: d.scheduled_at,
+          serviceUrl: `${appUrl}/provider/services/${id}`,
+          appUrl,
+        }),
+      });
+    } catch (e) {
+      console.error('Assigned provider notification failed:', e);
+    }
+  })();
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: 'create',
@@ -204,7 +239,6 @@ services.put('/:id', async (c) => {
   if (d.room_id !== undefined)      pairs.push(['room_id', d.room_id]);
   if (d.priority !== undefined)     pairs.push(['priority', d.priority]);
   if (d.assigned_to !== undefined)  pairs.push(['assigned_to', d.assigned_to]);
-  if (d.cost !== undefined)         pairs.push(['cost', d.cost]);
   if (d.warranty_until !== undefined) pairs.push(['warranty_until', d.warranty_until]);
   if (d.scheduled_at !== undefined) pairs.push(['scheduled_at', d.scheduled_at]);
   if (d.checklist !== undefined)    pairs.push(['checklist', JSON.stringify(d.checklist)]);
@@ -425,6 +459,53 @@ services.post('/:id/video', async (c) => {
   });
 
   return ok(c, { video_url: fileUrl });
+});
+
+// ── POST /properties/:propertyId/services/:id/audio ──────────────────────────
+
+services.post('/:id/audio', async (c) => {
+  const propertyId = c.req.param('propertyId');
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const order = await c.env.DB
+    .prepare('SELECT id FROM service_orders WHERE id = ? AND property_id = ? AND deleted_at IS NULL')
+    .bind(id, propertyId)
+    .first();
+
+  if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
+
+  const formData = await c.req.formData().catch(() => null);
+  if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
+
+  const file = formData.get('file') as File | null;
+  if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
+
+  const allowed = new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm']);
+  if (!allowed.has(file.type)) return err(c, 'Tipo de áudio não permitido', 'INVALID_FILE', 422);
+  if (file.size > 20 * 1024 * 1024) return err(c, 'Áudio excede 20MB', 'INVALID_FILE', 422);
+
+  const key = buildR2Key({ propertyId, category: 'documents', filename: file.name });
+  const buffer = await file.arrayBuffer();
+  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+
+  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
+
+  await c.env.DB
+    .prepare('UPDATE service_orders SET audio_url = ? WHERE id = ?')
+    .bind(fileUrl, id)
+    .run();
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'service_order', entityId: id, action: 'audio_upload',
+    actorId: userId, newData: { audio_url: fileUrl },
+  });
+
+  return ok(c, { audio_url: fileUrl });
 });
 
 // ── DELETE /properties/:propertyId/services/:id ──────────────────────────────

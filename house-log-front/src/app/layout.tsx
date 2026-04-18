@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin']
 export const metadata: Metadata = {
   title: { default: 'HouseLog', template: '%s | HouseLog' },
   description: 'Gestão inteligente de ativos imobiliários',
-  manifest: '/manifest.json',
+  manifest: '/manifest.json?v=2',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -42,13 +42,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <head>
-        <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/next.svg" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="HouseLog" />
       </head>
-      <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
+      <body suppressHydrationWarning className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <AuthProvider>
             <SWRProvider>

@@ -1,5 +1,7 @@
 // API client for HouseLog backend (Cloudflare Workers)
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787/api/v1';
+const BASE =
+  process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  'https://houselog-api-dev.sukinodoncai.workers.dev/api/v1';
 
 function qs(params?: Record<string, string | number | undefined>): string {
   if (!params) return '';
@@ -121,11 +123,38 @@ export const invitesApi = {
       `/properties/${propertyId}/invites`
     ),
 
-  create: (propertyId: string, data: { email: string; role: 'viewer' | 'provider' | 'manager' }) =>
-    request<{ id: string; token: string; expires_at: string }>(
+  create: (
+    propertyId: string,
+    data: {
+      name?: string;
+      email?: string;
+      role: 'viewer' | 'provider' | 'manager';
+      specialties?: string[];
+      whatsapp?: string;
+    }
+  ) =>
+    request<{ id: string; token: string; expires_at: string; invite_url: string; delivery: 'email' | 'whatsapp_link' }>(
       `/properties/${propertyId}/invites`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
+
+  extractFromCard: async (propertyId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = getToken();
+    const res = await fetch(`${BASE}/properties/${propertyId}/invites/extract-card`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: 'Erro ao extrair dados do cartão' }));
+      throw new Error((body as { error?: string }).error ?? 'Erro ao extrair dados do cartão');
+    }
+
+    return res.json() as Promise<{ suggestion: InviteCardSuggestion }>;
+  },
 
   cancel: (propertyId: string, inviteId: string) =>
     request<{ success: boolean }>(`/properties/${propertyId}/invites/${inviteId}`, { method: 'DELETE' }),
@@ -264,6 +293,17 @@ export const servicesApi = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
     }).then((r) => r.json() as Promise<{ video_url: string }>);
+  },
+
+  uploadAudio: (propertyId: string, id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = getToken();
+    return fetch(`${BASE}/properties/${propertyId}/services/${id}/audio`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then((r) => r.json() as Promise<{ audio_url: string }>);
   },
 
   createAuditLink: (
@@ -476,6 +516,7 @@ export type ServiceOrder = {
   before_photos: string;
   after_photos: string;
   video_url: string | null;
+  audio_url: string | null;
   checklist: string;
   warranty_until: string | null;
   scheduled_at: string | null;
@@ -591,6 +632,8 @@ export type PropertyProvider = {
   user_id: string;
   role: string;
   can_open_os: number;
+  specialties: string | null;
+  whatsapp: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -602,6 +645,8 @@ export type PropertyCollaborator = {
   user_id: string;
   role: 'viewer' | 'provider' | 'manager';
   can_open_os: number;
+  specialties?: string | null;
+  whatsapp?: string | null;
   created_at: string;
   name: string;
   email: string;
@@ -615,6 +660,8 @@ export type PropertyInvite = {
   invited_by: string;
   invited_by_name: string;
   email: string;
+  invite_name?: string | null;
+  whatsapp?: string | null;
   role: 'viewer' | 'provider' | 'manager';
   token: string;
   expires_at: string;
@@ -623,13 +670,24 @@ export type PropertyInvite = {
 };
 
 export type InviteDetails = {
-  email: string;
+  email: string | null;
+  invite_name?: string | null;
+  whatsapp?: string | null;
   role: string;
   expires_at: string;
   property_name: string;
   property_address: string;
   property_city: string;
   invited_by_name: string;
+};
+
+export type InviteCardSuggestion = {
+  name: string;
+  email: string;
+  whatsapp: string;
+  specialties: string[];
+  confidence: number;
+  notes: string;
 };
 
 export type SearchResult = {

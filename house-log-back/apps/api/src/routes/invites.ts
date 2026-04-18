@@ -8,8 +8,11 @@ import type { Bindings, Variables } from '../lib/types';
 const invites = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const createSchema = z.object({
-  email: z.string().email('Email inválido'),
+  name: z.string().min(2).max(120).optional(),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
   role: z.enum(['viewer', 'provider', 'manager']).default('viewer'),
+  specialties: z.array(z.string().min(2)).max(20).optional(),
+  whatsapp: z.string().min(8).max(30).optional(),
 });
 
 const ROLE_LABELS: Record<string, string> = {
@@ -18,16 +21,50 @@ const ROLE_LABELS: Record<string, string> = {
   manager: 'Gestor',
 };
 
+function normalizeWhatsapp(value?: string | null): string | null {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 8 ? digits : null;
+}
+
+function parseSpecialties(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item).trim().toLowerCase())
+    .filter((item) => item.length >= 2)
+    .slice(0, 10);
+}
+
+async function canManagePropertyTeam(db: D1Database, propertyId: string, userId: string): Promise<boolean> {
+  const access = await db.prepare(`
+    SELECT p.id
+    FROM properties p
+    WHERE p.id = ? AND p.deleted_at IS NULL
+      AND (
+        p.owner_id = ? OR p.manager_id = ?
+        OR EXISTS (
+          SELECT 1
+          FROM property_collaborators pc
+          WHERE pc.property_id = p.id AND pc.user_id = ? AND pc.role = 'manager'
+        )
+      )
+  `).bind(propertyId, userId, userId, userId).first();
+
+  return access !== null;
+}
+
 // ── Protected: create invite ──────────────────────────────────────────────────
 
 invites.post('/properties/:propertyId/invites', authMiddleware, async (c) => {
   const { propertyId } = c.req.param();
   const userId = c.get('userId');
 
-  // Only owner/manager of this property can invite
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
+  if (!canManage) return err(c, 'Imóvel não encontrado ou sem permissão', 'FORBIDDEN', 403);
+
   const property = await c.env.DB.prepare(
-    `SELECT id, name, owner_id FROM properties WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
-  ).bind(propertyId, userId, userId).first<{ id: string; name: string; owner_id: string }>();
+    `SELECT id, name, owner_id FROM properties WHERE id = ? AND deleted_at IS NULL`
+  ).bind(propertyId).first<{ id: string; name: string; owner_id: string }>();
 
   if (!property) return err(c, 'Imóvel não encontrado ou sem permissão', 'FORBIDDEN', 403);
 
@@ -37,31 +74,57 @@ invites.post('/properties/:propertyId/invites', authMiddleware, async (c) => {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
 
-  const { email, role } = parsed.data;
+  const { role } = parsed.data;
+  const inviteName = parsed.data.name?.trim() || null;
+  const normalizedWhatsapp = normalizeWhatsapp(parsed.data.whatsapp);
+  const normalizedEmail = parsed.data.email?.trim().toLowerCase() || null;
+  const specialtiesJson = JSON.stringify(parsed.data.specialties ?? []);
+
+  if (!normalizedEmail && !normalizedWhatsapp) {
+    return err(c, 'Informe e-mail ou WhatsApp para convidar', 'VALIDATION_ERROR', 422);
+  }
+
+  if (!normalizedEmail && !inviteName) {
+    return err(c, 'No pré-cadastro sem e-mail, informe o nome do prestador', 'VALIDATION_ERROR', 422);
+  }
+
+  const fallbackEmail = `wa-${(normalizedWhatsapp ?? 'sem-numero').replace(/\D/g, '') || 'sem-numero'}-${nanoid(6)}@pending.houselog.local`;
+  const inviteEmail = normalizedEmail ?? fallbackEmail;
 
   // Check for existing pending invite
-  const existing = await c.env.DB.prepare(
-    `SELECT id FROM property_invites WHERE property_id = ? AND email = ? AND accepted_at IS NULL AND expires_at > datetime('now')`
-  ).bind(propertyId, email).first();
-  if (existing) return err(c, 'Já existe um convite pendente para este email', 'DUPLICATE_INVITE', 409);
+  if (normalizedEmail) {
+    const existingByEmail = await c.env.DB.prepare(
+      `SELECT id FROM property_invites WHERE property_id = ? AND email = ? AND accepted_at IS NULL AND expires_at > datetime('now')`
+    ).bind(propertyId, inviteEmail).first();
+    if (existingByEmail) return err(c, 'Já existe um convite pendente para este email', 'DUPLICATE_INVITE', 409);
+  }
+
+  if (!normalizedEmail && normalizedWhatsapp) {
+    const existingByWhatsapp = await c.env.DB.prepare(
+      `SELECT id FROM property_invites WHERE property_id = ? AND whatsapp = ? AND accepted_at IS NULL AND expires_at > datetime('now')`
+    ).bind(propertyId, normalizedWhatsapp).first();
+    if (existingByWhatsapp) return err(c, 'Já existe um convite pendente para este WhatsApp', 'DUPLICATE_INVITE', 409);
+  }
 
   const token = nanoid(32);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const id = nanoid();
+  const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
 
   await c.env.DB.prepare(
-    `INSERT INTO property_invites (id, property_id, invited_by, email, role, token, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).bind(id, propertyId, userId, email, role, token, expiresAt).run();
+    `INSERT INTO property_invites (id, property_id, invited_by, email, role, token, expires_at, specialties, whatsapp, invite_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, propertyId, userId, inviteEmail, role, token, expiresAt, specialtiesJson, normalizedWhatsapp, inviteName).run();
 
   // Send invite email (non-blocking)
   void (async () => {
     try {
+      if (!normalizedEmail) return;
       if (!c.env.RESEND_API_KEY) return;
-      const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
       const inviter = await c.env.DB.prepare('SELECT name FROM users WHERE id = ?').bind(userId).first<{ name: string }>();
       const { sendEmail } = await import('../lib/email');
       await sendEmail(c.env.RESEND_API_KEY, {
-        to: email,
+        to: normalizedEmail,
         subject: `Convite para acessar ${property.name} no HouseLog`,
         html: buildInviteEmail({
           inviterName: inviter?.name ?? 'Um usuário',
@@ -77,7 +140,84 @@ invites.post('/properties/:propertyId/invites', authMiddleware, async (c) => {
     }
   })();
 
-  return ok(c, { id, token, expires_at: expiresAt }, 201);
+  return ok(c, {
+    id,
+    token,
+    expires_at: expiresAt,
+    invite_url: `${appUrl}/invite/${token}`,
+    delivery: normalizedEmail ? 'email' : 'whatsapp_link',
+  }, 201);
+});
+
+// ── OCR helper: extract provider data from business card image ──────────────
+
+invites.post('/properties/:propertyId/invites/extract-card', authMiddleware, async (c) => {
+  const { propertyId } = c.req.param();
+  const userId = c.get('userId');
+
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
+  if (!canManage) return err(c, 'Imóvel não encontrado ou sem permissão', 'FORBIDDEN', 403);
+
+  const formData = await c.req.formData().catch(() => null);
+  if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
+
+  const file = formData.get('file') as File | null;
+  if (!file) return err(c, 'Imagem do cartão é obrigatória', 'MISSING_FILE');
+  if (!file.type.startsWith('image/')) return err(c, 'Envie uma imagem válida (jpg/png/webp)', 'INVALID_FILE', 422);
+  if (file.size > 8 * 1024 * 1024) return err(c, 'Imagem muito grande (máx 8MB)', 'INVALID_FILE', 422);
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  let extracted: {
+    name?: string;
+    email?: string;
+    whatsapp?: string;
+    specialties?: string[];
+    confidence?: number;
+    notes?: string;
+  } = {};
+
+  try {
+    const aiResponse = await (c.env.AI as Ai).run('@cf/llava-hf/llava-1.5-7b-hf', {
+      image: [...bytes],
+      prompt: `Analise este cartão de visita e extraia os dados em JSON com o formato exato:
+{"name":"","email":"","whatsapp":"","specialties":[""],"confidence":0.0,"notes":""}
+Regras:
+- Retorne SOMENTE JSON válido.
+- whatsapp deve conter apenas números com DDI se possível.
+- specialties deve usar termos curtos em minúsculas (ex: eletrica, hidraulica, pintura, ar_condicionado, geral).
+- confidence entre 0 e 1.` ,
+      max_tokens: 450,
+    } as Parameters<Ai['run']>[1]);
+
+    const responseText = (aiResponse as { response?: string }).response ?? '';
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+      extracted = {
+        name: typeof parsed.name === 'string' ? parsed.name.trim() : undefined,
+        email: typeof parsed.email === 'string' ? parsed.email.trim().toLowerCase() : undefined,
+        whatsapp: normalizeWhatsapp(typeof parsed.whatsapp === 'string' ? parsed.whatsapp : null) ?? undefined,
+        specialties: parseSpecialties(parsed.specialties),
+        confidence: typeof parsed.confidence === 'number' ? Math.max(0, Math.min(1, parsed.confidence)) : undefined,
+        notes: typeof parsed.notes === 'string' ? parsed.notes.trim() : undefined,
+      };
+    }
+  } catch (e) {
+    console.error('Card OCR failed:', e);
+    return err(c, 'Não foi possível extrair dados da imagem. Tente uma foto mais nítida.', 'OCR_FAILED', 422);
+  }
+
+  return ok(c, {
+    suggestion: {
+      name: extracted.name ?? '',
+      email: extracted.email ?? '',
+      whatsapp: extracted.whatsapp ?? '',
+      specialties: extracted.specialties ?? [],
+      confidence: extracted.confidence ?? 0,
+      notes: extracted.notes ?? '',
+    },
+  });
 });
 
 // ── GET /properties/:propertyId/invites — list pending invites ────────────────
@@ -109,7 +249,7 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
   `).bind(propertyId).all();
 
   const { results: collaborators } = await c.env.DB.prepare(`
-    SELECT pc.id, pc.user_id, pc.role, pc.can_open_os, pc.created_at,
+    SELECT pc.id, pc.user_id, pc.role, pc.can_open_os, pc.specialties, pc.whatsapp, pc.created_at,
            u.name, u.email, u.phone, u.avatar_url
     FROM property_collaborators pc
     JOIN users u ON u.id = pc.user_id
@@ -126,10 +266,8 @@ invites.delete('/properties/:propertyId/invites/:inviteId', authMiddleware, asyn
   const { propertyId, inviteId } = c.req.param();
   const userId = c.get('userId');
 
-  const property = await c.env.DB.prepare(
-    `SELECT id FROM properties WHERE id = ? AND (owner_id = ? OR manager_id = ?) AND deleted_at IS NULL`
-  ).bind(propertyId, userId, userId).first();
-  if (!property) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
+  if (!canManage) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   await c.env.DB.prepare(`DELETE FROM property_invites WHERE id = ? AND property_id = ?`).bind(inviteId, propertyId).run();
   return ok(c, { success: true });
@@ -149,14 +287,20 @@ invites.get('/invite/:token', async (c) => {
     WHERE i.token = ? AND i.accepted_at IS NULL AND i.expires_at > datetime('now')
   `).bind(token).first<{
     id: string; email: string; role: string; expires_at: string;
+    invite_name: string | null;
+    whatsapp: string | null;
     property_name: string; property_address: string; property_city: string;
     invited_by_name: string; property_id: string;
   }>();
 
   if (!invite) return err(c, 'Convite inválido ou expirado', 'INVALID_TOKEN', 404);
 
+  const email = invite.email.endsWith('@pending.houselog.local') ? null : invite.email;
+
   return ok(c, {
-    email: invite.email,
+    email,
+    invite_name: invite.invite_name,
+    whatsapp: invite.whatsapp,
     role: invite.role,
     expires_at: invite.expires_at,
     property_name: invite.property_name,
@@ -175,23 +319,49 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
   const invite = await c.env.DB.prepare(`
     SELECT * FROM property_invites
     WHERE token = ? AND accepted_at IS NULL AND expires_at > datetime('now')
-  `).bind(token).first<{ id: string; property_id: string; role: string; email: string }>();
+  `).bind(token).first<{
+    id: string;
+    property_id: string;
+    role: string;
+    email: string;
+    specialties: string | null;
+    whatsapp: string | null;
+  }>();
 
   if (!invite) return err(c, 'Convite inválido ou expirado', 'INVALID_TOKEN', 404);
 
   // Managers get can_open_os = 1 by default; providers/viewers start at 0
   const defaultCanOpenOs = invite.role === 'manager' ? 1 : 0;
   const collabId = nanoid();
+  const inviteSpecialties = invite.specialties ?? '[]';
   try {
     await c.env.DB.prepare(
-      `INSERT INTO property_collaborators (id, property_id, user_id, role, can_open_os, invited_by)
-       VALUES (?, ?, ?, ?, ?, (SELECT invited_by FROM property_invites WHERE token = ?))`
-    ).bind(collabId, invite.property_id, userId, invite.role, defaultCanOpenOs, token).run();
+      `INSERT INTO property_collaborators
+       (id, property_id, user_id, role, can_open_os, specialties, whatsapp, invited_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT invited_by FROM property_invites WHERE token = ?))`
+    ).bind(
+      collabId,
+      invite.property_id,
+      userId,
+      invite.role,
+      defaultCanOpenOs,
+      inviteSpecialties,
+      invite.whatsapp,
+      token
+    ).run();
   } catch {
     // Already a collaborator — update role and reset can_open_os
     await c.env.DB.prepare(
-      `UPDATE property_collaborators SET role = ?, can_open_os = ? WHERE property_id = ? AND user_id = ?`
-    ).bind(invite.role, defaultCanOpenOs, invite.property_id, userId).run();
+      `UPDATE property_collaborators
+       SET role = ?, can_open_os = ?, specialties = ?, whatsapp = ?
+       WHERE property_id = ? AND user_id = ?`
+    ).bind(invite.role, defaultCanOpenOs, inviteSpecialties, invite.whatsapp, invite.property_id, userId).run();
+  }
+
+  if (invite.whatsapp) {
+    await c.env.DB.prepare(
+      `UPDATE users SET phone = COALESCE(NULLIF(phone, ''), ?) WHERE id = ?`
+    ).bind(invite.whatsapp, userId).run();
   }
 
   await c.env.DB.prepare(
@@ -207,11 +377,8 @@ invites.patch('/properties/:propertyId/collaborators/:collabId', authMiddleware,
   const { propertyId, collabId } = c.req.param();
   const userId = c.get('userId');
 
-  // Only the property owner can change permissions
-  const property = await c.env.DB.prepare(
-    `SELECT id FROM properties WHERE id = ? AND owner_id = ? AND deleted_at IS NULL`
-  ).bind(propertyId, userId).first();
-  if (!property) return err(c, 'Apenas o proprietário pode alterar permissões', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
+  if (!canManage) return err(c, 'Sem permissão para alterar permissões', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body !== 'object') return err(c, 'Body inválido', 'INVALID_BODY');
@@ -237,10 +404,9 @@ invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware
   const { propertyId, collabId } = c.req.param();
   const userId = c.get('userId');
 
-  // Owner can remove anyone; a collaborator can remove themselves
   const property = await c.env.DB.prepare(
-    `SELECT owner_id FROM properties WHERE id = ? AND deleted_at IS NULL`
-  ).bind(propertyId).first<{ owner_id: string }>();
+    `SELECT owner_id, manager_id FROM properties WHERE id = ? AND deleted_at IS NULL`
+  ).bind(propertyId).first<{ owner_id: string; manager_id: string | null }>();
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
   const collab = await c.env.DB.prepare(
@@ -248,9 +414,15 @@ invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware
   ).bind(collabId, propertyId).first<{ id: string; user_id: string }>();
   if (!collab) return err(c, 'Colaborador não encontrado', 'NOT_FOUND', 404);
 
-  const isOwner = property.owner_id === userId;
+  const managesByProperty = property.owner_id === userId || property.manager_id === userId;
+  const managesByCollaborator = await c.env.DB.prepare(
+    `SELECT id FROM property_collaborators WHERE property_id = ? AND user_id = ? AND role = 'manager'`
+  ).bind(propertyId, userId).first();
+  const isManager = managesByCollaborator !== null;
   const isSelf = collab.user_id === userId;
-  if (!isOwner && !isSelf) return err(c, 'Sem permissão para remover este colaborador', 'FORBIDDEN', 403);
+  if (!managesByProperty && !isManager && !isSelf) {
+    return err(c, 'Sem permissão para remover este colaborador', 'FORBIDDEN', 403);
+  }
 
   await c.env.DB.prepare(`DELETE FROM property_collaborators WHERE id = ?`).bind(collabId).run();
   return ok(c, { success: true });

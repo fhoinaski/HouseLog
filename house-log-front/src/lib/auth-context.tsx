@@ -7,7 +7,7 @@ type AuthState = {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; name: string; password: string; role?: string }) => Promise<void>;
+  register: (data: { email: string; name: string; password: string; role?: string; phone?: string }) => Promise<void>;
   logout: () => void;
 };
 
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(
-    async (data: { email: string; name: string; password: string; role?: string }) => {
+    async (data: { email: string; name: string; password: string; role?: string; phone?: string }) => {
       const { token, user: u } = await authApi.register(data);
       setToken(token);
       localStorage.setItem('hl_user', JSON.stringify(u));

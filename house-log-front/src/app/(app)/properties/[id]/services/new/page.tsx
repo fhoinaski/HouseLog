@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
@@ -23,7 +23,6 @@ const schema = z.object({
   description: z.string().optional(),
   room_id: z.string().optional(),
   assigned_to: z.string().optional(),
-  cost: z.coerce.number().min(0).optional().or(z.literal('')),
   warranty_until: z.string().optional(),
   scheduled_at: z.string().optional(),
 });
@@ -36,6 +35,10 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const [apiError, setApiError] = useState<string | null>(null);
+  const [systemType, setSystemType] = useState('electrical');
+  const [beforePhotos, setBeforePhotos] = useState<File[]>([]);
+  const [problemVideo, setProblemVideo] = useState<File | null>(null);
+  const [problemAudio, setProblemAudio] = useState<File | null>(null);
 
   const { data: roomsData } = useSWR(['rooms', id], () => roomsApi.list(id));
   const { data: providersData } = useSWR(['providers', id], () => propertiesApi.providers(id));
@@ -45,17 +48,48 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
     defaultValues: { priority: 'normal', system_type: 'electrical' },
   });
 
+  const providerOptions = useMemo(() => {
+    const providers = providersData?.providers ?? [];
+    return providers.filter((p) => {
+      const specialties = (() => {
+        if (!p.specialties) return [] as string[];
+        try {
+          const parsed = JSON.parse(p.specialties) as string[];
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [] as string[];
+        }
+      })();
+
+      return specialties.length === 0 || specialties.includes(systemType);
+    });
+  }, [providersData, systemType]);
+
   async function onSubmit(data: FormData) {
     setApiError(null);
     try {
       const res = await servicesApi.create(id, {
         ...data,
-        cost: data.cost === '' ? undefined : Number(data.cost),
         room_id: data.room_id || undefined,
         assigned_to: data.assigned_to || undefined,
         warranty_until: data.warranty_until || undefined,
         scheduled_at: data.scheduled_at || undefined,
       });
+
+      if (beforePhotos.length > 0) {
+        for (const photo of beforePhotos) {
+          await servicesApi.uploadPhoto(id, res.order.id, photo, 'before');
+        }
+      }
+
+      if (problemVideo) {
+        await servicesApi.uploadVideo(id, res.order.id, problemVideo);
+      }
+
+      if (problemAudio) {
+        await servicesApi.uploadAudio(id, res.order.id, problemAudio);
+      }
+
       router.push(`/properties/${id}/services/${res.order.id}`);
     } catch (e) {
       setApiError((e as Error).message || 'Erro ao criar OS');
@@ -84,7 +118,13 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Sistema *</Label>
-                <Select defaultValue="electrical" onValueChange={(v) => setValue('system_type', v)}>
+                <Select
+                  defaultValue="electrical"
+                  onValueChange={(v) => {
+                    setValue('system_type', v);
+                    setSystemType(v);
+                  }}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(SYSTEM_TYPE_LABELS).map(([k, v]) => (
@@ -113,6 +153,38 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
                 placeholder="Descreva o problema ou serviço em detalhes..." {...register('description')} />
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="before_photos">Fotos do problema</Label>
+              <Input
+                id="before_photos"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => setBeforePhotos(Array.from(e.target.files ?? []))}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="problem_video">Vídeo (opcional)</Label>
+                <Input
+                  id="problem_video"
+                  type="file"
+                  accept="video/mp4,video/webm,video/quicktime"
+                  onChange={(e) => setProblemVideo(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="problem_audio">Áudio (opcional)</Label>
+                <Input
+                  id="problem_audio"
+                  type="file"
+                  accept="audio/*"
+                  onChange={(e) => setProblemAudio(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            </div>
+
             {roomsData?.rooms && roomsData.rooms.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Cômodo</Label>
@@ -127,36 +199,30 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="scheduled_at">Agendamento</Label>
-                <Input id="scheduled_at" type="datetime-local" {...register('scheduled_at')} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="cost">Custo Estimado (R$)</Label>
-                <Input id="cost" type="number" step="0.01" min={0} placeholder="0,00" {...register('cost')} />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="scheduled_at">Agendamento</Label>
+              <Input id="scheduled_at" type="datetime-local" {...register('scheduled_at')} />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Atribuir para prestador</Label>
-                {providersData?.providers && providersData.providers.length > 0 ? (
+                {providerOptions.length > 0 ? (
                   <Select onValueChange={(v) => setValue('assigned_to', v === '__none__' ? undefined : v)}>
                     <SelectTrigger><SelectValue placeholder="Nenhum (deixar em aberto)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Nenhum (deixar em aberto)</SelectItem>
-                      {providersData.providers.map((p) => (
+                      {providerOptions.map((p) => (
                         <SelectItem key={p.user_id} value={p.user_id}>
                           {p.name}
-                          {p.email && <span className="text-[var(--muted-foreground)] ml-1 text-xs">· {p.email}</span>}
+                          {p.email && <span className="text-muted-foreground ml-1 text-xs">· {p.email}</span>}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="text-xs text-[var(--muted-foreground)] py-2">
-                    Nenhum prestador autorizado. Convide um na aba <strong>Equipe</strong>.
+                  <p className="text-xs text-muted-foreground py-2">
+                    Nenhum prestador compatível com este tipo de serviço. Convide/cadastre na aba <strong>Equipe</strong>.
                   </p>
                 )}
               </div>

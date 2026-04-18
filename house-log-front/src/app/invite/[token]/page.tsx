@@ -110,6 +110,14 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   if (!invite) return null;
 
   const RoleIcon = ROLE_ICONS[invite.role] ?? Eye;
+  const registerParams = new URLSearchParams({
+    invite: token,
+    role: invite.role,
+    redirect: `/invite/${token}`,
+  });
+  if (invite.email) registerParams.set('email', invite.email);
+  if (invite.invite_name) registerParams.set('name', invite.invite_name);
+  if (invite.whatsapp) registerParams.set('phone', invite.whatsapp);
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-6">
@@ -123,9 +131,9 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
         </div>
 
         {/* Invite card */}
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
           {/* Property banner */}
-          <div className="bg-gradient-to-br from-primary-600 to-primary-700 px-6 py-5 text-white">
+          <div className="bg-linear-to-br from-primary-600 to-primary-700 px-6 py-5 text-white">
             <p className="text-sm opacity-80 mb-1">{invite.invited_by_name} convidou você para</p>
             <h1 className="text-xl font-bold">{invite.property_name}</h1>
             <p className="text-sm opacity-70 mt-0.5">{invite.property_address}, {invite.property_city}</p>
@@ -143,7 +151,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
               )} />
               <div>
                 <p className="font-semibold text-sm">{ROLE_LABELS[invite.role] ?? invite.role}</p>
-                <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{ROLE_DESC[invite.role]}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{ROLE_DESC[invite.role]}</p>
               </div>
             </div>
 
@@ -154,11 +162,34 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
               </div>
             )}
 
-            <Button className="w-full" onClick={handleAccept} loading={accepting}>
-              {user ? 'Aceitar convite' : 'Entrar e aceitar'}
-            </Button>
+            {(invite.invite_name || invite.whatsapp || invite.email) && (
+              <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground space-y-1">
+                {invite.invite_name && <p><strong>Pré-cadastro:</strong> {invite.invite_name}</p>}
+                {invite.whatsapp && <p><strong>WhatsApp:</strong> {invite.whatsapp}</p>}
+                {invite.email && <p><strong>E-mail:</strong> {invite.email}</p>}
+              </div>
+            )}
 
-            <p className="text-center text-xs text-[var(--muted-foreground)]">
+            {user ? (
+              <Button className="w-full" onClick={handleAccept} loading={accepting}>
+                Aceitar convite
+              </Button>
+            ) : (
+              <div className="space-y-2">
+                <Button className="w-full" onClick={() => router.push(`/login?redirect=/invite/${token}`)}>
+                  Entrar para aceitar
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => router.push(`/register?${registerParams.toString()}`)}
+                >
+                  Criar conta rápida
+                </Button>
+              </div>
+            )}
+
+            <p className="text-center text-xs text-muted-foreground">
               Convite expira em {new Date(invite.expires_at).toLocaleDateString('pt-BR')}
             </p>
           </div>

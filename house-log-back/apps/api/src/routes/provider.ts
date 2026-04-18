@@ -6,15 +6,21 @@ import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 const provider = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 provider.use('*', authMiddleware);
 
-function requireProvider(role: string) {
-  return role === 'provider' || role === 'admin';
+async function canAccessProviderPortal(db: D1Database, userId: string, role: string): Promise<boolean> {
+  if (role === 'provider' || role === 'admin') return true;
+  const collaborator = await db.prepare(
+    `SELECT id FROM property_collaborators WHERE user_id = ? AND role = 'provider' LIMIT 1`
+  ).bind(userId).first();
+  return collaborator !== null;
 }
 
 // GET /provider/services
 provider.get('/services', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!requireProvider(role)) return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
 
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
   const cursor = c.req.query('cursor');
@@ -55,7 +61,9 @@ provider.get('/services/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const { id } = c.req.param();
-  if (!requireProvider(role)) return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
 
   const order = await c.env.DB.prepare(`
     SELECT s.*,
@@ -85,7 +93,9 @@ provider.get('/services/:id', async (c) => {
 provider.get('/stats', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!requireProvider(role)) return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
 
   const { results: statusCounts } = await c.env.DB.prepare(`
     SELECT status, COUNT(*) as count
@@ -114,7 +124,9 @@ provider.post('/services/:id/invoice', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const { id } = c.req.param();
-  if (!requireProvider(role)) return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  if (!(await canAccessProviderPortal(c.env.DB, userId, role))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
 
   const order = await c.env.DB.prepare(`
     SELECT s.id, s.property_id
