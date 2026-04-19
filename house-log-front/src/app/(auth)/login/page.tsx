@@ -67,7 +67,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-bg-page px-6 py-8">
+    <main className="safe-top safe-bottom min-h-screen bg-bg-page px-6 py-8">
       <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-97.5 flex-col">
         <div className="rounded-xl border-half border-border-subtle bg-bg-surface px-6 pb-6 pt-8">
           <header className="mb-8 flex flex-col items-center text-center">
@@ -82,9 +82,7 @@ export default function LoginPage() {
             <div>
               <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" placeholder="seu@email.com" autoComplete="email" {...register('email')} />
-              {errors.email && (
-                <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.email.message}</p>
-              )}
+              {errors.email && <p className="hl-error mt-1">{errors.email.message}</p>}
             </div>
 
             <div>
@@ -95,29 +93,27 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="pr-8"
+                  className="pr-12"
                   {...register('password')}
                 />
                 <button
                   type="button"
-                  className="absolute right-0 top-1/2 -translate-y-1/2 text-(--hl-text-tertiary)"
+                  className="hl-btn-ghost absolute right-0 top-1/2 h-input-md w-input-md -translate-y-1/2 p-0 text-text-tertiary"
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                   onClick={() => setShowPassword((prev) => !prev)}
                 >
                   {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
                 </button>
               </div>
-              {errors.password && (
-                <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.password.message}</p>
-              )}
+              {errors.password && <p className="hl-error mt-1">{errors.password.message}</p>}
             </div>
 
             <div className="mb-6 flex items-center justify-between">
-              <label className="flex items-center gap-2 text-[13px] text-(--hl-text-secondary)">
-                <input type="checkbox" {...register('remember')} />
+              <label className="flex items-center gap-2 text-sm text-text-secondary">
+                <input type="checkbox" className="h-4 w-4 accent-bg-accent" {...register('remember')} />
                 Lembrar de mim
               </label>
-              <button type="button" className="text-[13px] font-medium text-(--hl-accent-orange)">
+              <button type="button" className="hl-btn-ghost h-auto min-h-0 px-0 py-0 text-sm text-text-accent">
                 Esqueceu a senha?
               </button>
             </div>
@@ -137,9 +133,9 @@ export default function LoginPage() {
             </Button>
 
             <div className="flex items-center gap-3 py-1">
-              <span className="h-px flex-1 bg-(--hl-border-light)" />
-              <span className="text-[12px] text-(--hl-text-tertiary)">ou</span>
-              <span className="h-px flex-1 bg-(--hl-border-light)" />
+              <span className="h-px flex-1 bg-border-subtle" />
+              <span className="text-xs text-text-tertiary">ou</span>
+              <span className="h-px flex-1 bg-border-subtle" />
             </div>
 
             <Button type="button" variant="outline" size="lg" className="w-full">
@@ -149,17 +145,17 @@ export default function LoginPage() {
               Continuar com Google
             </Button>
 
-            <p className="pt-1 text-center text-[13px] text-(--hl-text-secondary)">
-              Nao tem uma conta?{' '}
-              <Link href="/register" className="font-medium text-(--color-primary)">
+            <p className="pt-1 text-center text-sm text-text-secondary">
+              Não tem uma conta?{' '}
+              <Link href="/register" className="font-medium text-text-accent">
                 Criar conta
               </Link>
             </p>
           </form>
         </div>
 
-        <footer className="mt-auto pt-6 text-center text-[11px] text-(--hl-text-tertiary)">
-          HouseLog v1.0.0 · Gestao Operacional de Imoveis · {currentYear}
+        <footer className="mt-auto pt-6 text-center text-xs text-text-tertiary">
+          HouseLog v1.0.0 · Gestão operacional de imóveis · {currentYear}
         </footer>
       </section>
     </main>

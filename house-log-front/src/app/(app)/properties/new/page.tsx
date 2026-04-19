@@ -14,10 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent } from '@/components/ui/card';
 
 const schema = z.object({
-  name: z.string().min(1, 'Nome obrigatório'),
+  name: z.string().min(1, 'Nome obrigatorio'),
   type: z.enum(['house', 'apt', 'commercial', 'warehouse']),
-  address: z.string().min(1, 'Endereço obrigatório'),
-  city: z.string().min(1, 'Cidade obrigatória'),
+  address: z.string().min(1, 'Endereco obrigatorio'),
+  city: z.string().min(1, 'Cidade obrigatoria'),
   area_m2: z.coerce.number().positive().optional().or(z.literal('')),
 });
 
@@ -40,7 +40,7 @@ export default function NewPropertyPage() {
     if (watchType === 'house') return 'Casa';
     if (watchType === 'apt') return 'Apartamento';
     if (watchType === 'commercial') return 'Comercial';
-    return 'Galpão';
+    return 'Galpao';
   }, [watchType]);
 
   async function onSubmit(data: FormData) {
@@ -52,7 +52,7 @@ export default function NewPropertyPage() {
       });
       router.push(`/properties/${res.property.id}`);
     } catch (e) {
-      setError((e as Error).message || 'Erro ao criar imóvel');
+      setError((e as Error).message || 'Erro ao criar imovel');
     }
   }
 
@@ -68,25 +68,19 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-bg-page pb-20 pt-13">
-      <header className="fixed left-0 top-0 z-40 flex h-13 w-full items-center justify-between border-b border-border-subtle bg-bg-surface px-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Voltar"
-          className="-ml-1"
-          onClick={() => router.back()}
-        >
+    <div className="safe-top safe-bottom min-h-screen overflow-x-hidden bg-bg-page">
+      <header className="fixed left-0 top-0 z-40 flex h-13 w-full items-center justify-between border-b border-half border-border-subtle bg-bg-surface px-4">
+        <Button variant="ghost" size="icon" aria-label="Voltar" className="-ml-1" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="pr-10 text-center text-[15px] font-medium tracking-tight text-text-primary">Novo imóvel</h1>
+        <h1 className="pr-10 text-center text-md font-medium tracking-tight text-text-primary">Novo imovel</h1>
       </header>
 
       <main className="mx-auto mt-4 flex w-full max-w-3xl flex-col gap-4 px-4 pb-8">
         <div className="flex flex-col gap-2">
-          <h2 className="text-[20px] font-medium tracking-tight text-text-primary">Adicionar propriedade</h2>
-          <p className="max-w-lg text-[13px] leading-relaxed text-text-secondary">
-            Insira os dados fundamentais para integrar esta propriedade ao seu portfólio de gestão.
+          <h2 className="text-xl font-medium tracking-tight text-text-primary">Adicionar propriedade</h2>
+          <p className="max-w-lg text-sm leading-relaxed text-text-secondary">
+            Insira os dados fundamentais para integrar esta propriedade ao seu portfolio de gestao.
           </p>
         </div>
 
@@ -94,80 +88,81 @@ export default function NewPropertyPage() {
           <button
             type="button"
             onClick={onPickCover}
-            className="group relative flex min-h-55 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-half border-border-subtle bg-bg-surface p-6 transition-colors hover:bg-bg-subtle active:scale-[0.98]"
+            className="hl-btn-ghost group relative flex min-h-55 w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-half border-border-subtle bg-bg-surface p-6"
+            aria-label="Selecionar imagem de capa"
           >
             {coverPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverPreview} alt="Prévia da capa" className="absolute inset-0 h-full w-full object-cover" />
+              <img src={coverPreview} alt="Previa da capa" className="absolute inset-0 h-full w-full object-cover" />
             ) : null}
             <div className={cn('z-10 flex flex-col items-center gap-3 text-center', coverPreview ? 'rounded-xl bg-bg-surface px-4 py-3' : '')}>
               <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-bg-accent-subtle text-text-accent">
                 <ImagePlus className="h-8 w-8" />
               </div>
-              <h3 className="text-[15px] font-medium text-text-primary">Imagem de capa</h3>
-              <p className="max-w-55 text-[12px] leading-tight text-text-secondary">
-                Toque para fazer upload da foto principal do imóvel.
+              <h3 className="text-md font-medium text-text-primary">Imagem de capa</h3>
+              <p className="max-w-55 text-xs leading-tight text-text-secondary">
+                Toque para fazer upload da foto principal do imovel.
               </p>
             </div>
-            <input ref={coverInputRef} accept="image/*" className="hidden" type="file" onChange={onCoverChange} />
+            <input ref={coverInputRef} accept="image/*" className="hl-input sr-only" type="file" onChange={onCoverChange} />
           </button>
 
-          <Card className="rounded-xl border-neutral-100 bg-(--hl-bg-card) p-1">
+          <Card className="p-1">
             <CardContent className="flex flex-col gap-4 p-0">
-              <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
-                <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Nome da propriedade</label>
-                <Input id="name" placeholder="Ex: Edifício Aurora" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('name')} />
-                {errors.name && <p className="mt-2 text-[12px] text-(--color-danger)">{errors.name.message}</p>}
+              <div className="rounded-lg bg-bg-surface p-4 transition-colors focus-within:bg-bg-subtle">
+                <label htmlFor="name" className="hl-label mb-2 text-text-tertiary">Nome da propriedade</label>
+                <Input id="name" placeholder="Ex.: Edificio Aurora" className="border-0 bg-transparent p-0" {...register('name')} />
+                {errors.name && <p className="hl-error mt-2">{errors.name.message}</p>}
               </div>
 
-              <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
-                <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Endereço completo</label>
-                <Input id="address" placeholder="Av. Paulista, 1000 - Bela Vista" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('address')} />
-                {errors.address && <p className="mt-2 text-[12px] text-(--color-danger)">{errors.address.message}</p>}
+              <div className="rounded-lg bg-bg-surface p-4 transition-colors focus-within:bg-bg-subtle">
+                <label htmlFor="address" className="hl-label mb-2 text-text-tertiary">Endereco completo</label>
+                <Input id="address" placeholder="Av. Paulista, 1000 - Bela Vista" className="border-0 bg-transparent p-0" {...register('address')} />
+                {errors.address && <p className="hl-error mt-2">{errors.address.message}</p>}
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="relative rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
-                  <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Tipo de imóvel</label>
+                <div className="relative rounded-lg bg-bg-surface p-4 transition-colors focus-within:bg-bg-subtle">
+                  <label className="hl-label mb-2 text-text-tertiary">Tipo de imovel</label>
                   <Select defaultValue="house" onValueChange={(value) => setValue('type', value as FormData['type'])}>
-                    <SelectTrigger className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium text-(--hl-text-primary) focus:border-(--field-border-strong)">
+                    <SelectTrigger className="border-0 bg-transparent p-0 text-text-primary">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="house">Casa</SelectItem>
                       <SelectItem value="apt">Apartamento</SelectItem>
                       <SelectItem value="commercial">Comercial</SelectItem>
-                      <SelectItem value="warehouse">Galpão</SelectItem>
+                      <SelectItem value="warehouse">Galpao</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="mt-2 text-[12px] text-(--hl-text-secondary)">Selecionado: {typeLabel}</p>
+                  <p className="mt-2 text-xs text-text-secondary">Selecionado: {typeLabel}</p>
                 </div>
 
-                <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
-                  <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Área total (m²)</label>
+                <div className="rounded-lg bg-bg-surface p-4 transition-colors focus-within:bg-bg-subtle">
+                  <label htmlFor="area_m2" className="hl-label mb-2 text-text-tertiary">Area total (m2)</label>
                   <div className="flex items-center gap-2">
-                    <Input id="area_m2" type="number" step="0.1" placeholder="0" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('area_m2')} />
-                    <span className="text-[13px] text-(--hl-text-secondary)">m²</span>
+                    <Input id="area_m2" type="number" step="0.1" placeholder="0" className="border-0 bg-transparent p-0" {...register('area_m2')} />
+                    <span className="text-sm text-text-secondary">m2</span>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
-                <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Cidade</label>
-                <Input id="city" placeholder="São Paulo" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('city')} />
-                {errors.city && <p className="mt-2 text-[12px] text-(--color-danger)">{errors.city.message}</p>}
+              <div className="rounded-lg bg-bg-surface p-4 transition-colors focus-within:bg-bg-subtle">
+                <label htmlFor="city" className="hl-label mb-2 text-text-tertiary">Cidade</label>
+                <Input id="city" placeholder="Sao Paulo" className="border-0 bg-transparent p-0" {...register('city')} />
+                {errors.city && <p className="hl-error mt-2">{errors.city.message}</p>}
               </div>
             </CardContent>
           </Card>
 
           {error && (
-            <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-[13px] text-(--color-danger)">
+            <div className="rounded-lg border-half border-border-danger bg-bg-danger px-4 py-3 text-sm text-text-danger">
               {error}
             </div>
           )}
 
           <Button type="submit" size="lg" loading={isSubmitting} className="mt-2 w-full">
-            Cadastrar imóvel
+            Cadastrar imovel
             <ArrowRight className="h-4 w-4" />
           </Button>
         </form>
