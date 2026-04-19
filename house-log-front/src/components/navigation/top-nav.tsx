@@ -28,32 +28,31 @@ export function TopNav() {
 
   const avatarColors =
     user?.role === 'owner'
-      ? { bg: 'var(--color-avatar-owner-bg)', fg: 'var(--color-avatar-owner-fg)' }
+      ? { bg: 'var(--avatar-owner-bg)', fg: 'var(--avatar-owner-text)' }
       : user?.role === 'provider' || user?.role === 'temp_provider'
-        ? { bg: 'var(--color-avatar-provider-bg)', fg: 'var(--color-avatar-provider-fg)' }
-        : { bg: 'var(--color-avatar-manager-bg)', fg: 'var(--color-avatar-manager-fg)' };
+        ? { bg: 'var(--avatar-provider-bg)', fg: 'var(--avatar-provider-text)' }
+        : { bg: 'var(--avatar-manager-bg)', fg: 'var(--avatar-manager-text)' };
 
   return (
     <>
       <div className="hidden h-14 shrink-0 md:block" aria-hidden="true" />
 
       <header
-        className="fixed left-0 right-0 top-0 hidden h-13 items-center border-b border-neutral-100 bg-(--hl-bg-card) px-4 md:flex"
-        style={{ zIndex: 'var(--z-nav)' }}
+        className="fixed left-0 right-0 top-0 z-sticky hidden h-13 items-center border-b border-border-subtle bg-nav-bg px-4 md:flex"
       >
         <Link
           href={user?.role === 'provider' || user?.role === 'temp_provider' ? '/provider/dashboard' : '/dashboard'}
           className="flex shrink-0 items-center gap-2"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-100">
-            <Home size={16} strokeWidth={1.8} className="text-(--color-primary)" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border-half border-border-subtle">
+            <Home size={16} strokeWidth={1.8} className="text-nav-text-active" />
           </div>
-          <span className="text-[15px] font-medium tracking-tight text-(--hl-text-primary)">HouseLog</span>
+          <span className="text-md font-medium tracking-tight text-text-inverse">HouseLog</span>
         </Link>
 
         <nav
           className="absolute left-1/2 flex h-13 -translate-x-1/2 items-center"
-          aria-label="Navegacao principal"
+          aria-label="Navegação principal"
         >
           {items.map((item) => {
             const active = isNavItemActive(item, pathname);
@@ -63,10 +62,10 @@ export function TopNav() {
                 key={item.href}
                 href={item.href}
                 className={
-                  'flex h-full items-center gap-1.5 border-b-2 px-4 text-[13px] font-medium transition-colors duration-150 ' +
+                  'flex h-full items-center gap-1.5 border-b-2 px-4 text-sm font-medium transition-colors duration-150 ' +
                   (active
-                    ? 'border-(--color-primary) text-(--hl-text-primary)'
-                    : 'border-transparent text-neutral-600 hover:border-neutral-100 hover:text-neutral-800')
+                    ? 'border-nav-text-active text-nav-text-active'
+                    : 'border-transparent text-nav-text-inactive hover:border-border-subtle hover:text-text-inverse')
                 }
               >
                 <Icon size={16} strokeWidth={1.8} aria-hidden="true" className="hidden md:block" />
@@ -78,9 +77,9 @@ export function TopNav() {
 
         <Link href={profileHref} className="group ml-auto flex shrink-0 items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: avatarColors.bg }}>
-            <span className="text-[11px] font-medium" style={{ color: avatarColors.fg }}>{initials}</span>
+            <span className="text-xs font-medium" style={{ color: avatarColors.fg }}>{initials}</span>
           </div>
-          <span className="hidden text-[13px] font-medium text-neutral-600 transition-colors group-hover:text-(--hl-text-primary) lg:block">
+          <span className="hidden text-sm font-medium text-nav-text-inactive transition-colors group-hover:text-nav-text-active lg:block">
             {firstName}
           </span>
         </Link>

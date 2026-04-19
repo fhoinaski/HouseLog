@@ -56,27 +56,27 @@ function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void
   const StatusIcon = STATUS_ICON[order.status] ?? Clock;
 
   return (
-    <Card className="cursor-pointer transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]" onClick={onClick}>
+    <Card className="cursor-pointer transition-colors hover:bg-bg-subtle active:scale-[0.98]" onClick={onClick}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
             <div className={cn(
               'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-              order.priority === 'urgent' ? 'bg-(--color-danger-light)' : 'bg-(--color-primary-light)'
+              order.priority === 'urgent' ? 'bg-bg-danger' : 'bg-bg-accent-subtle'
             )}>
               <StatusIcon className={cn(
                 'h-4 w-4',
-                order.priority === 'urgent' ? 'text-(--color-danger)' : 'text-(--color-primary)'
+                order.priority === 'urgent' ? 'text-text-danger' : 'text-text-accent'
               )} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-medium text-sm">{order.title}</p>
+                <p className="font-medium text-sm text-text-primary">{order.title}</p>
                 {order.priority === 'urgent' && (
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-(--color-danger)" />
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-text-danger" />
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-0.5 text-xs text-text-secondary">
                 {SYSTEM_TYPE_LABELS[order.system_type]} · {order.room_name ?? 'Sem cômodo'}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -90,11 +90,11 @@ function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
+            <p className="text-xs text-text-secondary">{formatDate(order.created_at)}</p>
             {order.assigned_to_name && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{order.assigned_to_name}</p>
+              <p className="mt-0.5 text-xs text-text-secondary">{order.assigned_to_name}</p>
             )}
-            <ChevronRight className="ml-auto mt-1 h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="ml-auto mt-1 h-4 w-4 text-text-tertiary" />
           </div>
         </div>
       </CardContent>
@@ -149,45 +149,39 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
     : [];
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="space-y-5 safe-bottom">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium">Ordens de serviço</h2>
+        <h2 className="text-xl font-medium text-text-primary">Ordens de serviço</h2>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           Nova OS
         </Button>
       </div>
 
-      {/* Status filter */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap tap-highlight-none">
         {['', 'requested', 'approved', 'in_progress', 'completed', 'verified'].map((s) => (
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors border',
-              statusFilter === s
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'border-border bg-card text-muted-foreground hover:border-primary-400'
-            )}
+            className="hl-chip"
+            data-active={statusFilter === s ? 'true' : undefined}
           >
             {s ? SERVICE_STATUS_LABELS[s] : 'Todas'}
           </button>
         ))}
       </div>
 
-      {/* List */}
       {orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Wrench className="mb-3 h-10 w-10 text-neutral-300" />
-          <p className="text-sm text-muted-foreground">Nenhuma OS encontrada</p>
+          <Wrench className="mb-3 h-10 w-10 text-text-disabled" />
+          <p className="text-sm text-text-secondary">Nenhuma OS encontrada</p>
           <Button variant="outline" className="mt-3" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" /> Criar OS
           </Button>
         </div>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className="space-y-3 tap-highlight-none">
             {orders.map((order) => (
               <OrderRow key={order.id} order={order} onClick={() => openDetail(order)} />
             ))}
@@ -218,7 +212,6 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         }}
       />
 
-      {/* Detail dialog */}
       {selectedOrder && (
         <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
           <DialogContent className="max-w-lg">
@@ -237,42 +230,41 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Sistema</dt>
-                  <dd>{SYSTEM_TYPE_LABELS[selectedOrder.system_type]}</dd>
+                  <dt className="text-text-secondary">Sistema</dt>
+                  <dd className="text-text-primary">{SYSTEM_TYPE_LABELS[selectedOrder.system_type]}</dd>
                 </div>
                 {selectedOrder.room_name && (
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Cômodo</dt>
-                    <dd>{selectedOrder.room_name}</dd>
+                    <dt className="text-text-secondary">Cômodo</dt>
+                    <dd className="text-text-primary">{selectedOrder.room_name}</dd>
                   </div>
                 )}
                 {selectedOrder.cost && (
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Custo</dt>
-                    <dd>R$ {selectedOrder.cost.toFixed(2)}</dd>
+                    <dt className="text-text-secondary">Custo</dt>
+                    <dd className="text-text-primary">R$ {selectedOrder.cost.toFixed(2)}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Criada por</dt>
-                  <dd>{selectedOrder.requested_by_name}</dd>
+                  <dt className="text-text-secondary">Criada por</dt>
+                  <dd className="text-text-primary">{selectedOrder.requested_by_name}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Data</dt>
-                  <dd>{formatDate(selectedOrder.created_at)}</dd>
+                  <dt className="text-text-secondary">Data</dt>
+                  <dd className="text-text-primary">{formatDate(selectedOrder.created_at)}</dd>
                 </div>
               </dl>
 
               {selectedOrder.description && (
                 <div>
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">Descrição</p>
-                  <p className="text-sm">{selectedOrder.description}</p>
+                  <p className="mb-1 text-xs font-medium text-text-secondary">Descrição</p>
+                  <p className="text-sm text-text-primary">{selectedOrder.description}</p>
                 </div>
               )}
 
-              {/* Photos */}
               {selectedBeforePhotos.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">Fotos antes</p>
+                  <p className="mb-2 text-xs font-medium text-text-secondary">Fotos antes</p>
                   <div className="flex gap-2 flex-wrap">
                     {selectedBeforePhotos.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -284,7 +276,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
               {selectedAfterPhotos.length > 0 && (
                 <div>
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">Fotos depois</p>
+                  <p className="mb-2 text-xs font-medium text-text-secondary">Fotos depois</p>
                   <div className="flex gap-2 flex-wrap">
                     {selectedAfterPhotos.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -294,9 +286,8 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
                 </div>
               )}
 
-              {/* Status actions */}
               {STATUS_TRANSITIONS[selectedOrder.status]?.length > 0 && (
-                <div className="flex gap-2 border-t border-border pt-2">
+                <div className="flex gap-2 border-t border-border-subtle pt-2">
                   {STATUS_TRANSITIONS[selectedOrder.status].map((next) => (
                     <Button
                       key={next}

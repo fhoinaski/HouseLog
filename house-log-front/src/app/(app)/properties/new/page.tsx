@@ -68,22 +68,24 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-(--hl-bg-page) pb-20 pt-13">
-      <header className="fixed left-0 top-0 z-40 flex h-13 w-full items-center justify-between border-b border-neutral-100 bg-(--hl-bg-card) px-4">
-        <button
+    <div className="min-h-screen overflow-x-hidden bg-bg-page pb-20 pt-13">
+      <header className="fixed left-0 top-0 z-40 flex h-13 w-full items-center justify-between border-b border-border-subtle bg-bg-surface px-4">
+        <Button
+          variant="ghost"
+          size="icon"
           aria-label="Voltar"
-          className="-ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-(--color-primary) transition-colors hover:bg-(--color-primary-light) active:scale-[0.98]"
+          className="-ml-1"
           onClick={() => router.back()}
         >
           <ArrowLeft className="h-5 w-5" />
-        </button>
-        <h1 className="pr-10 text-center text-[15px] font-medium tracking-tight text-(--hl-text-primary)">Novo imóvel</h1>
+        </Button>
+        <h1 className="pr-10 text-center text-[15px] font-medium tracking-tight text-text-primary">Novo imóvel</h1>
       </header>
 
       <main className="mx-auto mt-4 flex w-full max-w-3xl flex-col gap-4 px-4 pb-8">
         <div className="flex flex-col gap-2">
-          <h2 className="text-[20px] font-medium tracking-tight text-(--hl-text-primary)">Adicionar propriedade</h2>
-          <p className="max-w-lg text-[13px] leading-relaxed text-(--hl-text-secondary)">
+          <h2 className="text-[20px] font-medium tracking-tight text-text-primary">Adicionar propriedade</h2>
+          <p className="max-w-lg text-[13px] leading-relaxed text-text-secondary">
             Insira os dados fundamentais para integrar esta propriedade ao seu portfólio de gestão.
           </p>
         </div>
@@ -92,18 +94,18 @@ export default function NewPropertyPage() {
           <button
             type="button"
             onClick={onPickCover}
-            className="group relative flex min-h-55 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-neutral-100 bg-(--hl-bg-card) p-6 transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]"
+            className="group relative flex min-h-55 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-half border-border-subtle bg-bg-surface p-6 transition-colors hover:bg-bg-subtle active:scale-[0.98]"
           >
             {coverPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={coverPreview} alt="Prévia da capa" className="absolute inset-0 h-full w-full object-cover" />
             ) : null}
-            <div className={cn('z-10 flex flex-col items-center gap-3 text-center', coverPreview ? 'rounded-xl bg-(--hl-bg-card) px-4 py-3' : '')}>
-              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--color-primary-light) text-(--color-primary)">
+            <div className={cn('z-10 flex flex-col items-center gap-3 text-center', coverPreview ? 'rounded-xl bg-bg-surface px-4 py-3' : '')}>
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-bg-accent-subtle text-text-accent">
                 <ImagePlus className="h-8 w-8" />
               </div>
-              <h3 className="text-[15px] font-medium text-(--hl-text-primary)">Imagem de capa</h3>
-              <p className="max-w-55 text-[12px] leading-tight text-(--hl-text-secondary)">
+              <h3 className="text-[15px] font-medium text-text-primary">Imagem de capa</h3>
+              <p className="max-w-55 text-[12px] leading-tight text-text-secondary">
                 Toque para fazer upload da foto principal do imóvel.
               </p>
             </div>

@@ -58,51 +58,51 @@ function ScheduleCard({
         <div className="flex items-start gap-3">
           <div className={cn(
             'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
-            overdue ? 'bg-(--color-danger-light)' : 'bg-(--color-primary-light)'
+            overdue ? 'bg-bg-danger' : 'bg-bg-accent-subtle'
           )}>
-            <Wrench className={cn('h-4 w-4', overdue ? 'text-(--color-danger)' : 'text-(--color-primary)')} />
+            <Wrench className={cn('h-4 w-4', overdue ? 'text-text-danger' : 'text-text-accent')} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm">{s.title}</p>
+            <p className="font-medium text-sm text-text-primary">{s.title}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="secondary" className="text-xs">
                 {SYSTEM_TYPE_LABELS[s.system_type] ?? s.system_type}
               </Badge>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-text-secondary">
                 {FREQUENCY_LABELS[s.frequency]}
               </span>
               <span className={cn(
                 'text-xs font-medium flex items-center gap-1',
-                overdue ? 'text-(--color-danger)' : 'text-(--color-warning)'
+                overdue ? 'text-text-danger' : 'text-text-warning'
               )}>
                 {overdue ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                 {dueLabel}
               </span>
             </div>
             {s.last_done && (
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs text-text-secondary mt-0.5">
                 Última execução: {formatDate(s.last_done)}
               </p>
             )}
             {s.responsible && (
-              <p className="text-xs text-muted-foreground mt-0.5">Responsável: {s.responsible}</p>
+              <p className="text-xs text-text-secondary mt-0.5">Responsável: {s.responsible}</p>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-(--color-success) hover:bg-(--color-success-light)"
+              className="h-8 w-8 text-text-success hover:bg-bg-success"
               title="Marcar como feito"
               onClick={() => onMarkDone(s)}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(s)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-text-secondary" onClick={() => onEdit(s)}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-(--color-danger) hover:bg-(--color-danger-light)"
+              className="h-8 w-8 text-text-danger hover:bg-bg-danger"
               onClick={() => onDelete(s)}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -204,7 +204,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
     if (items.length === 0) return null;
     return (
       <div className="space-y-3">
-        <h3 className="text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">{title}</h3>
+        <h3 className="hl-section-title">{title}</h3>
         {items.map((s) => (
           <ScheduleCard key={s.id} s={s} onEdit={openEdit} onDelete={setDeleteItem} onMarkDone={setMarkDoneItem} />
         ))}
@@ -213,27 +213,27 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 safe-bottom">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-medium">Manutenção preventiva</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-xl font-medium text-text-primary">Manutenção preventiva</h2>
+          <p className="text-sm text-text-secondary">
             {schedules.length} agendamento{schedules.length !== 1 ? 's' : ''}
             {overdue.length > 0 && (
-              <span className="ml-2 font-medium text-(--color-danger)">· {overdue.length} vencido{overdue.length !== 1 ? 's' : ''}</span>
+              <span className="ml-2 font-medium text-text-danger">· {overdue.length} vencido{overdue.length !== 1 ? 's' : ''}</span>
             )}
           </p>
         </div>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4" />
-          Novo Agendamento
+          Novo agendamento
         </Button>
       </div>
 
       {schedules.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <RefreshCw className="mb-3 h-10 w-10 text-(--hl-text-tertiary)" />
-          <p className="text-muted-foreground text-sm">Nenhum agendamento cadastrado</p>
+          <RefreshCw className="mb-3 h-10 w-10 text-text-tertiary" />
+          <p className="text-text-secondary text-sm">Nenhum agendamento cadastrado</p>
           <Button variant="outline" className="mt-3" onClick={openNew}>
             <Plus className="h-4 w-4" /> Criar agendamento
           </Button>
@@ -246,11 +246,10 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editItem ? 'Editar Manutenção' : 'Nova Manutenção'}</DialogTitle>
+            <DialogTitle>{editItem ? 'Editar manutenção' : 'Nova manutenção'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-4">
@@ -287,7 +286,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
             <div className="space-y-1.5">
               <Label htmlFor="m-title">Título *</Label>
               <Input id="m-title" placeholder="Revisão do ar-condicionado..." {...register('title')} />
-              {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
+              {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -307,7 +306,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {apiError && (
-              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-3 py-2 text-sm text-(--color-danger)">
+              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
                 {apiError}
               </div>
             )}
@@ -324,14 +323,13 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
         </DialogContent>
       </Dialog>
 
-      {/* Mark done confirm dialog */}
       <Dialog open={!!markDoneItem} onOpenChange={() => { setMarkDoneItem(null); setAutoCreateOs(false); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Marcar como Realizado</DialogTitle>
+            <DialogTitle>Marcar como realizado</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Confirma a execução de <strong>{markDoneItem?.title}</strong>?
+          <p className="text-sm text-text-secondary">
+            Confirma a execução de <strong className="text-text-primary">{markDoneItem?.title}</strong>?
             A próxima data será recalculada automaticamente.
           </p>
           <label className="flex items-center gap-3 mt-2 cursor-pointer">
@@ -339,9 +337,9 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
               type="checkbox"
               checked={autoCreateOs}
               onChange={(e) => setAutoCreateOs(e.target.checked)}
-              className="h-4 w-4 rounded border-neutral-300 text-(--color-primary)"
+              className="h-4 w-4 rounded border-border-subtle"
             />
-            <span className="text-sm">Criar OS de verificação automaticamente</span>
+            <span className="text-sm text-text-primary">Criar OS de verificação automaticamente</span>
           </label>
           <div className="flex gap-3 mt-4">
             <Button variant="outline" onClick={() => setMarkDoneItem(null)} className="flex-1">
@@ -354,14 +352,13 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm dialog */}
       <Dialog open={!!deleteItem} onOpenChange={() => setDeleteItem(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Remover Agendamento</DialogTitle>
+            <DialogTitle>Remover agendamento</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Tem certeza que deseja remover <strong>{deleteItem?.title}</strong>? Esta ação não pode ser desfeita.
+          <p className="text-sm text-text-secondary">
+            Tem certeza que deseja remover <strong className="text-text-primary">{deleteItem?.title}</strong>? Esta ação não pode ser desfeita.
           </p>
           <div className="flex gap-3 mt-4">
             <Button variant="outline" onClick={() => setDeleteItem(null)} className="flex-1">

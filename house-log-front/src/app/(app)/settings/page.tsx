@@ -132,7 +132,7 @@ export default function SettingsPage() {
         <TabsContent value="profile">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Informações Pessoais</CardTitle>
+              <CardTitle className="text-base">Informações pessoais</CardTitle>
               <CardDescription>Atualize seu nome e telefone de contato</CardDescription>
             </CardHeader>
             <CardContent>
@@ -151,7 +151,7 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">O email não pode ser alterado</p>
                 </div>
                 {profileErrors.root && (
-                  <p className="text-xs text-(--color-danger)">{profileErrors.root.message}</p>
+                  <p className="text-xs text-text-danger">{profileErrors.root.message}</p>
                 )}
                 <Button type="submit" loading={savingProfile}>Salvar alterações</Button>
               </form>
@@ -163,7 +163,7 @@ export default function SettingsPage() {
         <TabsContent value="security">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Alterar Senha</CardTitle>
+              <CardTitle className="text-base">Alterar senha</CardTitle>
               <CardDescription>Use uma senha forte com ao menos 8 caracteres</CardDescription>
             </CardHeader>
             <CardContent>
@@ -172,18 +172,18 @@ export default function SettingsPage() {
                   <Label htmlFor="currentPw">Senha atual</Label>
                   <Input id="currentPw" type="password" {...regPw('currentPassword')} />
                   {pwErrors.currentPassword && (
-                    <p className="text-xs text-(--color-danger)">{pwErrors.currentPassword.message}</p>
+                    <p className="text-xs text-text-danger">{pwErrors.currentPassword.message}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="newPw">Nova senha</Label>
                   <Input id="newPw" type="password" {...regPw('newPassword')} />
-                  {pwErrors.newPassword && <p className="text-xs text-(--color-danger)">{pwErrors.newPassword.message}</p>}
+                  {pwErrors.newPassword && <p className="text-xs text-text-danger">{pwErrors.newPassword.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="confirmPw">Confirmar nova senha</Label>
                   <Input id="confirmPw" type="password" {...regPw('confirmPassword')} />
-                  {pwErrors.confirmPassword && <p className="text-xs text-(--color-danger)">{pwErrors.confirmPassword.message}</p>}
+                  {pwErrors.confirmPassword && <p className="text-xs text-text-danger">{pwErrors.confirmPassword.message}</p>}
                 </div>
                 <Button type="submit" loading={savingPw}>Alterar senha</Button>
               </form>
@@ -193,8 +193,8 @@ export default function SettingsPage() {
           <Card className="mt-4">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Shield className="h-4 w-4 text-(--color-success)" />
-                Sessões Ativas
+                <Shield className="h-4 w-4 text-text-success" />
+                Sessões ativas
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -213,7 +213,7 @@ export default function SettingsPage() {
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Preferências de Notificação</CardTitle>
+              <CardTitle className="text-base">Preferências de notificação</CardTitle>
               <CardDescription>Escolha quando você quer ser notificado por email</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -234,7 +234,7 @@ export default function SettingsPage() {
                       onChange={(e) => setNotifPrefs((p) => ({ ...p, [n.key]: e.target.checked }))}
                       className="peer sr-only"
                     />
-                    <div className="peer h-5 w-9 rounded-full bg-neutral-200 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-(--color-primary) peer-checked:after:translate-x-4" />
+                    <div className="peer h-5 w-9 rounded-full bg-bg-muted after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-interactive-primary-bg peer-checked:after:translate-x-4" />
                   </label>
                 </div>
               ))}

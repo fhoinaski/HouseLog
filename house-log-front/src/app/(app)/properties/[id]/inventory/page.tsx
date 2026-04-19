@@ -51,20 +51,19 @@ function ItemCard({
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]"
+      className="group cursor-pointer overflow-hidden transition-colors hover:bg-bg-subtle active:scale-[0.98]"
       onClick={onClick}
     >
-      <div className="relative h-32 bg-(--hl-bg-subtle)">
+      <div className="relative h-32 bg-bg-subtle">
         {item.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Package className="h-8 w-8 text-(--hl-text-tertiary)" />
+            <Package className="h-8 w-8 text-text-tertiary" />
           </div>
         )}
 
-        {/* Upload overlay / spinner */}
         {uploading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <Loader2 className="h-6 w-6 text-white animate-spin" />
@@ -101,15 +100,14 @@ function ItemCard({
         )}
         {item.warranty_until && (
           <div className="absolute top-2 right-2" title={`Garantia até ${item.warranty_until}`}>
-            <div className={cn(
-              'flex h-5 w-5 items-center justify-center rounded-full',
-              new Date(item.warranty_until) < new Date() ? 'bg-(--color-danger)' : 'bg-(--color-success)'
-            )}>
+            <div
+              className="flex h-5 w-5 items-center justify-center rounded-full"
+              style={{ background: new Date(item.warranty_until) < new Date() ? 'var(--text-danger)' : 'var(--text-success)' }}
+            >
               <ShieldCheck className="h-3 w-3 text-white" />
             </div>
           </div>
         )}
-        {/* QR button */}
         <Link
           href={`/properties/${propertyId}/inventory/${item.id}/qr`}
           onClick={(e) => e.stopPropagation()}
@@ -123,12 +121,12 @@ function ItemCard({
         <Badge variant="secondary" className="text-xs mb-1.5">
           {INVENTORY_CATEGORY_LABELS[item.category] ?? item.category}
         </Badge>
-        <p className="font-medium text-sm truncate">{item.name}</p>
-        {item.brand && <p className="text-xs text-muted-foreground truncate">{item.brand}</p>}
+        <p className="font-medium text-sm text-text-primary truncate">{item.name}</p>
+        {item.brand && <p className="text-xs text-text-secondary truncate">{item.brand}</p>}
         <div className="flex items-center justify-between mt-2">
-          <span className="text-sm font-medium">{item.quantity} {item.unit}</span>
+          <span className="text-sm font-medium text-text-primary">{item.quantity} {item.unit}</span>
           {item.room_name && (
-            <span className="text-xs text-muted-foreground truncate ml-2">{item.room_name}</span>
+            <span className="text-xs text-text-secondary truncate ml-2">{item.room_name}</span>
           )}
         </div>
       </CardContent>
@@ -205,7 +203,6 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
     const file = e.target.files?.[0];
     const itemId = uploadTargetRef.current;
     if (!file || !itemId) return;
-    // Reset so the same file can be re-selected later
     e.target.value = '';
 
     setUploadingId(itemId);
@@ -213,7 +210,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       await inventoryApi.uploadPhoto(id, itemId, file);
       await mutate();
     } catch {
-      // silently fail — user can retry by clicking again
+      // silently fail — user can retry
     } finally {
       setUploadingId(null);
       uploadTargetRef.current = null;
@@ -238,24 +235,23 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="space-y-5 safe-bottom">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium">Inventário</h2>
+        <h2 className="text-xl font-medium text-text-primary">Inventário</h2>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4" />
-          Novo Item
+          Novo item
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar item..."
-            className="h-11 w-full rounded-(--radius) border border-border bg-card py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-(--field-focus-ring)"
+            className="h-11 w-full rounded-lg border-half border-border-subtle bg-bg-surface py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -284,11 +280,10 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         </Select>
       </div>
 
-      {/* Grid */}
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Package className="mb-3 h-10 w-10 text-neutral-200" />
-          <p className="text-muted-foreground text-sm">Nenhum item encontrado</p>
+          <Package className="mb-3 h-10 w-10 text-text-disabled" />
+          <p className="text-text-secondary text-sm">Nenhum item encontrado</p>
           <Button variant="outline" className="mt-3" onClick={openNew}>
             <Plus className="h-4 w-4" /> Adicionar item
           </Button>
@@ -308,7 +303,6 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      {/* Hidden file input for photo upload */}
       <input
         ref={fileInputRef}
         type="file"
@@ -317,11 +311,10 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         onChange={handleFileChange}
       />
 
-      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editItem ? 'Editar Item' : 'Novo Item'}</DialogTitle>
+            <DialogTitle>{editItem ? 'Editar item' : 'Novo item'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2 max-h-[70vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-4">
@@ -338,13 +331,13 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.category && <p className="text-xs text-(--color-danger)">{errors.category.message}</p>}
+                {errors.category && <p className="text-xs text-text-danger">{errors.category.message}</p>}
               </div>
 
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="item-name">Nome *</Label>
                 <Input id="item-name" placeholder="Tinta acrílica, cerâmica..." {...register('name')} />
-                {errors.name && <p className="text-xs text-(--color-danger)">{errors.name.message}</p>}
+                {errors.name && <p className="text-xs text-text-danger">{errors.name.message}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -360,8 +353,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               <div className="space-y-1.5">
                 <Label htmlFor="color-code">Código de cor</Label>
                 <div className="flex gap-2">
-                  <input type="color" className="h-9 w-12 rounded border cursor-pointer" {...register('color_code')} />
-                  <Input id="color-code" placeholder="var(--color-primary)" {...register('color_code')} />
+                  <input type="color" className="h-9 w-12 rounded border-half border-border-subtle cursor-pointer" {...register('color_code')} />
+                  <Input id="color-code" placeholder="#FFFFFF" {...register('color_code')} />
                 </div>
               </div>
 
@@ -403,7 +396,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5">
                 <Label htmlFor="warranty" className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-(--color-success)" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-text-success" />
                   Garantia até
                 </Label>
                 <Input id="warranty" type="date" {...register('warranty_until')} />
@@ -411,7 +404,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             </div>
 
             {apiError && (
-              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-3 py-2 text-sm text-(--color-danger)">
+              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
                 {apiError}
               </div>
             )}

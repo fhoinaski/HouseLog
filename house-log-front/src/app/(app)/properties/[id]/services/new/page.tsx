@@ -131,7 +131,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-20">
+    <div className="mx-auto max-w-2xl space-y-6 safe-bottom">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
@@ -140,13 +140,13 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Detalhes da OS</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base text-text-primary">Detalhes da OS</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="title">Título *</Label>
               <Input id="title" placeholder="Troca de disjuntor, reparo de vazamento..." {...register('title')} />
-              {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
+              {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -166,7 +166,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
                     <SelectItem value="direct">Execução direta (prestador da equipe)</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-text-secondary">
                   {serviceFlow === 'quote'
                     ? 'Prestadores orçam esta OS; nenhum prestador é definido agora.'
                     : 'A OS é enviada direto ao prestador selecionado para execução.'}
@@ -272,13 +272,13 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
                       {providerOptions.map((p) => (
                         <SelectItem key={p.user_id} value={p.user_id}>
                           {p.name}
-                          {p.email && <span className="text-muted-foreground ml-1 text-xs">· {p.email}</span>}
+                          {p.email && <span className="text-text-secondary ml-1 text-xs">· {p.email}</span>}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <p className="text-xs text-muted-foreground py-2">
+                  <p className="text-xs text-text-secondary py-2">
                     Nenhum prestador compatível com este tipo de serviço. Convide/cadastre na aba <strong>Equipe</strong>.
                   </p>
                 )}
@@ -290,7 +290,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
             </div>
 
             {apiError && (
-              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-sm text-(--color-danger)">
+              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-4 py-3 text-sm text-text-danger">
                 {apiError}
               </div>
             )}

@@ -27,66 +27,61 @@ export default function ProviderServicesPage() {
   const orders = data?.data ?? [];
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="safe-bottom space-y-5">
       <div>
         <h1 className="text-2xl font-medium">Minhas ordens de serviço</h1>
         <p className="text-sm text-muted-foreground">OS atribuídas a você</p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex flex-wrap gap-2">
         {(['', 'approved', 'in_progress', 'completed', 'verified'] as const).map((s) => (
           <button
             key={s}
+            type="button"
             onClick={() => setStatusFilter(s)}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors border',
-              statusFilter === s
-                ? 'bg-primary-600 text-white border-primary-600'
-                : 'border-border bg-card text-muted-foreground hover:border-primary-400'
-            )}
+            data-active={statusFilter === s}
+            className="hl-chip"
           >
             {s ? SERVICE_STATUS_LABELS[s] : 'Todas'}
           </button>
         ))}
       </div>
 
-      {/* List */}
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+            <div key={i} className="hl-skeleton h-24 rounded-xl" />
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Wrench className="mb-3 h-10 w-10 text-neutral-300" />
-          <p className="text-muted-foreground text-sm">Nenhuma OS encontrada</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Wrench className="mb-3 h-10 w-10 text-text-disabled" />
+          <p className="text-sm text-muted-foreground">Nenhuma OS encontrada</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="tap-highlight-none space-y-3">
           {orders.map((order: ProviderServiceOrder) => (
             <Link key={order.id} href={`/provider/services/${order.id}`}>
-              <Card className="cursor-pointer transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]">
+              <Card className="cursor-pointer transition-colors hover:bg-bg-subtle active:scale-[0.98]">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
                       <div className={cn(
                         'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-                        order.priority === 'urgent' ? 'bg-(--color-danger-light)' : 'bg-(--color-primary-light)'
+                        order.priority === 'urgent' ? 'bg-bg-danger' : 'bg-bg-accent-subtle'
                       )}>
-                        <Wrench className={cn('h-4 w-4', order.priority === 'urgent' ? 'text-(--color-danger)' : 'text-(--color-primary)')} />
+                        <Wrench className={cn('h-4 w-4', order.priority === 'urgent' ? 'text-text-danger' : 'text-text-accent')} />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium text-sm">{order.title}</p>
-                          {order.priority === 'urgent' && <AlertTriangle className="h-3.5 w-3.5 text-(--color-danger) shrink-0" />}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{order.title}</p>
+                          {order.priority === 'urgent' && <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-text-danger" />}
                         </div>
-                        <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
+                        <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                           <MapPin className="h-3 w-3" />
                           <span>{order.property_name} · {SYSTEM_TYPE_LABELS[order.system_type]}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           <Badge variant={STATUS_VARIANT[order.status]} className="text-xs">
                             {SERVICE_STATUS_LABELS[order.status]}
                           </Badge>
@@ -96,9 +91,9 @@ export default function ProviderServicesPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="shrink-0 text-right">
                       <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto mt-1" />
+                      <ChevronRight className="ml-auto mt-1 h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
                 </CardContent>

@@ -44,7 +44,6 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
     resolver: zodResolver(schema),
   });
 
-  // Pre-populate form when property loads
   useEffect(() => {
     if (property) {
       reset({
@@ -70,7 +69,6 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   async function onSubmit(data: FormData) {
     setApiError(null);
     try {
-      // Upload cover first if changed
       let coverUrl = coverPreview === null ? null : (property?.cover_url ?? null);
       if (coverFile) {
         setUploadingCover(true);
@@ -107,7 +105,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   if (!property) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-interactive-primary-bg border-t-transparent" />
       </div>
     );
   }
@@ -115,31 +113,30 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   const effectiveCoverPreview = coverPreview === undefined ? property.cover_url : coverPreview;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-20">
+    <div className="mx-auto max-w-2xl space-y-6 safe-bottom">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-medium">Editar imóvel</h1>
+        <h1 className="text-xl font-medium text-text-primary">Editar imóvel</h1>
       </div>
 
-      {/* Cover photo */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Foto de Capa</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base text-text-primary">Foto de capa</CardTitle></CardHeader>
         <CardContent className="p-6 pt-0">
-          <div className="relative h-48 overflow-hidden rounded-xl bg-neutral-100">
+          <div className="relative h-48 overflow-hidden rounded-xl bg-bg-subtle">
             {effectiveCoverPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={effectiveCoverPreview} alt="capa" className="w-full h-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-neutral-400">
+              <div className="flex h-full items-center justify-center text-text-tertiary">
                 Sem foto de capa
               </div>
             )}
             <div className="absolute bottom-3 right-3 flex gap-2">
               <Button
                 type="button" size="sm" variant="outline"
-                className="bg-white/90 hover:bg-white"
+                className="bg-bg-surface/90 hover:bg-bg-surface"
                 onClick={() => coverRef.current?.click()}
               >
                 <Camera className="h-3.5 w-3.5" />
@@ -148,10 +145,10 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               {effectiveCoverPreview && (
                 <Button
                   type="button" size="icon" variant="outline"
-                  className="bg-white/90 hover:bg-white h-8 w-8"
+                  className="bg-bg-surface/90 hover:bg-bg-surface h-8 w-8"
                   onClick={() => { setCoverPreview(null); setCoverFile(null); }}
                 >
-                  <Trash2 className="h-3.5 w-3.5 text-(--color-danger)" />
+                  <Trash2 className="h-3.5 w-3.5 text-text-danger" />
                 </Button>
               )}
             </div>
@@ -162,14 +159,14 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Informações do Imóvel</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base text-text-primary">Informações do imóvel</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="name">Nome / Apelido *</Label>
                 <Input id="name" placeholder="Casa da Praia, Apto 302..." {...register('name')} />
-                {errors.name && <p className="text-xs text-(--color-danger)">{errors.name.message}</p>}
+                {errors.name && <p className="text-xs text-text-danger">{errors.name.message}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -196,13 +193,13 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="address">Endereço *</Label>
                 <Input id="address" placeholder="Rua das Flores, 123" {...register('address')} />
-                {errors.address && <p className="text-xs text-(--color-danger)">{errors.address.message}</p>}
+                {errors.address && <p className="text-xs text-text-danger">{errors.address.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="city">Cidade *</Label>
                 <Input id="city" placeholder="São Paulo" {...register('city')} />
-                {errors.city && <p className="text-xs text-(--color-danger)">{errors.city.message}</p>}
+                {errors.city && <p className="text-xs text-text-danger">{errors.city.message}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -211,7 +208,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="year_built">Ano de Construção</Label>
+                <Label htmlFor="year_built">Ano de construção</Label>
                 <Input id="year_built" type="number" min={1800} max={2100} placeholder="1990"
                   {...register('year_built')} />
               </div>
@@ -223,7 +220,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
             </div>
 
             {apiError && (
-              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-sm text-(--color-danger)">
+              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-4 py-3 text-sm text-text-danger">
                 {apiError}
               </div>
             )}
@@ -233,7 +230,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
                 Cancelar
               </Button>
               <Button type="submit" loading={isSubmitting || uploadingCover}>
-                Salvar Alterações
+                Salvar alterações
               </Button>
             </div>
           </form>

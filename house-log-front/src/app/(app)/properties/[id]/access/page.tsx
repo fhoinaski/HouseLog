@@ -22,12 +22,12 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
-  { value: 'wifi',       label: 'Wi-Fi',          icon: Wifi,      color: 'text-(--color-primary)', bg: 'bg-(--color-primary-light) border-(--color-primary-border)' },
-  { value: 'alarm',      label: 'Alarme',         icon: Shield,    color: 'text-(--color-danger)',  bg: 'bg-(--color-danger-light) border-(--color-danger-border)' },
-  { value: 'smart_lock', label: 'Fechadura smart', icon: Lock,      color: 'text-(--color-warning)', bg: 'bg-(--color-warning-light) border-(--color-warning-border)' },
-  { value: 'gate',       label: 'Portão/acesso',  icon: KeyRound,  color: 'text-(--color-warning)', bg: 'bg-(--color-warning-light) border-(--color-warning-border)' },
-  { value: 'app',        label: 'App/sistema',    icon: AppWindow, color: 'text-(--color-success)', bg: 'bg-(--color-success-light) border-(--color-success-light)' },
-  { value: 'other',      label: 'Outro',          icon: HelpCircle, color: 'text-(--color-neutral-600)', bg: 'bg-(--color-neutral-50) border-(--color-neutral-200)' },
+  { value: 'wifi',       label: 'Wi-Fi',          icon: Wifi,       color: 'text-text-accent',   bg: 'bg-bg-accent-subtle border-border-accent' },
+  { value: 'alarm',      label: 'Alarme',         icon: Shield,     color: 'text-text-danger',   bg: 'bg-bg-danger border-border-danger' },
+  { value: 'smart_lock', label: 'Fechadura smart', icon: Lock,       color: 'text-text-warning',  bg: 'bg-bg-warning border-border-warning' },
+  { value: 'gate',       label: 'Portão/acesso',  icon: KeyRound,   color: 'text-text-warning',  bg: 'bg-bg-warning border-border-warning' },
+  { value: 'app',        label: 'App/sistema',    icon: AppWindow,  color: 'text-text-success',  bg: 'bg-bg-success border-border-success' },
+  { value: 'other',      label: 'Outro',          icon: HelpCircle, color: 'text-text-secondary', bg: 'bg-bg-subtle border-border-subtle' },
 ] as const;
 
 type CategoryValue = (typeof CATEGORIES)[number]['value'];
@@ -40,7 +40,6 @@ const credSchema = z.object({
   notes:             z.string().optional(),
   integration_type:  z.enum(['intelbras']).optional().nullable(),
   share_with_os:     z.boolean().default(false),
-  // Intelbras config fields
   intelbras_host:    z.string().optional(),
   intelbras_user:    z.string().optional(),
   intelbras_pass:    z.string().optional(),
@@ -61,16 +60,16 @@ function SecretCell({ secret }: { secret: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <code className={cn(
-        'flex-1 rounded px-1.5 py-0.5 text-xs font-mono bg-muted',
+        'flex-1 rounded px-1.5 py-0.5 text-xs font-mono bg-bg-subtle text-text-primary',
         show ? '' : 'select-none text-transparent'
       )}>
         {secret}
       </code>
-      <button onClick={() => setShow(!show)} className="p-1 text-muted-foreground transition-colors hover:text-foreground" aria-label={show ? 'Ocultar credencial' : 'Mostrar credencial'}>
+      <button onClick={() => setShow(!show)} className="p-1 text-text-tertiary transition-colors hover:text-text-primary" aria-label={show ? 'Ocultar credencial' : 'Mostrar credencial'}>
         {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
       </button>
-      <button onClick={copy} className="p-1 text-muted-foreground transition-colors hover:text-(--color-primary)" aria-label="Copiar credencial">
-        {copied ? <span className="text-[11px] font-medium text-(--color-success)">✓</span> : <Copy className="h-3.5 w-3.5" />}
+      <button onClick={copy} className="p-1 text-text-tertiary transition-colors hover:text-text-accent" aria-label="Copiar credencial">
+        {copied ? <span className="text-xs font-medium text-text-success">✓</span> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
   );
@@ -97,12 +96,12 @@ function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string
     <DialogContent className="max-w-sm">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-(--color-warning)" />
+          <Zap className="h-4 w-4 text-text-warning" />
           Gerar senha temporária
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">Integração Intelbras — <span className="font-medium">{label}</span></p>
+        <p className="text-sm text-text-secondary">Integração Intelbras — <span className="font-medium text-text-primary">{label}</span></p>
 
         {!result ? (
           <>
@@ -126,12 +125,12 @@ function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string
           </>
         ) : (
           <div className="space-y-3">
-            <div className="rounded-xl border border-(--color-warning-border) bg-(--color-warning-light) p-4 text-center">
-              <p className="mb-1 text-xs text-(--color-warning)">PIN temporário</p>
-              <p className="select-all font-mono text-3xl font-medium tracking-widest text-neutral-900">{result.temp_pin}</p>
-              <p className="mt-2 text-xs text-(--color-warning)">Expira: {new Date(result.expires_at).toLocaleString('pt-BR')}</p>
+            <div className="rounded-xl border-half border-border-warning bg-bg-warning p-4 text-center">
+              <p className="mb-1 text-xs text-text-warning">PIN temporário</p>
+              <p className="select-all font-mono text-3xl font-medium tracking-widest text-text-primary">{result.temp_pin}</p>
+              <p className="mt-2 text-xs text-text-warning">Expira: {new Date(result.expires_at).toLocaleString('pt-BR')}</p>
             </div>
-            <p className="text-xs text-muted-foreground">{result.note}</p>
+            <p className="text-xs text-text-secondary">{result.note}</p>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => {
                 navigator.clipboard.writeText(result.temp_pin);
@@ -146,7 +145,7 @@ function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string
           </div>
         )}
 
-        <Button variant="ghost" className="w-full text-xs text-muted-foreground" onClick={onClose}>
+        <Button variant="ghost" className="w-full text-xs text-text-secondary" onClick={onClose}>
           <X className="h-3.5 w-3.5" /> Fechar
         </Button>
       </div>
@@ -245,23 +244,21 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
   })).filter((g) => g.items.length > 0);
 
   return (
-    <div className="space-y-6 pb-20">
-      {/* Header */}
+    <div className="space-y-6 safe-bottom">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-medium">Senhas e acessos</h2>
-          <p className="text-sm text-muted-foreground">
+          <h2 className="text-xl font-medium text-text-primary">Senhas e acessos</h2>
+          <p className="text-sm text-text-secondary">
             Wi-Fi, alarmes, fechaduras, portões e integrações.
           </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" />
-          Nova Credencial
+          Nova credencial
         </Button>
       </div>
 
-      {/* Info banner */}
-      <div className="rounded-xl border border-(--color-primary-border) bg-(--color-primary-light) px-4 py-3 text-sm text-(--color-primary)">
+      <div className="rounded-xl border-half border-border-accent bg-bg-accent-subtle px-4 py-3 text-sm text-text-accent">
         <p className="mb-0.5 font-medium">Compartilhamento seguro</p>
         <p className="text-xs opacity-80">
           Credenciais marcadas como <span className="font-medium">&quot;incluir em OS&quot;</span> são automaticamente enviadas
@@ -269,25 +266,24 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         </p>
       </div>
 
-      {/* Grouped by category */}
       {grouped.length > 0 ? (
         grouped.map(({ value, label, icon: Icon, color, bg, items: catItems }) => (
           <Card key={value}>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <div className={cn('flex h-7 w-7 items-center justify-center rounded-lg border', bg)}>
+              <CardTitle className="text-sm flex items-center gap-2 text-text-primary">
+                <div className={cn('flex h-7 w-7 items-center justify-center rounded-lg border-half', bg)}>
                   <Icon className={cn('h-3.5 w-3.5', color)} />
                 </div>
                 {label}
-                <span className="ml-auto text-xs font-normal text-muted-foreground">{catItems.length} item{catItems.length !== 1 ? 's' : ''}</span>
+                <span className="ml-auto text-xs font-normal text-text-secondary">{catItems.length} item{catItems.length !== 1 ? 's' : ''}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {catItems.map((cred) => (
-                <div key={cred.id} className="flex items-start gap-3 rounded-xl border border-border p-3 group">
+                <div key={cred.id} className="flex items-start gap-3 rounded-xl border-half border-border-subtle p-3 group">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{cred.label}</p>
+                      <p className="text-sm font-medium text-text-primary">{cred.label}</p>
                       {cred.share_with_os && (
                         <Badge variant="secondary" className="text-[11px] py-0">Incluir em OS</Badge>
                       )}
@@ -298,17 +294,17 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                       )}
                     </div>
                     {cred.username && (
-                      <p className="text-xs text-muted-foreground">Usuário: <span className="font-mono">{cred.username}</span></p>
+                      <p className="text-xs text-text-secondary">Usuário: <span className="font-mono">{cred.username}</span></p>
                     )}
                     <SecretCell secret={cred.secret} />
-                    {cred.notes && <p className="text-xs text-muted-foreground">{cred.notes}</p>}
+                    {cred.notes && <p className="text-xs text-text-secondary">{cred.notes}</p>}
                   </div>
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {cred.integration_type === 'intelbras' && (
                       <button
                         onClick={() => setTempCodeCred(cred)}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-(--color-warning) transition-colors hover:bg-(--color-warning-light)"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-warning transition-colors hover:bg-bg-warning"
                         title="Gerar senha temporária"
                       >
                         <Zap className="h-3.5 w-3.5" />
@@ -316,14 +312,14 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                     )}
                     <button
                       onClick={() => openEdit(cred)}
-                      className="flex items-center justify-center h-7 w-7 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+                      className="flex items-center justify-center h-7 w-7 rounded-lg text-text-secondary hover:bg-bg-subtle transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(cred.id)}
                       disabled={deletingId === cred.id}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-(--color-danger) transition-colors hover:bg-(--color-danger-light) disabled:opacity-40"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-text-danger transition-colors hover:bg-bg-danger disabled:opacity-40"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -335,11 +331,11 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         ))
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
-            <KeyRound className="h-8 w-8 text-muted-foreground" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-bg-subtle mb-4">
+            <KeyRound className="h-8 w-8 text-text-tertiary" />
           </div>
-          <p className="font-medium">Nenhuma credencial cadastrada</p>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
+          <p className="font-medium text-text-primary">Nenhuma credencial cadastrada</p>
+          <p className="text-sm text-text-secondary mt-1 max-w-xs">
             Salve senhas de Wi-Fi, alarmes, fechaduras inteligentes e outros acessos do imóvel.
           </p>
           <Button className="mt-4" onClick={openCreate}>
@@ -348,12 +344,11 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* Form dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-(--color-primary)" />
+              <KeyRound className="h-4 w-4 text-text-accent" />
               {editing ? 'Editar credencial' : 'Nova credencial'}
             </DialogTitle>
           </DialogHeader>
@@ -377,7 +372,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
             <div className="space-y-1.5">
               <Label htmlFor="label">Nome / Identificação *</Label>
               <Input id="label" placeholder="Ex: Wi-Fi Principal, Alarme Sala..." {...register('label')} />
-              {errors.label && <p className="text-xs text-(--color-danger)">{errors.label.message}</p>}
+              {errors.label && <p className="text-xs text-text-danger">{errors.label.message}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -388,7 +383,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
             <div className="space-y-1.5">
               <Label htmlFor="secret">Senha / Código / PIN *</Label>
               <Input id="secret" type="password" placeholder="••••••••" {...register('secret')} />
-              {errors.secret && <p className="text-xs text-(--color-danger)">{errors.secret.message}</p>}
+              {errors.secret && <p className="text-xs text-text-danger">{errors.secret.message}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -396,14 +391,13 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
               <Input id="notes" placeholder="Ex: Rede 5GHz, pressione * antes do código..." {...register('notes')} />
             </div>
 
-            {/* Intelbras integration */}
             {watchCategory === 'smart_lock' && (
-              <div className="space-y-3 rounded-xl border border-(--color-warning-border) bg-(--color-warning-light) p-3">
+              <div className="space-y-3 rounded-xl border-half border-border-warning bg-bg-warning p-3">
                 <div className="flex items-center justify-between">
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-(--color-warning)">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-text-warning">
                     <Zap className="h-3.5 w-3.5" /> Integração Intelbras
                   </p>
-                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-(--color-warning)">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-text-warning">
                     <input
                       type="checkbox"
                       className="rounded"
@@ -420,7 +414,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                       <Input placeholder="Usuário" {...register('intelbras_user')} />
                       <Input placeholder="Senha" type="password" {...register('intelbras_pass')} />
                     </div>
-                    <p className="text-[11px] text-(--color-warning)">
+                    <p className="text-xs text-text-warning">
                       Compatível com Intelbras Control iD, SS 5530 MF e similares via API local.
                     </p>
                   </div>
@@ -428,16 +422,15 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
               </div>
             )}
 
-            {/* Share with OS */}
-            <label className="flex items-start gap-3 rounded-xl border border-border p-3 cursor-pointer hover:bg-muted transition-colors">
+            <label className="flex items-start gap-3 rounded-xl border-half border-border-subtle p-3 cursor-pointer hover:bg-bg-subtle transition-colors">
               <input
                 type="checkbox"
                 className="mt-0.5 rounded"
                 {...register('share_with_os')}
               />
               <div>
-                <p className="text-sm font-medium">Incluir em OS compartilhadas</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-text-primary">Incluir em OS compartilhadas</p>
+                <p className="text-xs text-text-secondary">
                   Esta credencial será visível para o prestador quando o proprietário compartilhar uma OS via link.
                 </p>
               </div>
@@ -455,7 +448,6 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         </DialogContent>
       </Dialog>
 
-      {/* Temp code dialog */}
       <Dialog open={!!tempCodeCred} onOpenChange={() => setTempCodeCred(null)}>
         {tempCodeCred && (
           <TempCodeDialog

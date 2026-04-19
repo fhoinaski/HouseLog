@@ -67,22 +67,20 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-(--hl-bg-page) px-6 py-8">
+    <main className="min-h-screen bg-bg-page px-6 py-8">
       <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-97.5 flex-col">
-        <div className="rounded-xl border border-neutral-100 bg-(--hl-bg-card) px-6 pb-6 pt-8">
+        <div className="rounded-xl border-half border-border-subtle bg-bg-surface px-6 pb-6 pt-8">
           <header className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-3 flex h-13 w-13 items-center justify-center rounded-[14px] border-[1.5px] border-(--hl-border-light)">
-              <Home className="h-6 w-6 text-(--color-primary)" strokeWidth={1.9} />
+            <div className="mb-3 flex h-13 w-13 items-center justify-center rounded-[14px] border-half border-border-subtle">
+              <Home className="h-6 w-6 text-text-accent" strokeWidth={1.9} />
             </div>
-            <h1 className="text-[24px] font-medium tracking-[-0.3px] text-(--hl-text-primary)">HouseLog</h1>
-            <p className="mt-1 text-[11px] uppercase tracking-widest text-(--hl-text-tertiary)">
-              THE ARCHITECTURAL LENS
-            </p>
+            <h1 className="text-2xl font-medium tracking-tight text-text-primary">HouseLog</h1>
+            <p className="hl-section-title mt-1">The Architectural Lens</p>
           </header>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div>
-              <Label htmlFor="email">E-MAIL</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" placeholder="seu@email.com" autoComplete="email" {...register('email')} />
               {errors.email && (
                 <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.email.message}</p>
@@ -90,7 +88,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <Label htmlFor="password">SENHA</Label>
+              <Label htmlFor="password">Senha</Label>
               <div className="relative">
                 <Input
                   id="password"
