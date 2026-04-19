@@ -5,7 +5,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-bg-page">
       <TopNav />
-      <main className="flex-1">
+      <main className="safe-top safe-bottom flex-1">
         {children}
       </main>
       <BottomNav />

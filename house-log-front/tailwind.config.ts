@@ -316,7 +316,13 @@ const config: Config = {
   },
   plugins: [
     // Plugin para utilities de componentes específicos do HouseLog
-    function({ addUtilities, addComponents, theme }: any) {
+    function({
+      addUtilities,
+      addComponents,
+    }: {
+      addUtilities: (utilities: Record<string, Record<string, string | number | Record<string, string | number>>>) => void;
+      addComponents: (components: Record<string, Record<string, string | number | Record<string, string | number>>>) => void;
+    }) {
 
       // ---- COMPONENTES ----
       addComponents({

@@ -210,7 +210,6 @@ body {
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
   letter-spacing: var(--tracking-wide);
-  text-transform: uppercase;
 }
 
 .quick-action-circle {
@@ -227,7 +226,7 @@ body {
 .bottom-nav-minimal {
   border-radius: 0;
   background: var(--card-bg);
-  border-top: 1px solid var(--border-default);
+  border-top: 0.5px solid var(--border-default);
 }
 
 @layer base {
