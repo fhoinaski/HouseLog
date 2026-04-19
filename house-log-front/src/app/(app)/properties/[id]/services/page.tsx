@@ -2,7 +2,7 @@
 
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import useSWR, { useSWRConfig } from 'swr';
+import { useSWRConfig } from 'swr';
 import { Loader2, Plus, Wrench, ChevronRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import { servicesApi, type ServiceOrder } from '@/lib/api';
 import { usePagination } from '@/hooks/usePagination';
@@ -56,27 +56,27 @@ function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void
   const StatusIcon = STATUS_ICON[order.status] ?? Clock;
 
   return (
-    <Card className="cursor-pointer hover:shadow-sm transition-shadow" onClick={onClick}>
+    <Card className="cursor-pointer transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]" onClick={onClick}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3 min-w-0">
             <div className={cn(
-              'mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg',
-              order.priority === 'urgent' ? 'bg-rose-50' : 'bg-primary-50'
+              'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+              order.priority === 'urgent' ? 'bg-(--color-danger-light)' : 'bg-(--color-primary-light)'
             )}>
               <StatusIcon className={cn(
                 'h-4 w-4',
-                order.priority === 'urgent' ? 'text-rose-500' : 'text-primary-600'
+                order.priority === 'urgent' ? 'text-(--color-danger)' : 'text-(--color-primary)'
               )} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-medium text-sm">{order.title}</p>
                 {order.priority === 'urgent' && (
-                  <AlertTriangle className="h-3.5 w-3.5 text-rose-500 flex-shrink-0" />
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-(--color-danger)" />
                 )}
               </div>
-              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {SYSTEM_TYPE_LABELS[order.system_type]} · {order.room_name ?? 'Sem cômodo'}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -89,12 +89,12 @@ function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void
               </div>
             </div>
           </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-xs text-[var(--muted-foreground)]">{formatDate(order.created_at)}</p>
+          <div className="shrink-0 text-right">
+            <p className="text-xs text-muted-foreground">{formatDate(order.created_at)}</p>
             {order.assigned_to_name && (
-              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{order.assigned_to_name}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{order.assigned_to_name}</p>
             )}
-            <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)] ml-auto mt-1" />
+            <ChevronRight className="ml-auto mt-1 h-4 w-4 text-muted-foreground" />
           </div>
         </div>
       </CardContent>
@@ -149,9 +149,9 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
     : [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Ordens de Serviço</h2>
+        <h2 className="text-xl font-medium">Ordens de serviço</h2>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           Nova OS
@@ -168,7 +168,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
               'rounded-full px-3 py-1 text-xs font-medium transition-colors border',
               statusFilter === s
                 ? 'bg-primary-600 text-white border-primary-600'
-                : 'bg-[var(--card)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-primary-400'
+                : 'border-border bg-card text-muted-foreground hover:border-primary-400'
             )}
           >
             {s ? SERVICE_STATUS_LABELS[s] : 'Todas'}
@@ -179,8 +179,8 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
       {/* List */}
       {orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Wrench className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-[var(--muted-foreground)] text-sm">Nenhuma OS encontrada</p>
+          <Wrench className="mb-3 h-10 w-10 text-neutral-300" />
+          <p className="text-sm text-muted-foreground">Nenhuma OS encontrada</p>
           <Button variant="outline" className="mt-3" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" /> Criar OS
           </Button>
@@ -237,34 +237,34 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-[var(--muted-foreground)]">Sistema</dt>
+                  <dt className="text-muted-foreground">Sistema</dt>
                   <dd>{SYSTEM_TYPE_LABELS[selectedOrder.system_type]}</dd>
                 </div>
                 {selectedOrder.room_name && (
                   <div className="flex justify-between">
-                    <dt className="text-[var(--muted-foreground)]">Cômodo</dt>
+                    <dt className="text-muted-foreground">Cômodo</dt>
                     <dd>{selectedOrder.room_name}</dd>
                   </div>
                 )}
                 {selectedOrder.cost && (
                   <div className="flex justify-between">
-                    <dt className="text-[var(--muted-foreground)]">Custo</dt>
+                    <dt className="text-muted-foreground">Custo</dt>
                     <dd>R$ {selectedOrder.cost.toFixed(2)}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <dt className="text-[var(--muted-foreground)]">Criada por</dt>
+                  <dt className="text-muted-foreground">Criada por</dt>
                   <dd>{selectedOrder.requested_by_name}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-[var(--muted-foreground)]">Data</dt>
+                  <dt className="text-muted-foreground">Data</dt>
                   <dd>{formatDate(selectedOrder.created_at)}</dd>
                 </div>
               </dl>
 
               {selectedOrder.description && (
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted-foreground)] mb-1">Descrição</p>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Descrição</p>
                   <p className="text-sm">{selectedOrder.description}</p>
                 </div>
               )}
@@ -272,7 +272,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
               {/* Photos */}
               {selectedBeforePhotos.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Fotos antes</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Fotos antes</p>
                   <div className="flex gap-2 flex-wrap">
                     {selectedBeforePhotos.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -284,7 +284,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
               {selectedAfterPhotos.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Fotos depois</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Fotos depois</p>
                   <div className="flex gap-2 flex-wrap">
                     {selectedAfterPhotos.map((url, i) => (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -296,7 +296,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
               {/* Status actions */}
               {STATUS_TRANSITIONS[selectedOrder.status]?.length > 0 && (
-                <div className="flex gap-2 pt-2 border-t border-[var(--border)]">
+                <div className="flex gap-2 border-t border-border pt-2">
                   {STATUS_TRANSITIONS[selectedOrder.status].map((next) => (
                     <Button
                       key={next}

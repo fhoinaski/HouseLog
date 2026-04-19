@@ -64,24 +64,24 @@ function ScoreGauge({ score }: { score: number }) {
           {/* Background arc */}
           <path
             d="M 10 80 A 70 70 0 0 1 150 80"
-            fill="none" stroke="#e2e8f0" strokeWidth="12" strokeLinecap="round"
+            fill="none" stroke="var(--hl-border-light)" strokeWidth="12" strokeLinecap="round"
           />
           {/* Score arc */}
           <path
             d="M 10 80 A 70 70 0 0 1 150 80"
             fill="none"
-            stroke={score < 30 ? '#f43f5e' : score < 60 ? '#f59e0b' : score < 80 ? '#10b981' : '#3b82f6'}
+            stroke={score < 30 ? 'var(--color-danger)' : score < 60 ? 'var(--color-warning)' : score < 80 ? 'var(--color-success)' : 'var(--color-primary)'}
             strokeWidth="12"
             strokeLinecap="round"
             strokeDasharray={`${(dash / circ) * 220} 220`}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
-          <span className={cn('text-4xl font-black', scoreColor(score))}>{score}</span>
-          <span className="text-xs text-[var(--muted-foreground)]">de 100</span>
+          <span className={cn('text-4xl font-medium', scoreColor(score))}>{score}</span>
+          <span className="text-xs text-muted-foreground">de 100</span>
         </div>
       </div>
-      <span className={cn('text-sm font-semibold mt-1', scoreColor(score))}>
+      <span className={cn('mt-1 text-sm font-medium', scoreColor(score))}>
         {score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 30 ? 'Atenção' : 'Crítico'}
       </span>
     </div>
@@ -102,20 +102,20 @@ function FactorBar({
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <Icon className="h-4 w-4 text-muted-foreground" />
           <span className="font-medium">{meta.label}</span>
         </div>
-        <span className={cn('font-bold tabular-nums', scoreColor(pct))}>
+        <span className={cn('font-medium tabular-nums', scoreColor(pct))}>
           {value}/{max}
         </span>
       </div>
-      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+      <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
         <div
           className={cn('h-full rounded-full transition-all duration-700', scoreBg(pct))}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-xs text-[var(--muted-foreground)]">{meta.description}</p>
+      <p className="text-xs text-muted-foreground">{meta.description}</p>
     </div>
   );
 }
@@ -148,7 +148,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="max-w-3xl space-y-6 pb-20">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -158,9 +158,9 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
             </Link>
           </Button>
           <div>
-            <h1 className="text-xl font-bold">Relatório do Imóvel</h1>
+            <h1 className="text-xl font-medium">Relatório do imóvel</h1>
             {property && (
-              <p className="text-sm text-[var(--muted-foreground)]">{property.name}</p>
+              <p className="text-sm text-muted-foreground">{property.name}</p>
             )}
           </div>
         </div>
@@ -203,14 +203,14 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Activity className="h-4 w-4 text-primary-600" />
+            <Activity className="h-4 w-4 text-(--color-primary)" />
             Score de Saúde
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 pt-0">
           {scoreLoading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-(--color-primary) border-t-transparent" />
             </div>
           ) : scoreData ? (
             <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start">
@@ -227,7 +227,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
               </div>
             </div>
           ) : (
-            <p className="text-[var(--muted-foreground)] text-sm text-center py-6">
+            <p className="text-muted-foreground text-sm text-center py-6">
               Não foi possível calcular o score. Tente recalcular.
             </p>
           )}
@@ -239,29 +239,29 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
+              <TrendingUp className="h-4 w-4 text-(--color-success)" />
               Sumário de Valoração
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 pt-0">
             <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div className="rounded-xl bg-slate-50 p-4 text-center">
-                <dt className="text-xs text-[var(--muted-foreground)] mb-1">Total Despesas</dt>
-                <dd className="font-bold text-lg">{formatCurrency(valuationData.expenses_total ?? 0)}</dd>
+              <div className="rounded-xl bg-(--color-neutral-50) p-4 text-center">
+                <dt className="text-xs text-muted-foreground mb-1">Total Despesas</dt>
+                <dd className="text-lg font-medium">{formatCurrency(valuationData.expenses_total ?? 0)}</dd>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4 text-center">
-                <dt className="text-xs text-[var(--muted-foreground)] mb-1">Total Serviços</dt>
-                <dd className="font-bold text-lg">{formatCurrency(valuationData.services_total ?? 0)}</dd>
+              <div className="rounded-xl bg-(--color-neutral-50) p-4 text-center">
+                <dt className="text-xs text-muted-foreground mb-1">Total Serviços</dt>
+                <dd className="text-lg font-medium">{formatCurrency(valuationData.services_total ?? 0)}</dd>
               </div>
-              <div className="rounded-xl bg-primary-50 p-4 text-center">
-                <dt className="text-xs text-primary-700 mb-1">Score Atual</dt>
-                <dd className={cn('font-bold text-lg', scoreColor(valuationData.health_score ?? 0))}>
+              <div className="rounded-xl bg-(--color-primary-light) p-4 text-center">
+                <dt className="mb-1 text-xs text-(--color-primary)">Score atual</dt>
+                <dd className={cn('text-lg font-medium', scoreColor(valuationData.health_score ?? 0))}>
                   {valuationData.health_score ?? 0}/100
                 </dd>
               </div>
             </dl>
             {valuationData.generated_at && (
-              <p className="text-xs text-[var(--muted-foreground)] mt-4 text-right">
+              <p className="text-xs text-muted-foreground mt-4 text-right">
                 Gerado em {formatDate(valuationData.generated_at)}
               </p>
             )}
@@ -288,7 +288,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
                 { label: 'Cadastrado', value: formatDate(property.created_at) },
               ].filter(Boolean).map((item, i) => (
                 <div key={i}>
-                  <dt className="text-xs text-[var(--muted-foreground)]">{(item as { label: string }).label}</dt>
+                  <dt className="text-xs text-muted-foreground">{(item as { label: string }).label}</dt>
                   <dd className="font-medium mt-0.5">{(item as { value: string }).value}</dd>
                 </div>
               ))}

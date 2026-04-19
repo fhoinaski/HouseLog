@@ -99,20 +99,20 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Configurações</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">Gerencie sua conta e preferências</p>
+        <h1 className="text-2xl font-medium">Configurações</h1>
+        <p className="text-sm text-muted-foreground">Gerencie sua conta e preferências</p>
       </div>
 
       {/* User card */}
       <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-100 text-primary-700 font-bold text-lg flex-shrink-0">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-(--color-avatar-owner-bg) text-lg font-medium text-(--color-avatar-owner-fg)">
               {user?.name?.charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="font-semibold">{user?.name}</p>
-              <p className="text-sm text-[var(--muted-foreground)]">{user?.email}</p>
+              <p className="font-medium">{user?.name}</p>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
               <Badge variant="secondary" className="mt-1 text-xs">
                 {ROLE_LABELS[user?.role ?? ''] ?? user?.role}
               </Badge>
@@ -148,10 +148,10 @@ export default function SettingsPage() {
                 <div className="space-y-1.5">
                   <Label>Email</Label>
                   <Input value={user?.email ?? ''} disabled className="opacity-60" />
-                  <p className="text-xs text-[var(--muted-foreground)]">O email não pode ser alterado</p>
+                  <p className="text-xs text-muted-foreground">O email não pode ser alterado</p>
                 </div>
                 {profileErrors.root && (
-                  <p className="text-xs text-rose-500">{profileErrors.root.message}</p>
+                  <p className="text-xs text-(--color-danger)">{profileErrors.root.message}</p>
                 )}
                 <Button type="submit" loading={savingProfile}>Salvar alterações</Button>
               </form>
@@ -172,18 +172,18 @@ export default function SettingsPage() {
                   <Label htmlFor="currentPw">Senha atual</Label>
                   <Input id="currentPw" type="password" {...regPw('currentPassword')} />
                   {pwErrors.currentPassword && (
-                    <p className="text-xs text-rose-500">{pwErrors.currentPassword.message}</p>
+                    <p className="text-xs text-(--color-danger)">{pwErrors.currentPassword.message}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="newPw">Nova senha</Label>
                   <Input id="newPw" type="password" {...regPw('newPassword')} />
-                  {pwErrors.newPassword && <p className="text-xs text-rose-500">{pwErrors.newPassword.message}</p>}
+                  {pwErrors.newPassword && <p className="text-xs text-(--color-danger)">{pwErrors.newPassword.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="confirmPw">Confirmar nova senha</Label>
                   <Input id="confirmPw" type="password" {...regPw('confirmPassword')} />
-                  {pwErrors.confirmPassword && <p className="text-xs text-rose-500">{pwErrors.confirmPassword.message}</p>}
+                  {pwErrors.confirmPassword && <p className="text-xs text-(--color-danger)">{pwErrors.confirmPassword.message}</p>}
                 </div>
                 <Button type="submit" loading={savingPw}>Alterar senha</Button>
               </form>
@@ -193,7 +193,7 @@ export default function SettingsPage() {
           <Card className="mt-4">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Shield className="h-4 w-4 text-emerald-600" />
+                <Shield className="h-4 w-4 text-(--color-success)" />
                 Sessões Ativas
               </CardTitle>
             </CardHeader>
@@ -201,7 +201,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between text-sm">
                 <div>
                   <p className="font-medium">Este dispositivo</p>
-                  <p className="text-[var(--muted-foreground)] text-xs">Sessão atual</p>
+                  <p className="text-xs text-muted-foreground">Sessão atual</p>
                 </div>
                 <Badge variant="success">Ativo</Badge>
               </div>
@@ -225,7 +225,7 @@ export default function SettingsPage() {
                 <div key={n.key} className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">{n.label}</p>
-                    <p className="text-xs text-[var(--muted-foreground)]">{n.description}</p>
+                    <p className="text-xs text-muted-foreground">{n.description}</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -234,7 +234,7 @@ export default function SettingsPage() {
                       onChange={(e) => setNotifPrefs((p) => ({ ...p, [n.key]: e.target.checked }))}
                       className="peer sr-only"
                     />
-                    <div className="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-600 peer-checked:after:translate-x-4" />
+                    <div className="peer h-5 w-9 rounded-full bg-neutral-200 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-(--color-primary) peer-checked:after:translate-x-4" />
                   </label>
                 </div>
               ))}

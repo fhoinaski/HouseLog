@@ -1,25 +1,26 @@
 'use client';
 import {
-  Document, Page, Text, View, StyleSheet, Font,
+  Document, Page, Text, View, StyleSheet,
 } from '@react-pdf/renderer';
+import { COLOR_PALETTE } from '@/lib/color-palette';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', fontSize: 10, padding: 40, color: '#0f172a' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '1pt solid #e2e8f0' },
-  logo: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#1e293b' },
-  title: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginBottom: 6 },
-  subtitle: { fontSize: 11, color: '#64748b', marginBottom: 20 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, fontSize: 9, fontFamily: 'Helvetica-Bold' },
+  page: { fontFamily: 'Helvetica', fontSize: 11, padding: 40, color: COLOR_PALETTE.neutral900 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: `1pt solid ${COLOR_PALETTE.neutral100}` },
+  logo: { fontSize: 16, fontFamily: 'Helvetica', color: COLOR_PALETTE.neutral900 },
+  title: { fontSize: 18, fontFamily: 'Helvetica', marginBottom: 6 },
+  subtitle: { fontSize: 11, color: COLOR_PALETTE.neutral600, marginBottom: 20 },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, fontSize: 11, fontFamily: 'Helvetica' },
   section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', marginBottom: 8, paddingBottom: 4, borderBottom: '0.5pt solid #e2e8f0', color: '#475569', textTransform: 'uppercase' },
+  sectionTitle: { fontSize: 11, fontFamily: 'Helvetica', marginBottom: 8, paddingBottom: 4, borderBottom: `0.5pt solid ${COLOR_PALETTE.neutral100}`, color: COLOR_PALETTE.neutral600, textTransform: 'uppercase' },
   row: { flexDirection: 'row', marginBottom: 6 },
-  label: { width: 140, color: '#64748b', fontSize: 9.5 },
-  value: { flex: 1, fontFamily: 'Helvetica-Bold', fontSize: 9.5 },
-  desc: { color: '#475569', lineHeight: 1.5, fontSize: 9.5 },
+  label: { width: 140, color: COLOR_PALETTE.neutral600, fontSize: 11 },
+  value: { flex: 1, fontFamily: 'Helvetica', fontSize: 11 },
+  desc: { color: COLOR_PALETTE.neutral800, lineHeight: 1.5, fontSize: 11 },
   checkItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  checkBox: { width: 10, height: 10, border: '1pt solid #94a3b8', borderRadius: 2, marginRight: 6 },
-  checkBoxDone: { width: 10, height: 10, backgroundColor: '#10b981', borderRadius: 2, marginRight: 6 },
-  footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8', borderTop: '0.5pt solid #e2e8f0', paddingTop: 8 },
+  checkBox: { width: 10, height: 10, border: `1pt solid ${COLOR_PALETTE.neutral400}`, borderRadius: 2, marginRight: 6 },
+  checkBoxDone: { width: 10, height: 10, backgroundColor: COLOR_PALETTE.success, borderRadius: 2, marginRight: 6 },
+  footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', fontSize: 11, color: COLOR_PALETTE.neutral400, borderTop: `0.5pt solid ${COLOR_PALETTE.neutral100}`, paddingTop: 8 },
 });
 
 const STATUS_LABELS: Record<string, string> = {
@@ -64,7 +65,7 @@ export function ServiceOrderPDF({ order, propertyName }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>HouseLog</Text>
-          <Text style={{ fontSize: 8, color: '#94a3b8' }}>
+          <Text style={{ fontSize: 11, color: COLOR_PALETTE.neutral400 }}>
             Gerado em {new Date().toLocaleDateString('pt-BR')}
           </Text>
         </View>
@@ -75,10 +76,10 @@ export function ServiceOrderPDF({ order, propertyName }: Props) {
 
         {/* Badges row */}
         <View style={{ flexDirection: 'row', gap: 6, marginBottom: 20 }}>
-          <Text style={[styles.badge, { backgroundColor: '#f1f5f9', color: '#475569' }]}>
+          <Text style={[styles.badge, { backgroundColor: COLOR_PALETTE.warningLight, color: COLOR_PALETTE.warning }]}>
             {STATUS_LABELS[order.status] ?? order.status}
           </Text>
-          <Text style={[styles.badge, { backgroundColor: '#fef2f2', color: '#dc2626' }]}>
+          <Text style={[styles.badge, { backgroundColor: COLOR_PALETTE.dangerLight, color: COLOR_PALETTE.danger }]}>
             {PRIORITY_LABELS[order.priority] ?? order.priority}
           </Text>
         </View>
@@ -119,7 +120,7 @@ export function ServiceOrderPDF({ order, propertyName }: Props) {
             {checklist.map((c, i) => (
               <View key={i} style={styles.checkItem}>
                 <View style={c.done ? styles.checkBoxDone : styles.checkBox} />
-                <Text style={{ fontSize: 9.5, color: c.done ? '#94a3b8' : '#0f172a', textDecoration: c.done ? 'line-through' : 'none' }}>
+                <Text style={{ fontSize: 11, color: c.done ? COLOR_PALETTE.neutral400 : COLOR_PALETTE.neutral900, textDecoration: c.done ? 'line-through' : 'none' }}>
                   {c.item}
                 </Text>
               </View>

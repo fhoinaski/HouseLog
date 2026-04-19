@@ -65,7 +65,7 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   if (authLoading || (!invite && !loadError)) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-(--color-primary)" />
       </div>
     );
   }
@@ -73,12 +73,12 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   if (loadError) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-100">
-          <XCircle className="h-8 w-8 text-rose-500" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-(--color-danger-light)">
+          <XCircle className="h-8 w-8 text-(--color-danger)" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Convite inválido</h1>
-          <p className="mt-1 text-slate-500 text-sm max-w-xs">{loadError}</p>
+          <h1 className="text-xl font-medium text-(--hl-text-primary)">Convite inválido</h1>
+          <p className="mt-1 max-w-xs text-sm text-(--hl-text-secondary)">{loadError}</p>
         </div>
         <Button variant="outline" onClick={() => router.push('/dashboard')}>
           Ir para o Dashboard
@@ -90,14 +90,14 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   if (accepted && invite) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100">
-          <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-(--color-success-light)">
+          <CheckCircle2 className="h-8 w-8 text-(--color-success)" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Convite aceito!</h1>
-          <p className="mt-1 text-slate-500 text-sm max-w-xs">
-            Você agora é <strong>{ROLE_LABELS[invite.role]}</strong> de{' '}
-            <strong>{invite.property_name}</strong>.
+          <h1 className="text-xl font-medium text-(--hl-text-primary)">Convite aceito!</h1>
+          <p className="mt-1 max-w-xs text-sm text-(--hl-text-secondary)">
+            Você agora é <span className="font-medium">{ROLE_LABELS[invite.role]}</span> de{' '}
+            <span className="font-medium">{invite.property_name}</span>.
           </p>
         </div>
         <Button onClick={() => router.push(`/properties/${acceptedPropertyId}`)}>
@@ -127,15 +127,15 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600">
             <Building2 className="h-6 w-6 text-white" />
           </div>
-          <span className="text-2xl font-bold tracking-tight">HouseLog</span>
+          <span className="text-2xl font-medium tracking-tight">HouseLog</span>
         </div>
 
         {/* Invite card */}
-        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           {/* Property banner */}
-          <div className="bg-linear-to-br from-primary-600 to-primary-700 px-6 py-5 text-white">
+          <div className="bg-(--color-primary) px-6 py-5 text-white">
             <p className="text-sm opacity-80 mb-1">{invite.invited_by_name} convidou você para</p>
-            <h1 className="text-xl font-bold">{invite.property_name}</h1>
+            <h1 className="text-xl font-medium">{invite.property_name}</h1>
             <p className="text-sm opacity-70 mt-0.5">{invite.property_address}, {invite.property_city}</p>
           </div>
 
@@ -143,30 +143,30 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
             {/* Role */}
             <div className={cn(
               'flex items-start gap-3 rounded-xl p-4',
-              invite.role === 'manager' ? 'bg-primary-50' : invite.role === 'provider' ? 'bg-amber-50' : 'bg-slate-50'
+              invite.role === 'manager' ? 'bg-(--color-primary-light)' : invite.role === 'provider' ? 'bg-(--color-success-light)' : 'bg-(--color-neutral-50)'
             )}>
               <RoleIcon className={cn(
                 'h-5 w-5 mt-0.5 shrink-0',
-                invite.role === 'manager' ? 'text-primary-600' : invite.role === 'provider' ? 'text-amber-600' : 'text-slate-500'
+                invite.role === 'manager' ? 'text-(--color-primary)' : invite.role === 'provider' ? 'text-(--color-success)' : 'text-neutral-600'
               )} />
               <div>
-                <p className="font-semibold text-sm">{ROLE_LABELS[invite.role] ?? invite.role}</p>
+                <p className="text-sm font-medium">{ROLE_LABELS[invite.role] ?? invite.role}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{ROLE_DESC[invite.role]}</p>
               </div>
             </div>
 
             {/* Auth notice */}
             {!user && (
-              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+              <div className="rounded-lg border border-(--color-warning-border) bg-(--color-warning-light) px-3 py-2 text-xs text-(--color-warning)">
                 Você precisará fazer login ou criar uma conta para aceitar este convite.
               </div>
             )}
 
             {(invite.invite_name || invite.whatsapp || invite.email) && (
               <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground space-y-1">
-                {invite.invite_name && <p><strong>Pré-cadastro:</strong> {invite.invite_name}</p>}
-                {invite.whatsapp && <p><strong>WhatsApp:</strong> {invite.whatsapp}</p>}
-                {invite.email && <p><strong>E-mail:</strong> {invite.email}</p>}
+                {invite.invite_name && <p><span className="font-medium">Pré-cadastro:</span> {invite.invite_name}</p>}
+                {invite.whatsapp && <p><span className="font-medium">WhatsApp:</span> {invite.whatsapp}</p>}
+                {invite.email && <p><span className="font-medium">E-mail:</span> {invite.email}</p>}
               </div>
             )}
 

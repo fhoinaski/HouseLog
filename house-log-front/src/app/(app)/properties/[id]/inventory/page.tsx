@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { INVENTORY_CATEGORY_LABELS, formatCurrency, cn } from '@/lib/utils';
+import { INVENTORY_CATEGORY_LABELS, cn } from '@/lib/utils';
 
 const schema = z.object({
   category: z.string().min(1),
@@ -51,16 +51,16 @@ function ItemCard({
 
   return (
     <Card
-      className="group overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+      className="group cursor-pointer overflow-hidden transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]"
       onClick={onClick}
     >
-      <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200">
+      <div className="relative h-32 bg-(--hl-bg-subtle)">
         {item.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Package className="h-8 w-8 text-slate-300" />
+            <Package className="h-8 w-8 text-(--hl-text-tertiary)" />
           </div>
         )}
 
@@ -80,13 +80,13 @@ function ItemCard({
                 : 'opacity-0 group-hover:opacity-100 group-hover:bg-black/10'
             )}
           >
-            <Camera className="h-6 w-6 text-white drop-shadow" />
+            <Camera className="h-6 w-6 text-white" />
           </button>
         )}
 
         {item.color_code && (
           <div
-            className="absolute bottom-2 right-2 h-5 w-5 rounded-full border-2 border-white shadow"
+            className="absolute bottom-2 right-2 h-5 w-5 rounded-full border-2 border-white"
             style={{ background: item.color_code }}
             title={item.color_code}
           />
@@ -103,7 +103,7 @@ function ItemCard({
           <div className="absolute top-2 right-2" title={`Garantia até ${item.warranty_until}`}>
             <div className={cn(
               'flex h-5 w-5 items-center justify-center rounded-full',
-              new Date(item.warranty_until) < new Date() ? 'bg-rose-500' : 'bg-emerald-500'
+              new Date(item.warranty_until) < new Date() ? 'bg-(--color-danger)' : 'bg-(--color-success)'
             )}>
               <ShieldCheck className="h-3 w-3 text-white" />
             </div>
@@ -124,11 +124,11 @@ function ItemCard({
           {INVENTORY_CATEGORY_LABELS[item.category] ?? item.category}
         </Badge>
         <p className="font-medium text-sm truncate">{item.name}</p>
-        {item.brand && <p className="text-xs text-[var(--muted-foreground)] truncate">{item.brand}</p>}
+        {item.brand && <p className="text-xs text-muted-foreground truncate">{item.brand}</p>}
         <div className="flex items-center justify-between mt-2">
-          <span className="text-sm font-semibold">{item.quantity} {item.unit}</span>
+          <span className="text-sm font-medium">{item.quantity} {item.unit}</span>
           {item.room_name && (
-            <span className="text-xs text-[var(--muted-foreground)] truncate ml-2">{item.room_name}</span>
+            <span className="text-xs text-muted-foreground truncate ml-2">{item.room_name}</span>
           )}
         </div>
       </CardContent>
@@ -238,9 +238,9 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Inventário</h2>
+        <h2 className="text-xl font-medium">Inventário</h2>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4" />
           Novo Item
@@ -250,12 +250,12 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar item..."
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="h-11 w-full rounded-(--radius) border border-border bg-card py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-(--field-focus-ring)"
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -287,8 +287,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       {/* Grid */}
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Package className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-[var(--muted-foreground)] text-sm">Nenhum item encontrado</p>
+          <Package className="mb-3 h-10 w-10 text-neutral-200" />
+          <p className="text-muted-foreground text-sm">Nenhum item encontrado</p>
           <Button variant="outline" className="mt-3" onClick={openNew}>
             <Plus className="h-4 w-4" /> Adicionar item
           </Button>
@@ -338,13 +338,13 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.category && <p className="text-xs text-rose-500">{errors.category.message}</p>}
+                {errors.category && <p className="text-xs text-(--color-danger)">{errors.category.message}</p>}
               </div>
 
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="item-name">Nome *</Label>
                 <Input id="item-name" placeholder="Tinta acrílica, cerâmica..." {...register('name')} />
-                {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
+                {errors.name && <p className="text-xs text-(--color-danger)">{errors.name.message}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -361,7 +361,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
                 <Label htmlFor="color-code">Código de cor</Label>
                 <div className="flex gap-2">
                   <input type="color" className="h-9 w-12 rounded border cursor-pointer" {...register('color_code')} />
-                  <Input id="color-code" placeholder="#3b82f6" {...register('color_code')} />
+                  <Input id="color-code" placeholder="var(--color-primary)" {...register('color_code')} />
                 </div>
               </div>
 
@@ -403,7 +403,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5">
                 <Label htmlFor="warranty" className="flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                  <ShieldCheck className="h-3.5 w-3.5 text-(--color-success)" />
                   Garantia até
                 </Label>
                 <Input id="warranty" type="date" {...register('warranty_until')} />
@@ -411,7 +411,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             </div>
 
             {apiError && (
-              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-700">
+              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-3 py-2 text-sm text-(--color-danger)">
                 {apiError}
               </div>
             )}

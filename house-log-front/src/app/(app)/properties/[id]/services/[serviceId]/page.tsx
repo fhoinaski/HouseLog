@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
 import dynamic from 'next/dynamic';
 import {
-  ArrowLeft, Camera, Video, Share2, CheckCircle2, Clock,
-  Wrench, AlertTriangle, MapPin, User, DollarSign, Calendar,
-  ShieldCheck, Trash2, Copy, Download, Send, KeyRound,
+  ArrowLeft, Camera, Video, Share2, CheckCircle2,
+  AlertTriangle, MapPin, User, DollarSign, Calendar,
+  ShieldCheck, Copy, Download, Send, KeyRound,
 } from 'lucide-react';
-import { servicesApi, propertiesApi, shareApi, type ServiceOrder } from '@/lib/api';
+import { servicesApi, propertiesApi, shareApi } from '@/lib/api';
 import { ServiceOrderPDF } from '@/components/pdf/ServiceOrderPDF';
 import { BeforeAfterSlider } from '@/components/ui/before-after-slider';
 import { ServiceChat } from '@/components/services/service-chat';
@@ -114,7 +114,7 @@ export default function ServiceDetailPage({
       return;
     }
     setChecklist(safeParseChecklist(order.checklist));
-  }, [order?.id, order?.checklist]);
+  }, [order]);
 
   async function advanceStatus(next: string) {
     try {
@@ -227,7 +227,7 @@ export default function ServiceDetailPage({
   const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="max-w-3xl space-y-5 pb-20">
       {/* Back + header */}
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
@@ -235,8 +235,8 @@ export default function ServiceDetailPage({
         </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold truncate">{order.title}</h1>
-            {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 text-rose-500 flex-shrink-0" />}
+            <h1 className="truncate text-xl font-medium">{order.title}</h1>
+            {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 shrink-0 text-(--color-danger)" />}
           </div>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
@@ -269,61 +269,61 @@ export default function ServiceDetailPage({
         <CardContent className="p-5">
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Sistema</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Sistema</dt>
               <dd className="font-medium">{SYSTEM_TYPE_LABELS[order.system_type]}</dd>
             </div>
             {order.room_name && (
               <div>
-                <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Cômodo</dt>
+                <dt className="mb-0.5 text-xs text-muted-foreground">Cômodo</dt>
                 <dd className="font-medium flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5" /> {order.room_name}
                 </dd>
               </div>
             )}
             <div>
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Solicitado por</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Solicitado por</dt>
               <dd className="font-medium flex items-center gap-1">
                 <User className="h-3.5 w-3.5" /> {order.requested_by_name}
               </dd>
             </div>
             {order.assigned_to_name && (
               <div>
-                <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Atribuído a</dt>
+                <dt className="mb-0.5 text-xs text-muted-foreground">Atribuído a</dt>
                 <dd className="font-medium">{order.assigned_to_name}</dd>
               </div>
             )}
             <div>
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Criada em</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Criada em</dt>
               <dd className="font-medium flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5" /> {formatDate(order.created_at)}
               </dd>
             </div>
             {order.cost && (
               <div>
-                <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Custo</dt>
-                <dd className="font-medium flex items-center gap-1 text-emerald-600">
+                <dt className="mb-0.5 text-xs text-muted-foreground">Custo</dt>
+                <dd className="font-medium flex items-center gap-1 text-(--color-success)">
                   <DollarSign className="h-3.5 w-3.5" /> {formatCurrency(order.cost)}
                 </dd>
               </div>
             )}
             {order.warranty_until && (
               <div>
-                <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Garantia até</dt>
+                <dt className="mb-0.5 text-xs text-muted-foreground">Garantia até</dt>
                 <dd className="font-medium flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" /> {formatDate(order.warranty_until)}
+                  <ShieldCheck className="h-3.5 w-3.5 text-(--color-success)" /> {formatDate(order.warranty_until)}
                 </dd>
               </div>
             )}
             {order.scheduled_at && (
               <div>
-                <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Agendado</dt>
+                <dt className="mb-0.5 text-xs text-muted-foreground">Agendado</dt>
                 <dd className="font-medium">{formatDate(order.scheduled_at)}</dd>
               </div>
             )}
           </dl>
           {order.description && (
-            <div className="mt-4 pt-4 border-t border-[var(--border)]">
-              <p className="text-xs text-[var(--muted-foreground)] mb-1">Descrição</p>
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-1 text-xs text-muted-foreground">Descrição</p>
               <p className="text-sm whitespace-pre-wrap">{order.description}</p>
             </div>
           )}
@@ -336,14 +336,14 @@ export default function ServiceDetailPage({
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Checklist</CardTitle>
-              <span className="text-xs text-[var(--muted-foreground)]">
+              <span className="text-xs text-muted-foreground">
                 {checklist.filter((i) => i.done).length}/{checklist.length} concluídos
               </span>
             </div>
             {/* Progress bar */}
-            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-2">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                className="h-full rounded-full bg-(--color-success) transition-all duration-300"
                 style={{ width: `${checklist.length ? (checklist.filter((i) => i.done).length / checklist.length) * 100 : 0}%` }}
               />
             </div>
@@ -353,13 +353,13 @@ export default function ServiceDetailPage({
               <button
                 key={i}
                 onClick={() => toggleChecklistItem(i)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm text-left hover:bg-[var(--muted)] transition-colors"
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted"
               >
                 <CheckCircle2 className={cn(
-                  'h-4 w-4 flex-shrink-0 transition-colors',
-                  item.done ? 'text-emerald-500' : 'text-slate-300'
+                  'h-4 w-4 shrink-0 transition-colors',
+                  item.done ? 'text-(--color-success)' : 'text-(--hl-text-tertiary)'
                 )} />
-                <span className={item.done ? 'line-through text-[var(--muted-foreground)]' : ''}>
+                <span className={item.done ? 'line-through text-muted-foreground' : ''}>
                   {item.item}
                 </span>
               </button>
@@ -394,7 +394,7 @@ export default function ServiceDetailPage({
         <CardContent className="p-6 pt-0 space-y-4">
           {beforePhotos.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Antes</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Antes</p>
               <div className="flex gap-2 flex-wrap">
                 {beforePhotos.map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -408,7 +408,7 @@ export default function ServiceDetailPage({
           )}
           {afterPhotos.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Depois</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Depois</p>
               <div className="flex gap-2 flex-wrap">
                 {afterPhotos.map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -421,11 +421,11 @@ export default function ServiceDetailPage({
             </div>
           )}
           {beforePhotos.length === 0 && afterPhotos.length === 0 && (
-            <p className="text-sm text-[var(--muted-foreground)] text-center py-4">Nenhuma foto enviada</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma foto enviada</p>
           )}
           {order.video_url && (
             <div>
-              <p className="text-xs font-medium text-[var(--muted-foreground)] mb-2">Vídeo</p>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Vídeo</p>
               <a href={order.video_url} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-primary-600 hover:underline">
                 <Video className="h-4 w-4" /> Ver vídeo
@@ -447,7 +447,7 @@ export default function ServiceDetailPage({
               after={afterPhotos[afterPhotos.length - 1]}
               className="max-h-72"
             />
-            <p className="text-xs text-center text-[var(--muted-foreground)] mt-2">
+            <p className="mt-2 text-center text-xs text-muted-foreground">
               Arraste para comparar
             </p>
           </CardContent>
@@ -472,7 +472,7 @@ export default function ServiceDetailPage({
 
       {/* Status actions */}
       {nextStatuses.length > 0 && (
-        <div className="border-t border-[var(--border)] pt-4 flex gap-3 flex-wrap">
+        <div className="flex flex-wrap gap-3 border-t border-border pt-4">
           {nextStatuses.map((next) => (
             <Button key={next} onClick={() => advanceStatus(next)}
               variant={next === 'verified' ? 'default' : 'default'}>
@@ -495,7 +495,7 @@ export default function ServiceDetailPage({
               <Send className="h-4 w-4 text-primary-500" /> Enviar OS ao Prestador
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-muted-foreground">
             Gere um link público. O prestador pode visualizar a OS, aceitar, iniciar e marcar como concluído — sem precisar de conta.
           </p>
           {!shareLink ? (
@@ -507,7 +507,7 @@ export default function ServiceDetailPage({
                   placeholder="Ex: João Silva — Elétrica"
                   value={shareProviderName}
                   onChange={(e) => setShareProviderName(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
                 />
               </div>
               <div className="space-y-1.5">
@@ -517,10 +517,10 @@ export default function ServiceDetailPage({
                   placeholder="prestador@email.com"
                   value={shareProviderEmail}
                   onChange={(e) => setShareProviderEmail(e.target.value)}
-                  className="w-full rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
                 />
               </div>
-              <label className="flex items-start gap-2.5 rounded-lg border border-[var(--border)] p-3 cursor-pointer hover:bg-[var(--muted)] transition-colors">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3 transition-colors hover:bg-muted">
                 <input
                   type="checkbox"
                   className="mt-0.5 rounded"
@@ -529,10 +529,10 @@ export default function ServiceDetailPage({
                 />
                 <div>
                   <p className="text-sm font-medium flex items-center gap-1.5">
-                    <KeyRound className="h-3.5 w-3.5 text-amber-500" />
+                      <KeyRound className="h-3.5 w-3.5 text-(--color-warning)" />
                     Incluir senhas de acesso
                   </p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
+                  <p className="text-xs text-muted-foreground">
                     Credenciais marcadas como &ldquo;incluir em OS&rdquo; serão visíveis no link.
                   </p>
                 </div>
@@ -543,10 +543,10 @@ export default function ServiceDetailPage({
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="rounded-xl bg-[var(--muted)] border border-[var(--border)] px-3 py-2.5 text-xs font-mono break-all text-[var(--muted-foreground)]">
+              <div className="break-all rounded-xl border border-border bg-muted px-3 py-2.5 font-mono text-xs text-muted-foreground">
                 {shareLink.url}
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">
+              <p className="text-xs text-muted-foreground">
                 Expira: {new Date(shareLink.expires_at).toLocaleString('pt-BR')}
               </p>
               <div className="flex gap-2">
@@ -584,7 +584,7 @@ export default function ServiceDetailPage({
               <Share2 className="h-4 w-4" /> Link de Auditoria
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-muted-foreground">
             Gere um link temporário para que o prestador envie fotos e notas sem criar uma conta.
           </p>
           {!auditLink ? (
@@ -593,10 +593,10 @@ export default function ServiceDetailPage({
             </Button>
           ) : (
             <div className="space-y-3">
-              <div className="rounded-lg bg-[var(--muted)] px-3 py-2 text-xs font-mono break-all">
+              <div className="break-all rounded-lg bg-muted px-3 py-2 font-mono text-xs">
                 {auditLink.url}
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">
+              <p className="text-xs text-muted-foreground">
                 Expira em: {formatDate(auditLink.expires_at)}
               </p>
               <Button onClick={copyAuditLink} variant="outline" className="w-full">

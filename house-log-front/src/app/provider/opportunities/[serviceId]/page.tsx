@@ -78,7 +78,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold truncate">{order.title}</h1>
+          <h1 className="truncate text-xl font-medium">{order.title}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <Badge variant={PRIORITY_VARIANT[order.priority]}>{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
           </div>
@@ -117,7 +117,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             {myBids.map((bid: ServiceBid) => (
               <div key={bid.id} className="flex items-center justify-between px-5 py-3 border-b border-border last:border-0">
                 <div>
-                  <p className="font-bold text-lg">{formatCurrency(bid.amount)}</p>
+                  <p className="text-lg font-medium">{formatCurrency(bid.amount)}</p>
                   {bid.notes && <p className="text-xs text-muted-foreground">{bid.notes}</p>}
                   <p className="text-xs text-muted-foreground">{formatDate(bid.created_at)}</p>
                 </div>
@@ -138,7 +138,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
               <div className="space-y-1.5">
                 <Label htmlFor="bid-amount">Valor do orçamento (R$) *</Label>
                 <Input id="bid-amount" type="number" step="0.01" placeholder="0.00" {...register('amount')} />
-                {errors.amount && <p className="text-xs text-rose-500">{errors.amount.message}</p>}
+                {errors.amount && <p className="text-xs text-(--color-danger)">{errors.amount.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="bid-notes">Observações</Label>
@@ -146,7 +146,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                   id="bid-notes"
                   rows={3}
                   placeholder="Escopo, prazo, condições..."
-                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                  className="w-full resize-none rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-(--color-primary-border)"
                   {...register('notes')}
                 />
               </div>

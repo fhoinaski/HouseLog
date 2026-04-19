@@ -4,22 +4,22 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[12px] text-sm font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-primary-700/30 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+  'inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary-border) disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        default:     'bg-linear-to-r from-primary-400 to-primary-700 text-white shadow-[0_10px_30px_-10px_rgba(46,91,255,0.25)] hover:scale-[1.02] hover:brightness-110 active:scale-95',
-        destructive: 'bg-rose-500 text-white shadow-sm hover:bg-rose-600 active:scale-[0.98]',
-        outline:     'border border-zinc-600 bg-transparent text-[var(--foreground)] hover:bg-zinc-700/20 hover:scale-[1.02] active:scale-95',
-        secondary:   'bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--border)]',
-        ghost:       'border border-zinc-600 bg-transparent text-[var(--foreground)] hover:bg-zinc-700/20 hover:shadow-[0_0_20px_rgba(46,91,255,0.08)] hover:scale-[1.02] active:scale-95',
-        link:        'text-primary-700 underline-offset-4 hover:underline',
+        default: 'bg-(--color-primary) text-white hover:opacity-95',
+        destructive: 'bg-(--color-danger) text-white hover:opacity-95',
+        outline: 'border border-(--color-neutral-200) bg-transparent text-(--color-neutral-800) hover:bg-(--color-neutral-50)',
+        secondary: 'border border-(--color-neutral-200) bg-transparent text-(--color-neutral-800) hover:bg-(--color-neutral-50)',
+        ghost: 'bg-transparent text-(--color-neutral-800) hover:bg-(--color-neutral-50)',
+        link: 'text-(--color-primary) underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-[52px] px-4 py-2',
-        sm:      'h-10 rounded-[12px] px-3 text-xs',
-        lg:      'h-[52px] rounded-[12px] px-6 text-base',
-        icon:    'h-10 w-10 rounded-[12px]',
+        default: 'h-11 px-4 py-2.5',
+        sm: 'h-11 px-4 py-2 text-[13px]',
+        lg: 'h-12 px-4 py-2.5 text-[13px]',
+        icon: 'h-11 w-11 rounded-xl px-0 py-0',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

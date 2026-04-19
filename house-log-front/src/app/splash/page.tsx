@@ -9,26 +9,19 @@ const noiseTexture = {
 
 export default function SplashPage() {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-zinc-900 text-[#dae2fd]">
+    <div className="relative min-h-screen overflow-hidden bg-(--hl-bg-page) text-(--hl-text-primary)">
       <div className="pointer-events-none fixed inset-0 z-10" style={noiseTexture} />
-
-      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        <div className="absolute left-1/4 top-1/4 h-160 w-160 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-400/10 blur-[100px]" />
-        <div className="absolute bottom-1/4 right-1/4 h-120 w-120 translate-x-1/2 translate-y-1/2 rounded-full bg-emerald-400/10 blur-[90px]" />
-        <div className="absolute left-1/2 top-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 bg-zinc-950/40 backdrop-blur-3xl" />
-      </div>
 
       <main className="relative z-20 mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-14 px-6 text-center">
         <div className="space-y-6">
           <div className="relative mx-auto mb-4 flex h-24 w-24 items-center justify-center">
-            <div className="absolute inset-0 rounded-full bg-primary-400/20 blur-[30px]" />
-            <div className="flex h-full w-full rotate-45 items-center justify-center rounded-3xl border border-zinc-500/40 bg-[#2d3449]/60 shadow-[0_40px_60px_rgba(6,14,32,0.6)] backdrop-blur-2xl">
-              <Building2 className="h-10 w-10 -rotate-45 text-primary-400" />
+            <div className="flex h-full w-full rotate-45 items-center justify-center rounded-3xl border border-neutral-100 bg-(--hl-bg-card)">
+              <Building2 className="h-10 w-10 -rotate-45 text-(--color-primary)" />
             </div>
           </div>
 
-          <h1 className="text-5xl font-black tracking-tight text-primary-400 md:text-6xl">HouseLog</h1>
-          <p className="mx-auto max-w-72 text-base font-light tracking-wide text-[#c4c5d9] md:text-lg">
+          <h1 className="text-5xl font-medium tracking-tight text-(--color-primary) md:text-6xl">HouseLog</h1>
+          <p className="mx-auto max-w-72 text-base font-normal tracking-wide text-(--hl-text-secondary) md:text-lg">
             A inteligencia por tras do seu patrimonio
           </p>
         </div>
@@ -36,9 +29,8 @@ export default function SplashPage() {
         <div className="w-full pt-4">
           <Link
             href="/dashboard"
-            className="group relative flex w-full items-center justify-center overflow-hidden rounded-xl bg-linear-to-r from-primary-400 to-primary-700 px-8 py-4 text-base font-bold uppercase tracking-widest text-white shadow-[0_10px_30px_-10px_rgba(46,91,255,0.25)] transition-all duration-300 hover:scale-[1.02] hover:brightness-110 active:scale-95"
+            className="group relative flex min-h-11 w-full items-center justify-center overflow-hidden rounded-lg bg-(--color-primary) px-8 py-4 text-base font-medium text-white transition-all duration-200 hover:brightness-95 active:scale-[0.98]"
           >
-            <span className="absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-linear-to-r from-white/10 to-transparent" />
             <span className="relative">Comecar jornada</span>
             <ArrowRight className="relative ml-3 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
           </Link>
@@ -46,7 +38,7 @@ export default function SplashPage() {
       </main>
 
       <div className="pointer-events-none absolute bottom-8 z-20 w-full text-center">
-        <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-[#8e90a2]">v 2.0.4 - Architectural Lens</p>
+        <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">v 2.0.4 - Architectural Lens</p>
       </div>
     </div>
   );

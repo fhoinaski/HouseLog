@@ -12,25 +12,25 @@ import { cn, SYSTEM_TYPE_LABELS, formatDate, formatCurrency } from '@/lib/utils'
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const SYSTEM_COLORS: Record<string, string> = {
-  electrical:     'bg-amber-100   text-amber-700',
-  plumbing:       'bg-blue-100    text-blue-700',
-  structural:     'bg-slate-100   text-slate-700',
-  waterproofing:  'bg-cyan-100    text-cyan-700',
-  painting:       'bg-violet-100  text-violet-700',
-  flooring:       'bg-orange-100  text-orange-700',
-  roofing:        'bg-rose-100    text-rose-700',
-  general:        'bg-gray-100    text-gray-600',
+  electrical:     'bg-(--color-warning-light) text-(--color-warning)',
+  plumbing:       'bg-(--color-info-light) text-(--color-info)',
+  structural:     'bg-(--color-neutral-100) text-(--color-neutral-700)',
+  waterproofing:  'bg-(--color-primary-light) text-(--color-primary)',
+  painting:       'bg-(--color-info-light) text-(--color-info)',
+  flooring:       'bg-(--color-warning-light) text-(--color-warning)',
+  roofing:        'bg-(--color-danger-light) text-(--color-danger)',
+  general:        'bg-(--color-neutral-100) text-(--color-neutral-600)',
 };
 
 const SYSTEM_DOT: Record<string, string> = {
-  electrical: 'bg-amber-400',
-  plumbing:   'bg-blue-400',
-  structural: 'bg-slate-400',
-  waterproofing: 'bg-cyan-400',
-  painting:   'bg-violet-400',
-  flooring:   'bg-orange-400',
-  roofing:    'bg-rose-400',
-  general:    'bg-gray-400',
+  electrical: 'bg-(--color-warning)',
+  plumbing:   'bg-(--color-info)',
+  structural: 'bg-neutral-500',
+  waterproofing: 'bg-(--color-primary)',
+  painting:   'bg-(--color-info)',
+  flooring:   'bg-(--color-warning)',
+  roofing:    'bg-(--color-danger)',
+  general:    'bg-neutral-500',
 };
 
 function parsePhotos(raw: string | undefined): string[] {
@@ -66,18 +66,18 @@ function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {
 
 function TimelineSkeleton() {
   return (
-    <div className="relative pl-8 space-y-8">
-      <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-slate-200" />
+    <div className="relative space-y-8 pl-8">
+      <div className="absolute bottom-0 left-3 top-0 w-0.5 bg-(--hl-border-light)" />
       {[...Array(5)].map((_, i) => (
         <div key={i} className="relative">
-          <div className="absolute -left-[1.4rem] top-1.5 h-3 w-3 rounded-full bg-slate-200 border-2 border-white" />
-          <div className="h-4 w-24 bg-slate-200 rounded animate-pulse mb-2" />
-          <div className="rounded-xl border border-slate-100 p-4 space-y-3 animate-pulse">
-            <div className="h-4 w-48 bg-slate-200 rounded" />
-            <div className="h-3 w-20 bg-slate-100 rounded" />
+          <div className="absolute -left-[1.4rem] top-1.5 h-3 w-3 rounded-full border-2 border-white bg-(--hl-border-light)" />
+          <div className="mb-2 h-4 w-24 animate-pulse rounded bg-(--hl-border-light)" />
+          <div className="space-y-3 rounded-xl border border-(--hl-border-subtle) p-4 animate-pulse">
+            <div className="h-4 w-48 rounded bg-(--hl-border-light)" />
+            <div className="h-3 w-20 rounded bg-(--hl-border-subtle)" />
             <div className="flex gap-2">
               {[...Array(3)].map((_, j) => (
-                <div key={j} className="h-16 w-16 bg-slate-200 rounded-lg" />
+                <div key={j} className="h-16 w-16 rounded-lg bg-(--hl-border-light)" />
               ))}
             </div>
           </div>
@@ -99,22 +99,22 @@ function TimelineCard({
   const beforePhotos = parsePhotos(order.before_photos);
   const afterPhotos  = parsePhotos(order.after_photos);
   const dotColor = SYSTEM_DOT[order.system_type] ?? 'bg-primary-500';
-  const badgeColor = SYSTEM_COLORS[order.system_type] ?? 'bg-slate-100 text-slate-600';
+  const badgeColor = SYSTEM_COLORS[order.system_type] ?? 'bg-neutral-100 text-neutral-600';
   const completedDate = order.completed_at ?? order.created_at;
 
   return (
     <div className="relative">
       <div className={cn('absolute -left-[1.4rem] top-1.5 h-3 w-3 rounded-full border-2 border-white', dotColor)} />
-      <p className="text-xs text-slate-400 mb-1.5">{formatDate(completedDate)}</p>
+      <p className="mb-1.5 text-xs text-(--hl-text-tertiary)">{formatDate(completedDate)}</p>
 
-      <Card className="hover:shadow-sm transition-shadow">
+      <Card className="transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]">
         <CardContent className="p-4 space-y-3">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="font-medium text-sm leading-snug">{order.title}</p>
               {order.assigned_to_name && (
-                <p className="text-xs text-slate-400 mt-0.5">{order.assigned_to_name}</p>
+                <p className="mt-0.5 text-xs text-(--hl-text-tertiary)">{order.assigned_to_name}</p>
               )}
             </div>
             <span className={cn('shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium', badgeColor)}>
@@ -124,7 +124,7 @@ function TimelineCard({
 
           {/* Description */}
           {order.description && (
-            <p className="text-xs text-slate-500 line-clamp-2">{order.description}</p>
+            <p className="line-clamp-2 text-xs text-(--hl-text-secondary)">{order.description}</p>
           )}
 
           {/* Photos */}
@@ -132,7 +132,7 @@ function TimelineCard({
             <div className="space-y-1.5">
               {beforePhotos.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Antes</p>
+                  <p className="mb-1 text-xs text-(--hl-text-tertiary)">Antes</p>
                   <div className="flex gap-2 flex-wrap">
                     {beforePhotos.map((url, i) => (
                       <button key={i} onClick={() => onPhotoClick(url)} className="group relative">
@@ -140,10 +140,10 @@ function TimelineCard({
                         <img
                           src={url}
                           alt={`antes-${i + 1}`}
-                          className="h-16 w-16 rounded-lg object-cover border border-slate-200 group-hover:opacity-80 transition-opacity"
+                          className="h-16 w-16 rounded-lg border border-(--hl-border-light) object-cover transition-opacity group-hover:opacity-80"
                         />
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ImageIcon className="h-5 w-5 text-white drop-shadow" />
+                          <ImageIcon className="h-5 w-5 text-white" />
                         </div>
                       </button>
                     ))}
@@ -152,7 +152,7 @@ function TimelineCard({
               )}
               {afterPhotos.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-400 mb-1">Depois</p>
+                  <p className="mb-1 text-xs text-(--hl-text-tertiary)">Depois</p>
                   <div className="flex gap-2 flex-wrap">
                     {afterPhotos.map((url, i) => (
                       <button key={i} onClick={() => onPhotoClick(url)} className="group relative">
@@ -160,10 +160,10 @@ function TimelineCard({
                         <img
                           src={url}
                           alt={`depois-${i + 1}`}
-                          className="h-16 w-16 rounded-lg object-cover border border-slate-200 group-hover:opacity-80 transition-opacity"
+                          className="h-16 w-16 rounded-lg border border-(--hl-border-light) object-cover transition-opacity group-hover:opacity-80"
                         />
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <ImageIcon className="h-5 w-5 text-white drop-shadow" />
+                          <ImageIcon className="h-5 w-5 text-white" />
                         </div>
                       </button>
                     ))}
@@ -175,8 +175,8 @@ function TimelineCard({
 
           {/* Footer */}
           {order.cost != null && (
-            <p className="text-xs text-slate-500 font-medium">
-              Custo: <span className="text-slate-700">{formatCurrency(order.cost)}</span>
+            <p className="text-xs font-medium text-(--hl-text-secondary)">
+              Custo: <span className="text-(--hl-text-primary)">{formatCurrency(order.cost)}</span>
             </p>
           )}
         </CardContent>
@@ -215,7 +215,7 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="max-w-2xl space-y-5 pb-20">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild>
@@ -224,8 +224,8 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
           </Link>
         </Button>
         <div>
-          <h2 className="text-xl font-bold">Timeline de Manutenção</h2>
-          <p className="text-xs text-slate-400">Histórico de OS concluídas</p>
+          <h2 className="text-xl font-medium">Timeline de manutenção</h2>
+          <p className="text-xs text-(--hl-text-tertiary)">Histórico de OS concluídas</p>
         </div>
       </div>
 
@@ -242,7 +242,7 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
                   'rounded-full px-3 py-1 text-xs font-medium border transition-colors',
                   active
                     ? cn(SYSTEM_COLORS[type] ?? 'bg-primary-600 text-white', 'border-transparent')
-                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                    : 'border-(--hl-border-light) bg-white text-(--hl-text-secondary) hover:border-(--hl-border-strong)'
                 )}
               >
                 {SYSTEM_TYPE_LABELS[type] ?? type}
@@ -252,7 +252,7 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
           {filters.length > 0 && (
             <button
               onClick={() => setFilters([])}
-              className="rounded-full px-3 py-1 text-xs font-medium border border-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+              className="rounded-full border border-(--hl-border-light) px-3 py-1 text-xs font-medium text-(--hl-text-tertiary) transition-colors hover:text-(--hl-text-secondary)"
             >
               Limpar
             </button>
@@ -265,8 +265,8 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
         <TimelineSkeleton />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <CheckCircle2 className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-sm text-slate-400">
+          <CheckCircle2 className="mb-3 h-10 w-10 text-(--hl-text-tertiary)" />
+          <p className="text-sm text-(--hl-text-tertiary)">
             {filters.length > 0
               ? 'Nenhuma OS concluída para o filtro selecionado'
               : 'Nenhuma OS concluída ainda'}
@@ -279,7 +279,7 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
         </div>
       ) : (
         <div className="relative pl-8 space-y-7">
-          <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-slate-200" />
+          <div className="absolute bottom-0 left-3 top-0 w-0.5 bg-(--hl-border-light)" />
           {filtered.map((order) => (
             <TimelineCard
               key={order.id}
@@ -290,8 +290,8 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
 
           {hasMore && (
             <div className="relative flex justify-center pt-2">
-              <div className="absolute -left-[1.4rem] top-1.5 h-3 w-3 rounded-full bg-slate-200 border-2 border-white">
-                <GitCommitVertical className="h-3 w-3 text-slate-400 -ml-px -mt-px" />
+              <div className="absolute -left-[1.4rem] top-1.5 h-3 w-3 rounded-full border-2 border-white bg-(--hl-border-light)">
+                <GitCommitVertical className="-ml-px -mt-px h-3 w-3 text-(--hl-text-tertiary)" />
               </div>
               <Button variant="outline" onClick={loadMore} disabled={isLoadingMore}>
                 {isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Carregar mais'}

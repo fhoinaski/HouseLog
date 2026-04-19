@@ -131,12 +131,12 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6 pb-20">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-bold">Nova Ordem de Serviço</h1>
+        <h1 className="text-xl font-medium">Nova ordem de serviço</h1>
       </div>
 
       <Card>
@@ -146,7 +146,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
             <div className="space-y-1.5">
               <Label htmlFor="title">Título *</Label>
               <Input id="title" placeholder="Troca de disjuntor, reparo de vazamento..." {...register('title')} />
-              {errors.title && <p className="text-xs text-rose-500">{errors.title.message}</p>}
+              {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -290,7 +290,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
             </div>
 
             {apiError && (
-              <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
+              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-sm text-(--color-danger)">
                 {apiError}
               </div>
             )}

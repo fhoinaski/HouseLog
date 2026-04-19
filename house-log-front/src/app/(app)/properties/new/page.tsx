@@ -1,11 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Building2, ImagePlus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ImagePlus } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -29,12 +29,12 @@ export default function NewPropertyPage() {
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
 
-  const { register, handleSubmit, setValue, watch, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, control, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { type: 'house' },
   });
 
-  const watchType = watch('type');
+  const watchType = useWatch({ control, name: 'type' });
 
   const typeLabel = useMemo(() => {
     if (watchType === 'house') return 'Casa';
@@ -68,70 +68,67 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden pb-28 pt-20">
-      <div className="pointer-events-none fixed left-0 top-0 -z-10 h-96 w-full bg-linear-to-b from-zinc-800 to-transparent" />
-
-      <header className="fixed left-0 top-0 z-40 flex h-16 w-full items-center justify-between bg-background/80 px-6 shadow-[0px_40px_60px_rgba(6,14,32,0.4)] backdrop-blur-lg">
+    <div className="min-h-screen overflow-x-hidden bg-(--hl-bg-page) pb-20 pt-13">
+      <header className="fixed left-0 top-0 z-40 flex h-13 w-full items-center justify-between border-b border-neutral-100 bg-(--hl-bg-card) px-4">
         <button
           aria-label="Voltar"
-          className="-ml-2 rounded-full p-2 text-primary-400 transition-all duration-300 hover:bg-zinc-600 active:scale-95"
+          className="-ml-1 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-(--color-primary) transition-colors hover:bg-(--color-primary-light) active:scale-[0.98]"
           onClick={() => router.back()}
         >
-          <ArrowLeft className="h-6 w-6" />
+          <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="pr-10 text-center text-xl font-semibold tracking-tight text-primary-400">Novo Imóvel</h1>
+        <h1 className="pr-10 text-center text-[15px] font-medium tracking-tight text-(--hl-text-primary)">Novo imóvel</h1>
       </header>
 
-      <main className="relative z-10 mx-auto mt-6 flex w-full max-w-3xl flex-col gap-8 px-6 pb-10">
+      <main className="mx-auto mt-4 flex w-full max-w-3xl flex-col gap-4 px-4 pb-8">
         <div className="flex flex-col gap-2">
-          <h2 className="text-5xl font-extrabold tracking-tight text-primary-400">Adicionar Propriedade</h2>
-          <p className="max-w-lg text-xl leading-relaxed font-medium tracking-wide text-[#c4c5d9]">
+          <h2 className="text-[20px] font-medium tracking-tight text-(--hl-text-primary)">Adicionar propriedade</h2>
+          <p className="max-w-lg text-[13px] leading-relaxed text-(--hl-text-secondary)">
             Insira os dados fundamentais para integrar esta propriedade ao seu portfólio de gestão.
           </p>
         </div>
 
-        <form className="flex flex-col gap-6" onSubmit={handleSubmit(onSubmit)}>
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)}>
           <button
             type="button"
             onClick={onPickCover}
-            className="group relative flex min-h-55 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-zinc-500/10 bg-zinc-700 p-6 transition-all duration-300 hover:scale-[1.01] hover:bg-zinc-600"
+            className="group relative flex min-h-55 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-neutral-100 bg-(--hl-bg-card) p-6 transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]"
           >
-            <div className="pointer-events-none absolute inset-0 bg-linear-to-b from-zinc-600/20 to-transparent" />
             {coverPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={coverPreview} alt="Prévia da capa" className="absolute inset-0 h-full w-full object-cover" />
             ) : null}
-            <div className={cn('z-10 flex flex-col items-center gap-3 text-center', coverPreview ? 'bg-background/65 rounded-xl px-4 py-3 backdrop-blur-sm' : '')}>
-              <div className="mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-600/50 text-primary-400 shadow-[0_10px_30px_rgba(0,0,0,0.2)] backdrop-blur-md">
+            <div className={cn('z-10 flex flex-col items-center gap-3 text-center', coverPreview ? 'rounded-xl bg-(--hl-bg-card) px-4 py-3' : '')}>
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--color-primary-light) text-(--color-primary)">
                 <ImagePlus className="h-8 w-8" />
               </div>
-              <h3 className="text-2xl font-semibold text-[#dae2fd]">Imagem de Capa</h3>
-              <p className="max-w-55 text-sm leading-tight text-[#c4c5d9]">
+              <h3 className="text-[15px] font-medium text-(--hl-text-primary)">Imagem de capa</h3>
+              <p className="max-w-55 text-[12px] leading-tight text-(--hl-text-secondary)">
                 Toque para fazer upload da foto principal do imóvel.
               </p>
             </div>
             <input ref={coverInputRef} accept="image/*" className="hidden" type="file" onChange={onCoverChange} />
           </button>
 
-          <Card className="rounded-xl border-zinc-500/20 bg-zinc-800/70 p-1 shadow-[0px_20px_40px_rgba(6,14,32,0.4)]">
+          <Card className="rounded-xl border-neutral-100 bg-(--hl-bg-card) p-1">
             <CardContent className="flex flex-col gap-4 p-0">
-              <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
-                <label className="mb-2 block text-label-caps text-primary-400">Nome da propriedade</label>
-                <Input id="name" placeholder="Ex: Edifício Aurora" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('name')} />
-                {errors.name && <p className="mt-2 text-xs text-[#ffb4ab]">{errors.name.message}</p>}
+              <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
+                <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Nome da propriedade</label>
+                <Input id="name" placeholder="Ex: Edifício Aurora" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('name')} />
+                {errors.name && <p className="mt-2 text-[12px] text-(--color-danger)">{errors.name.message}</p>}
               </div>
 
-              <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
-                <label className="mb-2 block text-label-caps text-primary-400">Endereço completo</label>
-                <Input id="address" placeholder="Av. Paulista, 1000 - Bela Vista" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('address')} />
-                {errors.address && <p className="mt-2 text-xs text-[#ffb4ab]">{errors.address.message}</p>}
+              <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
+                <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Endereço completo</label>
+                <Input id="address" placeholder="Av. Paulista, 1000 - Bela Vista" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('address')} />
+                {errors.address && <p className="mt-2 text-[12px] text-(--color-danger)">{errors.address.message}</p>}
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="relative rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
-                  <label className="mb-2 block text-label-caps text-primary-400">Tipo de imóvel</label>
+                <div className="relative rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
+                  <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Tipo de imóvel</label>
                   <Select defaultValue="house" onValueChange={(value) => setValue('type', value as FormData['type'])}>
-                    <SelectTrigger className="h-auto border-0 bg-transparent p-0 text-4xl font-medium text-[#dae2fd] focus:ring-0">
+                    <SelectTrigger className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium text-(--hl-text-primary) focus:border-(--field-border-strong)">
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
@@ -141,35 +138,35 @@ export default function NewPropertyPage() {
                       <SelectItem value="warehouse">Galpão</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="mt-2 text-xs text-[#c4c5d9]">Selecionado: {typeLabel}</p>
+                  <p className="mt-2 text-[12px] text-(--hl-text-secondary)">Selecionado: {typeLabel}</p>
                 </div>
 
-                <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
-                  <label className="mb-2 block text-label-caps text-primary-400">Área total (m²)</label>
+                <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
+                  <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Área total (m²)</label>
                   <div className="flex items-center gap-2">
-                    <Input id="area_m2" type="number" step="0.1" placeholder="0" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('area_m2')} />
-                    <span className="text-2xl font-medium text-[#c4c5d9]">m²</span>
+                    <Input id="area_m2" type="number" step="0.1" placeholder="0" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('area_m2')} />
+                    <span className="text-[13px] text-(--hl-text-secondary)">m²</span>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-lg bg-background p-4 transition-all duration-300 focus-within:bg-zinc-600 focus-within:ring-1 focus-within:ring-primary-400/20">
-                <label className="mb-2 block text-label-caps text-primary-400">Cidade</label>
-                <Input id="city" placeholder="São Paulo" className="h-auto border-0 bg-transparent p-0 text-4xl font-medium placeholder:text-[#c4c5d9]/50 focus-visible:ring-0" {...register('city')} />
-                {errors.city && <p className="mt-2 text-xs text-[#ffb4ab]">{errors.city.message}</p>}
+              <div className="rounded-lg bg-(--hl-bg-card) p-4 transition-colors focus-within:bg-(--color-neutral-50)">
+                <label className="mb-2 block text-label-caps text-(--hl-text-tertiary)">Cidade</label>
+                <Input id="city" placeholder="São Paulo" className="h-11 border-0 border-b-[1.5px] border-(--field-border) bg-transparent p-0 text-[15px] font-medium placeholder:text-(--field-placeholder) focus-visible:border-(--field-border-strong)" {...register('city')} />
+                {errors.city && <p className="mt-2 text-[12px] text-(--color-danger)">{errors.city.message}</p>}
               </div>
             </CardContent>
           </Card>
 
           {error && (
-            <div className="rounded-md bg-[#93000a]/30 px-4 py-3 text-sm text-[#ffdad6]">
+            <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-[13px] text-(--color-danger)">
               {error}
             </div>
           )}
 
-          <Button type="submit" size="lg" loading={isSubmitting} className="mt-8 w-full text-3xl font-bold">
-            Cadastrar Imóvel
-            <ArrowRight className="h-6 w-6" />
+          <Button type="submit" size="lg" loading={isSubmitting} className="mt-2 w-full">
+            Cadastrar imóvel
+            <ArrowRight className="h-4 w-4" />
           </Button>
         </form>
       </main>

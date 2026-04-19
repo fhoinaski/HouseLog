@@ -29,8 +29,15 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_COLORS: Record<string, string> = {
   manager: 'bg-primary-100 text-primary-700',
-  provider: 'bg-amber-100 text-amber-700',
-  viewer: 'bg-slate-100 text-slate-600',
+  provider: 'bg-(--color-warning-light) text-(--color-warning)',
+  viewer: 'bg-neutral-100 text-neutral-600',
+};
+
+const ROLE_AVATAR: Record<string, string> = {
+  owner: 'bg-(--color-avatar-owner-bg) text-(--color-avatar-owner-fg)',
+  manager: 'bg-(--color-avatar-manager-bg) text-(--color-avatar-manager-fg)',
+  provider: 'bg-(--color-avatar-provider-bg) text-(--color-avatar-provider-fg)',
+  viewer: 'bg-(--color-neutral-50) text-(--color-neutral-600)',
 };
 
 const ROLE_ICONS: Record<string, React.ElementType> = {
@@ -98,7 +105,7 @@ function CollaboratorRow({
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
       {/* Avatar */}
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 font-semibold text-sm uppercase">
+      <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-medium uppercase', ROLE_AVATAR[collab.role] ?? ROLE_AVATAR.viewer)}>
         {collab.name.charAt(0)}
       </div>
 
@@ -123,9 +130,9 @@ function CollaboratorRow({
           disabled={!canToggle}
         >
           {collab.can_open_os ? (
-            <><ToggleRight className="h-4 w-4 text-emerald-600" /><span className="text-emerald-600 hidden sm:inline">Abre OS</span></>
+            <><ToggleRight className="h-4 w-4 text-(--color-success)" /><span className="hidden text-(--color-success) sm:inline">Abre OS</span></>
           ) : (
-            <><ToggleLeft className="h-4 w-4 text-slate-400" /><span className="text-slate-400 hidden sm:inline">Sem OS</span></>
+            <><ToggleLeft className="h-4 w-4 text-neutral-400" /><span className="hidden text-neutral-400 sm:inline">Sem OS</span></>
           )}
         </button>
       )}
@@ -134,7 +141,7 @@ function CollaboratorRow({
       {canManageTeam && (
         <Button
           variant="ghost" size="icon"
-          className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 shrink-0"
+          className="h-8 w-8 shrink-0 text-(--color-danger) hover:bg-(--color-danger-light)"
           onClick={() => onRemove(collab)}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -158,7 +165,7 @@ function InviteRow({
   const contactLabel = invite.whatsapp?.trim() || invite.email;
   return (
     <div className="flex items-center gap-3 py-3 border-b border-border last:border-0">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-(--color-warning-light) text-(--color-warning)">
         <Mail className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0">
@@ -176,7 +183,7 @@ function InviteRow({
       {isOwner && (
         <Button
           variant="ghost" size="icon"
-          className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 shrink-0"
+          className="h-8 w-8 shrink-0 text-(--color-danger) hover:bg-(--color-danger-light)"
           onClick={() => onCancel(invite)}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -340,7 +347,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Equipe</h2>
+            <h2 className="text-xl font-medium">Equipe</h2>
           <p className="text-sm text-muted-foreground">
             {collaborators.length} membro{collaborators.length !== 1 ? 's' : ''} ·{' '}
             {invites.length} convite{invites.length !== 1 ? 's' : ''} pendente{invites.length !== 1 ? 's' : ''}
@@ -358,8 +365,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Gestores', count: managerCount, color: 'text-primary-600', bg: 'bg-primary-50' },
-          { label: 'Prestadores', count: providerCount, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'Visualizadores', count: collaborators.filter((c) => c.role === 'viewer').length, color: 'text-slate-600', bg: 'bg-slate-50' },
+          { label: 'Prestadores', count: providerCount, color: 'text-(--color-warning)', bg: 'bg-(--color-warning-light)' },
+          { label: 'Visualizadores', count: collaborators.filter((c) => c.role === 'viewer').length, color: 'text-neutral-600', bg: 'bg-neutral-50' },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -367,7 +374,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                 <Users className={cn('h-4 w-4', s.color)} />
               </div>
               <div>
-                <p className={cn('text-xl font-bold', s.color)}>{s.count}</p>
+                <p className={cn('text-xl font-medium', s.color)}>{s.count}</p>
                 <p className="text-xs text-muted-foreground">{s.label}</p>
               </div>
             </CardContent>
@@ -376,11 +383,11 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       </div>
 
       {/* Permission legend */}
-      <div className="rounded-lg border border-border bg-card px-4 py-3 text-xs text-muted-foreground space-y-1">
-        <p className="font-semibold text-foreground">Permissões por papel</p>
+      <div className="space-y-1 rounded-lg border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">Permissões por papel</p>
         <p><span className="font-medium text-primary-700">Gestor</span> — visualiza tudo + abre OS (se habilitado pelo proprietário)</p>
-        <p><span className="font-medium text-amber-700">Prestador</span> — recebe OS atribuídas + pode abrir OS (se habilitado)</p>
-        <p><span className="font-medium text-slate-600">Visualizador</span> — apenas leitura, não pode abrir OS</p>
+        <p><span className="font-medium text-(--color-warning)">Prestador</span> — recebe OS atribuídas + pode abrir OS (se habilitado)</p>
+        <p><span className="font-medium text-neutral-600">Visualizador</span> — apenas leitura, não pode abrir OS</p>
       </div>
 
       {/* Active collaborators */}
@@ -406,7 +413,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
         </Card>
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Users className="h-10 w-10 text-slate-300 mb-3" />
+          <Users className="mb-3 h-10 w-10 text-neutral-300" />
           <p className="text-muted-foreground text-sm">Nenhum membro na equipe</p>
           {canManageTeam && (
             <Button variant="outline" className="mt-3" onClick={() => setInviteOpen(true)}>
@@ -421,7 +428,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Mail className="h-4 w-4 text-amber-500" />
+              <Mail className="h-4 w-4 text-(--color-warning)" />
               Convites pendentes
             </CardTitle>
           </CardHeader>
@@ -466,12 +473,12 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             <div className="space-y-1.5">
               <Label htmlFor="inv-name">Nome (pré-cadastro)</Label>
               <Input id="inv-name" placeholder="Nome do prestador" {...register('name')} />
-              {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
+              {errors.name && <p className="text-xs text-(--color-danger)">{errors.name.message}</p>}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="inv-email">Email</Label>
               <Input id="inv-email" type="email" placeholder="prestador@email.com" {...register('email')} />
-              {errors.email && <p className="text-xs text-rose-500">{errors.email.message}</p>}
+              {errors.email && <p className="text-xs text-(--color-danger)">{errors.email.message}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Papel *</Label>

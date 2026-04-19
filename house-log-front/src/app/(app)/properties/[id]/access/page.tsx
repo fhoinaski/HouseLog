@@ -22,12 +22,12 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
-  { value: 'wifi',       label: 'Wi-Fi',         icon: Wifi,       color: 'text-blue-500',    bg: 'bg-blue-50 border-blue-100' },
-  { value: 'alarm',      label: 'Alarme',         icon: Shield,     color: 'text-rose-500',    bg: 'bg-rose-50 border-rose-100' },
-  { value: 'smart_lock', label: 'Fechadura Smart', icon: Lock,       color: 'text-violet-500',  bg: 'bg-violet-50 border-violet-100' },
-  { value: 'gate',       label: 'Portão/Acesso',  icon: KeyRound,   color: 'text-amber-500',   bg: 'bg-amber-50 border-amber-100' },
-  { value: 'app',        label: 'App/Sistema',    icon: AppWindow,  color: 'text-emerald-500', bg: 'bg-emerald-50 border-emerald-100' },
-  { value: 'other',      label: 'Outro',          icon: HelpCircle, color: 'text-slate-500',   bg: 'bg-slate-50 border-slate-100' },
+  { value: 'wifi',       label: 'Wi-Fi',          icon: Wifi,      color: 'text-(--color-primary)', bg: 'bg-(--color-primary-light) border-(--color-primary-border)' },
+  { value: 'alarm',      label: 'Alarme',         icon: Shield,    color: 'text-(--color-danger)',  bg: 'bg-(--color-danger-light) border-(--color-danger-border)' },
+  { value: 'smart_lock', label: 'Fechadura smart', icon: Lock,      color: 'text-(--color-warning)', bg: 'bg-(--color-warning-light) border-(--color-warning-border)' },
+  { value: 'gate',       label: 'Portão/acesso',  icon: KeyRound,  color: 'text-(--color-warning)', bg: 'bg-(--color-warning-light) border-(--color-warning-border)' },
+  { value: 'app',        label: 'App/sistema',    icon: AppWindow, color: 'text-(--color-success)', bg: 'bg-(--color-success-light) border-(--color-success-light)' },
+  { value: 'other',      label: 'Outro',          icon: HelpCircle, color: 'text-(--color-neutral-600)', bg: 'bg-(--color-neutral-50) border-(--color-neutral-200)' },
 ] as const;
 
 type CategoryValue = (typeof CATEGORIES)[number]['value'];
@@ -61,16 +61,16 @@ function SecretCell({ secret }: { secret: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <code className={cn(
-        'flex-1 rounded px-1.5 py-0.5 text-xs font-mono bg-[var(--muted)]',
-        show ? '' : 'select-none [filter:blur(4px)]'
+        'flex-1 rounded px-1.5 py-0.5 text-xs font-mono bg-muted',
+        show ? '' : 'select-none text-transparent'
       )}>
         {secret}
       </code>
-      <button onClick={() => setShow(!show)} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+      <button onClick={() => setShow(!show)} className="p-1 text-muted-foreground transition-colors hover:text-foreground" aria-label={show ? 'Ocultar credencial' : 'Mostrar credencial'}>
         {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
       </button>
-      <button onClick={copy} className="p-1 text-[var(--muted-foreground)] hover:text-primary-500 transition-colors">
-        {copied ? <span className="text-[10px] text-emerald-500 font-medium">✓</span> : <Copy className="h-3.5 w-3.5" />}
+      <button onClick={copy} className="p-1 text-muted-foreground transition-colors hover:text-(--color-primary)" aria-label="Copiar credencial">
+        {copied ? <span className="text-[11px] font-medium text-(--color-success)">✓</span> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
   );
@@ -97,12 +97,12 @@ function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string
     <DialogContent className="max-w-sm">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-amber-500" />
-          Gerar Senha Temporária
+          <Zap className="h-4 w-4 text-(--color-warning)" />
+          Gerar senha temporária
         </DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
-        <p className="text-sm text-[var(--muted-foreground)]">Integração Intelbras — <strong>{label}</strong></p>
+        <p className="text-sm text-muted-foreground">Integração Intelbras — <span className="font-medium">{label}</span></p>
 
         {!result ? (
           <>
@@ -126,12 +126,12 @@ function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string
           </>
         ) : (
           <div className="space-y-3">
-            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-center">
-              <p className="text-xs text-amber-600 mb-1">PIN Temporário</p>
-              <p className="text-3xl font-bold font-mono tracking-widest text-amber-900 select-all">{result.temp_pin}</p>
-              <p className="text-xs text-amber-600 mt-2">Expira: {new Date(result.expires_at).toLocaleString('pt-BR')}</p>
+            <div className="rounded-xl border border-(--color-warning-border) bg-(--color-warning-light) p-4 text-center">
+              <p className="mb-1 text-xs text-(--color-warning)">PIN temporário</p>
+              <p className="select-all font-mono text-3xl font-medium tracking-widest text-neutral-900">{result.temp_pin}</p>
+              <p className="mt-2 text-xs text-(--color-warning)">Expira: {new Date(result.expires_at).toLocaleString('pt-BR')}</p>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)]">{result.note}</p>
+            <p className="text-xs text-muted-foreground">{result.note}</p>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => {
                 navigator.clipboard.writeText(result.temp_pin);
@@ -146,7 +146,7 @@ function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string
           </div>
         )}
 
-        <Button variant="ghost" className="w-full text-xs text-[var(--muted-foreground)]" onClick={onClose}>
+        <Button variant="ghost" className="w-full text-xs text-muted-foreground" onClick={onClose}>
           <X className="h-3.5 w-3.5" /> Fechar
         </Button>
       </div>
@@ -245,12 +245,12 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
   })).filter((g) => g.items.length > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Senhas & Acessos</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <h2 className="text-xl font-medium">Senhas e acessos</h2>
+          <p className="text-sm text-muted-foreground">
             Wi-Fi, alarmes, fechaduras, portões e integrações.
           </p>
         </div>
@@ -261,10 +261,10 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {/* Info banner */}
-      <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-700 dark:border-primary-900/40 dark:bg-primary-900/10 dark:text-primary-300">
-        <p className="font-semibold mb-0.5">Compartilhamento seguro</p>
+      <div className="rounded-xl border border-(--color-primary-border) bg-(--color-primary-light) px-4 py-3 text-sm text-(--color-primary)">
+        <p className="mb-0.5 font-medium">Compartilhamento seguro</p>
         <p className="text-xs opacity-80">
-          Credenciais marcadas como <strong>"incluir em OS"</strong> são automaticamente enviadas
+          Credenciais marcadas como <span className="font-medium">&quot;incluir em OS&quot;</span> são automaticamente enviadas
           ao prestador quando você compartilha uma Ordem de Serviço via link.
         </p>
       </div>
@@ -279,36 +279,36 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                   <Icon className={cn('h-3.5 w-3.5', color)} />
                 </div>
                 {label}
-                <span className="ml-auto text-xs font-normal text-[var(--muted-foreground)]">{catItems.length} item{catItems.length !== 1 ? 's' : ''}</span>
+                <span className="ml-auto text-xs font-normal text-muted-foreground">{catItems.length} item{catItems.length !== 1 ? 's' : ''}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {catItems.map((cred) => (
-                <div key={cred.id} className="flex items-start gap-3 rounded-xl border border-[var(--border)] p-3 group">
+                <div key={cred.id} className="flex items-start gap-3 rounded-xl border border-border p-3 group">
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold">{cred.label}</p>
+                      <p className="text-sm font-medium">{cred.label}</p>
                       {cred.share_with_os && (
-                        <Badge variant="secondary" className="text-[10px] py-0">Incluir em OS</Badge>
+                        <Badge variant="secondary" className="text-[11px] py-0">Incluir em OS</Badge>
                       )}
                       {cred.integration_type && (
-                        <Badge variant="secondary" className="text-[10px] py-0 bg-amber-100 text-amber-700">
+                        <Badge variant="warning" className="py-0 text-[11px]">
                           {cred.integration_type}
                         </Badge>
                       )}
                     </div>
                     {cred.username && (
-                      <p className="text-xs text-[var(--muted-foreground)]">Usuário: <span className="font-mono">{cred.username}</span></p>
+                      <p className="text-xs text-muted-foreground">Usuário: <span className="font-mono">{cred.username}</span></p>
                     )}
                     <SecretCell secret={cred.secret} />
-                    {cred.notes && <p className="text-xs text-[var(--muted-foreground)]">{cred.notes}</p>}
+                    {cred.notes && <p className="text-xs text-muted-foreground">{cred.notes}</p>}
                   </div>
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {cred.integration_type === 'intelbras' && (
                       <button
                         onClick={() => setTempCodeCred(cred)}
-                        className="flex items-center justify-center h-7 w-7 rounded-lg text-amber-500 hover:bg-amber-50 transition-colors"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-(--color-warning) transition-colors hover:bg-(--color-warning-light)"
                         title="Gerar senha temporária"
                       >
                         <Zap className="h-3.5 w-3.5" />
@@ -316,14 +316,14 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                     )}
                     <button
                       onClick={() => openEdit(cred)}
-                      className="flex items-center justify-center h-7 w-7 rounded-lg text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors"
+                      className="flex items-center justify-center h-7 w-7 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(cred.id)}
                       disabled={deletingId === cred.id}
-                      className="flex items-center justify-center h-7 w-7 rounded-lg text-rose-400 hover:bg-rose-50 transition-colors disabled:opacity-40"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-(--color-danger) transition-colors hover:bg-(--color-danger-light) disabled:opacity-40"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -335,11 +335,11 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         ))
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--muted)] mb-4">
-            <KeyRound className="h-8 w-8 text-[var(--muted-foreground)]" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted mb-4">
+            <KeyRound className="h-8 w-8 text-muted-foreground" />
           </div>
-          <p className="font-semibold">Nenhuma credencial cadastrada</p>
-          <p className="text-sm text-[var(--muted-foreground)] mt-1 max-w-xs">
+          <p className="font-medium">Nenhuma credencial cadastrada</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-xs">
             Salve senhas de Wi-Fi, alarmes, fechaduras inteligentes e outros acessos do imóvel.
           </p>
           <Button className="mt-4" onClick={openCreate}>
@@ -353,8 +353,8 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-primary-500" />
-              {editing ? 'Editar Credencial' : 'Nova Credencial'}
+              <KeyRound className="h-4 w-4 text-(--color-primary)" />
+              {editing ? 'Editar credencial' : 'Nova credencial'}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -377,7 +377,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
             <div className="space-y-1.5">
               <Label htmlFor="label">Nome / Identificação *</Label>
               <Input id="label" placeholder="Ex: Wi-Fi Principal, Alarme Sala..." {...register('label')} />
-              {errors.label && <p className="text-xs text-rose-500">{errors.label.message}</p>}
+              {errors.label && <p className="text-xs text-(--color-danger)">{errors.label.message}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -388,7 +388,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
             <div className="space-y-1.5">
               <Label htmlFor="secret">Senha / Código / PIN *</Label>
               <Input id="secret" type="password" placeholder="••••••••" {...register('secret')} />
-              {errors.secret && <p className="text-xs text-rose-500">{errors.secret.message}</p>}
+              {errors.secret && <p className="text-xs text-(--color-danger)">{errors.secret.message}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -398,12 +398,12 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
 
             {/* Intelbras integration */}
             {watchCategory === 'smart_lock' && (
-              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="space-y-3 rounded-xl border border-(--color-warning-border) bg-(--color-warning-light) p-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-(--color-warning)">
                     <Zap className="h-3.5 w-3.5" /> Integração Intelbras
                   </p>
-                  <label className="flex items-center gap-1.5 text-xs text-amber-700 cursor-pointer">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs text-(--color-warning)">
                     <input
                       type="checkbox"
                       className="rounded"
@@ -420,7 +420,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                       <Input placeholder="Usuário" {...register('intelbras_user')} />
                       <Input placeholder="Senha" type="password" {...register('intelbras_pass')} />
                     </div>
-                    <p className="text-[10px] text-amber-600">
+                    <p className="text-[11px] text-(--color-warning)">
                       Compatível com Intelbras Control iD, SS 5530 MF e similares via API local.
                     </p>
                   </div>
@@ -429,7 +429,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
             )}
 
             {/* Share with OS */}
-            <label className="flex items-start gap-3 rounded-xl border border-[var(--border)] p-3 cursor-pointer hover:bg-[var(--muted)] transition-colors">
+            <label className="flex items-start gap-3 rounded-xl border border-border p-3 cursor-pointer hover:bg-muted transition-colors">
               <input
                 type="checkbox"
                 className="mt-0.5 rounded"
@@ -437,7 +437,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
               />
               <div>
                 <p className="text-sm font-medium">Incluir em OS compartilhadas</p>
-                <p className="text-xs text-[var(--muted-foreground)]">
+                <p className="text-xs text-muted-foreground">
                   Esta credencial será visível para o prestador quando o proprietário compartilhar uma OS via link.
                 </p>
               </div>

@@ -16,9 +16,9 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import {
   SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS,
-  formatDate, formatCurrency, cn,
+  formatDate, formatCurrency,
 } from '@/lib/utils';
-import { ArrowLeft, MapPin, Calendar, DollarSign, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 const bidSchema = z.object({
   amount: z.coerce.number().positive('Valor deve ser positivo'),
@@ -93,7 +93,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold truncate">{order.title}</h1>
+          <h1 className="truncate text-xl font-medium">{order.title}</h1>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
           </div>
@@ -105,36 +105,36 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
         <CardContent className="p-5">
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Sistema</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Sistema</dt>
               <dd className="font-medium">{SYSTEM_TYPE_LABELS[order.system_type]}</dd>
             </div>
             <div>
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Prioridade</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Prioridade</dt>
               <dd className="font-medium">{SERVICE_PRIORITY_LABELS[order.priority]}</dd>
             </div>
             <div className="col-span-2">
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Imóvel</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Imóvel</dt>
               <dd className="font-medium flex items-center gap-1">
                 <MapPin className="h-3.5 w-3.5" />
                 {order.property_name} — {order.property_address}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Criada em</dt>
+              <dt className="mb-0.5 text-xs text-muted-foreground">Criada em</dt>
               <dd className="font-medium flex items-center gap-1">
                 <Calendar className="h-3.5 w-3.5" />{formatDate(order.created_at)}
               </dd>
             </div>
             {order.scheduled_at && (
               <div>
-                <dt className="text-xs text-[var(--muted-foreground)] mb-0.5">Agendado para</dt>
+                <dt className="mb-0.5 text-xs text-muted-foreground">Agendado para</dt>
                 <dd className="font-medium">{formatDate(order.scheduled_at)}</dd>
               </div>
             )}
           </dl>
           {order.description && (
-            <div className="mt-4 pt-4 border-t border-[var(--border)]">
-              <p className="text-xs text-[var(--muted-foreground)] mb-1">Descrição</p>
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="mb-1 text-xs text-muted-foreground">Descrição</p>
               <p className="text-sm whitespace-pre-wrap">{order.description}</p>
             </div>
           )}
@@ -165,16 +165,16 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
           <CardHeader><CardTitle className="text-base">Meus Orçamentos</CardTitle></CardHeader>
           <CardContent className="p-0">
             {myBids.map((bid: ServiceBid) => (
-              <div key={bid.id} className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] last:border-0">
+              <div key={bid.id} className="flex items-center justify-between border-b border-border px-5 py-3 last:border-0">
                 <div>
-                  <p className="font-bold text-lg">{formatCurrency(bid.amount)}</p>
-                  {bid.notes && <p className="text-xs text-[var(--muted-foreground)]">{bid.notes}</p>}
-                  <p className="text-xs text-[var(--muted-foreground)]">{formatDate(bid.created_at)}</p>
+                  <p className="text-lg font-medium">{formatCurrency(bid.amount)}</p>
+                  {bid.notes && <p className="text-xs text-muted-foreground">{bid.notes}</p>}
+                  <p className="text-xs text-muted-foreground">{formatDate(bid.created_at)}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {bid.status === 'pending' && <Clock className="h-4 w-4 text-amber-500" />}
-                  {bid.status === 'accepted' && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-                  {bid.status === 'rejected' && <XCircle className="h-4 w-4 text-rose-500" />}
+                  {bid.status === 'pending' && <Clock className="h-4 w-4 text-(--color-warning)" />}
+                  {bid.status === 'accepted' && <CheckCircle2 className="h-4 w-4 text-(--color-success)" />}
+                  {bid.status === 'rejected' && <XCircle className="h-4 w-4 text-(--color-danger)" />}
                   <Badge variant={bid.status === 'accepted' ? 'success' : bid.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
                     {bid.status === 'accepted' ? 'Aceito' : bid.status === 'rejected' ? 'Recusado' : 'Pendente'}
                   </Badge>
@@ -194,7 +194,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
               <div className="space-y-1.5">
                 <Label htmlFor="bid-amount">Valor do orçamento (R$) *</Label>
                 <Input id="bid-amount" type="number" step="0.01" placeholder="0.00" {...register('amount')} />
-                {errors.amount && <p className="text-xs text-rose-500">{errors.amount.message}</p>}
+                {errors.amount && <p className="text-xs text-(--color-danger)">{errors.amount.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="bid-notes">Observações</Label>
@@ -202,7 +202,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
                   id="bid-notes"
                   rows={3}
                   placeholder="Descreva o que está incluso, prazo de execução..."
-                  className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-transparent px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                  className="w-full resize-none rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-(--color-primary-border)"
                   {...register('notes')}
                 />
               </div>
@@ -218,7 +218,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
         <Card>
           <CardHeader><CardTitle className="text-base">Execução Direta</CardTitle></CardHeader>
           <CardContent className="p-5 pt-0">
-            <p className="text-sm text-[var(--muted-foreground)]">
+            <p className="text-sm text-muted-foreground">
               Esta OS foi atribuída diretamente para execução. Não é necessário enviar orçamento.
             </p>
           </CardContent>

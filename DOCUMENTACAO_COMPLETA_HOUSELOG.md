@@ -659,3 +659,167 @@ Este documento reflete o estado atual do codigo e melhorias recentes observadas 
 - perfil estruturado e portfolio antes/depois;
 - evolucao do design system para claro/escuro e mobile;
 - adocao do guia visual oficial The Architectural Lens para produto, Stitch e engenharia.
+
+---
+
+## 23. Apresentacao detalhada do projeto (frontend + backend)
+
+Data de referencia: 19/04/2026
+
+### 23.1 Narrativa do produto
+
+HouseLog e uma plataforma SaaS mobile-first de gestao operacional e manutencao de imoveis, desenhada para alinhar tres atores com objetivos diferentes, mas dependentes no mesmo fluxo:
+- owner: controle financeiro, governanca e decisao final em aprovacoes;
+- manager: operacao diaria, abertura de OS, comparacao de propostas e acompanhamento da execucao;
+- provider: resposta rapida a oportunidades, envio de proposta, execucao com evidencia e fechamento.
+
+A proposta central do produto e reduzir a fragmentacao operacional da administracao imobiliaria, conectando inventario, manutencao, financeiro, mensagens e documentos em um ciclo unico de trabalho, com rastreabilidade completa por imovel e por ordem de servico.
+
+### 23.2 Como o frontend esta hoje
+
+Stack e fundamentos:
+- Next.js App Router com React e TypeScript;
+- Tailwind v4 + tokens em globals.css;
+- componentes de base com Radix UI e variacoes reutilizaveis;
+- SWR para cache, refetch e consistencia de dados;
+- formularios com RHF + Zod;
+- PWA ativa (manifest, service worker, pagina offline).
+
+Estrutura de experiencia:
+- shell autenticado com top navigation e bottom navigation para foco mobile;
+- rotas por contexto de papel (app geral e portal do provider);
+- telas publicas para convite, auditoria e compartilhamento externo;
+- estados de loading, empty e error em fluxos criticos.
+
+Estado funcional observado no frontend:
+- dashboard do manager com secoes de acoes rapidas, imoveis, orcamentos e agenda;
+- portal do provider com dashboard, oportunidades, detalhes de servico e configuracoes;
+- fluxo de propriedade com submodulos de inventario, financeiro, manutencao, documentos e timeline;
+- chat por OS integrado ao fluxo operacional;
+- componentes de PDF para relatorios e ordens de servico.
+
+Direcao visual ativa:
+- Design System The Architectural Lens como guia oficial;
+- linguagem visual limpa, com foco funcional e hierarquia;
+- prioridade para legibilidade, rapidez de acao e uso em campo;
+- equilibrio entre clareza de dados e identidade premium sem excesso ornamental.
+
+### 23.3 Como o backend esta hoje
+
+Stack e runtime:
+- Cloudflare Workers com Hono;
+- D1 (SQLite) com Drizzle ORM;
+- R2 para ativos/arquivos;
+- KV para suporte operacional;
+- Queues para processamento assincrono;
+- Workers AI para fluxos inteligentes;
+- Resend para comunicacao por email.
+
+Topologia da API:
+- base principal em /api/v1;
+- modulos de autenticacao, propriedades, OS, bids, provider, marketplace, mensagens, documentos, despesas, manutencao, timeline, relatorios e busca;
+- rotas aninhadas por propertyId para manter escopo e seguranca contextual.
+
+Capacidades de plataforma no backend:
+- autenticacao completa com refresh e MFA;
+- governanca de acesso por papel;
+- ciclo completo de OS (criacao, cotacao, aprovacao, execucao e encerramento);
+- mensageria por OS com notificacao push por evento;
+- convite e vinculacao de colaboradores;
+- geracao de thumbnails e jobs assincronos;
+- rotinas agendadas para higiene de dados e manutencoes programadas.
+
+### 23.4 Fluxo ponta a ponta (estado operacional)
+
+1. Onboarding owner
+- owner cria conta, registra primeiro imovel e define threshold de aprovacao;
+- opcionalmente convida manager e providers para o imovel.
+
+2. Operacao manager
+- manager identifica necessidade e cria OS com contexto tecnico;
+- define estrategia de cotacao (direta ou multipla);
+- envia para providers e acompanha propostas recebidas.
+
+3. Governanca owner
+- quando valor ultrapassa threshold, owner recebe aprovacao pendente;
+- aprova ou rejeita com justificativa, mantendo trilha de decisao.
+
+4. Execucao provider
+- provider recebe oportunidade, envia bid e prazo;
+- se selecionado, executa servico e registra evidencia (antes/depois);
+- interage com manager/owner no chat da OS durante a execucao.
+
+5. Fechamento financeiro e historico
+- despesa e comprovantes ficam vinculados a OS e ao imovel;
+- relatorios consolidam custos por periodo/categoria;
+- timeline preserva historico operacional para auditoria.
+
+### 23.5 Modelo de dados (visao consolidada)
+
+Entidades nucleares:
+- User
+- Property
+- PropertyUser
+- ServiceOrder
+- Bid
+- Expense
+- InventoryItem
+- PreventiveMaintenance
+- Message
+- Document
+- Notification
+
+Relacoes-chave:
+- propriedade como eixo de contexto;
+- OS como unidade de execucao operacional;
+- bids como mecanismo de cotacao e selecao;
+- despesas e documentos como trilha financeira/auditoria;
+- mensagens e notificacoes como camada de comunicacao em tempo real.
+
+### 23.6 Integracao frontend-backend
+
+Contratos:
+- cliente frontend consome modulos de API especializados (auth, properties, services, bids, provider, marketplace, messages, etc);
+- padrao de contrato centralizado evita divergencia de payloads entre telas.
+
+Padrao de consumo:
+- SWR no frontend para fetch e revalidacao inteligente;
+- backend com responses padronizadas e controles de erro;
+- autenticacao com tokens e refresh para continuidade de sessao.
+
+Eventos e automacoes:
+- notificacoes push por eventos de negocio (nova bid, mensagem, aprovacao, conclusao);
+- queue para tarefas assincronas e reducao de latencia no caminho critico;
+- cron para rotina de expiracao e manutencao automatica.
+
+### 23.7 Pontos fortes atuais
+
+- arquitetura consistente para evolucao incremental;
+- cobertura funcional ampla do ciclo imobiliario operacional;
+- separacao clara entre dominio de produto, camada visual e contratos de API;
+- base pronta para escalar features de provider marketplace e analise financeira;
+- design system formalizado e aplicavel com governanca.
+
+### 23.8 Riscos tecnicos e de produto
+
+- risco de divergencia visual se paginas novas ignorarem tokens globais;
+- risco de regressao de UX mobile quando componentes locais bypassarem base UI;
+- risco de acoplamento acidental entre telas e payloads nao tipados;
+- risco de inflacao de complexidade em OS sem guias claros de status/transicao.
+
+Mitigacoes em curso:
+- reforco de tipagem de contratos no frontend;
+- padronizacao de estados de tela e navegacao por papel;
+- checklist de aceite visual e funcional antes de merge.
+
+### 23.9 Roadmap de consolidacao (curto prazo)
+
+1. Padronizar 100% dos fluxos de OS com estados e CTAs por papel.
+2. Fechar lacunas de tipagem residual e eliminar uso de any em telas criticas.
+3. Consolidar dashboards (owner, manager, provider) com metricas equivalentes.
+4. Expandir trilha financeira com comparativos e exportacoes robustas.
+5. Fortalecer observabilidade operacional (logs de evento por jornada critica).
+
+### 23.10 Resumo executivo para apresentacao
+
+HouseLog ja opera como uma plataforma full-stack coerente para gestao imobiliaria orientada a execucao. O frontend entrega experiencia mobile-first com fluxo guiado por papeis, enquanto o backend oferece base robusta em Cloudflare para seguranca, escala e automacao. O produto encontra-se em fase de consolidacao avancada, com foco em padronizacao de UX, endurecimento de contratos e aceleracao de rotinas operacionais fim-a-fim.

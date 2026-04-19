@@ -57,10 +57,10 @@ function ScheduleCard({
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <div className={cn(
-            'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg',
-            overdue ? 'bg-rose-50' : 'bg-primary-50'
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+            overdue ? 'bg-(--color-danger-light)' : 'bg-(--color-primary-light)'
           )}>
-            <Wrench className={cn('h-4 w-4', overdue ? 'text-rose-500' : 'text-primary-600')} />
+            <Wrench className={cn('h-4 w-4', overdue ? 'text-(--color-danger)' : 'text-(--color-primary)')} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm">{s.title}</p>
@@ -68,30 +68,30 @@ function ScheduleCard({
               <Badge variant="secondary" className="text-xs">
                 {SYSTEM_TYPE_LABELS[s.system_type] ?? s.system_type}
               </Badge>
-              <span className="text-xs text-[var(--muted-foreground)]">
+              <span className="text-xs text-muted-foreground">
                 {FREQUENCY_LABELS[s.frequency]}
               </span>
               <span className={cn(
                 'text-xs font-medium flex items-center gap-1',
-                overdue ? 'text-rose-500' : 'text-amber-600'
+                overdue ? 'text-(--color-danger)' : 'text-(--color-warning)'
               )}>
                 {overdue ? <AlertTriangle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                 {dueLabel}
               </span>
             </div>
             {s.last_done && (
-              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Última execução: {formatDate(s.last_done)}
               </p>
             )}
             {s.responsible && (
-              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">Responsável: {s.responsible}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Responsável: {s.responsible}</p>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50"
+              className="h-8 w-8 text-(--color-success) hover:bg-(--color-success-light)"
               title="Marcar como feito"
               onClick={() => onMarkDone(s)}
             >
@@ -102,7 +102,7 @@ function ScheduleCard({
             </Button>
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+              className="h-8 w-8 text-(--color-danger) hover:bg-(--color-danger-light)"
               onClick={() => onDelete(s)}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -204,7 +204,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
     if (items.length === 0) return null;
     return (
       <div className="space-y-3">
-        <h3 className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wide">{title}</h3>
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">{title}</h3>
         {items.map((s) => (
           <ScheduleCard key={s.id} s={s} onEdit={openEdit} onDelete={setDeleteItem} onMarkDone={setMarkDoneItem} />
         ))}
@@ -213,14 +213,14 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Manutenção Preventiva</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <h2 className="text-xl font-medium">Manutenção preventiva</h2>
+          <p className="text-sm text-muted-foreground">
             {schedules.length} agendamento{schedules.length !== 1 ? 's' : ''}
             {overdue.length > 0 && (
-              <span className="ml-2 text-rose-500 font-medium">· {overdue.length} vencido{overdue.length !== 1 ? 's' : ''}</span>
+              <span className="ml-2 font-medium text-(--color-danger)">· {overdue.length} vencido{overdue.length !== 1 ? 's' : ''}</span>
             )}
           </p>
         </div>
@@ -232,8 +232,8 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
 
       {schedules.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <RefreshCw className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-[var(--muted-foreground)] text-sm">Nenhum agendamento cadastrado</p>
+          <RefreshCw className="mb-3 h-10 w-10 text-(--hl-text-tertiary)" />
+          <p className="text-muted-foreground text-sm">Nenhum agendamento cadastrado</p>
           <Button variant="outline" className="mt-3" onClick={openNew}>
             <Plus className="h-4 w-4" /> Criar agendamento
           </Button>
@@ -287,7 +287,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
             <div className="space-y-1.5">
               <Label htmlFor="m-title">Título *</Label>
               <Input id="m-title" placeholder="Revisão do ar-condicionado..." {...register('title')} />
-              {errors.title && <p className="text-xs text-rose-500">{errors.title.message}</p>}
+              {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
             </div>
 
             <div className="space-y-1.5">
@@ -307,7 +307,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
             </div>
 
             {apiError && (
-              <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-sm text-rose-700">
+              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-3 py-2 text-sm text-(--color-danger)">
                 {apiError}
               </div>
             )}
@@ -330,7 +330,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
           <DialogHeader>
             <DialogTitle>Marcar como Realizado</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-muted-foreground">
             Confirma a execução de <strong>{markDoneItem?.title}</strong>?
             A próxima data será recalculada automaticamente.
           </p>
@@ -339,7 +339,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
               type="checkbox"
               checked={autoCreateOs}
               onChange={(e) => setAutoCreateOs(e.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-primary-600"
+              className="h-4 w-4 rounded border-neutral-300 text-(--color-primary)"
             />
             <span className="text-sm">Criar OS de verificação automaticamente</span>
           </label>
@@ -360,7 +360,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
           <DialogHeader>
             <DialogTitle>Remover Agendamento</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-[var(--muted-foreground)]">
+          <p className="text-sm text-muted-foreground">
             Tem certeza que deseja remover <strong>{deleteItem?.title}</strong>? Esta ação não pode ser desfeita.
           </p>
           <div className="flex gap-3 mt-4">

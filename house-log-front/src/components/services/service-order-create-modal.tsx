@@ -2,10 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, CalendarClock, CheckCircle2, Circle, FileImage, ListChecks, Sparkles, UserCheck, Wrench } from 'lucide-react';
+import { Building2, CalendarClock, CheckCircle2, FileImage, ListChecks, Sparkles, UserCheck, Wrench } from 'lucide-react';
 import { servicesApi, roomsApi, propertiesApi } from '@/lib/api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -99,6 +99,7 @@ export function ServiceOrderCreateModal({
     handleSubmit,
     setValue,
     watch,
+    control,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
@@ -117,7 +118,7 @@ export function ServiceOrderCreateModal({
     });
   }, [providersData, systemType]);
 
-  const assignedTo = watch('assigned_to');
+  const assignedTo = useWatch({ control, name: 'assigned_to' });
 
   function resetWizard() {
     setStep(0);
@@ -230,7 +231,7 @@ export function ServiceOrderCreateModal({
               <div className="space-y-1.5">
                 <Label htmlFor="os-title">Titulo *</Label>
                 <Input id="os-title" placeholder="Ex.: Vazamento na cozinha" {...register('title')} />
-                {errors.title && <p className="text-xs text-rose-500">{errors.title.message}</p>}
+                {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -268,7 +269,7 @@ export function ServiceOrderCreateModal({
                       ))}
                     </SelectContent>
                   </Select>
-                  {errors.system_type && <p className="text-xs text-rose-500">{errors.system_type.message}</p>}
+                  {errors.system_type && <p className="text-xs text-(--color-danger)">{errors.system_type.message}</p>}
                 </div>
               </div>
 
@@ -394,14 +395,14 @@ export function ServiceOrderCreateModal({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-primary-200 bg-primary-50 p-3 text-sm text-primary-900">
+              <div className="rounded-xl border border-(--color-primary-border) bg-(--color-primary-light) p-3 text-sm text-(--color-primary)">
                 Revise e conclua: a OS sera criada com o fluxo selecionado e os anexos serao enviados automaticamente.
               </div>
             </div>
           )}
 
           {apiError && (
-            <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
+            <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-sm text-(--color-danger)">
               {apiError}
             </div>
           )}

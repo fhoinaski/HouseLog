@@ -42,12 +42,12 @@ type PortfolioCase = {
 };
 
 const skillChip = cva(
-  'rounded-xl border p-2.5 text-left text-sm transition-all duration-200 skill-chip focus-visible:outline-none',
+  'min-h-11 rounded-[20px] border px-4 py-2 text-left text-[13px] font-medium transition-all duration-150 skill-chip focus-visible:outline-none',
   {
     variants: {
       active: {
-        true: 'bg-[var(--provider-accent)] border-[var(--provider-accent)] text-white shadow-sm',
-        false: 'border-border text-foreground hover:bg-[var(--provider-surface)]',
+        true: 'bg-[var(--hl-chip-selected-bg)] border-[var(--hl-chip-selected-bg)] text-[var(--hl-chip-selected-text)]',
+        false: 'bg-[var(--hl-chip-default-bg)] border-[var(--hl-chip-default-border)] text-[var(--hl-chip-default-text)]',
       },
     },
     defaultVariants: {
@@ -167,13 +167,13 @@ export default function ProviderSettingsPage() {
   const score = profileData?.score;
 
   return (
-    <div className={cn('space-y-5 max-w-4xl', styles.shell)}>
+    <div className={cn('space-y-6 max-w-4xl pb-8', styles.shell)}>
       <div className={styles.hero}>
-        <h1 className="text-2xl font-bold">Configurações do Prestador</h1>
-        <p className="text-sm text-zinc-700 dark:text-zinc-200">Portfólio profissional com visual unificado para serviços, formação e evidências antes/depois.</p>
+        <h1 className="text-[24px] font-medium tracking-tight sm:text-[24px]">Perfil do prestador</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Portfólio profissional com visual clean, foco operacional e evidências antes/depois.</p>
       </div>
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Medal className="h-4 w-4" />
@@ -186,22 +186,22 @@ export default function ProviderSettingsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 <div className={cn('p-3', styles.metricCard)}>
                   <p className="text-xs text-muted-foreground">Nota média</p>
-                  <p className="text-lg font-semibold flex items-center gap-1">
-                    <Star className="h-4 w-4 text-amber-500" />
+                  <p className="flex items-center gap-1 text-lg font-medium">
+                    <Star className="h-4 w-4 text-(--color-warning)" />
                     {(score.avg_stars ?? 0).toFixed(1)}
                   </p>
                 </div>
                 <div className={cn('p-3', styles.metricCard)}>
                   <p className="text-xs text-muted-foreground">Avaliações</p>
-                  <p className="text-lg font-semibold">{score.total_ratings}</p>
+                  <p className="text-lg font-medium">{score.total_ratings}</p>
                 </div>
                 <div className={cn('p-3', styles.metricCard)}>
                   <p className="text-xs text-muted-foreground">Endossos</p>
-                  <p className="text-lg font-semibold">{score.endorsements}</p>
+                  <p className="text-lg font-medium">{score.endorsements}</p>
                 </div>
                 <div className={cn('p-3', styles.metricCard)}>
                   <p className="text-xs text-muted-foreground">Top score</p>
-                  <p className="text-lg font-semibold">{score.top_score.toFixed(0)}</p>
+                  <p className="text-lg font-medium">{score.top_score.toFixed(0)}</p>
                 </div>
               </div>
               <div className="space-y-2">
@@ -210,7 +210,7 @@ export default function ProviderSettingsPage() {
                   <p className="text-sm text-muted-foreground">Sem comentários ainda.</p>
                 ) : (
                   (profileData?.reviews ?? []).slice(0, 5).map((review, idx) => (
-                    <div key={`${review.created_at}-${idx}`} className="rounded-lg border border-border p-3">
+                    <div key={`${review.created_at}-${idx}`} className="rounded-xl bg-(--surface-container-low) p-3">
                       <p className="text-xs text-muted-foreground">{formatDate(review.created_at)} · {review.stars}★</p>
                       <p className="text-sm mt-1">{review.comment || 'Sem comentário textual'}</p>
                     </div>
@@ -224,7 +224,7 @@ export default function ProviderSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Settings2 className="h-4 w-4" />
@@ -464,7 +464,7 @@ export default function ProviderSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <KeyRound className="h-4 w-4" />

@@ -1,257 +1,168 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowRight, Building2, Lock, Mail, ShieldCheck } from 'lucide-react';
-import { MfaRequiredError, useAuth } from '@/lib/auth-context';
-import { authInputClass, authInputShellClass, authLabelClass } from '@/components/auth/styles';
+import { Eye, EyeOff, Home, LogIn } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
-const schema = z.object({
-  email: z.string().email('Email inválido'),
-  password: z.string().min(1, 'Senha obrigatória'),
+type Role = 'owner' | 'manager' | 'provider' | 'temp_provider' | 'admin';
+
+const loginSchema = z.object({
+  email: z.string().email('Informe um e-mail valido'),
+  password: z.string().min(6, 'A senha deve ter no minimo 6 caracteres'),
+  remember: z.boolean().default(false),
 });
 
-type FormData = z.infer<typeof schema>;
+type LoginFormValues = z.infer<typeof loginSchema>;
 
-const NOISE_TEXTURE =
-  "url(\"data:image/svg+xml,%3Csvg%20viewBox%3D%270%200%20200%20200%27%20xmlns%3D%27http://www.w3.org/2000/svg%27%3E%3Cfilter%20id%3D%27noiseFilter%27%3E%3CfeTurbulence%20type%3D%27fractalNoise%27%20baseFrequency%3D%270.65%27%20numOctaves%3D%273%27%20stitchTiles%3D%27stitch%27/%3E%3C/filter%3E%3Crect%20width%3D%27100%25%27%20height%3D%27100%25%27%20filter%3D%27url(%23noiseFilter)%27%20opacity%3D%270.02%27/%3E%3C/svg%3E\")";
+function redirectByRole(role: Role): string {
+  if (role === 'provider' || role === 'temp_provider') return '/provider/dashboard';
+  return '/dashboard';
+}
 
 export default function LoginPage() {
-  const { login, completeMfa } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect') ?? '/dashboard';
-  const inviteMatch = redirect.match(/^\/invite\/([^/?#]+)/);
-  const inviteToken = inviteMatch?.[1];
-  const [error, setError] = useState<string | null>(null);
-  const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
-  const [mfaDigits, setMfaDigits] = useState(['', '', '', '', '', '']);
-  const [isMfaSubmitting, setIsMfaSubmitting] = useState(false);
-  const mfaRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const { login } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '', remember: false },
   });
 
-  function routeAfterAuth() {
-    const rawUser = localStorage.getItem('hl_user');
-    let parsedUser: { role?: string } | null = null;
-    if (rawUser) {
-      try {
-        parsedUser = JSON.parse(rawUser) as { role?: string };
-      } catch {
-        parsedUser = null;
-      }
-    }
-    if (parsedUser?.role === 'provider' || parsedUser?.role === 'temp_provider') {
-      router.replace('/provider/dashboard');
-      return;
-    }
-    router.replace(redirect);
-  }
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
 
-  async function onSubmit(data: FormData) {
-    setError(null);
+  async function onSubmit(values: LoginFormValues) {
     try {
-      await login(data.email, data.password);
-      routeAfterAuth();
-    } catch (e) {
-      if (e instanceof MfaRequiredError) {
-        setMfaChallengeToken(e.challengeToken);
-        setMfaDigits(['', '', '', '', '', '']);
-        setError(null);
+      await login(values.email, values.password);
+
+      const userRaw = localStorage.getItem('hl_user');
+      const role = userRaw ? (JSON.parse(userRaw) as { role?: Role }).role : 'owner';
+      router.push(redirectByRole(role ?? 'owner'));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro ao entrar';
+      const normalized = message.toLowerCase();
+
+      if (normalized.includes('network') || normalized.includes('fetch')) {
+        toast.error('Verifique sua conexao');
         return;
       }
-      setError((e as Error).message || 'Credenciais inválidas');
-    }
-  }
 
-  function handleMfaChange(index: number, value: string) {
-    const digit = value.replace(/\D/g, '').slice(0, 1);
-    const next = [...mfaDigits];
-    next[index] = digit;
-    setMfaDigits(next);
-    if (digit && index < mfaRefs.current.length - 1) {
-      mfaRefs.current[index + 1]?.focus();
-    }
-  }
-
-  function handleMfaKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === 'Backspace' && !mfaDigits[index] && index > 0) {
-      mfaRefs.current[index - 1]?.focus();
-    }
-  }
-
-  async function submitMfa() {
-    if (!mfaChallengeToken) return;
-    const code = mfaDigits.join('');
-    if (code.length !== 6) {
-      setError('Digite os 6 dígitos do autenticador.');
-      return;
-    }
-    try {
-      setError(null);
-      setIsMfaSubmitting(true);
-      await completeMfa(mfaChallengeToken, code);
-      routeAfterAuth();
-    } catch (e) {
-      setError((e as Error).message || 'Código inválido. Tente novamente.');
-    } finally {
-      setIsMfaSubmitting(false);
+      toast.error('Credenciais invalidas', {
+        description: message,
+      });
     }
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden px-6 py-12 text-foreground selection:bg-primary-700 selection:text-[#efefff]">
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-100">
-        <div className="absolute inset-0 opacity-2" style={{ backgroundImage: NOISE_TEXTURE }} />
-        <div className="absolute -right-[8%] -top-[12%] h-[60vh] w-[60vw] rounded-full bg-[radial-gradient(circle,rgba(184,195,255,0.09)_0%,rgba(11,19,38,0)_70%)] blur-[80px]" />
-        <div className="absolute -bottom-[20%] -left-[10%] h-[50vh] w-[70vw] rotate-[-15deg] bg-[linear-gradient(135deg,rgba(78,222,163,0.07)_0%,rgba(11,19,38,0)_100%)] blur-[100px]" />
-        <div className="absolute left-[10%] top-[20%] h-screen w-px rotate-25 bg-linear-to-b from-[rgba(218,226,253,0.05)] to-transparent" />
-      </div>
-
-      <section className="relative z-10 mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-md flex-col items-center justify-center">
-        <div className="mb-12 flex flex-col items-center">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-linear-to-br from-primary-400 to-primary-700 text-[#002388] shadow-[0_24px_48px_-20px_rgba(6,14,32,0.6)]">
-              <Building2 className="h-5 w-5" />
+    <main className="min-h-screen bg-(--hl-bg-page) px-6 py-8">
+      <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-97.5 flex-col">
+        <div className="rounded-xl border border-neutral-100 bg-(--hl-bg-card) px-6 pb-6 pt-8">
+          <header className="mb-8 flex flex-col items-center text-center">
+            <div className="mb-3 flex h-13 w-13 items-center justify-center rounded-[14px] border-[1.5px] border-(--hl-border-light)">
+              <Home className="h-6 w-6 text-(--color-primary)" strokeWidth={1.9} />
             </div>
-            <h1 className="text-[3.2rem] leading-none font-black tracking-tight text-primary-400 sm:text-[3.5rem]">
-              HouseLog
-            </h1>
-          </div>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-widest text-[#c4c5d9]/80">
-            Inteligencia arquitetonica para patrimonio
-          </p>
-        </div>
-
-        <div className="w-full rounded-xl border border-zinc-500/15 bg-zinc-700/45 p-8 backdrop-blur-xl shadow-[0_40px_60px_-15px_rgba(6,14,32,0.4)] sm:p-10">
-          <div className="mb-8 flex flex-col gap-2">
-            <h2 className="text-2xl font-bold tracking-tight text-[#dae2fd]">Acessar portal</h2>
-            <p className="text-sm font-medium text-[#c4c5d9]">
-              {inviteToken
-                ? 'Autentique-se para aceitar seu convite e entrar no ecossistema do imovel.'
-                : 'Autentique-se para entrar no seu ecossistema de propriedades.'}
+            <h1 className="text-[24px] font-medium tracking-[-0.3px] text-(--hl-text-primary)">HouseLog</h1>
+            <p className="mt-1 text-[11px] uppercase tracking-widest text-(--hl-text-tertiary)">
+              THE ARCHITECTURAL LENS
             </p>
-          </div>
+          </header>
 
-          {inviteToken && (
-            <div className="mb-6 rounded-lg bg-amber-700/20 px-4 py-3 text-sm font-medium text-[#ffddb8]">
-              Convite detectado. Entre ou crie sua conta para continuar.
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="email" className={authLabelClass}>
-                Endereco de email
-              </label>
-              <div className={authInputShellClass}>
-                <Mail className="h-5 w-5 text-[#8e90a2]" />
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="nome@empresa.com"
-                  autoComplete="email"
-                  className={authInputClass}
-                  {...register('email')}
-                />
-              </div>
-              {errors.email && <p className="text-xs text-[#ffb4ab]">{errors.email.message}</p>}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div>
+              <Label htmlFor="email">E-MAIL</Label>
+              <Input id="email" type="email" placeholder="seu@email.com" autoComplete="email" {...register('email')} />
+              {errors.email && (
+                <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.email.message}</p>
+              )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password" className={authLabelClass}>
-                  Senha
-                </label>
-                <button type="button" className="text-[0.6875rem] font-bold uppercase tracking-[0.05em] text-primary-400 transition-colors hover:text-[#dde1ff]">
-                  Esqueci
-                </button>
-              </div>
-              <div className={authInputShellClass}>
-                <Lock className="h-5 w-5 text-[#8e90a2]" />
-                <input
+            <div>
+              <Label htmlFor="password">SENHA</Label>
+              <div className="relative">
+                <Input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className={authInputClass}
+                  className="pr-8"
                   {...register('password')}
                 />
+                <button
+                  type="button"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 text-(--hl-text-tertiary)"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                </button>
               </div>
-              {errors.password && <p className="text-xs text-[#ffb4ab]">{errors.password.message}</p>}
+              {errors.password && (
+                <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.password.message}</p>
+              )}
             </div>
 
-            {mfaChallengeToken && (
-              <div className="flex flex-col gap-3 pt-1">
-                <label className="flex items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-[0.05em] text-amber-400">
-                  <ShieldCheck className="h-4 w-4" />
-                  Codigo do autenticador
-                </label>
-                <div className="flex items-center justify-between gap-2">
-                  {mfaDigits.map((digit, index) => (
-                    <input
-                      key={index}
-                      ref={(el) => {
-                        mfaRefs.current[index] = el;
-                      }}
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(event) => handleMfaChange(index, event.target.value)}
-                      onKeyDown={(event) => handleMfaKeyDown(index, event)}
-                      className="h-12 w-10 rounded-md bg-zinc-950 text-center text-xl font-bold text-[#dae2fd] transition-all duration-300 focus:-translate-y-0.5 focus:bg-[#2d3449] focus:outline-none focus:ring-1 focus:ring-amber-400"
-                      aria-label={`Digito ${index + 1} do codigo MFA`}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="mb-6 flex items-center justify-between">
+              <label className="flex items-center gap-2 text-[13px] text-(--hl-text-secondary)">
+                <input type="checkbox" {...register('remember')} />
+                Lembrar de mim
+              </label>
+              <button type="button" className="text-[13px] font-medium text-(--hl-accent-orange)">
+                Esqueceu a senha?
+              </button>
+            </div>
 
-            {error && (
-              <div className="rounded-md bg-[#93000a]/30 px-4 py-3 text-sm text-[#ffdad6]">
-                {error}
-              </div>
-            )}
-
-            <Button
-              type={mfaChallengeToken ? 'button' : 'submit'}
-              onClick={mfaChallengeToken ? submitMfa : undefined}
-              disabled={isSubmitting || isMfaSubmitting}
-              size="lg"
-              className="mt-2 w-full font-bold uppercase tracking-widest"
-            >
-              {mfaChallengeToken ? 'Validar codigo' : 'Entrar'}
-              <ArrowRight className="h-4 w-4" />
+            <Button type="submit" size="lg" disabled={isSubmitting} className="w-full">
+              {isSubmitting ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white" />
+                  Entrando...
+                </>
+              ) : (
+                <>
+                  <LogIn className="h-4 w-4" />
+                  Entrar
+                </>
+              )}
             </Button>
-          </form>
 
-          <div className="relative mt-8 pt-6 text-center">
-            <div className="absolute left-0 top-0 h-px w-full bg-linear-to-r from-transparent via-[#2d3449] to-transparent" />
-            <p className="text-sm text-[#c4c5d9]">
-              Novo no HouseLog?{' '}
-              <Link
-                href={inviteToken ? `/register?invite=${inviteToken}&redirect=${encodeURIComponent(redirect)}` : '/register'}
-                className="font-semibold text-emerald-400 underline decoration-emerald-400/30 underline-offset-4 transition-colors hover:text-[#6ffbbe]"
-              >
+            <div className="flex items-center gap-3 py-1">
+              <span className="h-px flex-1 bg-(--hl-border-light)" />
+              <span className="text-[12px] text-(--hl-text-tertiary)">ou</span>
+              <span className="h-px flex-1 bg-(--hl-border-light)" />
+            </div>
+
+            <Button type="button" variant="outline" size="lg" className="w-full">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                <path fill="currentColor" d="M12 10.2v3.9h5.4c-.2 1.2-1.4 3.5-5.4 3.5-3.2 0-5.8-2.7-5.8-6s2.6-6 5.8-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.8 3.2 14.6 2.3 12 2.3 6.9 2.3 2.8 6.4 2.8 11.5S6.9 20.7 12 20.7c6.9 0 9.1-4.8 9.1-7.3 0-.5-.1-.9-.1-1.3H12z" />
+              </svg>
+              Continuar com Google
+            </Button>
+
+            <p className="pt-1 text-center text-[13px] text-(--hl-text-secondary)">
+              Nao tem uma conta?{' '}
+              <Link href="/register" className="font-medium text-(--color-primary)">
                 Criar conta
               </Link>
             </p>
-          </div>
+          </form>
         </div>
 
-        <div className="mt-8 flex items-center gap-2 rounded-full border border-zinc-500/10 bg-zinc-950/50 px-4 py-2 backdrop-blur-md">
-          <div className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(78,222,163,0.6)]" />
-          <span className="text-[0.6875rem] font-medium uppercase tracking-widest text-[#c4c5d9]">
-            Sistema operacional
-          </span>
-        </div>
+        <footer className="mt-auto pt-6 text-center text-[11px] text-(--hl-text-tertiary)">
+          HouseLog v1.0.0 · Gestao Operacional de Imoveis · {currentYear}
+        </footer>
       </section>
     </main>
   );

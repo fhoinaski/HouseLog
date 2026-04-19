@@ -32,7 +32,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const router = useRouter();
   const coverRef = useRef<HTMLInputElement>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null | undefined>(undefined);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -57,7 +57,6 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         floors: property.floors,
         structure: property.structure ?? undefined,
       });
-      setCoverPreview(property.cover_url);
     }
   }, [property, reset]);
 
@@ -72,7 +71,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
     setApiError(null);
     try {
       // Upload cover first if changed
-      let coverUrl = property?.cover_url ?? null;
+      let coverUrl = coverPreview === null ? null : (property?.cover_url ?? null);
       if (coverFile) {
         setUploadingCover(true);
         const fd = new FormData();
@@ -113,25 +112,27 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
     );
   }
 
+  const effectiveCoverPreview = coverPreview === undefined ? property.cover_url : coverPreview;
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6 pb-20">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-xl font-bold">Editar Imóvel</h1>
+        <h1 className="text-xl font-medium">Editar imóvel</h1>
       </div>
 
       {/* Cover photo */}
       <Card>
         <CardHeader><CardTitle className="text-base">Foto de Capa</CardTitle></CardHeader>
         <CardContent className="p-6 pt-0">
-          <div className="relative rounded-xl overflow-hidden h-48 bg-slate-100">
-            {coverPreview ? (
+          <div className="relative h-48 overflow-hidden rounded-xl bg-neutral-100">
+            {effectiveCoverPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={coverPreview} alt="capa" className="w-full h-full object-cover" />
+              <img src={effectiveCoverPreview} alt="capa" className="w-full h-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-slate-400">
+              <div className="flex h-full items-center justify-center text-neutral-400">
                 Sem foto de capa
               </div>
             )}
@@ -142,15 +143,15 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
                 onClick={() => coverRef.current?.click()}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {coverPreview ? 'Trocar' : 'Adicionar'}
+                {effectiveCoverPreview ? 'Trocar' : 'Adicionar'}
               </Button>
-              {coverPreview && (
+              {effectiveCoverPreview && (
                 <Button
                   type="button" size="icon" variant="outline"
                   className="bg-white/90 hover:bg-white h-8 w-8"
                   onClick={() => { setCoverPreview(null); setCoverFile(null); }}
                 >
-                  <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                  <Trash2 className="h-3.5 w-3.5 text-(--color-danger)" />
                 </Button>
               )}
             </div>
@@ -168,7 +169,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="name">Nome / Apelido *</Label>
                 <Input id="name" placeholder="Casa da Praia, Apto 302..." {...register('name')} />
-                {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
+                {errors.name && <p className="text-xs text-(--color-danger)">{errors.name.message}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -195,13 +196,13 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
               <div className="sm:col-span-2 space-y-1.5">
                 <Label htmlFor="address">Endereço *</Label>
                 <Input id="address" placeholder="Rua das Flores, 123" {...register('address')} />
-                {errors.address && <p className="text-xs text-rose-500">{errors.address.message}</p>}
+                {errors.address && <p className="text-xs text-(--color-danger)">{errors.address.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="city">Cidade *</Label>
                 <Input id="city" placeholder="São Paulo" {...register('city')} />
-                {errors.city && <p className="text-xs text-rose-500">{errors.city.message}</p>}
+                {errors.city && <p className="text-xs text-(--color-danger)">{errors.city.message}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -222,7 +223,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
             </div>
 
             {apiError && (
-              <div className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-700">
+              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-4 py-3 text-sm text-(--color-danger)">
                 {apiError}
               </div>
             )}

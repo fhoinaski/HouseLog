@@ -1,0 +1,507 @@
+/*
+ * ============================================================
+ * HOUSELOG — DESIGN TOKENS
+ * Tema: The Architectural Lens
+ * ============================================================
+ *
+ * Este arquivo é a ÚNICA fonte de verdade visual do projeto.
+ * Todas as cores, tipografia, espaçamento, sombras e bordas
+ * são definidos aqui como CSS custom properties e consumidos
+ * pelo Tailwind via tailwind.config.ts.
+ *
+ * Para mudar o tema inteiro: edite apenas este arquivo.
+ * ============================================================
+ */
+
+@layer base {
+  :root {
+    /* --------------------------------------------------
+     * PALETA PRIMITIVA — Tema 3: The Architectural Lens
+     * Não use essas variáveis diretamente nos componentes.
+     * Use os tokens semânticos abaixo.
+     * -------------------------------------------------- */
+
+    /* Carvão (cor principal) */
+    --primitive-charcoal-950: #1E1916;
+    --primitive-charcoal-900: #2C2420;
+    --primitive-charcoal-800: #3D3530;
+    --primitive-charcoal-700: #4E4540;
+    --primitive-charcoal-600: #5F5550;
+    --primitive-charcoal-500: #7A6A60;
+    --primitive-charcoal-400: #9A8A80;
+    --primitive-charcoal-300: #BEB0A8;
+    --primitive-charcoal-200: #D8CEC8;
+    --primitive-charcoal-100: #EDE8E2;
+    --primitive-charcoal-50:  #F7F5F2;
+
+    /* Terracota/Dourado (cor de destaque/accent) */
+    --primitive-terracota-900: #5C3A1E;
+    --primitive-terracota-800: #7A4E28;
+    --primitive-terracota-700: #9A6535;
+    --primitive-terracota-600: #B8803A;
+    --primitive-terracota-500: #C8A882;
+    --primitive-terracota-400: #D9BF9E;
+    --primitive-terracota-300: #E6D4BA;
+    --primitive-terracota-200: #F0E6D4;
+    --primitive-terracota-100: #F7F2EB;
+    --primitive-terracota-50:  #FDFAF6;
+
+    /* Semânticos de status */
+    --primitive-danger-900:   #7F1D1D;
+    --primitive-danger-700:   #B91C1C;
+    --primitive-danger-600:   #DC2626;
+    --primitive-danger-200:   #FECACA;
+    --primitive-danger-100:   #FEE2E2;
+    --primitive-danger-50:    #FEF2F2;
+
+    --primitive-warning-900:  #78350F;
+    --primitive-warning-700:  #B45309;
+    --primitive-warning-600:  #D97706;
+    --primitive-warning-200:  #FDE68A;
+    --primitive-warning-100:  #FEF3C7;
+    --primitive-warning-50:   #FFFBEB;
+
+    --primitive-success-900:  #14532D;
+    --primitive-success-700:  #15803D;
+    --primitive-success-600:  #16A34A;
+    --primitive-success-200:  #BBF7D0;
+    --primitive-success-100:  #DCFCE7;
+    --primitive-success-50:   #F0FDF4;
+
+    --primitive-info-900:     #1E3A5F;
+    --primitive-info-700:     #1D4ED8;
+    --primitive-info-600:     #2563EB;
+    --primitive-info-200:     #BFDBFE;
+    --primitive-info-100:     #DBEAFE;
+    --primitive-info-50:      #EFF6FF;
+
+    /* --------------------------------------------------
+     * TOKENS SEMÂNTICOS — USE ESSES NOS COMPONENTES
+     * -------------------------------------------------- */
+
+    /* === BACKGROUNDS === */
+    --bg-page:            var(--primitive-charcoal-50);   /* fundo da página */
+    --bg-surface:         #FFFFFF;                        /* cards, modais, inputs */
+    --bg-surface-raised:  #FFFFFF;                        /* cards com elevação */
+    --bg-surface-overlay: rgba(255, 255, 255, 0.95);      /* overlays/popovers */
+    --bg-subtle:          var(--primitive-charcoal-100);  /* metric cards, linhas zebra */
+    --bg-muted:           var(--primitive-charcoal-200);  /* disabled, placeholders */
+
+    /* Accent backgrounds */
+    --bg-accent:          var(--primitive-terracota-500); /* botão primário */
+    --bg-accent-subtle:   var(--primitive-terracota-100); /* chips, badges de accent */
+    --bg-accent-muted:    var(--primitive-terracota-200); /* hover de itens accent */
+
+    /* Brand backgrounds */
+    --bg-brand:           var(--primitive-charcoal-800);  /* nav, header, brand surfaces */
+    --bg-brand-hover:     var(--primitive-charcoal-900);  /* hover em brand */
+    --bg-brand-subtle:    var(--primitive-charcoal-100);  /* chip, badge brand */
+
+    /* Status backgrounds */
+    --bg-danger:          var(--primitive-danger-50);
+    --bg-danger-emphasis: var(--primitive-danger-100);
+    --bg-warning:         var(--primitive-warning-50);
+    --bg-warning-emphasis:var(--primitive-warning-100);
+    --bg-success:         var(--primitive-success-50);
+    --bg-success-emphasis:var(--primitive-success-100);
+    --bg-info:            var(--primitive-info-50);
+    --bg-info-emphasis:   var(--primitive-info-100);
+
+    /* === FOREGROUND / TEXT === */
+    --text-primary:       var(--primitive-charcoal-800);  /* texto principal */
+    --text-secondary:     var(--primitive-charcoal-500);  /* texto secundário */
+    --text-tertiary:      var(--primitive-charcoal-400);  /* placeholder, hint */
+    --text-disabled:      var(--primitive-charcoal-300);  /* estado desabilitado */
+    --text-inverse:       var(--primitive-charcoal-50);   /* texto sobre bg escuro */
+    --text-on-accent:     #FFFFFF;                        /* texto sobre accent */
+
+    /* Text accent/brand */
+    --text-accent:        var(--primitive-terracota-700);
+    --text-accent-subtle: var(--primitive-terracota-500);
+    --text-brand:         var(--primitive-charcoal-800);
+
+    /* Text status */
+    --text-danger:        var(--primitive-danger-700);
+    --text-warning:       var(--primitive-warning-700);
+    --text-success:       var(--primitive-success-700);
+    --text-info:          var(--primitive-info-700);
+
+    /* === BORDERS === */
+    --border-default:     var(--primitive-charcoal-200);  /* bordas padrão */
+    --border-subtle:      var(--primitive-charcoal-100);  /* bordas suaves */
+    --border-strong:      var(--primitive-charcoal-400);  /* bordas de ênfase */
+    --border-focus:       var(--primitive-charcoal-800);  /* focus ring */
+    --border-accent:      var(--primitive-terracota-500); /* accent borders */
+    --border-danger:      var(--primitive-danger-600);
+    --border-warning:     var(--primitive-warning-600);
+    --border-success:     var(--primitive-success-600);
+
+    /* === INTERACTIVE === */
+    --interactive-primary-bg:     var(--primitive-charcoal-800);
+    --interactive-primary-hover:  var(--primitive-charcoal-900);
+    --interactive-primary-active: var(--primitive-charcoal-950);
+    --interactive-primary-text:   var(--primitive-charcoal-50);
+
+    --interactive-accent-bg:      var(--primitive-terracota-700);
+    --interactive-accent-hover:   var(--primitive-terracota-800);
+    --interactive-accent-active:  var(--primitive-terracota-900);
+    --interactive-accent-text:    #FFFFFF;
+
+    --interactive-secondary-bg:     transparent;
+    --interactive-secondary-hover:  var(--primitive-charcoal-50);
+    --interactive-secondary-active: var(--primitive-charcoal-100);
+    --interactive-secondary-border: var(--primitive-charcoal-300);
+    --interactive-secondary-text:   var(--primitive-charcoal-700);
+
+    --interactive-ghost-hover:  var(--primitive-charcoal-50);
+    --interactive-ghost-active: var(--primitive-charcoal-100);
+
+    --interactive-danger-bg:    var(--primitive-danger-600);
+    --interactive-danger-hover: var(--primitive-danger-700);
+    --interactive-danger-text:  #FFFFFF;
+
+    /* === SHADOWS === */
+    --shadow-xs: 0px 1px 2px rgba(61, 53, 48, 0.06);
+    --shadow-sm: 0px 1px 3px rgba(61, 53, 48, 0.08), 0px 1px 2px rgba(61, 53, 48, 0.06);
+    --shadow-md: 0px 4px 6px rgba(61, 53, 48, 0.07), 0px 2px 4px rgba(61, 53, 48, 0.06);
+    --shadow-lg: 0px 10px 15px rgba(61, 53, 48, 0.08), 0px 4px 6px rgba(61, 53, 48, 0.05);
+    --shadow-xl: 0px 20px 25px rgba(61, 53, 48, 0.10), 0px 8px 10px rgba(61, 53, 48, 0.06);
+    --shadow-focus: 0 0 0 3px rgba(61, 53, 48, 0.20);
+    --shadow-focus-danger: 0 0 0 3px rgba(220, 38, 38, 0.20);
+    --shadow-focus-accent: 0 0 0 3px rgba(200, 168, 130, 0.35);
+
+    /* === BORDER RADIUS === */
+    --radius-xs:   2px;
+    --radius-sm:   4px;
+    --radius-md:   8px;
+    --radius-lg:   12px;
+    --radius-xl:   16px;
+    --radius-2xl:  20px;
+    --radius-full: 9999px;
+
+    /* === SPACING SCALE === */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* === TYPOGRAPHY === */
+    --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Tamanhos */
+    --text-xs:   11px;
+    --text-sm:   13px;
+    --text-base: 14px;
+    --text-md:   15px;
+    --text-lg:   17px;
+    --text-xl:   20px;
+    --text-2xl:  24px;
+    --text-3xl:  30px;
+
+    /* Pesos */
+    --font-regular: 400;
+    --font-medium:  500;
+    --font-semibold: 600;  /* use raramente */
+
+    /* Line heights */
+    --leading-tight:  1.25;
+    --leading-snug:   1.375;
+    --leading-normal: 1.5;
+    --leading-relaxed:1.625;
+
+    /* Letter spacing */
+    --tracking-tight:  -0.01em;
+    --tracking-normal:  0;
+    --tracking-wide:    0.04em;
+    --tracking-wider:   0.08em;
+
+    /* === TRANSIÇÕES === */
+    --transition-fast:   100ms ease;
+    --transition-base:   150ms ease;
+    --transition-slow:   250ms ease;
+    --transition-spring: 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* === Z-INDEX SCALE === */
+    --z-base:    0;
+    --z-raised:  10;
+    --z-dropdown:200;
+    --z-sticky:  300;
+    --z-overlay: 400;
+    --z-modal:   500;
+    --z-toast:   600;
+    --z-tooltip: 700;
+
+    /* === COMPONENTES ESPECÍFICOS === */
+
+    /* Nav bar (bottom + top) */
+    --nav-bg:              var(--primitive-charcoal-800);
+    --nav-text-active:     var(--primitive-terracota-400);
+    --nav-text-inactive:   rgba(240, 234, 227, 0.45);
+    --nav-border:          var(--primitive-charcoal-900);
+    --nav-height-top:      52px;
+    --nav-height-bottom:   60px;
+
+    /* Cards */
+    --card-bg:             var(--bg-surface);
+    --card-border:         var(--border-subtle);
+    --card-border-hover:   var(--border-default);
+    --card-radius:         var(--radius-lg);
+    --card-padding:        16px;
+    --card-shadow:         var(--shadow-xs);
+    --card-shadow-hover:   var(--shadow-sm);
+
+    /* Card de urgência/aprovação (border-left colorida) */
+    --card-urgent-bg:      var(--bg-danger);
+    --card-urgent-border:  var(--border-danger);
+    --card-urgent-accent:  3px solid var(--primitive-danger-600);
+
+    /* Inputs */
+    --input-bg:            var(--bg-surface);
+    --input-bg-disabled:   var(--bg-muted);
+    --input-border:        var(--border-default);
+    --input-border-hover:  var(--border-strong);
+    --input-border-focus:  var(--border-focus);
+    --input-border-error:  var(--border-danger);
+    --input-text:          var(--text-primary);
+    --input-placeholder:   var(--text-tertiary);
+    --input-radius:        var(--radius-md);
+    --input-height-sm:     36px;
+    --input-height-md:     44px;
+    --input-height-lg:     52px;
+    --input-padding-x:     12px;
+    --input-font-size:     var(--text-base);
+    --input-shadow-focus:  var(--shadow-focus);
+
+    /* Badges / Status pills */
+    --badge-font-size:     var(--text-xs);
+    --badge-font-weight:   var(--font-medium);
+    --badge-padding:       2px 8px;
+    --badge-radius:        var(--radius-full);
+    --badge-letter-spacing:var(--tracking-wide);
+
+    /* Avatares */
+    --avatar-sm:  28px;
+    --avatar-md:  36px;
+    --avatar-lg:  44px;
+    --avatar-xl:  56px;
+
+    /* Avatar por role */
+    --avatar-owner-bg:     #EEEDFE;
+    --avatar-owner-text:   #534AB7;
+    --avatar-manager-bg:   var(--primitive-terracota-100);
+    --avatar-manager-text: var(--primitive-terracota-700);
+    --avatar-provider-bg:  var(--primitive-success-100);
+    --avatar-provider-text:var(--primitive-success-700);
+
+    /* Chips de filtro */
+    --chip-bg:          var(--bg-subtle);
+    --chip-bg-active:   var(--primitive-charcoal-800);
+    --chip-text:        var(--text-secondary);
+    --chip-text-active: var(--primitive-charcoal-50);
+    --chip-border:      var(--border-subtle);
+    --chip-radius:      var(--radius-full);
+    --chip-padding:     4px 12px;
+    --chip-font-size:   var(--text-sm);
+
+    /* Toast / Snackbar */
+    --toast-bg:       var(--primitive-charcoal-900);
+    --toast-text:     var(--primitive-charcoal-50);
+    --toast-radius:   var(--radius-lg);
+    --toast-shadow:   var(--shadow-lg);
+
+    /* Tabs */
+    --tab-text:           var(--text-secondary);
+    --tab-text-active:    var(--text-primary);
+    --tab-border-active:  var(--primitive-charcoal-800);
+    --tab-bg-active:      transparent;
+
+    /* Progress / Step indicator */
+    --step-bg:          var(--bg-muted);
+    --step-bg-active:   var(--primitive-charcoal-800);
+    --step-bg-done:     var(--primitive-terracota-500);
+    --step-text-active: var(--primitive-charcoal-50);
+    --step-text-done:   #FFFFFF;
+
+    /* Skeleton loader */
+    --skeleton-base:    var(--primitive-charcoal-100);
+    --skeleton-shine:   var(--primitive-charcoal-50);
+
+    /* FAB (Floating Action Button) */
+    --fab-bg:       var(--primitive-terracota-700);
+    --fab-hover:    var(--primitive-terracota-800);
+    --fab-text:     #FFFFFF;
+    --fab-shadow:   var(--shadow-lg);
+    --fab-size:     56px;
+    --fab-radius:   var(--radius-full);
+
+    /* Divider */
+    --divider-color:  var(--border-subtle);
+    --divider-strong: var(--border-default);
+  }
+
+  /* --------------------------------------------------
+   * DARK MODE
+   * -------------------------------------------------- */
+  .dark {
+    --bg-page:            var(--primitive-charcoal-950);
+    --bg-surface:         var(--primitive-charcoal-900);
+    --bg-surface-raised:  var(--primitive-charcoal-800);
+    --bg-surface-overlay: rgba(28, 22, 18, 0.95);
+    --bg-subtle:          var(--primitive-charcoal-800);
+    --bg-muted:           var(--primitive-charcoal-700);
+
+    --bg-accent:          var(--primitive-terracota-600);
+    --bg-accent-subtle:   rgba(200, 168, 130, 0.15);
+    --bg-accent-muted:    rgba(200, 168, 130, 0.25);
+
+    --bg-brand:           var(--primitive-charcoal-950);
+    --bg-brand-hover:     #0D0B09;
+    --bg-brand-subtle:    var(--primitive-charcoal-800);
+
+    --bg-danger:          rgba(127, 29, 29, 0.20);
+    --bg-danger-emphasis: rgba(127, 29, 29, 0.35);
+    --bg-warning:         rgba(120, 53, 15, 0.20);
+    --bg-warning-emphasis:rgba(120, 53, 15, 0.35);
+    --bg-success:         rgba(20, 83, 45, 0.20);
+    --bg-success-emphasis:rgba(20, 83, 45, 0.35);
+    --bg-info:            rgba(30, 58, 95, 0.20);
+    --bg-info-emphasis:   rgba(30, 58, 95, 0.35);
+
+    --text-primary:       var(--primitive-charcoal-100);
+    --text-secondary:     var(--primitive-charcoal-300);
+    --text-tertiary:      var(--primitive-charcoal-400);
+    --text-disabled:      var(--primitive-charcoal-600);
+    --text-inverse:       var(--primitive-charcoal-800);
+    --text-on-accent:     #FFFFFF;
+
+    --text-accent:        var(--primitive-terracota-400);
+    --text-accent-subtle: var(--primitive-terracota-300);
+    --text-brand:         var(--primitive-charcoal-100);
+
+    --text-danger:        #FCA5A5;
+    --text-warning:       #FCD34D;
+    --text-success:       #86EFAC;
+    --text-info:          #93C5FD;
+
+    --border-default:     rgba(255, 255, 255, 0.10);
+    --border-subtle:      rgba(255, 255, 255, 0.06);
+    --border-strong:      rgba(255, 255, 255, 0.20);
+    --border-focus:       var(--primitive-terracota-400);
+
+    --card-bg:            var(--primitive-charcoal-900);
+    --card-border:        rgba(255, 255, 255, 0.06);
+    --card-shadow:        none;
+
+    --input-bg:           var(--primitive-charcoal-800);
+    --input-bg-disabled:  var(--primitive-charcoal-700);
+    --input-border:       rgba(255, 255, 255, 0.10);
+    --input-border-hover: rgba(255, 255, 255, 0.20);
+    --input-border-focus: var(--primitive-terracota-400);
+    --input-text:         var(--primitive-charcoal-100);
+    --input-placeholder:  var(--primitive-charcoal-400);
+
+    --nav-bg:             var(--primitive-charcoal-950);
+    --nav-border:         rgba(255, 255, 255, 0.06);
+
+    --chip-bg:            var(--primitive-charcoal-800);
+    --chip-bg-active:     var(--primitive-terracota-700);
+    --chip-border:        rgba(255, 255, 255, 0.08);
+
+    --skeleton-base:      var(--primitive-charcoal-800);
+    --skeleton-shine:     var(--primitive-charcoal-700);
+
+    --toast-bg:           var(--primitive-charcoal-800);
+    --toast-shadow:       var(--shadow-xl);
+
+    --shadow-xs: 0px 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0px 1px 3px rgba(0, 0, 0, 0.4), 0px 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0px 4px 6px rgba(0, 0, 0, 0.35), 0px 2px 4px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0px 10px 15px rgba(0, 0, 0, 0.4), 0px 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0px 20px 25px rgba(0, 0, 0, 0.45), 0px 8px 10px rgba(0, 0, 0, 0.35);
+    --shadow-focus: 0 0 0 3px rgba(200, 168, 130, 0.30);
+    --shadow-focus-accent: 0 0 0 3px rgba(200, 168, 130, 0.40);
+
+    --interactive-secondary-hover:  var(--primitive-charcoal-800);
+    --interactive-secondary-active: var(--primitive-charcoal-700);
+    --interactive-secondary-border: var(--primitive-charcoal-600);
+    --interactive-ghost-hover:  var(--primitive-charcoal-800);
+    --interactive-ghost-active: var(--primitive-charcoal-700);
+  }
+}
+
+/* --------------------------------------------------
+ * UTILITÁRIOS GLOBAIS DE TIPOGRAFIA
+ * -------------------------------------------------- */
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    font-weight: var(--font-regular);
+    line-height: var(--leading-normal);
+    color: var(--text-primary);
+    background-color: var(--bg-page);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Seleção de texto */
+  ::selection {
+    background-color: var(--primitive-terracota-200);
+    color: var(--primitive-terracota-900);
+  }
+
+  /* Scrollbar personalizado (webkit) */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--primitive-charcoal-300);
+    border-radius: var(--radius-full);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primitive-charcoal-400);
+  }
+}
+
+/* --------------------------------------------------
+ * ANIMAÇÕES GLOBAIS
+ * -------------------------------------------------- */
+@layer base {
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(16px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  .animate-fade-in   { animation: fade-in 200ms ease forwards; }
+  .animate-slide-up  { animation: slide-up 250ms ease forwards; }
+  .animate-skeleton  { animation: skeleton-pulse 1.5s ease-in-out infinite; }
+  .animate-spin      { animation: spin 600ms linear infinite; }
+}

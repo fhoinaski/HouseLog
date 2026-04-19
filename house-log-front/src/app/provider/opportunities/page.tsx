@@ -27,9 +27,9 @@ export default function ProviderOpportunitiesPage() {
   const opportunities = data?.data ?? [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20">
       <div>
-        <h1 className="text-2xl font-bold">Oportunidades de Orçamento</h1>
+        <h1 className="text-[24px] font-medium">Oportunidades de orçamento</h1>
         <p className="text-sm text-muted-foreground">OS abertas para envio de proposta</p>
       </div>
 
@@ -55,18 +55,18 @@ export default function ProviderOpportunitiesPage() {
         </div>
       ) : opportunities.length === 0 ? (
         <div className="py-20 text-center">
-          <Briefcase className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+          <Briefcase className="mx-auto mb-3 h-10 w-10 text-neutral-300" />
           <p className="text-sm text-muted-foreground">Nenhuma oportunidade disponível no momento</p>
         </div>
       ) : (
         <div className="space-y-3">
           {opportunities.map((item: ProviderOpportunity) => (
             <Link key={item.id} href={`/provider/opportunities/${item.id}`}>
-              <Card className="cursor-pointer hover:shadow-sm transition-shadow">
+              <Card className="cursor-pointer transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{item.title}</p>
+                      <p className="truncate text-sm font-medium">{item.title}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {SYSTEM_TYPE_LABELS[item.system_type]} · {item.room_name ?? 'Sem cômodo'}
                       </p>

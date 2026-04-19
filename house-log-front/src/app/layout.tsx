@@ -5,6 +5,7 @@ import { SWRProvider } from '@/lib/swr-provider';
 import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { PwaRegister } from '@/components/pwa-register';
+import { COLOR_PALETTE } from '@/lib/color-palette';
 import './globals.css';
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'] });
@@ -28,12 +29,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
-    { media: '(prefers-color-scheme: dark)', color: '#0b1326' },
-  ],
+  themeColor: COLOR_PALETTE.neutral50,
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   maximumScale: 1,
   userScalable: false,
 };
@@ -49,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-title" content="HouseLog" />
       </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col bg-background text-foreground">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
           <AuthProvider>
             <SWRProvider>
               {children}

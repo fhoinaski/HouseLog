@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   FileText, Upload, Trash2, ExternalLink, Sparkles,
-  FileSearch, Download, Plus, Filter,
+  FileSearch, Filter,
 } from 'lucide-react';
 import { documentsApi, type Document } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,14 +27,14 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 };
 
 const DOC_TYPE_COLORS: Record<string, string> = {
-  invoice: 'bg-amber-50 text-amber-700',
-  manual: 'bg-slate-50 text-slate-600',
-  project: 'bg-blue-50 text-blue-700',
-  contract: 'bg-purple-50 text-purple-700',
-  deed: 'bg-emerald-50 text-emerald-700',
-  permit: 'bg-orange-50 text-orange-700',
-  insurance: 'bg-pink-50 text-pink-700',
-  other: 'bg-slate-50 text-slate-600',
+  invoice: 'bg-(--color-warning-light) text-(--color-warning)',
+  manual: 'bg-(--color-neutral-50) text-(--color-neutral-600)',
+  project: 'bg-(--color-primary-light) text-(--color-primary)',
+  contract: 'bg-(--color-primary-light) text-(--color-primary)',
+  deed: 'bg-(--color-success-light) text-(--color-success)',
+  permit: 'bg-(--color-warning-light) text-(--color-warning)',
+  insurance: 'bg-(--color-danger-light) text-(--color-danger)',
+  other: 'bg-(--color-neutral-50) text-(--color-neutral-600)',
 };
 
 const metaSchema = z.object({
@@ -49,13 +49,13 @@ const metaSchema = z.object({
 type MetaForm = z.infer<typeof metaSchema>;
 
 function DocRow({
-  doc, onDelete, onOcr,
+  doc, onDelete, onOcr, ocrLoading,
 }: {
   doc: Document;
   onDelete: () => void;
   onOcr: () => void;
+  ocrLoading: boolean;
 }) {
-  const isPdf = doc.file_url.endsWith('.pdf');
   const hasOcr = !!doc.ocr_data;
   const isInvoice = doc.type === 'invoice';
 
@@ -63,7 +63,7 @@ function DocRow({
     <Card>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg', DOC_TYPE_COLORS[doc.type])}>
+          <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', DOC_TYPE_COLORS[doc.type])}>
             <FileText className="h-4 w-4" />
           </div>
           <div className="flex-1 min-w-0">
@@ -71,47 +71,50 @@ function DocRow({
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="secondary" className="text-xs">{DOC_TYPE_LABELS[doc.type] ?? doc.type}</Badge>
               {doc.issue_date && (
-                <span className="text-xs text-[var(--muted-foreground)]">{formatDate(doc.issue_date)}</span>
+                <span className="text-xs text-muted-foreground">{formatDate(doc.issue_date)}</span>
               )}
               {doc.amount && (
-                <span className="text-xs font-medium text-emerald-600">{formatCurrency(doc.amount)}</span>
+                <span className="text-xs font-medium text-(--color-success)">{formatCurrency(doc.amount)}</span>
               )}
               {doc.expiry_date && new Date(doc.expiry_date) < new Date() && (
                 <Badge variant="destructive" className="text-xs">Vencido</Badge>
               )}
             </div>
             {doc.vendor_cnpj && (
-              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">CNPJ: {doc.vendor_cnpj}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">CNPJ: {doc.vendor_cnpj}</p>
             )}
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             {isInvoice && !hasOcr && (
               <Button
                 variant="ghost" size="icon"
-                className="h-8 w-8 text-violet-500 hover:text-violet-600 hover:bg-violet-50"
+                className="h-8 w-8 text-(--color-primary) hover:bg-(--color-primary-light)"
                 title="Processar com IA"
                 onClick={onOcr}
+                disabled={ocrLoading}
               >
-                <Sparkles className="h-3.5 w-3.5" />
+                <Sparkles className={cn('h-3.5 w-3.5', ocrLoading && 'animate-pulse')} />
               </Button>
             )}
             {hasOcr && (
               <span title="OCR processado">
-                <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                <Sparkles className="h-3.5 w-3.5 text-(--color-primary)" />
               </span>
             )}
             <a
               href={doc.file_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[var(--muted)] transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted transition-colors"
+              aria-label="Abrir documento"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+              className="h-8 w-8 text-(--color-danger) hover:bg-(--color-danger-light)"
               onClick={onDelete}
+              aria-label="Remover documento"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
@@ -203,12 +206,12 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Documentos</h2>
+        <h2 className="text-xl font-medium">Documentos</h2>
         <Button onClick={() => fileRef.current?.click()}>
           <Upload className="h-4 w-4" />
-          Enviar Arquivo
+          Enviar arquivo
         </Button>
         <input
           ref={fileRef}
@@ -238,8 +241,8 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       {/* List */}
       {docs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <FileSearch className="h-10 w-10 text-slate-300 mb-3" />
-          <p className="text-[var(--muted-foreground)] text-sm">
+          <FileSearch className="mb-3 h-10 w-10 text-neutral-300" />
+          <p className="text-muted-foreground text-sm">
             {typeFilter ? 'Nenhum documento deste tipo' : 'Nenhum documento enviado'}
           </p>
           <Button variant="outline" className="mt-3" onClick={() => fileRef.current?.click()}>
@@ -254,6 +257,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               doc={doc}
               onDelete={() => handleDelete(doc.id)}
               onOcr={() => handleOcr(doc.id)}
+              ocrLoading={ocrLoading === doc.id}
             />
           ))}
         </div>
@@ -266,7 +270,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             <DialogTitle>Detalhes do Documento</DialogTitle>
           </DialogHeader>
           {uploadFile && (
-            <div className="rounded-lg bg-[var(--muted)] px-3 py-2 text-sm text-[var(--muted-foreground)] mb-2">
+            <div className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground mb-2">
               📄 {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
             </div>
           )}
@@ -282,13 +286,13 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.type && <p className="text-xs text-rose-500">{errors.type.message}</p>}
+                {errors.type && <p className="text-xs text-(--color-danger)">{errors.type.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="doc-title">Título *</Label>
                 <Input id="doc-title" {...register('title')} />
-                {errors.title && <p className="text-xs text-rose-500">{errors.title.message}</p>}
+                {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
               </div>
 
               {watchType === 'invoice' && (
@@ -316,8 +320,8 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             </div>
 
             {watchType === 'invoice' && (
-              <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-xs text-violet-700 flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
+              <div className="flex items-center gap-2 rounded-lg border border-(--color-primary-border) bg-(--color-primary-light) px-3 py-2 text-xs text-(--color-primary)">
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
                 Após enviar, use o botão IA para extrair dados automaticamente da nota fiscal.
               </div>
             )}

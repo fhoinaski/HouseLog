@@ -2,14 +2,14 @@
 
 import { use, useState } from 'react';
 import useSWR from 'swr';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  BarChart, Bar, PieChart, Pie, Cell, ComposedChart, Line,
+  Bar, PieChart, Pie, Cell, ComposedChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { Plus, TrendingUp, TrendingDown, RefreshCw, ShieldCheck, Ruler } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, RefreshCw, Ruler } from 'lucide-react';
 import { expensesApi, propertiesApi } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,11 +17,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { formatCurrency, formatMonth, EXPENSE_CATEGORY_LABELS, cn } from '@/lib/utils';
 
-const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#f43f5e', '#8b5cf6', '#64748b', '#06b6d4', '#ec4899'];
+const COLORS = [
+  'var(--color-primary)',
+  'var(--color-warning)',
+  'var(--color-success)',
+  'var(--color-danger)',
+  'var(--color-neutral-600)',
+  'var(--color-neutral-400)',
+  'var(--color-primary-border)',
+  'var(--color-warning-border)',
+];
 
 const ALL_CATEGORIES = {
   ...EXPENSE_CATEGORY_LABELS,
@@ -44,9 +52,10 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formType, setFormType] = useState<'expense' | 'revenue'>('expense');
+  const [nowTs] = useState(() => Date.now());
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const sixMonthsAgo = new Date(Date.now() - 6 * 30 * 86400000).toISOString().slice(0, 7);
+  const currentMonth = new Date(nowTs).toISOString().slice(0, 7);
+  const sixMonthsAgo = new Date(nowTs - 6 * 30 * 86400000).toISOString().slice(0, 7);
 
   const { data, mutate } = useSWR(
     ['expenses-summary', id],
@@ -56,13 +65,13 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   const { data: propData } = useSWR(['property', id], () => propertiesApi.get(id));
   const area = propData?.property?.area_m2 ?? null;
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm<ExpenseForm>({
+  const { register, handleSubmit, reset, setValue, control, formState: { errors, isSubmitting } } = useForm<ExpenseForm>({
     resolver: zodResolver(expenseSchema),
     defaultValues: { reference_month: currentMonth, type: 'expense', is_recurring: false },
   });
 
-  const watchIsRecurring = watch('is_recurring');
-  const watchType = watch('type');
+  const watchIsRecurring = useWatch({ control, name: 'is_recurring' });
+  const watchType = useWatch({ control, name: 'type' });
 
   function openDialog(type: 'expense' | 'revenue') {
     setFormType(type);
@@ -117,11 +126,11 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold">Saúde Financeira</h2>
-          <p className="text-sm text-[var(--muted-foreground)]">Últimos 6 meses</p>
+          <h2 className="text-xl font-medium">Saúde financeira</h2>
+          <p className="text-sm text-muted-foreground">Últimos 6 meses</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => openDialog('revenue')}>
@@ -139,37 +148,37 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Despesas</p>
-            <p className="text-2xl font-bold text-rose-500 mt-1">{formatCurrency(totalExpenses)}</p>
-            <p className="text-xs text-[var(--muted-foreground)]">6 meses</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Despesas</p>
+            <p className="mt-1 text-2xl font-medium text-(--color-danger)">{formatCurrency(totalExpenses)}</p>
+            <p className="text-xs text-muted-foreground">6 meses</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Receitas</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(totalRevenue)}</p>
-            <p className="text-xs text-[var(--muted-foreground)]">6 meses</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Receitas</p>
+            <p className="mt-1 text-2xl font-medium text-(--color-success)">{formatCurrency(totalRevenue)}</p>
+            <p className="text-xs text-muted-foreground">6 meses</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Saldo</p>
-            <p className={cn('text-2xl font-bold mt-1', balance >= 0 ? 'text-emerald-600' : 'text-rose-500')}>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Saldo</p>
+            <p className={cn('mt-1 text-2xl font-medium', balance >= 0 ? 'text-(--color-success)' : 'text-(--color-danger)')}>
               {formatCurrency(balance)}
             </p>
-            <p className="text-xs text-[var(--muted-foreground)]">período</p>
+            <p className="text-xs text-muted-foreground">período</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
             <div className="flex items-start gap-2">
-              <Ruler className="h-4 w-4 text-primary-600 mt-1 flex-shrink-0" />
+              <Ruler className="mt-1 h-4 w-4 shrink-0 text-(--color-primary)" />
               <div>
-                <p className="text-xs text-[var(--muted-foreground)] uppercase tracking-wide">Custo/m²</p>
-                <p className="text-2xl font-bold mt-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Custo/m²</p>
+                <p className="mt-1 text-2xl font-medium">
                   {costPerSqm != null ? formatCurrency(costPerSqm) : '—'}
                 </p>
-                <p className="text-xs text-[var(--muted-foreground)]">
+                <p className="text-xs text-muted-foreground">
                   {area ? `${area} m²` : 'área não informada'}
                 </p>
               </div>
@@ -182,17 +191,17 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-primary-600" />
+            <TrendingUp className="h-4 w-4 text-(--color-primary)" />
             DRE — Receitas vs Despesas
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 pt-0">
           {dreData.length === 0 ? (
-            <p className="text-sm text-center py-8 text-[var(--muted-foreground)]">Nenhum dado ainda</p>
+            <p className="text-sm text-center py-8 text-muted-foreground">Nenhum dado ainda</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={dreData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--hl-border-light)" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis
                   tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
@@ -203,12 +212,12 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                     formatCurrency(v),
                     name === 'despesas' ? 'Despesas' : name === 'receitas' ? 'Receitas' : 'Saldo',
                   ]}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid var(--hl-border-light)', fontSize: '12px' }}
                 />
                 <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
-                <Bar dataKey="despesas" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="receitas" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Line dataKey="saldo" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
+                <Bar dataKey="despesas" fill="var(--color-danger)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="receitas" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
+                <Line dataKey="saldo" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -240,7 +249,7 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                   </Pie>
                   <Tooltip
                     formatter={(v: number) => [formatCurrency(v)]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--hl-border-light)', fontSize: '12px' }}
                   />
                   <Legend iconType="circle" iconSize={8} formatter={(value) => <span className="text-xs">{value}</span>} />
                 </PieChart>
@@ -256,8 +265,8 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {formType === 'revenue'
-                ? <><TrendingUp className="h-4 w-4 text-emerald-600" />Nova Receita</>
-                : <><TrendingDown className="h-4 w-4 text-rose-500" />Nova Despesa</>
+                ? <><TrendingUp className="h-4 w-4 text-(--color-success)" />Nova receita</>
+                : <><TrendingDown className="h-4 w-4 text-(--color-danger)" />Nova despesa</>
               }
             </DialogTitle>
           </DialogHeader>
@@ -272,19 +281,19 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                   ))}
                 </SelectContent>
               </Select>
-              {errors.category && <p className="text-xs text-rose-500">{errors.category.message}</p>}
+              {errors.category && <p className="text-xs text-(--color-danger)">{errors.category.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="amount">Valor (R$) *</Label>
                 <Input id="amount" type="number" step="0.01" placeholder="0,00" {...register('amount')} />
-                {errors.amount && <p className="text-xs text-rose-500">{errors.amount.message}</p>}
+                {errors.amount && <p className="text-xs text-(--color-danger)">{errors.amount.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ref-month">Mês de referência *</Label>
                 <Input id="ref-month" type="month" {...register('reference_month')} />
-                {errors.reference_month && <p className="text-xs text-rose-500">{errors.reference_month.message}</p>}
+                {errors.reference_month && <p className="text-xs text-(--color-danger)">{errors.reference_month.message}</p>}
               </div>
             </div>
 
@@ -302,14 +311,14 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                     className="peer sr-only"
                     {...register('is_recurring')}
                   />
-                  <div className="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary-600 peer-checked:after:translate-x-4" />
+                  <div className="peer h-5 w-9 rounded-full bg-(--hl-border-light) after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-(--color-primary) peer-checked:after:translate-x-4" />
                 </div>
                 <div>
                   <p className="text-sm font-medium flex items-center gap-1.5">
-                    <RefreshCw className="h-3.5 w-3.5 text-primary-600" />
+                    <RefreshCw className="h-3.5 w-3.5 text-(--color-primary)" />
                     Fixa mensal
                   </p>
-                  <p className="text-xs text-[var(--muted-foreground)]">
+                  <p className="text-xs text-muted-foreground">
                     {watchIsRecurring
                       ? 'Gera 12 lançamentos a partir deste mês'
                       : 'Ativar para criar recorrência anual'}
@@ -319,8 +328,8 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
             )}
 
             {watchIsRecurring && (
-              <div className="rounded-lg bg-primary-50 border border-primary-200 px-3 py-2 text-xs text-primary-700 flex items-center gap-2">
-                <RefreshCw className="h-3.5 w-3.5 flex-shrink-0" />
+              <div className="flex items-center gap-2 rounded-lg border border-(--color-primary-border) bg-(--color-primary-light) px-3 py-2 text-xs text-(--color-primary)">
+                <RefreshCw className="h-3.5 w-3.5 shrink-0" />
                 Serão criados automaticamente 12 lançamentos mensais.
               </div>
             )}

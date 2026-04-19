@@ -1,29 +1,30 @@
 'use client';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { COLOR_PALETTE } from '@/lib/color-palette';
 
 const styles = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', fontSize: 10, padding: 40, color: '#0f172a' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '1pt solid #e2e8f0' },
-  logo: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#1e293b' },
-  title: { fontSize: 18, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
-  subtitle: { fontSize: 11, color: '#64748b', marginBottom: 24 },
-  scoreBox: { alignItems: 'center', marginBottom: 24, padding: 20, backgroundColor: '#f8fafc', borderRadius: 8 },
-  scoreNum: { fontSize: 48, fontFamily: 'Helvetica-Bold', marginBottom: 4 },
-  scoreLabel: { fontSize: 14, fontFamily: 'Helvetica-Bold' },
+  page: { fontFamily: 'Helvetica', fontSize: 11, padding: 40, color: COLOR_PALETTE.neutral900 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: `1pt solid ${COLOR_PALETTE.neutral100}` },
+  logo: { fontSize: 16, fontFamily: 'Helvetica', color: COLOR_PALETTE.neutral900 },
+  title: { fontSize: 18, fontFamily: 'Helvetica', marginBottom: 4 },
+  subtitle: { fontSize: 11, color: COLOR_PALETTE.neutral600, marginBottom: 24 },
+  scoreBox: { alignItems: 'center', marginBottom: 24, padding: 20, backgroundColor: COLOR_PALETTE.neutral50, borderRadius: 8 },
+  scoreNum: { fontSize: 48, fontFamily: 'Helvetica', marginBottom: 4 },
+  scoreLabel: { fontSize: 14, fontFamily: 'Helvetica' },
   section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 11, fontFamily: 'Helvetica-Bold', marginBottom: 10, paddingBottom: 4, borderBottom: '0.5pt solid #e2e8f0', color: '#475569', textTransform: 'uppercase' },
+  sectionTitle: { fontSize: 11, fontFamily: 'Helvetica', marginBottom: 10, paddingBottom: 4, borderBottom: `0.5pt solid ${COLOR_PALETTE.neutral100}`, color: COLOR_PALETTE.neutral600, textTransform: 'uppercase' },
   factorRow: { marginBottom: 10 },
   factorHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 },
-  factorName: { fontSize: 9.5, fontFamily: 'Helvetica-Bold' },
-  factorScore: { fontSize: 9.5, fontFamily: 'Helvetica-Bold' },
-  barBg: { height: 6, backgroundColor: '#e2e8f0', borderRadius: 3 },
+  factorName: { fontSize: 11, fontFamily: 'Helvetica' },
+  factorScore: { fontSize: 11, fontFamily: 'Helvetica' },
+  barBg: { height: 6, backgroundColor: COLOR_PALETTE.neutral100, borderRadius: 3 },
   barFill: { height: 6, borderRadius: 3 },
-  factorDesc: { fontSize: 8.5, color: '#94a3b8', marginTop: 2 },
+  factorDesc: { fontSize: 11, color: COLOR_PALETTE.neutral400, marginTop: 2 },
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  statBox: { width: '30%', padding: 10, backgroundColor: '#f8fafc', borderRadius: 6 },
-  statLabel: { fontSize: 8.5, color: '#64748b', marginBottom: 3 },
-  statValue: { fontSize: 14, fontFamily: 'Helvetica-Bold' },
-  footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: '#94a3b8', borderTop: '0.5pt solid #e2e8f0', paddingTop: 8 },
+  statBox: { width: '30%', padding: 10, backgroundColor: COLOR_PALETTE.neutral50, borderRadius: 6 },
+  statLabel: { fontSize: 11, color: COLOR_PALETTE.neutral600, marginBottom: 3 },
+  statValue: { fontSize: 14, fontFamily: 'Helvetica' },
+  footer: { position: 'absolute', bottom: 30, left: 40, right: 40, flexDirection: 'row', justifyContent: 'space-between', fontSize: 11, color: COLOR_PALETTE.neutral400, borderTop: `0.5pt solid ${COLOR_PALETTE.neutral100}`, paddingTop: 8 },
 });
 
 const FACTOR_LABELS: Record<string, { label: string; max: number; description: string }> = {
@@ -35,10 +36,10 @@ const FACTOR_LABELS: Record<string, { label: string; max: number; description: s
 };
 
 function scoreColor(score: number) {
-  if (score >= 80) return '#3b82f6';
-  if (score >= 60) return '#10b981';
-  if (score >= 30) return '#f59e0b';
-  return '#f43f5e';
+  if (score >= 80) return COLOR_PALETTE.primary;
+  if (score >= 60) return COLOR_PALETTE.success;
+  if (score >= 30) return COLOR_PALETTE.warning;
+  return COLOR_PALETTE.danger;
 }
 
 interface Props {
@@ -63,7 +64,7 @@ export function HealthReportPDF({ score, breakdown, valuation }: Props) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.logo}>HouseLog</Text>
-          <Text style={{ fontSize: 8, color: '#94a3b8' }}>
+          <Text style={{ fontSize: 11, color: COLOR_PALETTE.neutral400 }}>
             Gerado em {new Date().toLocaleDateString('pt-BR')}
           </Text>
         </View>
@@ -76,7 +77,7 @@ export function HealthReportPDF({ score, breakdown, valuation }: Props) {
         <View style={styles.scoreBox}>
           <Text style={[styles.scoreNum, { color }]}>{score}</Text>
           <Text style={[styles.scoreLabel, { color }]}>{label}</Text>
-          <Text style={{ fontSize: 9, color: '#94a3b8', marginTop: 4 }}>Score de Saúde (0–100)</Text>
+          <Text style={{ fontSize: 11, color: COLOR_PALETTE.neutral400, marginTop: 4 }}>Score de Saúde (0–100)</Text>
         </View>
 
         {/* Breakdown */}

@@ -30,7 +30,7 @@ export function BeforeAfterSlider({ before, after, className }: Props) {
   return (
     <div
       ref={containerRef}
-      className={cn('relative w-full overflow-hidden rounded-xl select-none cursor-col-resize', className)}
+      className={cn('relative w-full cursor-col-resize select-none overflow-hidden rounded-xl ring-1 ring-inset ring-(--hl-border-light)', className)}
       style={{ aspectRatio: '4/3' }}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
@@ -53,24 +53,24 @@ export function BeforeAfterSlider({ before, after, className }: Props) {
 
       {/* Divider line */}
       <div
-        className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg pointer-events-none"
+        className="pointer-events-none absolute bottom-0 top-0 w-0.5 bg-white/90"
         style={{ left: `${position}%` }}
       >
         {/* Handle */}
-        <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 left-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-lg ring-2 ring-white/30">
+        <div className="absolute left-1/2 top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-neutral-100 bg-white">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M5 8L2 5l3-3M11 8l3 3-3 3" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            <line x1="2" y1="8" x2="14" y2="8" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M5 8L2 5l3-3M11 8l3 3-3 3" stroke="var(--hl-text-secondary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="2" y1="8" x2="14" y2="8" stroke="var(--hl-text-secondary)" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </div>
       </div>
 
       {/* Labels */}
-      <span className="absolute left-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-bold bg-black/50 text-white pointer-events-none">
-        ANTES
+      <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-(--color-neutral-50) px-2 py-0.5 text-[11px] font-medium text-(--hl-text-secondary)">
+        Antes
       </span>
-      <span className="absolute right-2 top-2 rounded px-1.5 py-0.5 text-[10px] font-bold bg-black/50 text-white pointer-events-none">
-        DEPOIS
+      <span className="pointer-events-none absolute right-3 top-3 rounded-full bg-(--color-neutral-50) px-2 py-0.5 text-[11px] font-medium text-(--hl-text-secondary)">
+        Depois
       </span>
     </div>
   );

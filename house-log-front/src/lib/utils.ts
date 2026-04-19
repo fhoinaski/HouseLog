@@ -32,17 +32,17 @@ export function formatMonth(yyyyMm?: string | null): string {
 }
 
 export function scoreColor(score: number): string {
-  if (score < 30) return 'text-rose-500';
-  if (score < 60) return 'text-amber-500';
-  if (score < 80) return 'text-emerald-500';
-  return 'text-primary-600';
+  if (score < 30) return 'text-(--color-danger)';
+  if (score < 60) return 'text-(--color-warning)';
+  if (score < 80) return 'text-(--color-success)';
+  return 'text-(--color-primary)';
 }
 
 export function scoreBg(score: number): string {
-  if (score < 30) return 'bg-rose-500';
-  if (score < 60) return 'bg-amber-500';
-  if (score < 80) return 'bg-emerald-500';
-  return 'bg-primary-500';
+  if (score < 30) return 'bg-(--color-danger)';
+  if (score < 60) return 'bg-(--color-warning)';
+  if (score < 80) return 'bg-(--color-success)';
+  return 'bg-(--color-primary)';
 }
 
 export const PROPERTY_TYPE_LABELS: Record<string, string> = {

@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useRef, useState } from 'react';
-import { Building2, Camera, Upload, CheckCircle2, AlertCircle, Clock, X, Send } from 'lucide-react';
+import { Building2, Camera, CheckCircle2, AlertCircle, Clock, X, Send } from 'lucide-react';
 import { auditApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { SYSTEM_TYPE_LABELS } from '@/lib/utils';
@@ -31,6 +31,7 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
   const [previews, setPreviews] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [initialized, setInitialized] = useState(false);
+  const [nowTs] = useState(() => Date.now());
 
   // Fetch audit data on mount
   if (!initialized) {
@@ -79,10 +80,10 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
   if (state === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center bg-(--hl-bg-page)">
         <div className="text-center">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary-600 border-t-transparent mx-auto" />
-          <p className="mt-4 text-sm text-slate-500">Carregando...</p>
+          <p className="mt-4 text-sm text-(--hl-text-secondary)">Carregando...</p>
         </div>
       </div>
     );
@@ -90,14 +91,14 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
   if (state === 'expired') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-(--hl-bg-page) p-4">
         <div className="text-center max-w-xs">
-          <div className="h-14 w-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
-            <Clock className="h-7 w-7 text-amber-500" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--color-warning-light)">
+            <Clock className="h-7 w-7 text-(--color-warning)" />
           </div>
-          <h1 className="text-lg font-bold">Link Expirado</h1>
-          <p className="text-sm text-slate-500 mt-2">{errorMsg}</p>
-          <p className="text-xs text-slate-400 mt-4">
+          <h1 className="text-lg font-medium">Link expirado</h1>
+          <p className="mt-2 text-sm text-(--hl-text-secondary)">{errorMsg}</p>
+          <p className="mt-4 text-xs text-(--hl-text-tertiary)">
             Solicite um novo link ao responsável pelo imóvel.
           </p>
         </div>
@@ -107,13 +108,13 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
   if (state === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-(--hl-bg-page) p-4">
         <div className="text-center max-w-xs">
-          <div className="h-14 w-14 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="h-7 w-7 text-rose-500" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--color-danger-light)">
+            <AlertCircle className="h-7 w-7 text-(--color-danger)" />
           </div>
-          <h1 className="text-lg font-bold">Erro</h1>
-          <p className="text-sm text-slate-500 mt-2">{errorMsg}</p>
+          <h1 className="text-lg font-medium">Erro</h1>
+          <p className="mt-2 text-sm text-(--hl-text-secondary)">{errorMsg}</p>
         </div>
       </div>
     );
@@ -121,13 +122,13 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
   if (state === 'success') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-(--hl-bg-page) p-4">
         <div className="text-center max-w-xs">
-          <div className="h-14 w-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-            <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-(--color-success-light)">
+            <CheckCircle2 className="h-7 w-7 text-(--color-success)" />
           </div>
-          <h1 className="text-lg font-bold">Enviado com sucesso!</h1>
-          <p className="text-sm text-slate-500 mt-2">
+          <h1 className="text-lg font-medium">Enviado com sucesso!</h1>
+          <p className="mt-2 text-sm text-(--hl-text-secondary)">
             Suas fotos e observações foram registradas. Obrigado!
           </p>
         </div>
@@ -139,50 +140,50 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
   const scope = data?.scope;
   const hoursLeft = data
-    ? Math.max(0, Math.ceil((new Date(data.expires_at).getTime() - Date.now()) / 3600000))
+    ? Math.max(0, Math.ceil((new Date(data.expires_at).getTime() - nowTs) / 3600000))
     : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-(--hl-bg-page) pb-20">
       {/* Header */}
-      <div className="bg-slate-900 px-4 py-4 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-lg bg-primary-600 flex items-center justify-center flex-shrink-0">
+      <div className="flex items-center gap-3 bg-(--hl-bg-card) px-4 py-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--color-primary)">
           <Building2 className="h-4 w-4 text-white" />
         </div>
         <div className="min-w-0">
-          <p className="text-white font-semibold text-sm truncate">{data?.property_name}</p>
-          <p className="text-slate-400 text-xs truncate">{data?.address}</p>
+          <p className="truncate text-sm font-medium text-(--hl-text-primary)">{data?.property_name}</p>
+          <p className="truncate text-xs text-(--hl-text-secondary)">{data?.address}</p>
         </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
         {/* OS Info */}
-        <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
+        <div className="rounded-xl border border-(--hl-border-light) bg-white p-4">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+            <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">
               {SYSTEM_TYPE_LABELS[data?.system_type ?? ''] ?? data?.system_type}
             </span>
-            <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+            <span className="flex items-center gap-1 text-xs font-medium text-(--color-warning)">
               <Clock className="h-3 w-3" /> {hoursLeft}h restantes
             </span>
           </div>
-          <p className="font-semibold text-slate-900">{data?.order_title}</p>
+          <p className="font-medium text-(--hl-text-primary)">{data?.order_title}</p>
           {data?.order_description && (
-            <p className="text-sm text-slate-500 mt-1 line-clamp-3">{data.order_description}</p>
+            <p className="mt-1 line-clamp-3 text-sm text-(--hl-text-secondary)">{data.order_description}</p>
           )}
         </div>
 
         {/* Before photos (read-only reference) */}
         {data?.before_photos && data.before_photos.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">
               Fotos de referência (antes)
             </p>
             <div className="flex gap-2 overflow-x-auto pb-1">
               {data.before_photos.map((url, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={i} src={url} alt="antes"
-                  className="h-20 w-20 flex-shrink-0 rounded-lg object-cover"
+                  className="h-20 w-20 rounded-lg object-cover"
                 />
               ))}
             </div>
@@ -192,7 +193,7 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
         {/* Photo upload */}
         {scope?.canUploadPhotos && (
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">
               Suas fotos (depois / execução)
             </p>
 
@@ -216,7 +217,7 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
             <button
               onClick={() => photoRef.current?.click()}
-              className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-6 text-slate-400 hover:border-primary-400 hover:text-primary-500 transition-colors"
+              className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-(--hl-border-light) py-6 text-(--hl-text-tertiary) transition-colors hover:border-(--color-primary-border) hover:text-(--color-primary)"
             >
               <Camera className="h-6 w-6" />
               <span className="text-sm font-medium">
@@ -237,7 +238,7 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
 
         {/* Notes */}
         <div>
-          <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-2">
+          <label className="mb-2 block text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">
             Observações
           </label>
           <textarea
@@ -245,7 +246,7 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="Descreva o que foi realizado, materiais usados, observações..."
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+            className="w-full resize-none rounded-lg border border-(--hl-border-light) bg-white px-3 py-2 text-sm placeholder:text-(--hl-text-tertiary) focus:outline-none focus:ring-2 focus:ring-(--color-primary-border)"
           />
         </div>
 
@@ -254,14 +255,14 @@ export default function AuditPage({ params }: { params: Promise<{ token: string 
           onClick={handleSubmit}
           loading={state === 'submitting'}
           disabled={scope?.canUploadPhotos && photos.length === 0}
-          className="w-full h-12 text-base"
+          className="h-12 w-full text-base"
         >
           <Send className="h-4 w-4" />
           {state === 'submitting' ? 'Enviando...' : 'Enviar Registro'}
         </Button>
 
         {scope?.canUploadPhotos && photos.length === 0 && (
-          <p className="text-center text-xs text-slate-400">
+          <p className="text-center text-xs text-(--hl-text-tertiary)">
             Adicione pelo menos 1 foto para enviar
           </p>
         )}
