@@ -46,29 +46,29 @@ function RoomCard({
     <Card>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50">
-            <Icon className="h-5 w-5 text-primary-600" />
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-accent-subtle">
+            <Icon className="h-5 w-5 text-text-accent" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm">{room.name}</p>
+            <p className="font-medium text-sm text-text-primary">{room.name}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="secondary" className="text-xs">{typeLabel}</Badge>
-              <span className="text-xs text-muted-foreground">Andar {room.floor}</span>
+              <span className="text-xs text-text-secondary">Andar {room.floor}</span>
               {room.area_m2 && (
-                <span className="text-xs text-muted-foreground">{room.area_m2} m²</span>
+                <span className="text-xs text-text-secondary">{room.area_m2} m²</span>
               )}
             </div>
             {room.notes && (
-              <p className="text-xs text-muted-foreground mt-1 truncate">{room.notes}</p>
+              <p className="text-xs text-text-secondary mt-1 truncate">{room.notes}</p>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(room)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-text-secondary" onClick={() => onEdit(room)}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-(--color-danger) hover:bg-(--color-danger-light)"
+              className="h-8 w-8 text-text-danger hover:bg-bg-danger"
               onClick={() => onDelete(room)}
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -154,22 +154,22 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 safe-bottom">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-medium">Cômodos</h2>
-          <p className="text-sm text-muted-foreground">{rooms.length} cômodo{rooms.length !== 1 ? 's' : ''} cadastrado{rooms.length !== 1 ? 's' : ''}</p>
+          <h2 className="text-xl font-medium text-text-primary">Cômodos</h2>
+          <p className="text-sm text-text-secondary">{rooms.length} cômodo{rooms.length !== 1 ? 's' : ''} cadastrado{rooms.length !== 1 ? 's' : ''}</p>
         </div>
         <Button onClick={openNew}>
           <Plus className="h-4 w-4" />
-          Novo Cômodo
+          Novo cômodo
         </Button>
       </div>
 
       {rooms.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Home className="mb-3 h-10 w-10 text-(--hl-text-tertiary)" />
-          <p className="text-muted-foreground text-sm">Nenhum cômodo cadastrado</p>
+          <Home className="mb-3 h-10 w-10 text-text-tertiary" />
+          <p className="text-text-secondary text-sm">Nenhum cômodo cadastrado</p>
           <Button variant="outline" className="mt-3" onClick={openNew}>
             <Plus className="h-4 w-4" /> Adicionar cômodo
           </Button>
@@ -178,7 +178,7 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
         <div className="space-y-6">
           {floors.map((floor) => (
             <div key={floor}>
-              <h3 className="mb-3 text-[11px] font-medium uppercase tracking-[0.04em] text-(--hl-text-tertiary)">
+              <h3 className="mb-3 hl-section-title">
                 {floor === 0 ? 'Térreo' : floor === -1 ? 'Subsolo' : `${floor}º Andar`}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -191,17 +191,16 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
         </div>
       )}
 
-      {/* Create / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editRoom ? 'Editar Cômodo' : 'Novo Cômodo'}</DialogTitle>
+            <DialogTitle>{editRoom ? 'Editar cômodo' : 'Novo cômodo'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label htmlFor="room-name">Nome *</Label>
               <Input id="room-name" placeholder="Quarto principal, Banheiro social..." {...register('name')} />
-              {errors.name && <p className="text-xs text-(--color-danger)">{errors.name.message}</p>}
+              {errors.name && <p className="text-xs text-text-danger">{errors.name.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -237,7 +236,7 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
             </div>
 
             {apiError && (
-              <div className="rounded-lg border border-(--color-danger-border) bg-(--color-danger-light) px-3 py-2 text-sm text-(--color-danger)">
+              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
                 {apiError}
               </div>
             )}
@@ -254,14 +253,13 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirm dialog */}
       <Dialog open={!!deleteRoom} onOpenChange={() => setDeleteRoom(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Remover Cômodo</DialogTitle>
+            <DialogTitle>Remover cômodo</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Tem certeza que deseja remover <strong>{deleteRoom?.name}</strong>?
+          <p className="text-sm text-text-secondary">
+            Tem certeza que deseja remover <strong className="text-text-primary">{deleteRoom?.name}</strong>?
             Esta ação não pode ser desfeita.
           </p>
           <div className="flex gap-3 mt-4">

@@ -42,6 +42,51 @@
     --input: var(--input-border);
     --ring: var(--border-focus);
     --radius: var(--radius-md);
+
+    /* ---- legacy alias map (do not use in new code) ---- */
+    --hl-bg-page:            var(--bg-page);
+    --hl-bg-card:            var(--card-bg);
+    --hl-bg-section:         var(--bg-subtle);
+    --hl-text-primary:       var(--text-primary);
+    --hl-text-secondary:     var(--text-secondary);
+    --hl-text-tertiary:      var(--text-tertiary);
+    --hl-border-light:       var(--border-subtle);
+    --hl-accent-red:         var(--text-danger);
+    --hl-accent-orange:      var(--text-accent);
+    --hl-accent-green:       var(--text-success);
+    --hl-chip-selected-bg:   var(--chip-bg-active);
+    --hl-chip-selected-text: var(--chip-text-active);
+    --hl-chip-default-bg:    var(--chip-bg);
+    --hl-chip-default-border:var(--chip-border);
+    --hl-chip-default-text:  var(--chip-text);
+    --color-primary:         var(--interactive-primary-bg);
+    --color-primary-border:  var(--border-accent);
+    --color-primary-light:   var(--bg-accent-subtle);
+    --color-danger:          var(--text-danger);
+    --color-danger-light:    var(--bg-danger);
+    --color-danger-border:   var(--border-danger);
+    --color-success:         var(--text-success);
+    --color-success-light:   var(--bg-success);
+    --color-warning:         var(--text-warning);
+    --color-warning-light:   var(--bg-warning);
+    --color-neutral-50:      var(--bg-subtle);
+    --color-neutral-100:     var(--border-subtle);
+    --color-neutral-200:     var(--border-default);
+    --color-neutral-800:     var(--text-primary);
+    --color-avatar-owner-bg:    var(--avatar-owner-bg);
+    --color-avatar-owner-fg:    var(--avatar-owner-text);
+    --color-avatar-provider-bg: var(--avatar-provider-bg);
+    --color-avatar-provider-fg: var(--avatar-provider-text);
+    --color-avatar-manager-bg:  var(--avatar-manager-bg);
+    --color-avatar-manager-fg:  var(--avatar-manager-text);
+    --field-border:          var(--input-border);
+    --field-border-strong:   var(--input-border-hover);
+    --field-text:            var(--input-text);
+    --field-placeholder:     var(--input-placeholder);
+    --provider-accent:       var(--bg-accent);
+    --provider-surface:      var(--bg-surface);
+    --surface-container-low: var(--bg-subtle);
+    --z-nav:                 300;
   }
 
   .dark {
@@ -64,6 +109,34 @@
     --border: var(--border-default);
     --input: var(--input-border);
     --ring: var(--border-focus);
+
+    /* dark-mode legacy aliases */
+    --hl-bg-page:            var(--bg-page);
+    --hl-bg-card:            var(--card-bg);
+    --hl-bg-section:         var(--bg-subtle);
+    --hl-text-primary:       var(--text-primary);
+    --hl-text-secondary:     var(--text-secondary);
+    --hl-text-tertiary:      var(--text-tertiary);
+    --hl-border-light:       var(--border-subtle);
+    --hl-chip-selected-bg:   var(--chip-bg-active);
+    --hl-chip-selected-text: var(--chip-text-active);
+    --hl-chip-default-bg:    var(--chip-bg);
+    --hl-chip-default-border:var(--chip-border);
+    --hl-chip-default-text:  var(--chip-text);
+    --color-primary:         var(--interactive-primary-bg);
+    --color-primary-light:   var(--bg-accent-subtle);
+    --color-danger:          var(--text-danger);
+    --color-danger-light:    var(--bg-danger);
+    --color-success:         var(--text-success);
+    --color-success-light:   var(--bg-success);
+    --color-warning:         var(--text-warning);
+    --color-warning-light:   var(--bg-warning);
+    --color-neutral-50:      var(--bg-subtle);
+    --field-border:          var(--input-border);
+    --field-border-strong:   var(--input-border-hover);
+    --field-text:            var(--input-text);
+    --field-placeholder:     var(--input-placeholder);
+    --surface-container-low: var(--bg-subtle);
   }
 }
 
@@ -94,12 +167,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--outline-variant) 50%, transparent);
+  background: color-mix(in srgb, var(--border-default) 50%, transparent);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--outline-variant) 72%, transparent);
+  background: color-mix(in srgb, var(--border-default) 72%, transparent);
 }
 
 :focus-visible:not(input):not(textarea):not(select) {

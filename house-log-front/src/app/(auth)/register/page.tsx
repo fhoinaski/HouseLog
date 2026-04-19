@@ -168,13 +168,13 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen bg-(--hl-bg-page) px-6 py-8">
-      <section className="mx-auto w-full max-w-97.5 rounded-xl border border-neutral-100 bg-(--hl-bg-card) px-6 pb-6 pt-7">
+    <main className="min-h-screen bg-bg-page px-6 py-8">
+      <section className="mx-auto w-full max-w-97.5 rounded-xl border-half border-border-subtle bg-bg-surface px-6 pb-6 pt-7">
         <header className="mb-6 flex flex-col items-center gap-2">
-          <div className="flex h-13 w-13 items-center justify-center rounded-[14px] border-[1.5px] border-(--hl-border-light)">
-            <Home className="h-6 w-6 text-(--color-primary)" strokeWidth={1.9} />
+          <div className="flex h-13 w-13 items-center justify-center rounded-[14px] border-half border-border-subtle">
+            <Home className="h-6 w-6 text-text-accent" strokeWidth={1.9} />
           </div>
-          <h1 className="text-[22px] font-medium tracking-[-0.3px] text-(--hl-text-primary)">HouseLog</h1>
+          <h1 className="text-xl font-medium tracking-tight text-text-primary">HouseLog</h1>
         </header>
 
         <div className="mb-6 flex items-center justify-center gap-2">
@@ -213,7 +213,7 @@ export default function RegisterPage() {
                       className={
                         selected
                           ? 'mb-2 inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-(--color-primary) text-white'
-                          : 'mb-2 inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-(--color-neutral-50) text-neutral-800'
+                          : 'mb-2 inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-bg-subtle text-text-primary'
                       }
                     >
                       <Icon className="h-4.5 w-4.5" />
@@ -251,13 +251,13 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <Label htmlFor="email">E-MAIL</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" placeholder="seu@email.com" {...register('email')} />
               {errors.email && <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.email.message}</p>}
             </div>
 
             <div>
-              <Label htmlFor="phoneNumber">TELEFONE</Label>
+              <Label htmlFor="phoneNumber">Telefone</Label>
               <Input
                 id="phoneNumber"
                 inputMode="numeric"
@@ -269,20 +269,20 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <Label htmlFor="password">SENHA</Label>
+              <Label htmlFor="password">Senha</Label>
               <Input id="password" type="password" placeholder="Minimo 8 caracteres" {...register('password')} />
               {errors.password && <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.password.message}</p>}
             </div>
 
             <div>
-              <Label htmlFor="confirmPassword">CONFIRMAR SENHA</Label>
+              <Label htmlFor="confirmPassword">Confirmar senha</Label>
               <Input id="confirmPassword" type="password" placeholder="Repita sua senha" {...register('confirmPassword')} />
               {errors.confirmPassword && <p className="mt-1 text-[12px] text-(--hl-accent-red)">{errors.confirmPassword.message}</p>}
             </div>
 
             {needsInvite && (
               <div>
-                <Label htmlFor="inviteToken">CODIGO DE CONVITE</Label>
+                <Label htmlFor="inviteToken">Código de convite</Label>
                 <Input id="inviteToken" placeholder="Token alfanumerico" {...register('inviteToken')} />
               </div>
             )}
@@ -319,7 +319,7 @@ export default function RegisterPage() {
               <Check className="h-7 w-7 text-(--hl-accent-green)" strokeWidth={2.4} />
             </div>
 
-            <h2 className="text-[20px] font-medium text-(--hl-text-primary)">Perfil Criado!</h2>
+            <h2 className="text-xl font-medium text-text-primary">Perfil criado!</h2>
             <p className="mt-2 text-[14px] text-(--hl-text-secondary)">
               Seu perfil esta ativo. Voce ja pode acessar a plataforma.
             </p>
@@ -337,7 +337,7 @@ export default function RegisterPage() {
                   onClick={() => router.push('/provider/settings')}
                 >
                   <Settings2 className="h-4 w-4" />
-                  Adicionar Fotos ao Portfolio
+                  Adicionar fotos ao portfólio
                 </Button>
               )}
             </div>

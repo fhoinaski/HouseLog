@@ -21,14 +21,14 @@ import { toast } from 'sonner';
 import { formatCurrency, formatMonth, EXPENSE_CATEGORY_LABELS, cn } from '@/lib/utils';
 
 const COLORS = [
-  'var(--color-primary)',
-  'var(--color-warning)',
-  'var(--color-success)',
-  'var(--color-danger)',
-  'var(--color-neutral-600)',
-  'var(--color-neutral-400)',
-  'var(--color-primary-border)',
-  'var(--color-warning-border)',
+  'var(--interactive-primary-bg)',
+  'var(--text-warning)',
+  'var(--text-success)',
+  'var(--text-danger)',
+  'var(--text-secondary)',
+  'var(--text-tertiary)',
+  'var(--border-accent)',
+  'var(--border-warning)',
 ];
 
 const ALL_CATEGORIES = {
@@ -96,7 +96,6 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  // DRE chart data: merge expense and revenue by month
   const expenseByMonth = new Map((data?.by_month ?? []).map((m) => [m.reference_month, m.total]));
   const revenueByMonth = new Map(
     ((data as { by_month_revenue?: { reference_month: string; total: number }[] })?.by_month_revenue ?? [])
@@ -126,11 +125,11 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   }));
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 safe-bottom">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-medium">Saúde financeira</h2>
-          <p className="text-sm text-muted-foreground">Últimos 6 meses</p>
+          <h2 className="text-xl font-medium text-text-primary">Saúde financeira</h2>
+          <p className="text-sm text-text-secondary">Últimos 6 meses</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => openDialog('revenue')}>
@@ -144,41 +143,40 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Despesas</p>
-            <p className="mt-1 text-2xl font-medium text-(--color-danger)">{formatCurrency(totalExpenses)}</p>
-            <p className="text-xs text-muted-foreground">6 meses</p>
+            <p className="hl-section-title">Despesas</p>
+            <p className="mt-1 text-2xl font-medium text-text-danger">{formatCurrency(totalExpenses)}</p>
+            <p className="text-xs text-text-secondary">6 meses</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Receitas</p>
-            <p className="mt-1 text-2xl font-medium text-(--color-success)">{formatCurrency(totalRevenue)}</p>
-            <p className="text-xs text-muted-foreground">6 meses</p>
+            <p className="hl-section-title">Receitas</p>
+            <p className="mt-1 text-2xl font-medium text-text-success">{formatCurrency(totalRevenue)}</p>
+            <p className="text-xs text-text-secondary">6 meses</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Saldo</p>
-            <p className={cn('mt-1 text-2xl font-medium', balance >= 0 ? 'text-(--color-success)' : 'text-(--color-danger)')}>
+            <p className="hl-section-title">Saldo</p>
+            <p className={cn('mt-1 text-2xl font-medium', balance >= 0 ? 'text-text-success' : 'text-text-danger')}>
               {formatCurrency(balance)}
             </p>
-            <p className="text-xs text-muted-foreground">período</p>
+            <p className="text-xs text-text-secondary">período</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
             <div className="flex items-start gap-2">
-              <Ruler className="mt-1 h-4 w-4 shrink-0 text-(--color-primary)" />
+              <Ruler className="mt-1 h-4 w-4 shrink-0 text-text-accent" />
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Custo/m²</p>
-                <p className="mt-1 text-2xl font-medium">
+                <p className="hl-section-title">Custo/m²</p>
+                <p className="mt-1 text-2xl font-medium text-text-primary">
                   {costPerSqm != null ? formatCurrency(costPerSqm) : '—'}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-text-secondary">
                   {area ? `${area} m²` : 'área não informada'}
                 </p>
               </div>
@@ -187,21 +185,20 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
         </Card>
       </div>
 
-      {/* DRE Chart — Receitas vs Despesas */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-4 w-4 text-(--color-primary)" />
-            DRE — Receitas vs Despesas
+          <CardTitle className="flex items-center gap-2 text-base text-text-primary">
+            <TrendingUp className="h-4 w-4 text-text-accent" />
+            DRE — Receitas vs despesas
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6 pt-0">
           {dreData.length === 0 ? (
-            <p className="text-sm text-center py-8 text-muted-foreground">Nenhum dado ainda</p>
+            <p className="text-sm text-center py-8 text-text-secondary">Nenhum dado ainda</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <ComposedChart data={dreData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--hl-border-light)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis
                   tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
@@ -212,23 +209,22 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                     formatCurrency(v),
                     name === 'despesas' ? 'Despesas' : name === 'receitas' ? 'Receitas' : 'Saldo',
                   ]}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid var(--hl-border-light)', fontSize: '12px' }}
+                  contentStyle={{ borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '12px' }}
                 />
                 <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
-                <Bar dataKey="despesas" fill="var(--color-danger)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="receitas" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
-                <Line dataKey="saldo" stroke="var(--color-primary)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
+                <Bar dataKey="despesas" fill="var(--text-danger)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="receitas" fill="var(--text-success)" radius={[4, 4, 0, 0]} />
+                <Line dataKey="saldo" stroke="var(--interactive-primary-bg)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
               </ComposedChart>
             </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      {/* Pie chart — by category */}
       {categoryData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Despesas por Categoria</CardTitle>
+            <CardTitle className="text-base text-text-primary">Despesas por categoria</CardTitle>
           </CardHeader>
           <CardContent className="p-6 pt-0">
             <div className="flex flex-col lg:flex-row items-center gap-6">
@@ -249,7 +245,7 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                   </Pie>
                   <Tooltip
                     formatter={(v: number) => [formatCurrency(v)]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--hl-border-light)', fontSize: '12px' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '12px' }}
                   />
                   <Legend iconType="circle" iconSize={8} formatter={(value) => <span className="text-xs">{value}</span>} />
                 </PieChart>
@@ -259,14 +255,13 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
         </Card>
       )}
 
-      {/* Expense/Revenue dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {formType === 'revenue'
-                ? <><TrendingUp className="h-4 w-4 text-(--color-success)" />Nova receita</>
-                : <><TrendingDown className="h-4 w-4 text-(--color-danger)" />Nova despesa</>
+                ? <><TrendingUp className="h-4 w-4 text-text-success" />Nova receita</>
+                : <><TrendingDown className="h-4 w-4 text-text-danger" />Nova despesa</>
               }
             </DialogTitle>
           </DialogHeader>
@@ -281,19 +276,19 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                   ))}
                 </SelectContent>
               </Select>
-              {errors.category && <p className="text-xs text-(--color-danger)">{errors.category.message}</p>}
+              {errors.category && <p className="text-xs text-text-danger">{errors.category.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="amount">Valor (R$) *</Label>
                 <Input id="amount" type="number" step="0.01" placeholder="0,00" {...register('amount')} />
-                {errors.amount && <p className="text-xs text-(--color-danger)">{errors.amount.message}</p>}
+                {errors.amount && <p className="text-xs text-text-danger">{errors.amount.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ref-month">Mês de referência *</Label>
                 <Input id="ref-month" type="month" {...register('reference_month')} />
-                {errors.reference_month && <p className="text-xs text-(--color-danger)">{errors.reference_month.message}</p>}
+                {errors.reference_month && <p className="text-xs text-text-danger">{errors.reference_month.message}</p>}
               </div>
             </div>
 
@@ -302,7 +297,6 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
               <Input id="notes" placeholder="Opcional..." {...register('notes')} />
             </div>
 
-            {/* Recurring toggle (expenses only) */}
             {watchType === 'expense' && (
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <div className="relative">
@@ -311,14 +305,14 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
                     className="peer sr-only"
                     {...register('is_recurring')}
                   />
-                  <div className="peer h-5 w-9 rounded-full bg-(--hl-border-light) after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-(--color-primary) peer-checked:after:translate-x-4" />
+                  <div className="peer h-5 w-9 rounded-full bg-border-subtle after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-interactive-primary-bg peer-checked:after:translate-x-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium flex items-center gap-1.5">
-                    <RefreshCw className="h-3.5 w-3.5 text-(--color-primary)" />
+                  <p className="text-sm font-medium flex items-center gap-1.5 text-text-primary">
+                    <RefreshCw className="h-3.5 w-3.5 text-text-accent" />
                     Fixa mensal
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-text-secondary">
                     {watchIsRecurring
                       ? 'Gera 12 lançamentos a partir deste mês'
                       : 'Ativar para criar recorrência anual'}
@@ -328,7 +322,7 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
             )}
 
             {watchIsRecurring && (
-              <div className="flex items-center gap-2 rounded-lg border border-(--color-primary-border) bg-(--color-primary-light) px-3 py-2 text-xs text-(--color-primary)">
+              <div className="flex items-center gap-2 rounded-lg border-half border-border-accent bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" />
                 Serão criados automaticamente 12 lançamentos mensais.
               </div>

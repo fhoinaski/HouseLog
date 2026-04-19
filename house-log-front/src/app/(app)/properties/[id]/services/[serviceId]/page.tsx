@@ -205,7 +205,7 @@ export default function ServiceDetailPage({
   if (!order) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-interactive-primary-bg border-t-transparent" />
       </div>
     );
   }
@@ -221,22 +221,21 @@ export default function ServiceDetailPage({
     try {
       await servicesApi.patchChecklist(propertyId, serviceId, updated);
     } catch {
-      setChecklist(checklist); // revert on error
+      setChecklist(checklist);
     }
   }
   const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
 
   return (
-    <div className="max-w-3xl space-y-5 pb-20">
-      {/* Back + header */}
+    <div className="max-w-3xl space-y-5 safe-bottom">
       <div className="flex items-start gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="truncate text-xl font-medium">{order.title}</h1>
-            {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 shrink-0 text-(--color-danger)" />}
+            <h1 className="truncate text-xl font-medium text-text-primary">{order.title}</h1>
+            {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 shrink-0 text-text-danger" />}
           </div>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
@@ -264,87 +263,87 @@ export default function ServiceDetailPage({
         </div>
       </div>
 
-      {/* Meta */}
       <Card>
         <CardContent className="p-5">
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="mb-0.5 text-xs text-muted-foreground">Sistema</dt>
-              <dd className="font-medium">{SYSTEM_TYPE_LABELS[order.system_type]}</dd>
+              <dt className="mb-0.5 text-xs text-text-secondary">Sistema</dt>
+              <dd className="font-medium text-text-primary">{SYSTEM_TYPE_LABELS[order.system_type]}</dd>
             </div>
             {order.room_name && (
               <div>
-                <dt className="mb-0.5 text-xs text-muted-foreground">Cômodo</dt>
-                <dd className="font-medium flex items-center gap-1">
+                <dt className="mb-0.5 text-xs text-text-secondary">Cômodo</dt>
+                <dd className="font-medium flex items-center gap-1 text-text-primary">
                   <MapPin className="h-3.5 w-3.5" /> {order.room_name}
                 </dd>
               </div>
             )}
             <div>
-              <dt className="mb-0.5 text-xs text-muted-foreground">Solicitado por</dt>
-              <dd className="font-medium flex items-center gap-1">
+              <dt className="mb-0.5 text-xs text-text-secondary">Solicitado por</dt>
+              <dd className="font-medium flex items-center gap-1 text-text-primary">
                 <User className="h-3.5 w-3.5" /> {order.requested_by_name}
               </dd>
             </div>
             {order.assigned_to_name && (
               <div>
-                <dt className="mb-0.5 text-xs text-muted-foreground">Atribuído a</dt>
-                <dd className="font-medium">{order.assigned_to_name}</dd>
+                <dt className="mb-0.5 text-xs text-text-secondary">Atribuído a</dt>
+                <dd className="font-medium text-text-primary">{order.assigned_to_name}</dd>
               </div>
             )}
             <div>
-              <dt className="mb-0.5 text-xs text-muted-foreground">Criada em</dt>
-              <dd className="font-medium flex items-center gap-1">
+              <dt className="mb-0.5 text-xs text-text-secondary">Criada em</dt>
+              <dd className="font-medium flex items-center gap-1 text-text-primary">
                 <Calendar className="h-3.5 w-3.5" /> {formatDate(order.created_at)}
               </dd>
             </div>
             {order.cost && (
               <div>
-                <dt className="mb-0.5 text-xs text-muted-foreground">Custo</dt>
-                <dd className="font-medium flex items-center gap-1 text-(--color-success)">
+                <dt className="mb-0.5 text-xs text-text-secondary">Custo</dt>
+                <dd className="font-medium flex items-center gap-1 text-text-success">
                   <DollarSign className="h-3.5 w-3.5" /> {formatCurrency(order.cost)}
                 </dd>
               </div>
             )}
             {order.warranty_until && (
               <div>
-                <dt className="mb-0.5 text-xs text-muted-foreground">Garantia até</dt>
-                <dd className="font-medium flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-(--color-success)" /> {formatDate(order.warranty_until)}
+                <dt className="mb-0.5 text-xs text-text-secondary">Garantia até</dt>
+                <dd className="font-medium flex items-center gap-1 text-text-primary">
+                  <ShieldCheck className="h-3.5 w-3.5 text-text-success" /> {formatDate(order.warranty_until)}
                 </dd>
               </div>
             )}
             {order.scheduled_at && (
               <div>
-                <dt className="mb-0.5 text-xs text-muted-foreground">Agendado</dt>
-                <dd className="font-medium">{formatDate(order.scheduled_at)}</dd>
+                <dt className="mb-0.5 text-xs text-text-secondary">Agendado</dt>
+                <dd className="font-medium text-text-primary">{formatDate(order.scheduled_at)}</dd>
               </div>
             )}
           </dl>
           {order.description && (
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="mb-1 text-xs text-muted-foreground">Descrição</p>
-              <p className="text-sm whitespace-pre-wrap">{order.description}</p>
+            <div className="mt-4 border-t border-border-subtle pt-4">
+              <p className="mb-1 text-xs text-text-secondary">Descrição</p>
+              <p className="text-sm text-text-primary whitespace-pre-wrap">{order.description}</p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Checklist — interactive */}
       {checklist.length > 0 && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Checklist</CardTitle>
-              <span className="text-xs text-muted-foreground">
+              <CardTitle className="text-base text-text-primary">Checklist</CardTitle>
+              <span className="text-xs text-text-secondary">
                 {checklist.filter((i) => i.done).length}/{checklist.length} concluídos
               </span>
             </div>
-            {/* Progress bar */}
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100">
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-subtle">
               <div
-                className="h-full rounded-full bg-(--color-success) transition-all duration-300"
-                style={{ width: `${checklist.length ? (checklist.filter((i) => i.done).length / checklist.length) * 100 : 0}%` }}
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${checklist.length ? (checklist.filter((i) => i.done).length / checklist.length) * 100 : 0}%`,
+                  background: 'var(--text-success)',
+                }}
               />
             </div>
           </CardHeader>
@@ -353,13 +352,13 @@ export default function ServiceDetailPage({
               <button
                 key={i}
                 onClick={() => toggleChecklistItem(i)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-bg-subtle"
               >
                 <CheckCircle2 className={cn(
                   'h-4 w-4 shrink-0 transition-colors',
-                  item.done ? 'text-(--color-success)' : 'text-(--hl-text-tertiary)'
+                  item.done ? 'text-text-success' : 'text-text-tertiary'
                 )} />
-                <span className={item.done ? 'line-through text-muted-foreground' : ''}>
+                <span className={item.done ? 'line-through text-text-tertiary' : 'text-text-primary'}>
                   {item.item}
                 </span>
               </button>
@@ -368,11 +367,10 @@ export default function ServiceDetailPage({
         </Card>
       )}
 
-      {/* Photos */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Fotos</CardTitle>
+            <CardTitle className="text-base text-text-primary">Fotos</CardTitle>
             <div className="flex gap-2">
               <Button
                 variant="outline" size="sm"
@@ -394,7 +392,7 @@ export default function ServiceDetailPage({
         <CardContent className="p-6 pt-0 space-y-4">
           {beforePhotos.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Antes</p>
+              <p className="mb-2 text-xs font-medium text-text-secondary">Antes</p>
               <div className="flex gap-2 flex-wrap">
                 {beforePhotos.map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -408,7 +406,7 @@ export default function ServiceDetailPage({
           )}
           {afterPhotos.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Depois</p>
+              <p className="mb-2 text-xs font-medium text-text-secondary">Depois</p>
               <div className="flex gap-2 flex-wrap">
                 {afterPhotos.map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -421,13 +419,13 @@ export default function ServiceDetailPage({
             </div>
           )}
           {beforePhotos.length === 0 && afterPhotos.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">Nenhuma foto enviada</p>
+            <p className="py-4 text-center text-sm text-text-secondary">Nenhuma foto enviada</p>
           )}
           {order.video_url && (
             <div>
-              <p className="mb-2 text-xs font-medium text-muted-foreground">Vídeo</p>
+              <p className="mb-2 text-xs font-medium text-text-secondary">Vídeo</p>
               <a href={order.video_url} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-primary-600 hover:underline">
+                className="inline-flex items-center gap-2 text-sm text-text-accent hover:underline">
                 <Video className="h-4 w-4" /> Ver vídeo
               </a>
             </div>
@@ -435,11 +433,10 @@ export default function ServiceDetailPage({
         </CardContent>
       </Card>
 
-      {/* Before/After slider — only when both sets have photos */}
       {beforePhotos.length > 0 && afterPhotos.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Comparação Antes / Depois</CardTitle>
+            <CardTitle className="text-base text-text-primary">Comparação antes / depois</CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0">
             <BeforeAfterSlider
@@ -447,35 +444,32 @@ export default function ServiceDetailPage({
               after={afterPhotos[afterPhotos.length - 1]}
               className="max-h-72"
             />
-            <p className="mt-2 text-center text-xs text-muted-foreground">
+            <p className="mt-2 text-center text-xs text-text-secondary">
               Arraste para comparar
             </p>
           </CardContent>
         </Card>
       )}
 
-      {/* Video + audit link */}
       <div className="flex gap-3 flex-wrap">
         <Button
           variant="outline"
           loading={uploadingMedia}
           onClick={() => videoRef.current?.click()}
         >
-          <Video className="h-4 w-4" /> Enviar Vídeo
+          <Video className="h-4 w-4" /> Enviar vídeo
         </Button>
         <Button variant="outline" onClick={() => setAuditDialogOpen(true)}>
-          <Share2 className="h-4 w-4" /> Link de Auditoria
+          <Share2 className="h-4 w-4" /> Link de auditoria
         </Button>
       </div>
 
       <ServiceChat serviceOrderId={serviceId} title="Chat com prestador" />
 
-      {/* Status actions */}
       {nextStatuses.length > 0 && (
-        <div className="flex flex-wrap gap-3 border-t border-border pt-4">
+        <div className="flex flex-wrap gap-3 border-t border-border-subtle pt-4">
           {nextStatuses.map((next) => (
-            <Button key={next} onClick={() => advanceStatus(next)}
-              variant={next === 'verified' ? 'default' : 'default'}>
+            <Button key={next} onClick={() => advanceStatus(next)}>
               <CheckCircle2 className="h-4 w-4" />
               Mover para: {SERVICE_STATUS_LABELS[next]}
             </Button>
@@ -483,44 +477,42 @@ export default function ServiceDetailPage({
         </div>
       )}
 
-      {/* Hidden inputs */}
       <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
       <input ref={videoRef} type="file" accept="video/mp4" className="hidden" onChange={handleVideoUpload} />
 
-      {/* Share with provider dialog */}
       <Dialog open={shareDialogOpen} onOpenChange={(o) => { setShareDialogOpen(o); if (!o) setShareLink(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-primary-500" /> Enviar OS ao Prestador
+              <Send className="h-4 w-4 text-text-accent" /> Enviar OS ao prestador
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-text-secondary">
             Gere um link público. O prestador pode visualizar a OS, aceitar, iniciar e marcar como concluído — sem precisar de conta.
           </p>
           {!shareLink ? (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Nome do prestador (opcional)</label>
+                <label className="text-xs font-medium text-text-primary">Nome do prestador (opcional)</label>
                 <input
                   type="text"
                   placeholder="Ex: João Silva — Elétrica"
                   value={shareProviderName}
                   onChange={(e) => setShareProviderName(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                  className="w-full rounded-lg border-half border-border-subtle bg-bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium">Email do prestador (opcional)</label>
+                <label className="text-xs font-medium text-text-primary">Email do prestador (opcional)</label>
                 <input
                   type="email"
                   placeholder="prestador@email.com"
                   value={shareProviderEmail}
                   onChange={(e) => setShareProviderEmail(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+                  className="w-full rounded-lg border-half border-border-subtle bg-bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
                 />
               </div>
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3 transition-colors hover:bg-muted">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border-half border-border-subtle p-3 transition-colors hover:bg-bg-subtle">
                 <input
                   type="checkbox"
                   className="mt-0.5 rounded"
@@ -528,30 +520,30 @@ export default function ServiceDetailPage({
                   onChange={(e) => setShareIncludeCreds(e.target.checked)}
                 />
                 <div>
-                  <p className="text-sm font-medium flex items-center gap-1.5">
-                      <KeyRound className="h-3.5 w-3.5 text-(--color-warning)" />
+                  <p className="text-sm font-medium flex items-center gap-1.5 text-text-primary">
+                    <KeyRound className="h-3.5 w-3.5 text-text-warning" />
                     Incluir senhas de acesso
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-text-secondary">
                     Credenciais marcadas como &ldquo;incluir em OS&rdquo; serão visíveis no link.
                   </p>
                 </div>
               </label>
               <Button onClick={generateShareLink} loading={generatingShare} className="w-full">
-                <Send className="h-4 w-4" /> Gerar Link
+                <Send className="h-4 w-4" /> Gerar link
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="break-all rounded-xl border border-border bg-muted px-3 py-2.5 font-mono text-xs text-muted-foreground">
+              <div className="break-all rounded-xl border-half border-border-subtle bg-bg-subtle px-3 py-2.5 font-mono text-xs text-text-secondary">
                 {shareLink.url}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-text-secondary">
                 Expira: {new Date(shareLink.expires_at).toLocaleString('pt-BR')}
               </p>
               <div className="flex gap-2">
                 <Button onClick={copyShareLink} variant="outline" className="flex-1">
-                  <Copy className="h-4 w-4" /> Copiar Link
+                  <Copy className="h-4 w-4" /> Copiar link
                 </Button>
                 <Button
                   variant="outline"
@@ -564,7 +556,7 @@ export default function ServiceDetailPage({
                     }
                   }}
                 >
-                  {shareProviderEmail ? 'Enviar Email' : <Copy className="h-4 w-4" />}
+                  {shareProviderEmail ? 'Enviar email' : <Copy className="h-4 w-4" />}
                   {shareProviderEmail ? '' : 'Copiar'}
                 </Button>
               </div>
@@ -576,31 +568,30 @@ export default function ServiceDetailPage({
         </DialogContent>
       </Dialog>
 
-      {/* Audit link dialog */}
       <Dialog open={auditDialogOpen} onOpenChange={setAuditDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Share2 className="h-4 w-4" /> Link de Auditoria
+              <Share2 className="h-4 w-4" /> Link de auditoria
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-text-secondary">
             Gere um link temporário para que o prestador envie fotos e notas sem criar uma conta.
           </p>
           {!auditLink ? (
             <Button onClick={generateAuditLink} loading={generatingLink} className="w-full">
-              <Share2 className="h-4 w-4" /> Gerar Link (48h)
+              <Share2 className="h-4 w-4" /> Gerar link (48h)
             </Button>
           ) : (
             <div className="space-y-3">
-              <div className="break-all rounded-lg bg-muted px-3 py-2 font-mono text-xs">
+              <div className="break-all rounded-lg bg-bg-subtle px-3 py-2 font-mono text-xs text-text-secondary">
                 {auditLink.url}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-text-secondary">
                 Expira em: {formatDate(auditLink.expires_at)}
               </p>
               <Button onClick={copyAuditLink} variant="outline" className="w-full">
-                <Copy className="h-4 w-4" /> Copiar Link
+                <Copy className="h-4 w-4" /> Copiar link
               </Button>
             </div>
           )}

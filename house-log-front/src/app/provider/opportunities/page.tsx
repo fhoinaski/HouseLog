@@ -27,7 +27,7 @@ export default function ProviderOpportunitiesPage() {
   const opportunities = data?.data ?? [];
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="safe-bottom space-y-5">
       <div>
         <h1 className="text-[24px] font-medium">Oportunidades de orçamento</h1>
         <p className="text-sm text-muted-foreground">OS abertas para envio de proposta</p>
@@ -50,19 +50,19 @@ export default function ProviderOpportunitiesPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />
+            <div key={i} className="hl-skeleton h-24 rounded-xl" />
           ))}
         </div>
       ) : opportunities.length === 0 ? (
         <div className="py-20 text-center">
-          <Briefcase className="mx-auto mb-3 h-10 w-10 text-neutral-300" />
+          <Briefcase className="mx-auto mb-3 h-10 w-10 text-text-disabled" />
           <p className="text-sm text-muted-foreground">Nenhuma oportunidade disponível no momento</p>
         </div>
       ) : (
         <div className="space-y-3">
           {opportunities.map((item: ProviderOpportunity) => (
             <Link key={item.id} href={`/provider/opportunities/${item.id}`}>
-              <Card className="cursor-pointer transition-colors hover:bg-(--color-neutral-50) active:scale-[0.98]">
+              <Card className="cursor-pointer transition-colors hover:bg-bg-subtle active:scale-[0.98]">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

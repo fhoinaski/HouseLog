@@ -66,18 +66,6 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-function getPlaceholderColor(name: string): string {
-  const colors = [
-    'from-[#CBD5E1] to-[#94A3B8]',
-    'from-[#A7C4A0] to-[#6B9E63]',
-    'from-[#C4B5A0] to-[#8B7355]',
-    'from-[#A0B4C4] to-[#5B7F99]',
-    'from-[#C4A0B4] to-[#99537F]',
-  ];
-  const idx = name.charCodeAt(0) % colors.length;
-  return colors[idx];
-}
-
 const QUICK_ACTIONS = [
   { label: 'Nova OS', icon: FilePlus, href: '/properties' },
   { label: 'Agendar', icon: CalendarDays, href: '/schedule' },
@@ -94,14 +82,10 @@ function QuickActions() {
           href={href}
           className="group flex flex-col items-center gap-2"
         >
-          <div className="
-            h-13 w-13 rounded-[14px] bg-[#F3F4F6]
-            flex items-center justify-center
-            transition-colors duration-150 group-hover:bg-[#E5E7EB]
-          ">
-            <Icon size={22} strokeWidth={1.8} className="text-zinc-700" />
+          <div className="flex h-13 w-13 items-center justify-center rounded-[14px] bg-bg-subtle transition-colors duration-150 group-hover:bg-bg-muted">
+            <Icon size={22} strokeWidth={1.8} className="text-text-secondary" />
           </div>
-          <span className="text-center text-[11px] leading-tight whitespace-nowrap text-[#6B7280]">
+          <span className="whitespace-nowrap text-center text-xs leading-tight text-text-secondary">
             {label}
           </span>
         </Link>
@@ -113,21 +97,16 @@ function QuickActions() {
 function PropertyThumbnail({ name, photoUrl }: { name: string; photoUrl?: string }) {
   if (photoUrl) {
     return (
-      <div className="h-13 w-13 overflow-hidden rounded-[10px] shrink-0">
+      <div className="h-13 w-13 shrink-0 overflow-hidden rounded-[10px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={photoUrl} alt={name} className="h-full w-full object-cover" />
       </div>
     );
   }
-  const gradient = getPlaceholderColor(name);
   const initials = getInitials(name);
   return (
-    <div className={`
-      h-13 w-13 rounded-[10px] shrink-0
-      bg-linear-to-br ${gradient}
-      flex items-center justify-center
-    `}>
-      <span className="text-[13px] font-medium text-white/90">{initials}</span>
+    <div className="flex h-13 w-13 shrink-0 items-center justify-center rounded-[10px] bg-bg-accent-subtle">
+      <span className="text-sm font-medium text-text-accent">{initials}</span>
     </div>
   );
 }
@@ -139,32 +118,27 @@ function PropertiesSection({ properties, isLoading }: {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-[0.07em] text-[#6B7280]">
-          Imóveis Gerenciados
-        </span>
-        <Link
-          href="/properties"
-          className="text-[13px] font-medium text-[#F59E0B] hover:underline"
-        >
+        <span className="hl-section-title">Imóveis gerenciados</span>
+        <Link href="/properties" className="text-sm font-medium text-text-accent hover:underline">
           Ver todos
         </Link>
       </div>
 
-      <div className="rounded-xl bg-[#F9FAFB] px-3">
+      <div className="rounded-xl bg-bg-subtle px-3">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 border-b border-[#F3F4F6] py-3 last:border-b-0">
-              <div className="h-13 w-13 rounded-[10px] bg-[#E5E7EB] animate-pulse shrink-0" />
+            <div key={i} className="flex items-center gap-3 border-b border-border-subtle py-3 last:border-b-0">
+              <div className="hl-skeleton h-13 w-13 shrink-0 rounded-[10px]" />
               <div className="flex-1 space-y-2">
-                <div className="h-4 w-3/4 rounded bg-[#E5E7EB] animate-pulse" />
-                <div className="h-3 w-1/2 rounded bg-[#E5E7EB] animate-pulse" />
+                <div className="hl-skeleton h-4 w-3/4 rounded" />
+                <div className="hl-skeleton h-3 w-1/2 rounded" />
               </div>
             </div>
           ))
         ) : properties.length === 0 ? (
           <div className="py-8 text-center">
-            <p className="text-[13px] text-[#9CA3AF]">Nenhum imóvel cadastrado</p>
-            <Link href="/properties/new" className="mt-1 block text-[13px] font-medium text-[#1A2332] hover:underline">
+            <p className="text-sm text-text-tertiary">Nenhum imóvel cadastrado</p>
+            <Link href="/properties/new" className="mt-1 block text-sm font-medium text-text-primary hover:underline">
               Adicionar imóvel
             </Link>
           </div>
@@ -173,35 +147,33 @@ function PropertiesSection({ properties, isLoading }: {
             <Link
               key={property.id}
               href={`/properties/${property.id}`}
-              className="-mx-3 flex items-center gap-3 rounded-xl border-b border-[#F3F4F6] px-3 py-3 transition-colors hover:bg-white/60 last:border-b-0"
+              className="-mx-3 flex items-center gap-3 rounded-xl border-b border-border-subtle px-3 py-3 transition-colors hover:bg-bg-surface last:border-b-0"
             >
               <PropertyThumbnail
                 name={property.name}
                 photoUrl={property.coverPhotoUrl ?? property.photoUrl}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-medium text-zinc-900">
+                <p className="truncate text-md font-medium text-text-primary">
                   {property.name}
                 </p>
-                <p className="mt-0.5 truncate text-[13px] text-[#6B7280]">
+                <p className="mt-0.5 truncate text-sm text-text-secondary">
                   {property.address}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {property.activeServicesCount > 0 && (
-                  <span className="rounded-md bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-medium text-[#92400E]">
+                  <span className="hl-badge hl-badge-pending">
                     {property.activeServicesCount} OS
                   </span>
                 )}
                 {property.completedServicesCount > 0 && (
-                  <span className="rounded-md bg-[#D1FAE5] px-2 py-0.5 text-[11px] font-medium text-[#065F46]">
+                  <span className="hl-badge hl-badge-done">
                     {property.completedServicesCount} OK
                   </span>
                 )}
                 {property.activeServicesCount === 0 && property.completedServicesCount === 0 && (
-                  <span className="rounded-md bg-[#F3F4F6] px-2 py-0.5 text-[11px] font-medium text-[#9CA3AF]">
-                    0 OS
-                  </span>
+                  <span className="hl-badge hl-badge-draft">0 OS</span>
                 )}
               </div>
             </Link>
@@ -219,28 +191,24 @@ function BidsSection({ bids, isLoading }: {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-[0.07em] text-[#6B7280]">
-          Orçamentos para Analisar
-        </span>
+        <span className="hl-section-title">Orçamentos para analisar</span>
         {bids.length > 0 && (
-          <span className="rounded-md bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-medium text-[#92400E]">
-            {bids.length}
-          </span>
+          <span className="hl-badge hl-badge-pending">{bids.length}</span>
         )}
       </div>
 
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-xl bg-[#FFFBEB] p-3 animate-pulse">
-              <div className="mb-2 h-4 w-2/3 rounded bg-[#FEF3C7]" />
-              <div className="h-3 w-1/2 rounded bg-[#FEF3C7]" />
+            <div key={i} className="hl-skeleton rounded-xl p-3">
+              <div className="mb-2 h-4 w-2/3 rounded" />
+              <div className="h-3 w-1/2 rounded" />
             </div>
           ))}
         </div>
       ) : bids.length === 0 ? (
-        <div className="rounded-xl bg-[#F9FAFB] py-8 text-center">
-          <p className="text-[13px] text-[#9CA3AF]">Nenhum orçamento pendente</p>
+        <div className="rounded-xl bg-bg-subtle py-8 text-center">
+          <p className="text-sm text-text-tertiary">Nenhum orçamento pendente</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -248,17 +216,17 @@ function BidsSection({ bids, isLoading }: {
             <Link
               key={bid.id}
               href={`/properties/${bid.propertyId}/services/${bid.serviceOrderId}`}
-              className="block rounded-xl bg-[#FFFBEB] p-3 transition-colors hover:bg-[#FEF3C7]/60"
+              className="block rounded-xl bg-bg-warning p-3 transition-colors hover:bg-bg-warning-emphasis"
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="leading-snug text-[14px] font-medium text-zinc-900">
+                <p className="text-base font-medium leading-snug text-text-primary">
                   {bid.title}
                 </p>
-                <span className="mt-0.5 shrink-0 text-[11px] text-[#9CA3AF]">
+                <span className="mt-0.5 shrink-0 text-xs text-text-tertiary">
                   {new Date(bid.createdAt).toLocaleDateString('pt-BR')}
                 </span>
               </div>
-              <p className="mt-0.5 text-[12px] text-[#6B7280]">
+              <p className="mt-0.5 text-xs text-text-secondary">
                 {bid.providerName}
                 {bid.amount !== null
                   ? ` · R$ ${Number(bid.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -279,28 +247,26 @@ function AgendaSection({ schedule, isLoading }: {
   return (
     <div>
       <div className="mb-3">
-        <span className="text-[11px] font-medium uppercase tracking-[0.07em] text-[#6B7280]">
-          Agenda de Hoje
-        </span>
+        <span className="hl-section-title">Agenda de hoje</span>
       </div>
 
-      <div className="rounded-xl bg-[#F9FAFB] px-3">
+      <div className="rounded-xl bg-bg-subtle px-3">
         {isLoading ? (
           <div className="space-y-2 py-2">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 border-b border-[#F3F4F6] py-3 last:border-b-0">
-                <div className="h-9 w-0.75 rounded-sm bg-[#E5E7EB] animate-pulse shrink-0" />
+              <div key={i} className="flex items-center gap-3 border-b border-border-subtle py-3 last:border-b-0">
+                <div className="hl-skeleton h-9 w-0.75 shrink-0 rounded-sm" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-2/3 rounded bg-[#F3F4F6] animate-pulse" />
-                  <div className="h-3 w-1/2 rounded bg-[#F3F4F6] animate-pulse" />
+                  <div className="hl-skeleton h-4 w-2/3 rounded" />
+                  <div className="hl-skeleton h-3 w-1/2 rounded" />
                 </div>
               </div>
             ))}
           </div>
         ) : schedule.length === 0 ? (
           <div className="flex items-center gap-3 py-4">
-            <CalendarCheck size={18} strokeWidth={1.8} className="text-[#D1D5DB]" />
-            <p className="text-[13px] text-[#9CA3AF]">
+            <CalendarCheck size={18} strokeWidth={1.8} className="text-text-disabled" />
+            <p className="text-sm text-text-tertiary">
               Nenhum serviço agendado para hoje
             </p>
           </div>
@@ -310,25 +276,25 @@ function AgendaSection({ schedule, isLoading }: {
               <Link
                 key={item.id ?? i}
                 href={`/properties/${item.propertyId}/services/${item.serviceOrderId}`}
-                className="-mx-1 flex items-center gap-3 rounded-lg border-b border-[#F3F4F6] px-1 py-3 transition-colors hover:bg-[#F9FAFB] last:border-b-0"
+                className="-mx-1 flex items-center gap-3 rounded-lg border-b border-border-subtle px-1 py-3 transition-colors hover:bg-bg-surface last:border-b-0"
               >
                 <div
                   className="h-9 w-0.75 shrink-0 rounded-sm"
                   style={{
-                    background: item.status === 'confirmed' || item.status === 'in_progress'
-                      ? '#4EDEA3'
-                      : '#F59E0B',
+                    backgroundColor: item.status === 'confirmed' || item.status === 'in_progress'
+                      ? 'var(--primitive-success-600)'
+                      : 'var(--text-warning)',
                   }}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium text-zinc-900">
+                  <p className="truncate text-base font-medium text-text-primary">
                     {item.title}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-[#6B7280]">
+                  <p className="mt-0.5 text-xs text-text-secondary">
                     {item.time} · {item.propertyName}
                   </p>
                 </div>
-                <ChevronRight size={16} strokeWidth={1.8} className="shrink-0 text-[#D1D5DB]" />
+                <ChevronRight size={16} strokeWidth={1.8} className="shrink-0 text-text-disabled" />
               </Link>
             ))}
           </div>
@@ -465,13 +431,13 @@ export default function DashboardPage() {
   const firstName = user?.name?.split(' ')[0] ?? 'você';
 
   return (
-    <div className="mx-auto max-w-300 px-4 py-4 md:px-6 md:py-6 pb-20 md:pb-8">
+    <div className="mx-auto max-w-300 px-4 py-4 safe-bottom md:px-6 md:py-6 md:pb-8">
       <div className="mb-6 md:mb-8">
-        <p className="text-[14px] text-[#6B7280]">{getGreeting()}</p>
-        <h1 className="mt-0.5 text-[24px] md:text-[28px] font-medium tracking-tight leading-tight text-zinc-900">
+        <p className="text-base text-text-secondary">{getGreeting()}</p>
+        <h1 className="mt-0.5 text-2xl font-medium leading-tight tracking-tight text-text-primary md:text-3xl">
           {firstName}
         </h1>
-        <p className="mt-1 text-[13px] capitalize text-[#9CA3AF]">
+        <p className="mt-1 text-sm capitalize text-text-tertiary">
           {formatDate()}
         </p>
       </div>

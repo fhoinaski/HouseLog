@@ -21,20 +21,20 @@ import { toast } from 'sonner';
 import { formatDate, formatCurrency, cn } from '@/lib/utils';
 
 const DOC_TYPE_LABELS: Record<string, string> = {
-  invoice: 'Nota Fiscal', manual: 'Manual', project: 'Projeto',
+  invoice: 'Nota fiscal', manual: 'Manual', project: 'Projeto',
   contract: 'Contrato', deed: 'Escritura', permit: 'Licença/Alvará',
   insurance: 'Seguro', other: 'Outro',
 };
 
 const DOC_TYPE_COLORS: Record<string, string> = {
-  invoice: 'bg-(--color-warning-light) text-(--color-warning)',
-  manual: 'bg-(--color-neutral-50) text-(--color-neutral-600)',
-  project: 'bg-(--color-primary-light) text-(--color-primary)',
-  contract: 'bg-(--color-primary-light) text-(--color-primary)',
-  deed: 'bg-(--color-success-light) text-(--color-success)',
-  permit: 'bg-(--color-warning-light) text-(--color-warning)',
-  insurance: 'bg-(--color-danger-light) text-(--color-danger)',
-  other: 'bg-(--color-neutral-50) text-(--color-neutral-600)',
+  invoice: 'bg-bg-warning text-text-warning',
+  manual: 'bg-bg-subtle text-text-secondary',
+  project: 'bg-bg-accent-subtle text-text-accent',
+  contract: 'bg-bg-accent-subtle text-text-accent',
+  deed: 'bg-bg-success text-text-success',
+  permit: 'bg-bg-warning text-text-warning',
+  insurance: 'bg-bg-danger text-text-danger',
+  other: 'bg-bg-subtle text-text-secondary',
 };
 
 const metaSchema = z.object({
@@ -67,28 +67,28 @@ function DocRow({
             <FileText className="h-4 w-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm truncate">{doc.title}</p>
+            <p className="font-medium text-sm text-text-primary truncate">{doc.title}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <Badge variant="secondary" className="text-xs">{DOC_TYPE_LABELS[doc.type] ?? doc.type}</Badge>
               {doc.issue_date && (
-                <span className="text-xs text-muted-foreground">{formatDate(doc.issue_date)}</span>
+                <span className="text-xs text-text-secondary">{formatDate(doc.issue_date)}</span>
               )}
               {doc.amount && (
-                <span className="text-xs font-medium text-(--color-success)">{formatCurrency(doc.amount)}</span>
+                <span className="text-xs font-medium text-text-success">{formatCurrency(doc.amount)}</span>
               )}
               {doc.expiry_date && new Date(doc.expiry_date) < new Date() && (
                 <Badge variant="destructive" className="text-xs">Vencido</Badge>
               )}
             </div>
             {doc.vendor_cnpj && (
-              <p className="text-xs text-muted-foreground mt-0.5">CNPJ: {doc.vendor_cnpj}</p>
+              <p className="text-xs text-text-secondary mt-0.5">CNPJ: {doc.vendor_cnpj}</p>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {isInvoice && !hasOcr && (
               <Button
                 variant="ghost" size="icon"
-                className="h-8 w-8 text-(--color-primary) hover:bg-(--color-primary-light)"
+                className="h-8 w-8 text-text-accent hover:bg-bg-accent-subtle"
                 title="Processar com IA"
                 onClick={onOcr}
                 disabled={ocrLoading}
@@ -98,21 +98,21 @@ function DocRow({
             )}
             {hasOcr && (
               <span title="OCR processado">
-                <Sparkles className="h-3.5 w-3.5 text-(--color-primary)" />
+                <Sparkles className="h-3.5 w-3.5 text-text-accent" />
               </span>
             )}
             <a
               href={doc.file_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-bg-subtle transition-colors"
               aria-label="Abrir documento"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="h-3.5 w-3.5 text-text-secondary" />
             </a>
             <Button
               variant="ghost" size="icon"
-              className="h-8 w-8 text-(--color-danger) hover:bg-(--color-danger-light)"
+              className="h-8 w-8 text-text-danger hover:bg-bg-danger"
               onClick={onDelete}
               aria-label="Remover documento"
             >
@@ -152,7 +152,6 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadFile(file);
-    // Auto-fill title from filename
     reset((prev) => ({ ...prev, title: file.name.replace(/\.[^.]+$/, '') }));
     setDialogOpen(true);
   }
@@ -206,9 +205,9 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="space-y-5 safe-bottom">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium">Documentos</h2>
+        <h2 className="text-xl font-medium text-text-primary">Documentos</h2>
         <Button onClick={() => fileRef.current?.click()}>
           <Upload className="h-4 w-4" />
           Enviar arquivo
@@ -222,7 +221,6 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         />
       </div>
 
-      {/* Type filter */}
       <div className="flex gap-2 flex-wrap">
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-44">
@@ -238,11 +236,10 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </Select>
       </div>
 
-      {/* List */}
       {docs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <FileSearch className="mb-3 h-10 w-10 text-neutral-300" />
-          <p className="text-muted-foreground text-sm">
+          <FileSearch className="mb-3 h-10 w-10 text-text-disabled" />
+          <p className="text-text-secondary text-sm">
             {typeFilter ? 'Nenhum documento deste tipo' : 'Nenhum documento enviado'}
           </p>
           <Button variant="outline" className="mt-3" onClick={() => fileRef.current?.click()}>
@@ -263,14 +260,13 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
         </div>
       )}
 
-      {/* Upload metadata dialog */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setUploadFile(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Detalhes do Documento</DialogTitle>
+            <DialogTitle>Detalhes do documento</DialogTitle>
           </DialogHeader>
           {uploadFile && (
-            <div className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground mb-2">
+            <div className="rounded-lg bg-bg-subtle px-3 py-2 text-sm text-text-secondary mb-2">
               📄 {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
             </div>
           )}
@@ -286,19 +282,19 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
                     ))}
                   </SelectContent>
                 </Select>
-                {errors.type && <p className="text-xs text-(--color-danger)">{errors.type.message}</p>}
+                {errors.type && <p className="text-xs text-text-danger">{errors.type.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="doc-title">Título *</Label>
                 <Input id="doc-title" {...register('title')} />
-                {errors.title && <p className="text-xs text-(--color-danger)">{errors.title.message}</p>}
+                {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
               </div>
 
               {watchType === 'invoice' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label htmlFor="doc-cnpj">CNPJ Fornecedor</Label>
+                    <Label htmlFor="doc-cnpj">CNPJ fornecedor</Label>
                     <Input id="doc-cnpj" placeholder="00.000.000/0001-00" {...register('vendor_cnpj')} />
                   </div>
                   <div className="space-y-1.5">
@@ -320,7 +316,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             </div>
 
             {watchType === 'invoice' && (
-              <div className="flex items-center gap-2 rounded-lg border border-(--color-primary-border) bg-(--color-primary-light) px-3 py-2 text-xs text-(--color-primary)">
+              <div className="flex items-center gap-2 rounded-lg border-half border-border-accent bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
                 Após enviar, use o botão IA para extrair dados automaticamente da nota fiscal.
               </div>

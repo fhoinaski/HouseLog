@@ -18,21 +18,20 @@ export default function ProviderDashboard() {
   const recentBids = data?.recent_bids ?? [];
 
   const statCards = [
-    { label: 'Em andamento', value: (stats.in_progress ?? 0) + (stats.approved ?? 0), icon: Wrench, color: 'text-(--color-warning)', bg: 'bg-(--color-warning-light)' },
-    { label: 'Concluídas', value: (stats.completed ?? 0) + (stats.verified ?? 0), icon: CheckCircle2, color: 'text-(--color-success)', bg: 'bg-(--color-success-light)' },
-    { label: 'Urgentes', value: 0, icon: AlertTriangle, color: 'text-(--color-danger)', bg: 'bg-(--color-danger-light)' },
-    { label: 'Total OS', value: total, icon: Clock, color: 'text-(--color-primary)', bg: 'bg-(--color-primary-light)' },
+    { label: 'Em andamento', value: (stats.in_progress ?? 0) + (stats.approved ?? 0), icon: Wrench, color: 'text-text-warning', bg: 'bg-bg-warning' },
+    { label: 'Concluídas', value: (stats.completed ?? 0) + (stats.verified ?? 0), icon: CheckCircle2, color: 'text-text-success', bg: 'bg-bg-success' },
+    { label: 'Urgentes', value: 0, icon: AlertTriangle, color: 'text-text-danger', bg: 'bg-bg-danger' },
+    { label: 'Total OS', value: total, icon: Clock, color: 'text-text-accent', bg: 'bg-bg-accent-subtle' },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-[20px] font-medium text-(--hl-text-primary)">Ola, {user?.name?.split(' ')[0]}</h1>
-        <p className="text-[13px] text-(--hl-text-secondary)">Bem-vindo ao seu portal de prestador</p>
+        <h1 className="text-xl font-medium text-text-primary">Olá, {user?.name?.split(' ')[0]}</h1>
+        <p className="text-sm text-text-secondary">Bem-vindo ao seu portal de prestador</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {statCards.map((s) => (
           <Card key={s.label}>
             <CardContent className="p-4">
@@ -41,8 +40,8 @@ export default function ProviderDashboard() {
                   <s.icon className={`h-4 w-4 ${s.color}`} />
                 </div>
                 <div>
-                  <p className="text-[20px] font-medium text-(--hl-text-primary)">{s.value}</p>
-                  <p className="text-[12px] text-(--hl-text-secondary)">{s.label}</p>
+                  <p className="text-xl font-medium text-text-primary">{s.value}</p>
+                  <p className="text-xs text-text-secondary">{s.label}</p>
                 </div>
               </div>
             </CardContent>
@@ -50,11 +49,10 @@ export default function ProviderDashboard() {
         ))}
       </div>
 
-      {/* Recent bids */}
       {recentBids.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Últimos Orçamentos Enviados</CardTitle>
+            <CardTitle className="text-base">Últimos orçamentos enviados</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             {(recentBids as unknown as { id: string; service_title: string; property_name: string; amount: number; status: string; created_at: string }[]).map((bid) => (
@@ -64,7 +62,7 @@ export default function ProviderDashboard() {
                   <p className="text-xs text-muted-foreground">{bid.property_name} · {formatDate(bid.created_at)}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-medium text-(--color-success)">{formatCurrency(bid.amount)}</span>
+                  <span className="font-medium text-text-success">{formatCurrency(bid.amount)}</span>
                   <Badge variant={bid.status === 'accepted' ? 'success' : bid.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
                     {bid.status === 'accepted' ? 'Aceito' : bid.status === 'rejected' ? 'Recusado' : 'Pendente'}
                   </Badge>
@@ -75,17 +73,16 @@ export default function ProviderDashboard() {
         </Card>
       )}
 
-      {/* Quick access */}
       <Card>
         <CardContent className="p-4">
-          <Link href="/provider/services" className="flex items-center justify-between hover:opacity-80 transition-opacity">
+          <Link href="/provider/services" className="flex items-center justify-between transition-opacity hover:opacity-80">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50">
-                <Wrench className="h-4 w-4 text-(--color-primary)" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-bg-accent-subtle">
+                <Wrench className="h-4 w-4 text-text-accent" />
               </div>
               <div>
-                <p className="font-medium text-sm">Ver todas as OS</p>
-                <p className="text-xs text-muted-foreground">Gerencie suas ordens de servico</p>
+                <p className="text-sm font-medium">Ver todas as OS</p>
+                <p className="text-xs text-muted-foreground">Gerencie suas ordens de serviço</p>
               </div>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />

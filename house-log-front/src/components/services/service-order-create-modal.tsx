@@ -191,7 +191,7 @@ export function ServiceOrderCreateModal({
       <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] p-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
           <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Wrench className="h-4 w-4 text-primary-600" />
+            <Wrench className="h-4 w-4 text-text-accent" />
             Nova Ordem de Servico
           </DialogTitle>
           <DialogDescription>
@@ -210,7 +210,7 @@ export function ServiceOrderCreateModal({
                   <div
                     className={cn(
                       'h-7 w-7 rounded-full flex items-center justify-center shrink-0',
-                      done ? 'bg-primary-600 text-white' : active ? 'bg-primary-100 text-primary-700' : 'bg-muted text-muted-foreground'
+                      done ? 'bg-interactive-primary-bg text-text-inverse' : active ? 'bg-bg-accent-subtle text-text-accent' : 'bg-bg-muted text-text-tertiary'
                     )}
                   >
                     {done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
