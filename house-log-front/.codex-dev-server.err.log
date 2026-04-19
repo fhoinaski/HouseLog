@@ -1,0 +1,22 @@
+(node:7928) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///F:/HouseLog/house-log-front/tailwind.config.ts?id=1776641165349 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to F:\HouseLog\house-log-front\package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error: Can't resolve 'tailwindcss' in 'F:\HouseLog'
+    [2m[at finishWithoutResolve (F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\Resolver.js:587:18)][0m
+    [2m[at F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\Resolver.js:679:14][0m
+    [2m[at F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (F:\HouseLog\house-log-front\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (F:\HouseLog\house-log-front\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:27:1)][0m
+    [2m[at F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\DescriptionFilePlugin.js:89:43][0m
+    [2m[at F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m
+    [2m[at eval (eval at create (F:\HouseLog\house-log-front\node_modules\tapable\lib\HookCodeFactory.js:31:10), <anonymous>:15:1)][0m
+    [2m[at F:\HouseLog\house-log-front\node_modules\enhanced-resolve\lib\Resolver.js:740:5][0m {
+  details: "resolve 'tailwindcss' in 'F:\\HouseLog'\n" +
+    '  Parsed request is a module\n' +
+    '  using description file: F:\\HouseLog\\package.json (relative path: .)\n' +
+    '    resolve as module\n' +
+    "      F:\\HouseLog\\node_modules doesn't exist or is not a directory\n" +
+    "      F:\\node_modules doesn't exist or is not a directory"
+}

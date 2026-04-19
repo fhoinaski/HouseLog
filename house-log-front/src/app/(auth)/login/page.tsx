@@ -6,18 +6,19 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Home, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { EntryShell } from '@/components/auth/entry-shell';
 
 type Role = 'owner' | 'manager' | 'provider' | 'temp_provider' | 'admin';
 
 const loginSchema = z.object({
-  email: z.string().email('Informe um e-mail valido'),
-  password: z.string().min(6, 'A senha deve ter no minimo 6 caracteres'),
+  email: z.string().email('Informe um e-mail válido'),
+  password: z.string().min(6, 'A senha deve ter no mínimo 6 caracteres'),
   remember: z.boolean().default(false),
 });
 
@@ -56,108 +57,88 @@ export default function LoginPage() {
       const normalized = message.toLowerCase();
 
       if (normalized.includes('network') || normalized.includes('fetch')) {
-        toast.error('Verifique sua conexao');
+        toast.error('Verifique sua conexão');
         return;
       }
 
-      toast.error('Credenciais invalidas', {
+      toast.error('Credenciais inválidas', {
         description: message,
       });
     }
   }
 
   return (
-    <main className="safe-top safe-bottom min-h-screen bg-bg-page px-6 py-8">
-      <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-97.5 flex-col">
-        <div className="rounded-xl border-half border-border-subtle bg-bg-surface px-6 pb-6 pt-8">
-          <header className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-3 flex h-13 w-13 items-center justify-center rounded-[14px] border-half border-border-subtle">
-              <Home className="h-6 w-6 text-text-accent" strokeWidth={1.9} />
-            </div>
-            <h1 className="text-2xl font-medium tracking-tight text-text-primary">HouseLog</h1>
-            <p className="hl-section-title mt-1">The Architectural Lens</p>
-          </header>
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            <div>
-              <Label htmlFor="email">E-mail</Label>
-              <Input id="email" type="email" placeholder="seu@email.com" autoComplete="email" {...register('email')} />
-              {errors.email && <p className="hl-error mt-1">{errors.email.message}</p>}
-            </div>
-
-            <div>
-              <Label htmlFor="password">Senha</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  className="pr-12"
-                  {...register('password')}
-                />
-                <button
-                  type="button"
-                  className="hl-btn-ghost absolute right-0 top-1/2 h-input-md w-input-md -translate-y-1/2 p-0 text-text-tertiary"
-                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                  onClick={() => setShowPassword((prev) => !prev)}
-                >
-                  {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                </button>
-              </div>
-              {errors.password && <p className="hl-error mt-1">{errors.password.message}</p>}
-            </div>
-
-            <div className="mb-6 flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-text-secondary">
-                <input type="checkbox" className="h-4 w-4 accent-bg-accent" {...register('remember')} />
-                Lembrar de mim
-              </label>
-              <button type="button" className="hl-btn-ghost h-auto min-h-0 px-0 py-0 text-sm text-text-accent">
-                Esqueceu a senha?
-              </button>
-            </div>
-
-            <Button type="submit" size="lg" disabled={isSubmitting} className="w-full">
-              {isSubmitting ? (
-                <>
-                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white" />
-                  Entrando...
-                </>
-              ) : (
-                <>
-                  <LogIn className="h-4 w-4" />
-                  Entrar
-                </>
-              )}
-            </Button>
-
-            <div className="flex items-center gap-3 py-1">
-              <span className="h-px flex-1 bg-border-subtle" />
-              <span className="text-xs text-text-tertiary">ou</span>
-              <span className="h-px flex-1 bg-border-subtle" />
-            </div>
-
-            <Button type="button" variant="outline" size="lg" className="w-full">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-                <path fill="currentColor" d="M12 10.2v3.9h5.4c-.2 1.2-1.4 3.5-5.4 3.5-3.2 0-5.8-2.7-5.8-6s2.6-6 5.8-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.8 3.2 14.6 2.3 12 2.3 6.9 2.3 2.8 6.4 2.8 11.5S6.9 20.7 12 20.7c6.9 0 9.1-4.8 9.1-7.3 0-.5-.1-.9-.1-1.3H12z" />
-              </svg>
-              Continuar com Google
-            </Button>
-
-            <p className="pt-1 text-center text-sm text-text-secondary">
-              Não tem uma conta?{' '}
-              <Link href="/register" className="font-medium text-text-accent">
-                Criar conta
-              </Link>
-            </p>
-          </form>
+    <EntryShell
+      eyebrow="Acesso seguro"
+      title="Entre no centro operacional"
+      description="Acesse imóveis, ordens de serviço, orçamento, agenda e histórico com uma leitura objetiva."
+      footer={`HouseLog v1.0.0 · Gestão operacional de imóveis · ${currentYear}`}
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        <div>
+          <Label htmlFor="email">E-mail</Label>
+          <Input id="email" type="email" placeholder="seu@email.com" autoComplete="email" {...register('email')} />
+          {errors.email && <p className="hl-error">{errors.email.message}</p>}
         </div>
 
-        <footer className="mt-auto pt-6 text-center text-xs text-text-tertiary">
-          HouseLog v1.0.0 · Gestão operacional de imóveis · {currentYear}
-        </footer>
-      </section>
-    </main>
+        <div>
+          <Label htmlFor="password">Senha</Label>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              className="pr-12"
+              {...register('password')}
+            />
+            <button
+              type="button"
+              className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-[var(--radius-md)] text-text-tertiary transition-colors hover:bg-[var(--interactive-ghost-hover)] hover:text-text-primary focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              {showPassword ? <EyeOff className="h-[18px] w-[18px]" /> : <Eye className="h-[18px] w-[18px]" />}
+            </button>
+          </div>
+          {errors.password && <p className="hl-error">{errors.password.message}</p>}
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex min-h-11 items-center gap-2 text-sm text-text-secondary">
+            <input type="checkbox" className="h-4 w-4 accent-[var(--provider-accent)]" {...register('remember')} />
+            Lembrar de mim
+          </label>
+          <button type="button" className="min-h-11 rounded-[var(--radius-md)] px-1 text-sm font-medium text-text-accent transition-colors hover:text-text-accent-subtle focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]">
+            Esqueceu a senha?
+          </button>
+        </div>
+
+        <Button type="submit" size="lg" loading={isSubmitting} disabled={isSubmitting} className="w-full">
+          {!isSubmitting && <LogIn className="h-4 w-4" />}
+          {isSubmitting ? 'Entrando...' : 'Entrar'}
+        </Button>
+
+        <div className="flex items-center gap-3 py-1">
+          <span className="h-px flex-1 bg-[var(--divider-color)]" />
+          <span className="text-xs text-text-tertiary">ou</span>
+          <span className="h-px flex-1 bg-[var(--divider-color)]" />
+        </div>
+
+        <Button type="button" variant="outline" size="lg" className="w-full">
+          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+            <path fill="currentColor" d="M12 10.2v3.9h5.4c-.2 1.2-1.4 3.5-5.4 3.5-3.2 0-5.8-2.7-5.8-6s2.6-6 5.8-6c1.8 0 3 .8 3.7 1.4l2.5-2.4C16.8 3.2 14.6 2.3 12 2.3 6.9 2.3 2.8 6.4 2.8 11.5S6.9 20.7 12 20.7c6.9 0 9.1-4.8 9.1-7.3 0-.5-.1-.9-.1-1.3H12z" />
+          </svg>
+          Continuar com Google
+        </Button>
+
+        <p className="pt-1 text-center text-sm text-text-secondary">
+          Não tem uma conta?{' '}
+          <Link href="/register" className="font-medium text-text-accent hover:text-text-accent-subtle">
+            Criar conta
+          </Link>
+        </p>
+      </form>
+    </EntryShell>
   );
 }

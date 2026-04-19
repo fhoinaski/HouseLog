@@ -1,0 +1,16 @@
+{
+  "name": "houselog",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix house-log-front run dev",
+    "build": "npm --prefix house-log-front run build",
+    "start": "npm --prefix house-log-front run start",
+    "lint": "npm --prefix house-log-front run lint",
+    "test:e2e": "npm --prefix house-log-front run test:e2e",
+    "dev:front": "npm --prefix house-log-front run dev",
+    "build:front": "npm --prefix house-log-front run build",
+    "dev:api": "npm --prefix house-log-back/apps/api run dev",
+    "build:api": "npm --prefix house-log-back/apps/api run build",
+    "type-check:api": "npm --prefix house-log-back/apps/api run type-check"
+  }
+}

@@ -18,19 +18,19 @@ export interface NavItem {
 
 export const NAV_CONFIG: Record<string, NavItem[]> = {
   owner: [
-    { label: 'Inicio', href: '/dashboard', icon: Home, matchExact: true },
-    { label: 'Imoveis', href: '/properties', icon: Building2 },
+    { label: 'Início', href: '/dashboard', icon: Home, matchExact: true },
+    { label: 'Imóveis', href: '/properties', icon: Building2 },
     { label: 'Agenda', href: '/schedule', icon: CalendarDays },
     { label: 'Financeiro', href: '/financial', icon: BarChart2 },
   ],
   manager: [
-    { label: 'Inicio', href: '/dashboard', icon: Home, matchExact: true },
-    { label: 'Imoveis', href: '/properties', icon: Building2 },
+    { label: 'Início', href: '/dashboard', icon: Home, matchExact: true },
+    { label: 'Imóveis', href: '/properties', icon: Building2 },
     { label: 'Financeiro', href: '/financial', icon: BarChart2 },
     { label: 'Agenda', href: '/schedule', icon: CalendarDays },
   ],
   provider: [
-    { label: 'Inicio', href: '/provider/dashboard', icon: Home, matchExact: true },
+    { label: 'Início', href: '/provider/dashboard', icon: Home, matchExact: true },
     { label: 'Oportunidades', href: '/provider/opportunities', icon: Briefcase },
     { label: 'Minhas OS', href: '/provider/services', icon: ClipboardCheck },
     { label: 'Config.', href: '/provider/settings', icon: Settings2 },

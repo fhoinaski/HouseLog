@@ -3,7 +3,9 @@
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check, ChevronDown } from 'lucide-react';
+import { type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
+import { fieldVariants } from '@/components/ui/visual-system';
 
 const Select = SelectPrimitive.Root;
 const SelectGroup = SelectPrimitive.Group;
@@ -11,12 +13,14 @@ const SelectValue = SelectPrimitive.Value;
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & VariantProps<typeof fieldVariants>
+>(({ className, children, variant, density, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
+    data-slot="select-trigger"
     className={cn(
-      'hl-input flex items-center justify-between pr-3 text-md [&>span]:line-clamp-1',
+      'hl-input flex items-center justify-between pr-3 text-md disabled:cursor-not-allowed disabled:opacity-60 [&>span]:line-clamp-1',
+      fieldVariants({ variant, density }),
       className
     )}
     {...props}
@@ -36,8 +40,9 @@ const SelectContent = React.forwardRef<
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
+      data-slot="select-content"
       className={cn(
-        'relative z-50 max-h-96 min-w-32 overflow-hidden rounded-lg border-half border-border-subtle bg-bg-surface text-text-primary data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 shadow-sm',
+        'relative z-50 max-h-96 min-w-32 overflow-hidden rounded-md border-half border-border-subtle bg-bg-surface text-text-primary shadow-sm data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
         position === 'popper' &&
           'data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1',
         className
@@ -46,6 +51,7 @@ const SelectContent = React.forwardRef<
       {...props}
     >
       <SelectPrimitive.Viewport
+        data-slot="select-viewport"
         className={cn(
           'p-1',
           position === 'popper' &&
@@ -65,6 +71,7 @@ const SelectItem = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
+    data-slot="select-item"
     className={cn(
       'relative flex w-full cursor-default select-none items-center rounded-md py-3 pl-8 pr-3 text-sm outline-none focus:bg-bg-subtle data-disabled:pointer-events-none data-disabled:opacity-50',
       className
@@ -87,6 +94,7 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
+    data-slot="select-label"
     className={cn('py-1.5 pl-8 pr-2 text-xs font-medium text-text-secondary', className)}
     {...props}
   />

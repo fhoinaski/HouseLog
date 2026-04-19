@@ -3,14 +3,15 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { KeyRound, Medal, Plus, Settings2, Star, Trash2 } from 'lucide-react';
-import { cva } from 'class-variance-authority';
 import { authApi, marketplaceApi, PROVIDER_CATEGORY_OPTIONS } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { chipVariants } from '@/components/ui/visual-system';
 import { toast } from 'sonner';
 import { cn, formatDate } from '@/lib/utils';
 import styles from './provider-settings.module.css';
@@ -41,21 +42,6 @@ type PortfolioCase = {
   afterImageUrl?: string;
 };
 
-const skillChip = cva(
-  'min-h-11 rounded-[20px] border px-4 py-2 text-left text-[13px] font-medium transition-all duration-150 skill-chip focus-visible:outline-none',
-  {
-    variants: {
-      active: {
-        true: 'bg-[var(--hl-chip-selected-bg)] border-[var(--hl-chip-selected-bg)] text-[var(--hl-chip-selected-text)]',
-        false: 'bg-[var(--hl-chip-default-bg)] border-[var(--hl-chip-default-border)] text-[var(--hl-chip-default-text)]',
-      },
-    },
-    defaultVariants: {
-      active: false,
-    },
-  }
-);
-
 export default function ProviderSettingsPage() {
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
@@ -78,7 +64,7 @@ export default function ProviderSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
-  const { data: profileData, mutate: mutateProfile } = useSWR(
+  const { data: profileData, mutate: mutateProfile, error: profileError } = useSWR(
     user?.id ? ['provider-public-profile', user.id] : null,
     () => marketplaceApi.providerProfile(user!.id)
   );
@@ -165,23 +151,49 @@ export default function ProviderSettingsPage() {
   }
 
   const score = profileData?.score;
+  const filledProfileFields =
+    [
+      phone,
+      whatsapp,
+      serviceArea,
+      bio,
+      coursesText,
+      specializationsText,
+      portfolioText,
+    ].filter((value) => value.trim().length > 0).length +
+    selected.length +
+    education.length +
+    portfolioCases.length;
 
   return (
-    <div className={cn('space-y-6 max-w-4xl pb-8', styles.shell)}>
+    <div className={cn('mx-auto max-w-5xl space-y-5 pb-8 sm:space-y-6', styles.shell)}>
       <div className={styles.hero}>
-        <h1 className="text-[24px] font-medium tracking-tight sm:text-[24px]">Perfil do prestador</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Portfólio profissional com visual clean, foco operacional e evidências antes/depois.</p>
+        <div>
+          <p className={styles.eyebrow}>Provider lens</p>
+          <h1 className="mt-2 text-[24px] font-medium leading-tight text-text-primary sm:text-[28px]">Perfil do prestador</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
+            Portfólio profissional com leitura rápida, foco operacional e evidências antes/depois.
+          </p>
+        </div>
+        <div className={styles.heroSignal} aria-label="Campos preenchidos no perfil">
+          <span>{filledProfileFields}</span>
+          <small>sinais preenchidos</small>
+        </div>
       </div>
 
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+      <Card variant="tonal" density="comfortable">
+        <CardHeader className={styles.cardHeader}>
+          <CardTitle className="flex items-center gap-2 text-base">
             <Medal className="h-4 w-4" />
             Pontuação e avaliações
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {score ? (
+          {profileError ? (
+            <div className={styles.statePanel}>
+              Não foi possível carregar a pontuação agora. As alterações do perfil continuam disponíveis.
+            </div>
+          ) : score ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 <div className={cn('p-3', styles.metricCard)}>
@@ -219,14 +231,14 @@ export default function ProviderSettingsPage() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">Carregando pontuação...</p>
+            <div className={styles.statePanel}>Carregando pontuação...</div>
           )}
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+      <Card variant="tonal" density="comfortable">
+        <CardHeader className={styles.cardHeader}>
+          <CardTitle className="flex items-center gap-2 text-base">
             <Settings2 className="h-4 w-4" />
             Perfil profissional e serviços
           </CardTitle>
@@ -255,18 +267,21 @@ export default function ProviderSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="provider-pix-type" className={styles.fieldLabel}>Tipo da chave PIX</Label>
-              <select
-                id="provider-pix-type"
+              <Select
                 value={pixKeyType}
-                onChange={(e) => setPixKeyType(e.target.value as 'cpf' | 'cnpj' | 'email' | 'phone' | 'random')}
-                className={styles.nativeSelect}
+                onValueChange={(value) => setPixKeyType(value as 'cpf' | 'cnpj' | 'email' | 'phone' | 'random')}
               >
-                <option value="cpf">CPF</option>
-                <option value="cnpj">CNPJ</option>
-                <option value="email">Email</option>
-                <option value="phone">Telefone</option>
-                <option value="random">Aleatória</option>
-              </select>
+                <SelectTrigger id="provider-pix-type">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cpf">CPF</SelectItem>
+                  <SelectItem value="cnpj">CNPJ</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="phone">Telefone</SelectItem>
+                  <SelectItem value="random">Aleatória</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -277,13 +292,13 @@ export default function ProviderSettingsPage() {
 
           <div className="space-y-1.5">
             <Label className={styles.fieldLabel}>Hard skills (clique para ativar)</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {PROVIDER_CATEGORY_OPTIONS.map((item) => (
               <button
                 key={item.value}
                 type="button"
                 onClick={() => toggle(item.value)}
-                className={cn(skillChip({ active: selectedSet.has(item.value) }), styles.skillChip)}
+                className={cn(chipVariants({ active: selectedSet.has(item.value) }), styles.skillChip)}
               >
                 {item.label}
               </button>
@@ -352,25 +367,33 @@ export default function ProviderSettingsPage() {
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <select
+                      <Select
                         value={entry.type}
-                        onChange={(e) => updateEducation(idx, { type: e.target.value as EducationEntry['type'] })}
-                        className={styles.nativeSelect}
+                        onValueChange={(value) => updateEducation(idx, { type: value as EducationEntry['type'] })}
                       >
-                        <option value="college">Faculdade</option>
-                        <option value="technical">Técnico</option>
-                        <option value="course">Curso</option>
-                        <option value="certification">Certificação</option>
-                        <option value="other">Outro</option>
-                      </select>
-                      <select
+                        <SelectTrigger aria-label="Tipo de formação">
+                          <SelectValue placeholder="Tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="college">Faculdade</SelectItem>
+                          <SelectItem value="technical">Técnico</SelectItem>
+                          <SelectItem value="course">Curso</SelectItem>
+                          <SelectItem value="certification">Certificação</SelectItem>
+                          <SelectItem value="other">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select
                         value={entry.status}
-                        onChange={(e) => updateEducation(idx, { status: e.target.value as EducationEntry['status'] })}
-                        className={styles.nativeSelect}
+                        onValueChange={(value) => updateEducation(idx, { status: value as EducationEntry['status'] })}
                       >
-                        <option value="in_progress">Cursando</option>
-                        <option value="completed">Concluído</option>
-                      </select>
+                        <SelectTrigger aria-label="Status da formação">
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="in_progress">Cursando</SelectItem>
+                          <SelectItem value="completed">Concluído</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Input
                         value={entry.certificationUrl ?? ''}
                         onChange={(e) => updateEducation(idx, { certificationUrl: e.target.value })}
@@ -464,9 +487,9 @@ export default function ProviderSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+      <Card variant="tonal" density="comfortable">
+        <CardHeader className={styles.cardHeader}>
+          <CardTitle className="flex items-center gap-2 text-base">
             <KeyRound className="h-4 w-4" />
             Trocar senha
           </CardTitle>

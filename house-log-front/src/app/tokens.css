@@ -238,6 +238,42 @@
     --z-toast:   600;
     --z-tooltip: 700;
 
+    /* === PERSONALIZACAO / VISUAL SYSTEM === */
+    --surface-page:        var(--bg-page);
+    --surface-base:        var(--bg-surface);
+    --surface-raised:      var(--bg-surface-raised);
+    --surface-strong:      var(--bg-subtle);
+    --surface-muted:       var(--bg-muted);
+    --surface-glass:       color-mix(in srgb, var(--bg-surface-overlay) 88%, transparent);
+    --surface-inverse:     var(--bg-brand);
+    --surface-outline:     var(--border-subtle);
+    --surface-outline-strong: var(--border-default);
+    --surface-grid-line:   color-mix(in srgb, var(--border-subtle) 72%, transparent);
+    --surface-blur:        16px;
+    --surface-shadow-raised: var(--shadow-sm);
+
+    --provider-accent:     var(--bg-accent);
+    --provider-surface:    var(--surface-base);
+    --provider-surface-strong: var(--surface-strong);
+    --provider-divider:    var(--surface-outline);
+
+    --field-bg:            var(--input-bg);
+    --field-bg-hover:      var(--surface-strong);
+    --field-border:        var(--input-border);
+    --field-border-strong: var(--input-border-hover);
+    --field-text:          var(--input-text);
+    --field-placeholder:   var(--input-placeholder);
+    --field-focus-ring:    var(--input-shadow-focus);
+
+    --button-premium-bg:    var(--interactive-primary-bg);
+    --button-premium-hover: var(--interactive-primary-hover);
+    --button-premium-text:  var(--interactive-primary-text);
+    --button-premium-shadow: var(--shadow-xs);
+    --button-premium-focus: var(--shadow-focus);
+    --button-tonal-bg:      var(--bg-accent-subtle);
+    --button-tonal-hover:   var(--bg-accent-muted);
+    --button-tonal-text:    var(--text-accent);
+
     /* === COMPONENTES ESPECÍFICOS === */
 
     /* Nav bar (bottom + top) */
@@ -249,13 +285,13 @@
     --nav-height-bottom:   60px;
 
     /* Cards */
-    --card-bg:             var(--bg-surface);
+    --card-bg:             var(--surface-base);
     --card-border:         var(--border-subtle);
     --card-border-hover:   var(--border-default);
     --card-radius:         var(--radius-lg);
     --card-padding:        16px;
     --card-shadow:         var(--shadow-xs);
-    --card-shadow-hover:   var(--shadow-sm);
+    --card-shadow-hover:   var(--surface-shadow-raised);
 
     /* Card de urgência/aprovação (border-left colorida) */
     --card-urgent-bg:      var(--bg-danger);
@@ -263,7 +299,7 @@
     --card-urgent-accent:  3px solid var(--primitive-danger-600);
 
     /* Inputs */
-    --input-bg:            var(--bg-surface);
+    --input-bg:            var(--surface-base);
     --input-bg-disabled:   var(--bg-muted);
     --input-border:        var(--border-default);
     --input-border-hover:  var(--border-strong);
@@ -504,4 +540,202 @@
   .animate-slide-up  { animation: slide-up 250ms ease forwards; }
   .animate-skeleton  { animation: skeleton-pulse 1.5s ease-in-out infinite; }
   .animate-spin      { animation: spin 600ms linear infinite; }
+}
+
+/* --------------------------------------------------
+ * ARCHITECTURAL LENS — GLOBAL DEFAULT
+ * Mantem todas as paginas no tema premium escuro,
+ * inclusive quando next-themes aplica a classe .light.
+ * -------------------------------------------------- */
+@layer base {
+  :root,
+  .light,
+  .dark {
+    --primitive-charcoal-950: #060E20;
+    --primitive-charcoal-900: #0B1326;
+    --primitive-charcoal-800: #111A2E;
+    --primitive-charcoal-700: #172238;
+    --primitive-charcoal-600: #22304A;
+    --primitive-charcoal-500: #31394D;
+    --primitive-charcoal-400: #8892A8;
+    --primitive-charcoal-300: #B7C0D4;
+    --primitive-charcoal-200: #D8DEEA;
+    --primitive-charcoal-100: #EEF2F8;
+    --primitive-charcoal-50:  #F7F9FC;
+
+    --primitive-lens-primary: #B8C3FF;
+    --primitive-lens-secondary: #4EDEA3;
+    --primitive-lens-tertiary: #FFB95F;
+
+    --bg-page: #0B1326;
+    --bg-surface: #111A2E;
+    --bg-surface-raised: #172238;
+    --bg-surface-overlay: rgba(17, 26, 46, 0.94);
+    --bg-subtle: #172238;
+    --bg-muted: #22304A;
+
+    --bg-accent: var(--primitive-lens-primary);
+    --bg-accent-subtle: rgba(184, 195, 255, 0.13);
+    --bg-accent-muted: rgba(184, 195, 255, 0.20);
+    --bg-brand: #060E20;
+    --bg-brand-hover: #0B1326;
+    --bg-brand-subtle: #172238;
+
+    --bg-danger: rgba(248, 113, 113, 0.14);
+    --bg-danger-emphasis: rgba(248, 113, 113, 0.22);
+    --bg-warning: rgba(255, 185, 95, 0.14);
+    --bg-warning-emphasis: rgba(255, 185, 95, 0.22);
+    --bg-success: rgba(78, 222, 163, 0.13);
+    --bg-success-emphasis: rgba(78, 222, 163, 0.22);
+    --bg-info: rgba(184, 195, 255, 0.13);
+    --bg-info-emphasis: rgba(184, 195, 255, 0.22);
+
+    --text-primary: #F7F9FC;
+    --text-secondary: #D8DEEA;
+    --text-tertiary: #8892A8;
+    --text-disabled: #5D6880;
+    --text-inverse: #060E20;
+    --text-on-accent: #060E20;
+    --text-accent: var(--primitive-lens-primary);
+    --text-accent-subtle: #D8DEFF;
+    --text-brand: #F7F9FC;
+    --text-danger: #FCA5A5;
+    --text-warning: var(--primitive-lens-tertiary);
+    --text-success: var(--primitive-lens-secondary);
+    --text-info: var(--primitive-lens-primary);
+
+    --border-default: rgba(216, 222, 234, 0.13);
+    --border-subtle: rgba(216, 222, 234, 0.08);
+    --border-strong: rgba(216, 222, 234, 0.22);
+    --border-focus: var(--primitive-lens-primary);
+    --border-accent: rgba(184, 195, 255, 0.48);
+    --border-danger: rgba(252, 165, 165, 0.50);
+    --border-warning: rgba(255, 185, 95, 0.55);
+    --border-success: rgba(78, 222, 163, 0.48);
+
+    --interactive-primary-bg: var(--primitive-lens-primary);
+    --interactive-primary-hover: #D8DEFF;
+    --interactive-primary-active: #9CA9F7;
+    --interactive-primary-text: #060E20;
+    --interactive-accent-bg: var(--primitive-lens-tertiary);
+    --interactive-accent-hover: #FFD19A;
+    --interactive-accent-active: #EAA24E;
+    --interactive-accent-text: #060E20;
+    --interactive-secondary-bg: rgba(216, 222, 234, 0.06);
+    --interactive-secondary-hover: rgba(216, 222, 234, 0.10);
+    --interactive-secondary-active: rgba(216, 222, 234, 0.15);
+    --interactive-secondary-border: rgba(216, 222, 234, 0.14);
+    --interactive-secondary-text: #EEF2F8;
+    --interactive-ghost-hover: rgba(216, 222, 234, 0.08);
+    --interactive-ghost-active: rgba(216, 222, 234, 0.13);
+    --interactive-danger-bg: #EF4444;
+    --interactive-danger-hover: #F87171;
+    --interactive-danger-text: #FFFFFF;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.24);
+    --shadow-sm: 0 10px 28px -24px rgba(0, 0, 0, 0.90);
+    --shadow-md: 0 18px 42px -30px rgba(0, 0, 0, 0.92);
+    --shadow-lg: 0 24px 60px -34px rgba(0, 0, 0, 0.95);
+    --shadow-xl: 0 32px 80px -42px rgba(0, 0, 0, 0.98);
+    --shadow-focus: 0 0 0 3px rgba(184, 195, 255, 0.36);
+    --shadow-focus-danger: 0 0 0 3px rgba(248, 113, 113, 0.32);
+    --shadow-focus-accent: 0 0 0 3px rgba(255, 185, 95, 0.36);
+
+    --surface-page: var(--bg-page);
+    --surface-base: var(--bg-surface);
+    --surface-raised: var(--bg-surface-raised);
+    --surface-strong: var(--bg-subtle);
+    --surface-muted: var(--bg-muted);
+    --surface-glass: rgba(17, 26, 46, 0.78);
+    --surface-inverse: #EEF2F8;
+    --surface-outline: var(--border-subtle);
+    --surface-outline-strong: var(--border-default);
+    --surface-grid-line: rgba(216, 222, 234, 0.07);
+    --surface-blur: 18px;
+    --surface-shadow-raised: var(--shadow-md);
+
+    --provider-accent: var(--primitive-lens-primary);
+    --provider-surface: var(--surface-base);
+    --provider-surface-strong: var(--surface-strong);
+    --provider-divider: var(--surface-outline);
+
+    --field-bg: rgba(17, 26, 46, 0.92);
+    --field-bg-hover: rgba(23, 34, 56, 0.96);
+    --field-border: var(--border-default);
+    --field-border-strong: var(--border-strong);
+    --field-text: var(--text-primary);
+    --field-placeholder: var(--text-tertiary);
+    --field-focus-ring: var(--shadow-focus);
+
+    --button-premium-bg: var(--interactive-primary-bg);
+    --button-premium-hover: var(--interactive-primary-hover);
+    --button-premium-text: var(--interactive-primary-text);
+    --button-premium-shadow: var(--shadow-sm);
+    --button-premium-focus: var(--shadow-focus);
+    --button-tonal-bg: rgba(184, 195, 255, 0.13);
+    --button-tonal-hover: rgba(184, 195, 255, 0.20);
+    --button-tonal-text: var(--primitive-lens-primary);
+
+    --nav-bg: rgba(6, 14, 32, 0.94);
+    --nav-text-active: #F7F9FC;
+    --nav-text-inactive: rgba(216, 222, 234, 0.62);
+    --nav-border: rgba(216, 222, 234, 0.08);
+
+    --card-bg: rgba(17, 26, 46, 0.88);
+    --card-border: rgba(216, 222, 234, 0.09);
+    --card-border-hover: rgba(184, 195, 255, 0.24);
+    --card-shadow: var(--shadow-sm);
+    --card-shadow-hover: var(--shadow-md);
+    --card-urgent-bg: rgba(255, 185, 95, 0.12);
+    --card-urgent-border: rgba(255, 185, 95, 0.36);
+    --card-urgent-accent: 3px solid var(--primitive-lens-tertiary);
+
+    --input-bg: rgba(11, 19, 38, 0.72);
+    --input-bg-disabled: rgba(34, 48, 74, 0.62);
+    --input-border: rgba(216, 222, 234, 0.13);
+    --input-border-hover: rgba(216, 222, 234, 0.24);
+    --input-border-focus: var(--primitive-lens-primary);
+    --input-border-error: rgba(252, 165, 165, 0.55);
+    --input-text: var(--text-primary);
+    --input-placeholder: rgba(216, 222, 234, 0.50);
+    --input-shadow-focus: var(--shadow-focus);
+
+    --avatar-owner-bg: rgba(184, 195, 255, 0.18);
+    --avatar-owner-text: #D8DEFF;
+    --avatar-manager-bg: rgba(255, 185, 95, 0.18);
+    --avatar-manager-text: #FFD19A;
+    --avatar-provider-bg: rgba(78, 222, 163, 0.18);
+    --avatar-provider-text: #9AF0C9;
+
+    --chip-bg: rgba(216, 222, 234, 0.07);
+    --chip-bg-active: var(--primitive-lens-primary);
+    --chip-text: var(--text-secondary);
+    --chip-text-active: #060E20;
+    --chip-border: rgba(216, 222, 234, 0.10);
+
+    --toast-bg: #111A2E;
+    --toast-text: #F7F9FC;
+    --tab-text: var(--text-secondary);
+    --tab-text-active: var(--text-primary);
+    --tab-border-active: var(--primitive-lens-primary);
+    --step-bg: rgba(216, 222, 234, 0.12);
+    --step-bg-active: var(--primitive-lens-primary);
+    --step-bg-done: var(--primitive-lens-secondary);
+    --step-text-active: #060E20;
+    --step-text-done: #060E20;
+    --skeleton-base: rgba(216, 222, 234, 0.10);
+    --skeleton-shine: rgba(216, 222, 234, 0.18);
+    --fab-bg: var(--primitive-lens-primary);
+    --fab-hover: #D8DEFF;
+    --fab-text: #060E20;
+    --divider-color: rgba(216, 222, 234, 0.08);
+    --divider-strong: rgba(216, 222, 234, 0.14);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 18% -10%, rgba(184, 195, 255, 0.14), transparent 28rem),
+      radial-gradient(circle at 88% 8%, rgba(78, 222, 163, 0.08), transparent 24rem),
+      var(--bg-page);
+  }
 }

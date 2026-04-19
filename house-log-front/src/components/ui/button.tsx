@@ -1,30 +1,8 @@
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
-import { cva, type VariantProps } from 'class-variance-authority';
+import { type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
-
-const buttonVariants = cva(
-  'inline-flex min-h-input-md items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition-all duration-150 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
-  {
-    variants: {
-      variant: {
-        default: 'hl-btn-primary',
-        destructive: 'hl-btn-danger',
-        outline: 'hl-btn-secondary',
-        secondary: 'hl-btn-secondary',
-        ghost: 'hl-btn-ghost',
-        link: 'h-auto min-h-0 px-0 py-0 text-text-accent underline-offset-4 hover:underline',
-      },
-      size: {
-        default: 'px-4 py-2',
-        sm: 'px-4 py-2',
-        lg: 'min-h-12 px-4 py-3 text-base',
-        icon: 'w-input-md rounded-md px-0 py-0',
-      },
-    },
-    defaultVariants: { variant: 'default', size: 'default' },
-  }
-);
+import { buttonVariants } from '@/components/ui/visual-system';
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof buttonVariants> & {
@@ -37,6 +15,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button';
     return (
       <Comp
+        data-slot="button"
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}

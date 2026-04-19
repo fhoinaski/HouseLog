@@ -6,6 +6,8 @@
 // ============================================================
 
 import type { Config } from 'tailwindcss'
+import defaultTheme from 'tailwindcss/defaultTheme'
+import plugin from 'tailwindcss/plugin'
 
 const config: Config = {
   darkMode: 'class',  // usa classe .dark no <html>
@@ -221,17 +223,22 @@ const config: Config = {
     // ESPAÇAMENTO — usa escala do tokens.css
     // -------------------------------------------------------
     spacing: {
+      ...defaultTheme.spacing,
       '0':  '0',
+      '0.75': '3px',
       '1':  'var(--space-1)',   // 4px
       '2':  'var(--space-2)',   // 8px
       '3':  'var(--space-3)',   // 12px
       '4':  'var(--space-4)',   // 16px
+      '4.5': '18px',
       '5':  'var(--space-5)',   // 20px
       '6':  'var(--space-6)',   // 24px
       '8':  'var(--space-8)',   // 32px
       '10': 'var(--space-10)',  // 40px
       '12': 'var(--space-12)', // 48px
+      '13': '52px',
       '16': 'var(--space-16)', // 64px
+      '97.5': '390px',
       // Sizes específicos de componentes
       'nav-top':    'var(--nav-height-top)',     // 52px
       'nav-bottom': 'var(--nav-height-bottom)',  // 60px
@@ -306,6 +313,9 @@ const config: Config = {
         'screen-content': 'calc(100dvh - var(--nav-height-top) - var(--nav-height-bottom))',
         'screen-top':     'calc(100dvh - var(--nav-height-top))',
       },
+      maxWidth: {
+        '97.5': '390px',
+      },
 
       // Bordas especiais de componente
       borderWidth: {
@@ -316,12 +326,9 @@ const config: Config = {
   },
   plugins: [
     // Plugin para utilities de componentes específicos do HouseLog
-    function({
+    plugin(function({
       addUtilities,
       addComponents,
-    }: {
-      addUtilities: (utilities: Record<string, Record<string, string | number | Record<string, string | number>>>) => void;
-      addComponents: (components: Record<string, Record<string, string | number | Record<string, string | number>>>) => void;
     }) {
 
       // ---- COMPONENTES ----
@@ -794,7 +801,7 @@ const config: Config = {
           borderWidth: '0.5px',
         },
       })
-    },
+    }),
   ],
 }
 

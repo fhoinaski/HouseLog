@@ -14,16 +14,13 @@ export function BottomNav() {
     <>
       <div
         className="block shrink-0 md:hidden"
-        style={{ height: 'calc(var(--nav-height-bottom) + env(safe-area-inset-bottom))' }}
+        style={{ height: 'calc(var(--nav-height-bottom) + 24px + env(safe-area-inset-bottom))' }}
         aria-hidden="true"
       />
 
-      <nav
-        aria-label="Navegação principal"
-        className="fixed bottom-0 left-0 right-0 z-sticky border-t border-border-subtle bg-nav-bg md:hidden"
-      >
+      <nav aria-label="Navegação principal" className="fixed bottom-0 left-0 right-0 z-sticky px-4 pb-3 md:hidden">
         <div
-          className="flex items-center justify-around pt-2"
+          className="mx-auto flex max-w-md items-center justify-around rounded-[var(--radius-xl)] bg-nav-bg/95 px-2 pt-2 shadow-[0_16px_40px_-18px_rgba(0,0,0,0.7)] backdrop-blur-[var(--surface-blur)]"
           style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom))' }}
         >
           {items.map((item) => {
@@ -33,7 +30,10 @@ export function BottomNav() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="tap-highlight-none flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.75"
+                className={
+                  'tap-highlight-none flex min-h-11 min-w-14 flex-col items-center justify-center gap-[3px] rounded-[var(--radius-md)] px-2 transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] ' +
+                  (active ? 'bg-white/10' : 'hover:bg-white/5')
+                }
               >
                 <Icon
                   size={22}
