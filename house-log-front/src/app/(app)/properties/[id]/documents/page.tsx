@@ -1,40 +1,46 @@
 'use client';
 
+import type * as React from 'react';
 import { use, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {
-  FileText, Upload, Trash2, ExternalLink, Sparkles,
-  FileSearch, Filter,
-} from 'lucide-react';
+import { ExternalLink, FileSearch, FileText, Filter, Sparkles, Trash2, Upload } from 'lucide-react';
 import { documentsApi, type Document } from '@/lib/api';
-import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { documentRowVariants, documentTypeIconVariants } from '@/components/ui/visual-system';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
-import { formatDate, formatCurrency, cn } from '@/lib/utils';
 
 const DOC_TYPE_LABELS: Record<string, string> = {
-  invoice: 'Nota fiscal', manual: 'Manual', project: 'Projeto',
-  contract: 'Contrato', deed: 'Escritura', permit: 'Licença/Alvará',
-  insurance: 'Seguro', other: 'Outro',
+  invoice: 'Nota fiscal',
+  manual: 'Manual',
+  project: 'Projeto',
+  contract: 'Contrato',
+  deed: 'Escritura',
+  permit: 'Licença/Alvará',
+  insurance: 'Seguro',
+  other: 'Outro',
 };
 
-const DOC_TYPE_COLORS: Record<string, string> = {
-  invoice: 'bg-bg-warning text-text-warning',
-  manual: 'bg-bg-subtle text-text-secondary',
-  project: 'bg-bg-accent-subtle text-text-accent',
-  contract: 'bg-bg-accent-subtle text-text-accent',
-  deed: 'bg-bg-success text-text-success',
-  permit: 'bg-bg-warning text-text-warning',
-  insurance: 'bg-bg-danger text-text-danger',
-  other: 'bg-bg-subtle text-text-secondary',
+const DOC_TYPE_TONES: Record<string, 'default' | 'accent' | 'warning' | 'success' | 'danger'> = {
+  invoice: 'warning',
+  manual: 'default',
+  project: 'accent',
+  contract: 'accent',
+  deed: 'success',
+  permit: 'warning',
+  insurance: 'danger',
+  other: 'default',
 };
 
 const metaSchema = z.object({
@@ -49,79 +55,91 @@ const metaSchema = z.object({
 type MetaForm = z.infer<typeof metaSchema>;
 
 function DocRow({
-  doc, onDelete, onOcr, ocrLoading,
+  doc,
+  onDelete,
+  onOcr,
+  ocrLoading,
 }: {
   doc: Document;
   onDelete: () => void;
   onOcr: () => void;
   ocrLoading: boolean;
 }) {
-  const hasOcr = !!doc.ocr_data;
+  const hasOcr = Boolean(doc.ocr_data);
   const isInvoice = doc.type === 'invoice';
+  const expired = Boolean(doc.expiry_date && new Date(doc.expiry_date) < new Date());
+  const tone = DOC_TYPE_TONES[doc.type] ?? 'default';
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', DOC_TYPE_COLORS[doc.type])}>
-            <FileText className="h-4 w-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm text-text-primary truncate">{doc.title}</p>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <Badge variant="secondary" className="text-xs">{DOC_TYPE_LABELS[doc.type] ?? doc.type}</Badge>
-              {doc.issue_date && (
-                <span className="text-xs text-text-secondary">{formatDate(doc.issue_date)}</span>
-              )}
-              {doc.amount && (
-                <span className="text-xs font-medium text-text-success">{formatCurrency(doc.amount)}</span>
-              )}
-              {doc.expiry_date && new Date(doc.expiry_date) < new Date() && (
-                <Badge variant="destructive" className="text-xs">Vencido</Badge>
-              )}
-            </div>
-            {doc.vendor_cnpj && (
-              <p className="text-xs text-text-secondary mt-0.5">CNPJ: {doc.vendor_cnpj}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {isInvoice && !hasOcr && (
-              <Button
-                variant="ghost" size="icon"
-                className="h-8 w-8 text-text-accent hover:bg-bg-accent-subtle"
-                title="Processar com IA"
-                onClick={onOcr}
-                disabled={ocrLoading}
-              >
-                <Sparkles className={cn('h-3.5 w-3.5', ocrLoading && 'animate-pulse')} />
-              </Button>
+    <article className={documentRowVariants()}>
+      <div className="flex items-start gap-3">
+        <div className={documentTypeIconVariants({ tone })}>
+          <FileText className="h-4 w-4" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-text-primary">{doc.title}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {DOC_TYPE_LABELS[doc.type] ?? doc.type}
+            </Badge>
+            {doc.issue_date && <span className="text-xs text-text-secondary">{formatDate(doc.issue_date)}</span>}
+            {doc.amount && <span className="text-xs font-medium text-text-success">{formatCurrency(doc.amount)}</span>}
+            {expired && (
+              <Badge variant="destructive" className="text-xs">
+                Vencido
+              </Badge>
             )}
             {hasOcr && (
-              <span title="OCR processado">
-                <Sparkles className="h-3.5 w-3.5 text-text-accent" />
-              </span>
+              <Badge variant="outline" className="text-xs">
+                OCR processado
+              </Badge>
             )}
-            <a
-              href={doc.file_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-bg-subtle transition-colors"
-              aria-label="Abrir documento"
-            >
-              <ExternalLink className="h-3.5 w-3.5 text-text-secondary" />
-            </a>
-            <Button
-              variant="ghost" size="icon"
-              className="h-8 w-8 text-text-danger hover:bg-bg-danger"
-              onClick={onDelete}
-              aria-label="Remover documento"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
           </div>
+          {doc.vendor_cnpj && <p className="mt-1 text-xs text-text-secondary">CNPJ: {doc.vendor_cnpj}</p>}
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {isInvoice && !hasOcr && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 min-h-8 w-8 text-text-accent hover:bg-bg-accent-subtle"
+              title="Processar com IA"
+              onClick={onOcr}
+              disabled={ocrLoading}
+            >
+              <Sparkles className={cn('h-3.5 w-3.5', ocrLoading && 'animate-pulse')} />
+            </Button>
+          )}
+          {hasOcr && (
+            <span title="OCR processado" className="flex h-8 w-8 items-center justify-center">
+              <Sparkles className="h-3.5 w-3.5 text-text-accent" />
+            </span>
+          )}
+          <a
+            href={doc.file_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-text-secondary transition-colors hover:bg-bg-subtle"
+            aria-label="Abrir documento"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 min-h-8 w-8 text-text-danger hover:bg-bg-danger"
+            onClick={onDelete}
+            aria-label="Remover documento"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -135,12 +153,18 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   const [uploading, setUploading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState<string | null>(null);
 
-  const { data, mutate } = useSWR(
-    ['documents', id, typeFilter],
-    () => documentsApi.list(id, { type: typeFilter === 'all' ? undefined : typeFilter })
+  const { data, mutate, isLoading } = useSWR(['documents', id, typeFilter], () =>
+    documentsApi.list(id, { type: typeFilter === 'all' ? undefined : typeFilter })
   );
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<MetaForm>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<MetaForm>({
     resolver: zodResolver(metaSchema),
     defaultValues: { type: 'invoice' },
   });
@@ -205,80 +229,119 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-5 safe-bottom">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium text-text-primary">Documentos</h2>
-        <Button onClick={() => fileRef.current?.click()}>
-          <Upload className="h-4 w-4" />
-          Enviar arquivo
-        </Button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".jpg,.jpeg,.png,.webp,.pdf"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-44">
-            <Filter className="h-3.5 w-3.5 mr-2" />
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {docs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <FileSearch className="mb-3 h-10 w-10 text-text-disabled" />
-          <p className="text-text-secondary text-sm">
-            {typeFilter ? 'Nenhum documento deste tipo' : 'Nenhum documento enviado'}
-          </p>
-          <Button variant="outline" className="mt-3" onClick={() => fileRef.current?.click()}>
-            <Upload className="h-4 w-4" /> Enviar documento
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {docs.map((doc) => (
-            <DocRow
-              key={doc.id}
-              doc={doc}
-              onDelete={() => handleDelete(doc.id)}
-              onOcr={() => handleOcr(doc.id)}
-              ocrLoading={ocrLoading === doc.id}
+    <div className="safe-bottom space-y-6">
+      <PageHeader
+        density="editorial"
+        eyebrow="Acervo técnico"
+        title="Documentos do imóvel"
+        description="Repositório documental do prontuário técnico: notas, manuais, contratos, projetos, seguros e licenças."
+        actions={
+          <>
+            <Button type="button" onClick={() => fileRef.current?.click()}>
+              <Upload className="h-4 w-4" />
+              Enviar arquivo
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp,.pdf"
+              className="hidden"
+              onChange={handleFileChange}
             />
-          ))}
-        </div>
-      )}
+          </>
+        }
+      />
 
-      <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setUploadFile(null); }}>
+      <PageSection
+        title="Governança documental"
+        description="Filtre o acervo para localizar evidências técnicas, comprovantes fiscais e documentos com validade operacional."
+        tone="strong"
+        density="editorial"
+        actions={
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-full sm:w-48">
+              <Filter className="mr-2 h-3.5 w-3.5" />
+              <SelectValue placeholder="Tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {Object.entries(DOC_TYPE_LABELS).map(([key, label]) => (
+                <SelectItem key={key} value={key}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      >
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
+            ))}
+          </div>
+        ) : docs.length === 0 ? (
+          <EmptyState
+            icon={<FileSearch className="h-6 w-6" />}
+            title={typeFilter === 'all' ? 'Nenhum documento no acervo' : 'Nenhum documento neste filtro'}
+            description={
+              typeFilter === 'all'
+                ? 'Envie notas, manuais, projetos e comprovantes para compor o prontuário técnico do imóvel.'
+                : 'Ajuste o filtro ou envie um novo documento para este tipo de registro.'
+            }
+            tone="subtle"
+            density="spacious"
+            actions={
+              <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                <Upload className="h-4 w-4" />
+                Enviar documento
+              </Button>
+            }
+          />
+        ) : (
+          <div className="space-y-3">
+            {docs.map((doc) => (
+              <DocRow
+                key={doc.id}
+                doc={doc}
+                onDelete={() => handleDelete(doc.id)}
+                onOcr={() => handleOcr(doc.id)}
+                ocrLoading={ocrLoading === doc.id}
+              />
+            ))}
+          </div>
+        )}
+      </PageSection>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setUploadFile(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Detalhes do documento</DialogTitle>
           </DialogHeader>
           {uploadFile && (
-            <div className="rounded-lg bg-bg-subtle px-3 py-2 text-sm text-text-secondary mb-2">
-              📄 {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
+            <div className="mb-2 rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2 text-sm text-text-secondary">
+              {uploadFile.name} ({(uploadFile.size / 1024).toFixed(0)} KB)
             </div>
           )}
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-1">
-            <div className="grid grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-1 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Tipo *</Label>
-                <Select defaultValue="invoice" onValueChange={(v) => setValue('type', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select defaultValue="invoice" onValueChange={(value) => setValue('type', value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(DOC_TYPE_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    {Object.entries(DOC_TYPE_LABELS).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>
+                        {label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -316,14 +379,22 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             </div>
 
             {watchType === 'invoice' && (
-              <div className="flex items-center gap-2 rounded-lg border-half border-border-accent bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
+              <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border-half border-border-accent bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
                 Após enviar, use o botão IA para extrair dados automaticamente da nota fiscal.
               </div>
             )}
 
             <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); setUploadFile(null); }} className="flex-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDialogOpen(false);
+                  setUploadFile(null);
+                }}
+                className="flex-1"
+              >
                 Cancelar
               </Button>
               <Button type="submit" loading={uploading} className="flex-1">

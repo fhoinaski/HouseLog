@@ -45,11 +45,11 @@ export default function ProviderOpportunitiesPage() {
       <PageHeader
         eyebrow="Provider network"
         title="Rede homologada"
-        description="Solicitacoes elegiveis para sua atuacao tecnica dentro da operacao privada HouseLog."
+        description="Solicitações elegíveis para sua atuação técnica dentro da operação privada HouseLog."
       />
 
       <PageSection
-        title="Elegibilidade tecnica"
+        title="Elegibilidade técnica"
         description="Filtre por sistema para priorizar os chamados mais aderentes ao seu perfil homologado."
         contentClassName="flex flex-wrap gap-2"
       >
@@ -67,8 +67,8 @@ export default function ProviderOpportunitiesPage() {
       </PageSection>
 
       <PageSection
-        title="Operacoes elegiveis"
-        description="Solicitacoes abertas para analise e proposta dentro da rede homologada."
+        title="Operações elegíveis"
+        description="Solicitações abertas para análise e proposta dentro da rede homologada."
         tone="strong"
       >
         {isLoading ? (
@@ -80,8 +80,8 @@ export default function ProviderOpportunitiesPage() {
         ) : opportunities.length === 0 ? (
           <EmptyState
             icon={<Briefcase className="h-6 w-6" />}
-            title="Nenhuma solicitacao elegivel no momento"
-            description="Quando uma operacao privada compativel com sua homologacao estiver disponivel, ela aparecera aqui para analise."
+            title="Nenhuma solicitação elegível no momento"
+            description="Quando uma operação privada compatível com sua homologação estiver disponível, ela aparecerá aqui para análise."
             tone="subtle"
             density="spacious"
           />
@@ -93,7 +93,7 @@ export default function ProviderOpportunitiesPage() {
                   interactive
                   leadingIcon={<Briefcase className="h-4 w-4" />}
                   title={item.title}
-                  meta={`${SYSTEM_TYPE_LABELS[item.system_type]} - ${item.room_name ?? 'Sem comodo'}`}
+                  meta={`${SYSTEM_TYPE_LABELS[item.system_type]} - ${item.room_name ?? 'Sem cômodo'}`}
                   value={item.my_bid ? formatCurrency(item.my_bid.amount) : undefined}
                   status={
                     <div className="flex max-w-[10rem] flex-wrap justify-end gap-1.5">
@@ -115,7 +115,7 @@ export default function ProviderOpportunitiesPage() {
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs">
-                          Elegivel
+                          Elegível
                         </Badge>
                       )}
                     </div>

@@ -32,7 +32,7 @@ export function PageSection({
             {title && <h2 className="text-base font-medium text-text-primary">{title}</h2>}
             {description && <p className="max-w-2xl text-sm leading-6 text-text-secondary">{description}</p>}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+          {actions && <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div>}
         </div>
       )}
       <div className={cn(contentClassName)}>{children}</div>

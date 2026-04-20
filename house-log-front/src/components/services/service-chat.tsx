@@ -6,8 +6,9 @@ import { MessageCircle, Send } from 'lucide-react';
 import { messagesApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { chatBubbleVariants, chatPanelVariants } from '@/components/ui/visual-system';
 import { formatDate, cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -48,42 +49,43 @@ export function ServiceChat({ serviceOrderId, title = 'Chat da OS' }: ServiceCha
   }
 
   return (
-    <Card className="overflow-hidden rounded-md bg-[var(--provider-surface)]">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <MessageCircle className="h-4 w-4" />
-          {title}
-        </CardTitle>
+    <Card variant="section" density="editorial" className="overflow-hidden">
+      <CardHeader className="gap-2 pb-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-bg-accent-subtle text-text-accent">
+            <MessageCircle className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <CardTitle className="text-base leading-tight">{title}</CardTitle>
+            <CardDescription className="mt-1 leading-6">
+              Canal privado para alinhar escopo, evidencias e proximos passos da OS.
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="max-h-[22rem] min-h-48 space-y-3 overflow-y-auto rounded-md bg-[var(--provider-surface-strong)] p-3">
+
+      <CardContent className="space-y-4">
+        <div className={chatPanelVariants()}>
           {isLoading ? (
-            <div className="rounded-md bg-[var(--provider-surface)] p-3 text-sm text-text-secondary">
+            <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-sm leading-6 text-text-secondary">
               Carregando mensagens...
             </div>
           ) : error ? (
-            <div className="rounded-md bg-[var(--provider-surface)] p-3 text-sm text-text-secondary">
-              Não foi possível carregar as mensagens agora.
+            <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-sm leading-6 text-text-secondary">
+              Nao foi possivel carregar as mensagens agora.
             </div>
           ) : messages.length === 0 ? (
-            <div className="rounded-md bg-[var(--provider-surface)] p-3 text-sm leading-6 text-text-secondary">
-              Nenhuma mensagem ainda. Use este espaço para alinhar escopo, evidências e próximos passos da OS.
+            <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-sm leading-6 text-text-secondary">
+              Nenhuma mensagem ainda. Use este espaco para alinhar escopo, evidencias e proximos passos da OS.
             </div>
           ) : (
             messages.map((msg) => {
               const mine = msg.author_id === user?.id;
               return (
                 <div key={msg.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-                  <div
-                    className={cn(
-                      'max-w-[88%] rounded-md px-3 py-2 text-sm leading-6 shadow-none',
-                      mine
-                        ? 'bg-[var(--interactive-primary-bg)] text-[var(--interactive-primary-text)]'
-                        : 'bg-[var(--provider-surface)] text-text-primary'
-                    )}
-                  >
-                    <p className={cn('mb-1 text-[11px]', mine ? 'opacity-75' : 'text-text-tertiary')}>
-                      {msg.author_name} · {formatDate(msg.created_at)}
+                  <div className={chatBubbleVariants({ mine })}>
+                    <p className={cn('mb-1 text-[11px] font-medium', mine ? 'opacity-75' : 'text-text-tertiary')}>
+                      {msg.author_name} - {formatDate(msg.created_at)}
                     </p>
                     <p className="whitespace-pre-wrap">{msg.body}</p>
                   </div>
@@ -93,13 +95,13 @@ export function ServiceChat({ serviceOrderId, title = 'Chat da OS' }: ServiceCha
           )}
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Digite sua mensagem"
+            placeholder="Digite sua mensagem privada"
             rows={2}
-            className="min-h-14"
+            className="min-h-16"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -107,7 +109,13 @@ export function ServiceChat({ serviceOrderId, title = 'Chat da OS' }: ServiceCha
               }
             }}
           />
-          <Button type="button" disabled={!hasContent} loading={sending} onClick={() => void sendMessage()} className="w-full sm:w-auto">
+          <Button
+            type="button"
+            disabled={!hasContent}
+            loading={sending}
+            onClick={() => void sendMessage()}
+            className="w-full self-end sm:w-auto"
+          >
             <Send className="h-4 w-4" />
             Enviar
           </Button>

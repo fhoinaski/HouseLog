@@ -23,7 +23,7 @@ export default function ProviderDashboard() {
 
   const statCards = [
     { label: 'Em andamento', value: (stats.in_progress ?? 0) + (stats.approved ?? 0), icon: Wrench, tone: 'warning' as const },
-    { label: 'Concluidas', value: (stats.completed ?? 0) + (stats.verified ?? 0), icon: CheckCircle2, tone: 'success' as const },
+    { label: 'Concluídas', value: (stats.completed ?? 0) + (stats.verified ?? 0), icon: CheckCircle2, tone: 'success' as const },
     { label: 'Urgentes', value: 0, icon: AlertTriangle, tone: 'danger' as const },
     { label: 'Total OS', value: total, icon: Clock, tone: 'accent' as const },
   ];
@@ -32,11 +32,11 @@ export default function ProviderDashboard() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Provider network"
-        title={`Ola, ${user?.name?.split(' ')[0]}`}
-        description="Rede homologada para operacoes privadas"
+        title={`Olá, ${user?.name?.split(' ')[0]}`}
+        description="Rede homologada para operações privadas"
       />
 
-      <PageSection title="Resumo operacional" description="Leitura rapida das operacoes atribuidas a sua rede.">
+      <PageSection title="Resumo operacional" description="Leitura rápida das operações atribuídas à sua rede.">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {statCards.map((metric) => (
             <MetricCard
@@ -51,10 +51,10 @@ export default function ProviderDashboard() {
       </PageSection>
 
       {recentBids.length > 0 && (
-        <PageSection title="Ultimas propostas enviadas">
+        <PageSection title="Últimas propostas enviadas">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Historico recente</CardTitle>
+              <CardTitle className="text-base">Histórico recente</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {(recentBids as unknown as { id: string; service_title: string; property_name: string; amount: number; status: string; created_at: string }[]).map((bid) => (
@@ -83,8 +83,8 @@ export default function ProviderDashboard() {
                 <Wrench className="h-4 w-4 text-text-accent" />
               </div>
               <div>
-                <p className="text-sm font-medium">Ver operacoes atribuidas</p>
-                <p className="text-xs text-muted-foreground">Gerencie ordens de servico dentro da rede homologada</p>
+                <p className="text-sm font-medium">Ver operações atribuídas</p>
+                <p className="text-xs text-muted-foreground">Gerencie ordens de serviço dentro da rede homologada</p>
               </div>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />

@@ -35,6 +35,7 @@ export const cardVariants = cva('hl-card text-text-primary', {
     variant: {
       default: '',
       tonal: 'bg-[var(--surface-strong)]',
+      section: 'rounded-[var(--radius-xl)] bg-[var(--surface-base)]',
       raised: 'bg-[var(--surface-raised)] shadow-[var(--surface-shadow-raised)]',
       glass: 'bg-[var(--surface-glass)] backdrop-blur-[var(--surface-blur)]',
       interactive: 'card-hover cursor-pointer bg-[var(--surface-base)]',
@@ -43,6 +44,7 @@ export const cardVariants = cva('hl-card text-text-primary', {
       compact: '[--card-padding:12px]',
       default: '',
       comfortable: '[--card-padding:20px]',
+      editorial: '[--card-padding:20px]',
     },
   },
   defaultVariants: {
@@ -160,6 +162,7 @@ export const pageHeaderVariants = cva('flex flex-col gap-3 text-text-primary', {
       compact: 'py-1',
       default: 'py-2',
       spacious: 'py-4',
+      editorial: 'py-3 sm:py-5',
     },
   },
   defaultVariants: {
@@ -178,6 +181,7 @@ export const pageSectionVariants = cva('space-y-3', {
       compact: 'space-y-2',
       default: 'space-y-3',
       comfortable: 'space-y-4',
+      editorial: 'space-y-4 sm:space-y-5',
     },
   },
   defaultVariants: {
@@ -230,6 +234,78 @@ export const metricIconVariants = cva(
   }
 );
 
+export const actionTileVariants = cva(
+  'group/action-tile flex min-h-28 flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-center text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
+  {
+    variants: {
+      tone: {
+        default: '',
+        accent: '',
+        warning: '',
+        success: '',
+        muted: '',
+      },
+      density: {
+        compact: 'min-h-24 p-3',
+        default: 'min-h-28 p-4',
+        comfortable: 'min-h-32 p-5',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+      density: 'default',
+    },
+  }
+);
+
+export const actionTileIconVariants = cva(
+  'flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] transition-colors',
+  {
+    variants: {
+      tone: {
+        default: 'bg-[var(--surface-strong)] text-text-primary',
+        accent: 'bg-bg-accent-subtle text-text-accent',
+        warning: 'bg-bg-warning text-text-warning',
+        success: 'bg-bg-success text-text-success',
+        muted: 'bg-bg-subtle text-text-secondary',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+    },
+  }
+);
+
+export const documentRowVariants = cva('rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 text-text-primary', {
+  variants: {
+    interactive: {
+      true: 'transition-colors hover:bg-[var(--field-bg-hover)]',
+      false: '',
+    },
+  },
+  defaultVariants: {
+    interactive: false,
+  },
+});
+
+export const documentTypeIconVariants = cva(
+  'flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
+  {
+    variants: {
+      tone: {
+        default: 'bg-bg-subtle text-text-secondary',
+        accent: 'bg-bg-accent-subtle text-text-accent',
+        warning: 'bg-bg-warning text-text-warning',
+        success: 'bg-bg-success text-text-success',
+        danger: 'bg-bg-danger text-text-danger',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+    },
+  }
+);
+
 export const serviceOrderCardVariants = cva(
   'group/service-order rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3 text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)]',
   {
@@ -250,6 +326,31 @@ export const serviceOrderCardVariants = cva(
     },
   }
 );
+
+export const propertySummaryCardVariants = cva('rounded-[var(--radius-xl)] bg-[var(--surface-base)] text-text-primary', {
+  variants: {
+    density: {
+      compact: 'p-4',
+      default: 'p-5',
+      comfortable: 'p-6',
+    },
+  },
+  defaultVariants: {
+    density: 'default',
+  },
+});
+
+export const propertySummaryItemVariants = cva('rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3', {
+  variants: {
+    tone: {
+      default: '',
+      muted: 'bg-[var(--surface-base)]',
+    },
+  },
+  defaultVariants: {
+    tone: 'default',
+  },
+});
 
 export const emptyStateVariants = cva(
   'flex flex-col items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-6 py-12 text-center text-text-primary',
@@ -272,3 +373,35 @@ export const emptyStateVariants = cva(
     },
   }
 );
+
+export const chatPanelVariants = cva(
+  'min-h-56 max-h-[24rem] overflow-y-auto rounded-[var(--radius-xl)] p-3 text-text-primary sm:p-4',
+  {
+    variants: {
+      tone: {
+        default: 'bg-[var(--surface-strong)]',
+        subtle: 'bg-[var(--surface-base)]',
+      },
+      density: {
+        compact: 'space-y-2',
+        default: 'space-y-3',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+      density: 'default',
+    },
+  }
+);
+
+export const chatBubbleVariants = cva('max-w-[min(88%,34rem)] rounded-[var(--radius-lg)] px-3 py-2 text-sm leading-6', {
+  variants: {
+    mine: {
+      true: 'bg-[var(--interactive-primary-bg)] text-[var(--interactive-primary-text)]',
+      false: 'bg-[var(--surface-base)] text-text-primary',
+    },
+  },
+  defaultVariants: {
+    mine: false,
+  },
+});

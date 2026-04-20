@@ -28,8 +28,8 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-medium text-text-primary">{title}</h3>
-      {description && <p className="mt-1 max-w-sm text-sm leading-6 text-text-secondary">{description}</p>}
+      <h3 className="max-w-sm text-sm font-medium text-text-primary">{title}</h3>
+      {description && <p className="mt-1 max-w-md text-sm leading-6 text-text-secondary">{description}</p>}
       {actions && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{actions}</div>}
     </div>
   );
