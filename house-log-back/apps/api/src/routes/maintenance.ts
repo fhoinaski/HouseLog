@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
+import { canMarkMaintenanceDone } from '../lib/authorization';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { getDb } from '../db/client';
@@ -20,6 +22,8 @@ type MaintenanceSchedule = {
 
 const maintenance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 maintenance.use('*', authMiddleware);
+
+type MaintenanceContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 const FREQUENCY_DAYS: Record<string, number> = {
   weekly: 7, monthly: 30, quarterly: 90, semiannual: 180, annual: 365,
@@ -41,6 +45,94 @@ function calcNextDue(frequency: string, lastDone?: string): string {
   const days = FREQUENCY_DAYS[frequency] ?? 365;
   base.setDate(base.getDate() + days);
   return base.toISOString().slice(0, 10);
+}
+
+async function markMaintenanceDone(c: MaintenanceContext) {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [schedule] = await db
+    .select({
+      id: maintenanceSchedules.id,
+      property_id: maintenanceSchedules.propertyId,
+      system_type: maintenanceSchedules.systemType,
+      title: maintenanceSchedules.title,
+      description: maintenanceSchedules.description,
+      responsible: maintenanceSchedules.responsible,
+      frequency: maintenanceSchedules.frequency,
+      last_done: maintenanceSchedules.lastDone,
+      next_due: maintenanceSchedules.nextDue,
+      auto_create_os: maintenanceSchedules.autoCreateOs,
+      notes: maintenanceSchedules.notes,
+      created_at: maintenanceSchedules.createdAt,
+      deleted_at: maintenanceSchedules.deletedAt,
+    })
+    .from(maintenanceSchedules)
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .limit(1) as MaintenanceSchedule[];
+
+  if (!schedule) return err(c, 'Agendamento nÃ£o encontrado', 'NOT_FOUND', 404);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const nextDue = calcNextDue(schedule.frequency, today);
+
+  await db
+    .update(maintenanceSchedules)
+    .set({ lastDone: today, nextDue })
+    .where(eq(maintenanceSchedules.id, id));
+
+  // If auto_create_os is enabled, create a service order
+  if (schedule.auto_create_os) {
+    const osId = nanoid();
+    await db.insert(serviceOrders).values({
+      id: osId,
+      propertyId,
+      systemType: schedule.system_type as typeof serviceOrders.$inferInsert.systemType,
+      requestedBy: userId,
+      title: `[Auto] ${schedule.title}`,
+      description: `ManutenÃ§Ã£o preventiva gerada automaticamente. PrÃ³xima: ${nextDue}`,
+      priority: 'preventive',
+      status: 'requested',
+      beforePhotos: [],
+      afterPhotos: [],
+      checklist: [],
+    });
+
+    await writeAuditLog(c.env.DB, {
+      entityType: 'service_order',
+      entityId: osId,
+      action: 'auto_create',
+      actorId: userId,
+      newData: { maintenance_schedule_id: id, property_id: propertyId },
+    });
+  }
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'maintenance_schedule',
+    entityId: id,
+    action: 'maintenance_mark_done',
+    actorId: userId,
+    oldData: {
+      previous_last_done: schedule.last_done,
+      previous_next_due: schedule.next_due,
+      auto_create_os: schedule.auto_create_os === 1,
+    },
+    newData: {
+      property_id: propertyId,
+      maintenance_schedule_id: id,
+      last_done: today,
+      next_due: nextDue,
+      auto_create_os: schedule.auto_create_os === 1,
+    },
+  });
+
+  return ok(c, { last_done: today, next_due: nextDue });
 }
 
 // ── GET /properties/:propertyId/maintenance ───────────────────────────────────
@@ -244,6 +336,8 @@ maintenance.put('/:id', async (c) => {
 // ── POST /properties/:propertyId/maintenance/:id/done ────────────────────────
 // Mark a maintenance as completed today → recalculate next_due
 
+maintenance.post('/:id/mark-done', markMaintenanceDone);
+
 maintenance.post('/:id/done', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
@@ -251,7 +345,7 @@ maintenance.post('/:id/done', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [schedule] = await db
@@ -303,13 +397,25 @@ maintenance.post('/:id/done', async (c) => {
 
     await writeAuditLog(c.env.DB, {
       entityType: 'service_order', entityId: osId, action: 'auto_create',
-      actorId: userId, newData: { maintenance_schedule_id: id },
+      actorId: userId, newData: { maintenance_schedule_id: id, property_id: propertyId },
     });
   }
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'maintenance_schedule', entityId: id, action: 'mark_done',
-    actorId: userId, newData: { last_done: today, next_due: nextDue },
+    entityType: 'maintenance_schedule', entityId: id, action: 'maintenance_mark_done',
+    actorId: userId,
+    oldData: {
+      previous_last_done: schedule.last_done,
+      previous_next_due: schedule.next_due,
+      auto_create_os: schedule.auto_create_os === 1,
+    },
+    newData: {
+      property_id: propertyId,
+      maintenance_schedule_id: id,
+      last_done: today,
+      next_due: nextDue,
+      auto_create_os: schedule.auto_create_os === 1,
+    },
   });
 
   return ok(c, { last_done: today, next_due: nextDue });

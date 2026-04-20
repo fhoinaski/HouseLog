@@ -3,7 +3,8 @@ import { nanoid } from 'nanoid';
 import { and, eq, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
-import { assertPropertyAccess, authMiddleware } from '../middleware/auth';
+import { canCreateAuditLink } from '../lib/authorization';
+import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
@@ -22,8 +23,8 @@ auditLinks.post('/', authMiddleware, async (c) => {
   const userId = c.get('userId');
   const userRole = c.get('userRole');
 
-  const canAccessProperty = await assertPropertyAccess(c.env.DB, propertyId, userId, userRole);
-  if (!canAccessProperty) return err(c, 'Permissão insuficiente', 'FORBIDDEN', 403);
+  const canCreateLink = await canCreateAuditLink(c.env.DB, { propertyId, userId, role: userRole });
+  if (!canCreateLink) return err(c, 'Permissão insuficiente', 'FORBIDDEN', 403);
 
   // Verify the OS exists and belongs to the property
   const [order] = await db
@@ -188,8 +189,9 @@ auditLinks.post('/public/:token/submit', async (c) => {
 
   if (scope.canUploadPhotos) {
     const files = formData.getAll('photos');
-    for (const file of files) {
-      if (typeof file === 'string') continue;
+    for (const entry of files) {
+      if (typeof entry === 'string') continue;
+      const file = entry as File;
       if (!file.type.startsWith('image/')) continue;
       if (file.size > 50 * 1024 * 1024) continue;
 

@@ -3,6 +3,10 @@ import { and, eq, isNull, or } from 'drizzle-orm';
 import { verifyJwt } from '../lib/jwt';
 import { getDb } from '../db/client';
 import { properties, propertyCollaborators } from '../db/schema';
+import {
+  canAccessProperty,
+  canRevealCredentialSecret,
+} from '../lib/authorization';
 import type { Bindings, Variables, Role } from '../lib/types';
 
 // Extracts JWT from Authorization header and sets userId/userRole in context
@@ -53,40 +57,7 @@ export async function assertPropertyAccess(
   userId: string,
   role: Role
 ): Promise<boolean> {
-  // Providers must use provider portal/public share flows only.
-  // They cannot access property-level owner/manager dashboards.
-  if (role === 'provider' || role === 'temp_provider') return false;
-
-  const drizzle = getDb(db);
-  const [owned] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, propertyId),
-        or(eq(properties.ownerId, userId), eq(properties.managerId, userId)),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-  if (owned) return true;
-
-  try {
-    const [collab] = await drizzle
-      .select({ id: propertyCollaborators.id })
-      .from(propertyCollaborators)
-      .where(
-        and(
-          eq(propertyCollaborators.propertyId, propertyId),
-          eq(propertyCollaborators.userId, userId)
-        )
-      )
-      .limit(1);
-    return !!collab;
-  } catch (e) {
-    if (String(e).includes('property_collaborators')) return false;
-    throw e;
-  }
+  return canAccessProperty(db, { propertyId, userId, role });
 }
 
 // Sensitive property secrets require a direct owner/manager relationship.
@@ -98,22 +69,7 @@ export async function assertPropertySecretAccess(
   userId: string,
   role: Role
 ): Promise<boolean> {
-  if (role === 'provider' || role === 'temp_provider') return false;
-
-  const drizzle = getDb(db);
-  const [property] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, propertyId),
-        or(eq(properties.ownerId, userId), eq(properties.managerId, userId)),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-
-  return !!property;
+  return canRevealCredentialSecret(db, { propertyId, userId, role });
 }
 
 // Returns whether a user is allowed to open (create) a service order on a property.

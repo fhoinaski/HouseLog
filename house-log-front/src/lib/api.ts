@@ -306,7 +306,7 @@ export const maintenanceApi = {
     }),
 
   markDone: (propertyId: string, id: string, auto_create_os?: boolean) =>
-    request<{ schedule: MaintenanceSchedule }>(`/properties/${propertyId}/maintenance/${id}/done`, {
+    request<{ last_done: string; next_due: string }>(`/properties/${propertyId}/maintenance/${id}/mark-done`, {
       method: 'POST', body: JSON.stringify({ auto_create_os: auto_create_os ? 1 : 0 }),
     }),
 

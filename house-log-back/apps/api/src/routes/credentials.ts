@@ -1,16 +1,27 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { writeAuditLog } from '../lib/audit';
-import { authMiddleware, assertPropertyAccess, assertPropertySecretAccess } from '../middleware/auth';
+import {
+  canCreateCredential,
+  canDeleteCredential,
+  canGenerateTemporaryCredentialAccess,
+  canListCredentials,
+  canRevealCredentialSecret,
+  canUpdateCredential,
+} from '../lib/authorization';
+import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { propertyAccessCredentials } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const credentials = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 credentials.use('*', authMiddleware);
+
+type CredentialsContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 const CATEGORIES = ['wifi', 'alarm', 'smart_lock', 'gate', 'app', 'other'] as const;
 
@@ -78,6 +89,52 @@ function toCredentialResponse(row: CredentialRecord): CredentialResponse {
   };
 }
 
+async function revealCredentialSecret(c: CredentialsContext) {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const credId = c.req.param('credId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [cred] = await db
+    .select(credentialRevealSelect)
+    .from(propertyAccessCredentials)
+    .where(
+      and(
+        eq(propertyAccessCredentials.id, credId),
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
+    )
+    .limit(1) as RevealedCredentialRecord[];
+
+  if (!cred) return err(c, 'Credencial nÃ£o encontrada', 'NOT_FOUND', 404);
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'property_access_credential',
+    entityId: cred.id,
+    action: 'secret_reveal',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      category: cred.category,
+      label: cred.label,
+    },
+  });
+
+  return ok(c, {
+    credential: {
+      ...toCredentialResponse(cred),
+      secret: cred.secret,
+      secret_revealed: true,
+    },
+  });
+}
+
 // ── GET /properties/:propertyId/credentials ──────────────────────────────────
 
 credentials.get('/', async (c) => {
@@ -86,7 +143,7 @@ credentials.get('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canListCredentials(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const results = await db
@@ -113,7 +170,7 @@ credentials.post('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canCreateCredential(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -160,7 +217,7 @@ credentials.get('/:credId/secret', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertySecretAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [cred] = await db
@@ -201,6 +258,11 @@ credentials.get('/:credId/secret', async (c) => {
 
 // ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────
 
+// POST /properties/:propertyId/credentials/:credId/secret/reveal
+// Preferred explicit action for sensitive, audited credential reveal.
+
+credentials.post('/:credId/secret/reveal', revealCredentialSecret);
+
 credentials.put('/:credId', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
@@ -208,7 +270,7 @@ credentials.put('/:credId', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canUpdateCredential(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -270,7 +332,7 @@ credentials.delete('/:credId', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canDeleteCredential(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   await db
@@ -298,7 +360,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canGenerateTemporaryCredentialAccess(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => ({})) as { expires_hours?: number; provider_name?: string };

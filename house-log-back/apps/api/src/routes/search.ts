@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import { and, eq, isNull, like, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, like as sqlLike, or } from 'drizzle-orm';
 import { ok } from '../lib/response';
+import { canAccessProperty, listAccessiblePropertyIds } from '../lib/authorization';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import {
@@ -34,12 +35,19 @@ search.get('/', async (c) => {
 
   if (q.length < 2) return ok(c, { results: [] as SearchResult[] });
 
-  const like = `%${q}%`;
+  const pattern = `%${q}%`;
   const results: SearchResult[] = [];
-  const accessFilters = [isNull(properties.deletedAt)];
-  if (role !== 'admin') {
-    accessFilters.push(or(eq(properties.ownerId, userId), eq(properties.managerId, userId))!);
-  }
+
+  const accessiblePropertyIds = propertyId
+    ? (await canAccessProperty(c.env.DB, { propertyId, userId, role }) ? [propertyId] : [])
+    : await listAccessiblePropertyIds(c.env.DB, { userId, role });
+
+  if (accessiblePropertyIds.length === 0) return ok(c, { results });
+
+  const accessFilters = [
+    isNull(properties.deletedAt),
+    inArray(properties.id, accessiblePropertyIds),
+  ];
   if (propertyId) {
     accessFilters.push(eq(properties.id, propertyId));
   }
@@ -61,9 +69,9 @@ search.get('/', async (c) => {
         accessWhere,
         isNull(serviceOrders.deletedAt),
         or(
-          like(serviceOrders.title, like),
-          like(serviceOrders.description, like),
-          like(serviceOrders.systemType, like)
+          sqlLike(serviceOrders.title, pattern),
+          sqlLike(serviceOrders.description, pattern),
+          sqlLike(serviceOrders.systemType, pattern)
         )
       )
     )
@@ -93,7 +101,7 @@ search.get('/', async (c) => {
       and(
         accessWhere,
         isNull(documents.deletedAt),
-        or(like(documents.title, like), like(documents.ocrData, like))
+        or(sqlLike(documents.title, pattern), sqlLike(documents.ocrData, pattern))
       )
     )
     .limit(5);
@@ -124,9 +132,9 @@ search.get('/', async (c) => {
         accessWhere,
         isNull(inventoryItems.deletedAt),
         or(
-          like(inventoryItems.name, like),
-          like(inventoryItems.brand, like),
-          like(inventoryItems.category, like)
+          sqlLike(inventoryItems.name, pattern),
+          sqlLike(inventoryItems.brand, pattern),
+          sqlLike(inventoryItems.category, pattern)
         )
       )
     )
@@ -157,8 +165,8 @@ search.get('/', async (c) => {
         accessWhere,
         isNull(maintenanceSchedules.deletedAt),
         or(
-          like(maintenanceSchedules.title, like),
-          like(maintenanceSchedules.systemType, like)
+          sqlLike(maintenanceSchedules.title, pattern),
+          sqlLike(maintenanceSchedules.systemType, pattern)
         )
       )
     )

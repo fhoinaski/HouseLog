@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
+import { canDeleteDocument, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
@@ -86,7 +87,7 @@ documents.post('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canUploadDocument(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const formData = await c.req.formData().catch(() => null);
@@ -206,7 +207,7 @@ documents.delete('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canDeleteDocument(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [doc] = await db
@@ -255,7 +256,7 @@ documents.post('/:id/ocr', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canRequestDocumentOCR(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [doc] = await db

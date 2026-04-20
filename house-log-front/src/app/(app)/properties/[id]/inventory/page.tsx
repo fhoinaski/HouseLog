@@ -1,20 +1,35 @@
 'use client';
 
+import type * as React from 'react';
 import { use, useRef, useState } from 'react';
+import Link from 'next/link';
 import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Camera, Loader2, Plus, Package, Filter, Search, AlertTriangle, QrCode, ShieldCheck } from 'lucide-react';
-import Link from 'next/link';
+import {
+  AlertTriangle,
+  Camera,
+  Filter,
+  Loader2,
+  Package,
+  Plus,
+  QrCode,
+  Search,
+  ShieldCheck,
+} from 'lucide-react';
 import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
-import { Card, CardContent } from '@/components/ui/card';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { MetricCard } from '@/components/ui/metric-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { inventoryItemCardVariants, inventoryPhotoFrameVariants } from '@/components/ui/visual-system';
 import { INVENTORY_CATEGORY_LABELS, cn } from '@/lib/utils';
 
 const schema = z.object({
@@ -48,16 +63,14 @@ function ItemCard({
   onClick: () => void;
 }) {
   const isLowStock = item.quantity <= item.reserve_qty;
+  const warrantyExpired = Boolean(item.warranty_until && new Date(item.warranty_until) < new Date());
 
   return (
-    <Card
-      className="group cursor-pointer overflow-hidden transition-colors hover:bg-bg-subtle active:scale-[0.98]"
-      onClick={onClick}
-    >
-      <div className="relative h-32 bg-bg-subtle">
+    <article className={inventoryItemCardVariants({ state: isLowStock ? 'lowStock' : 'default' })} onClick={onClick}>
+      <div className={inventoryPhotoFrameVariants({ tone: item.photo_url ? 'default' : 'empty' })}>
         {item.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.photo_url} alt={item.name} className="w-full h-full object-cover" />
+          <img src={item.photo_url} alt={item.name} className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center">
             <Package className="h-8 w-8 text-text-tertiary" />
@@ -66,17 +79,16 @@ function ItemCard({
 
         {uploading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <Loader2 className="h-6 w-6 text-white animate-spin" />
+            <Loader2 className="h-6 w-6 animate-spin text-white" />
           </div>
         ) : (
           <button
+            type="button"
             onClick={onPhotoClick}
             title="Alterar foto"
             className={cn(
-              'absolute inset-0 flex items-center justify-center bg-black/0 transition-colors',
-              item.photo_url
-                ? 'opacity-0 group-hover:opacity-100 group-hover:bg-black/30'
-                : 'opacity-0 group-hover:opacity-100 group-hover:bg-black/10'
+              'absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-colors group-hover/inventory:opacity-100',
+              item.photo_url ? 'group-hover/inventory:bg-black/30' : 'group-hover/inventory:bg-black/10'
             )}
           >
             <Camera className="h-6 w-6 text-white" />
@@ -91,46 +103,49 @@ function ItemCard({
           />
         )}
         {isLowStock && (
-          <div className="absolute top-2 left-2">
-            <Badge variant="urgent" className="text-xs gap-1">
+          <div className="absolute left-2 top-2">
+            <Badge variant="urgent" className="gap-1 text-xs">
               <AlertTriangle className="h-3 w-3" />
               Baixo estoque
             </Badge>
           </div>
         )}
         {item.warranty_until && (
-          <div className="absolute top-2 right-2" title={`Garantia até ${item.warranty_until}`}>
+          <div className="absolute right-2 top-2" title={`Garantia até ${item.warranty_until}`}>
             <div
-              className="flex h-5 w-5 items-center justify-center rounded-full"
-              style={{ background: new Date(item.warranty_until) < new Date() ? 'var(--text-danger)' : 'var(--text-success)' }}
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded-[var(--radius-md)]',
+                warrantyExpired ? 'bg-bg-danger text-text-danger' : 'bg-bg-success text-text-success'
+              )}
             >
-              <ShieldCheck className="h-3 w-3 text-white" />
+              <ShieldCheck className="h-3.5 w-3.5" />
             </div>
           </div>
         )}
         <Link
           href={`/properties/${propertyId}/inventory/${item.id}/qr`}
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-2 left-2 h-6 w-6 flex items-center justify-center rounded bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute bottom-2 left-2 flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-black/50 text-white opacity-0 transition-opacity group-hover/inventory:opacity-100"
           title="Ver QR Code"
         >
-          <QrCode className="h-3 w-3" />
+          <QrCode className="h-3.5 w-3.5" />
         </Link>
       </div>
-      <CardContent className="p-3">
-        <Badge variant="secondary" className="text-xs mb-1.5">
+
+      <div className="p-3">
+        <Badge variant="secondary" className="mb-1.5 text-xs">
           {INVENTORY_CATEGORY_LABELS[item.category] ?? item.category}
         </Badge>
-        <p className="font-medium text-sm text-text-primary truncate">{item.name}</p>
-        {item.brand && <p className="text-xs text-text-secondary truncate">{item.brand}</p>}
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-sm font-medium text-text-primary">{item.quantity} {item.unit}</span>
-          {item.room_name && (
-            <span className="text-xs text-text-secondary truncate ml-2">{item.room_name}</span>
-          )}
+        <p className="truncate text-sm font-medium text-text-primary">{item.name}</p>
+        {item.brand && <p className="truncate text-xs text-text-secondary">{item.brand}</p>}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-text-primary">
+            {item.quantity} {item.unit}
+          </span>
+          {item.room_name && <span className="truncate text-xs text-text-secondary">{item.room_name}</span>}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   );
 }
 
@@ -147,9 +162,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<string | null>(null);
 
-  const { data, mutate } = useSWR(
-    ['inventory', id, categoryFilter, roomFilter],
-    () => inventoryApi.list(id, {
+  const { data, mutate, isLoading } = useSWR(['inventory', id, categoryFilter, roomFilter], () =>
+    inventoryApi.list(id, {
       category: categoryFilter === 'all' ? undefined : categoryFilter,
       room_id: roomFilter === 'all' ? undefined : roomFilter,
     })
@@ -157,14 +171,24 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
   const { data: roomsData } = useSWR(['rooms', id], () => roomsApi.list(id));
 
-  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { quantity: 0, unit: 'un', reserve_qty: 0 },
   });
 
-  const items = (data?.data ?? []).filter((item) =>
+  const allItems = data?.data ?? [];
+  const items = allItems.filter((item) =>
     !search || item.name.toLowerCase().includes(search.toLowerCase()) || item.brand?.toLowerCase().includes(search.toLowerCase())
   );
+  const lowStockCount = allItems.filter((item) => item.quantity <= item.reserve_qty).length;
+  const warrantyCount = allItems.filter((item) => Boolean(item.warranty_until)).length;
+  const roomTrackedCount = allItems.filter((item) => Boolean(item.room_id)).length;
 
   function openNew() {
     setEditItem(null);
@@ -210,7 +234,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       await inventoryApi.uploadPhoto(id, itemId, file);
       await mutate();
     } catch {
-      // silently fail — user can retry
+      // Preserva o comportamento anterior: falha silenciosa e permite nova tentativa.
     } finally {
       setUploadingId(null);
       uploadTargetRef.current = null;
@@ -235,73 +259,125 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-5 safe-bottom">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium text-text-primary">Inventário</h2>
-        <Button onClick={openNew}>
-          <Plus className="h-4 w-4" />
-          Novo item
-        </Button>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar item..."
-            className="h-11 w-full rounded-lg border-half border-border-subtle bg-bg-surface py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"
-          />
-        </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-40">
-            <Filter className="h-3.5 w-3.5 mr-2" />
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            {Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, v]) => (
-              <SelectItem key={k} value={k}>{v}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={roomFilter} onValueChange={setRoomFilter}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Cômodo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os cômodos</SelectItem>
-            {(roomsData?.rooms ?? []).map((r) => (
-              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Package className="mb-3 h-10 w-10 text-text-disabled" />
-          <p className="text-text-secondary text-sm">Nenhum item encontrado</p>
-          <Button variant="outline" className="mt-3" onClick={openNew}>
-            <Plus className="h-4 w-4" /> Adicionar item
+    <div className="safe-bottom space-y-6">
+      <PageHeader
+        density="editorial"
+        eyebrow="Prontuário técnico"
+        title="Inventário técnico"
+        description="Materiais, equipamentos, reservas, garantias e rastreabilidade física que sustentam a operação do imóvel."
+        actions={
+          <Button type="button" onClick={openNew}>
+            <Plus className="h-4 w-4" />
+            Novo item
           </Button>
+        }
+      />
+
+      <PageSection
+        title="Rastreabilidade do acervo físico"
+        description="Acompanhe itens por categoria, cômodo, estoque mínimo, garantia e QR Code para consulta em campo."
+        tone="strong"
+        density="editorial"
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard label="Itens" value={allItems.length} helper="Registros filtrados" icon={Package} />
+          <MetricCard
+            label="Baixo estoque"
+            value={lowStockCount}
+            helper={lowStockCount > 0 ? 'Repor ou revisar reserva' : 'Reservas ok'}
+            icon={AlertTriangle}
+            tone={lowStockCount > 0 ? 'warning' : 'default'}
+          />
+          <MetricCard label="Com garantia" value={warrantyCount} helper="Itens com validade" icon={ShieldCheck} tone="success" />
+          <MetricCard label="Com cômodo" value={roomTrackedCount} helper="Localização rastreada" icon={QrCode} tone="accent" />
         </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {items.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              propertyId={id}
-              uploading={uploadingId === item.id}
-              onPhotoClick={(e) => handlePhotoClick(e, item.id)}
-              onClick={() => openEdit(item)}
-            />
-          ))}
-        </div>
-      )}
+      </PageSection>
+
+      <PageSection
+        title="Itens do inventário"
+        description="Filtre o acervo técnico para localizar materiais, equipamentos e reservas por uso operacional."
+        density="editorial"
+        actions={
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <div className="relative min-w-0 sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar item..."
+                className="pl-9"
+              />
+            </div>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full sm:w-44">
+                <Filter className="mr-2 h-3.5 w-3.5" />
+                <SelectValue placeholder="Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={roomFilter} onValueChange={setRoomFilter}>
+              <SelectTrigger className="w-full sm:w-48">
+                <SelectValue placeholder="Cômodo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os cômodos</SelectItem>
+                {(roomsData?.rooms ?? []).map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      >
+        {isLoading ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="hl-skeleton h-52 rounded-[var(--radius-xl)]" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<Package className="h-6 w-6" />}
+            title={allItems.length === 0 ? 'Nenhum item no inventário técnico' : 'Nenhum item encontrado'}
+            description={
+              allItems.length === 0
+                ? 'Adicione materiais, equipamentos e reservas para compor a rastreabilidade técnica do imóvel.'
+                : 'Ajuste busca, categoria ou cômodo para localizar outro registro do acervo.'
+            }
+            tone="subtle"
+            density="spacious"
+            actions={
+              <Button type="button" variant="outline" onClick={openNew}>
+                <Plus className="h-4 w-4" />
+                Adicionar item
+              </Button>
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {items.map((item) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                propertyId={id}
+                uploading={uploadingId === item.id}
+                onPhotoClick={(e) => handlePhotoClick(e, item.id)}
+                onClick={() => openEdit(item)}
+              />
+            ))}
+          </div>
+        )}
+      </PageSection>
 
       <input
         ref={fileInputRef}
@@ -316,25 +392,26 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
           <DialogHeader>
             <DialogTitle>{editItem ? 'Editar item' : 'Novo item'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2 max-h-[70vh] overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5">
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-2 max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label>Categoria *</Label>
-                <Select
-                  defaultValue={editItem?.category}
-                  onValueChange={(v) => setValue('category', v)}
-                >
-                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                <Select defaultValue={editItem?.category} onValueChange={(v) => setValue('category', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecionar..." />
+                  </SelectTrigger>
                   <SelectContent>
                     {Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                      <SelectItem key={k} value={k}>
+                        {v}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {errors.category && <p className="text-xs text-text-danger">{errors.category.message}</p>}
               </div>
 
-              <div className="col-span-2 space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="item-name">Nome *</Label>
                 <Input id="item-name" placeholder="Tinta acrílica, cerâmica..." {...register('name')} />
                 {errors.name && <p className="text-xs text-text-danger">{errors.name.message}</p>}
@@ -353,7 +430,11 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               <div className="space-y-1.5">
                 <Label htmlFor="color-code">Código de cor</Label>
                 <div className="flex gap-2">
-                  <input type="color" className="h-9 w-12 rounded border-half border-border-subtle cursor-pointer" {...register('color_code')} />
+                  <input
+                    type="color"
+                    className="h-11 w-12 cursor-pointer rounded-[var(--radius-md)] border-half border-border-subtle"
+                    {...register('color_code')}
+                  />
                   <Input id="color-code" placeholder="#FFFFFF" {...register('color_code')} />
                 </div>
               </div>
@@ -364,11 +445,15 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
                   defaultValue={editItem?.room_id ?? '__none__'}
                   onValueChange={(v) => setValue('room_id', v === '__none__' ? undefined : v)}
                 >
-                  <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Nenhum" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Nenhum</SelectItem>
                     {(roomsData?.rooms ?? []).map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -404,7 +489,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             </div>
 
             {apiError && (
-              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
+              <div className="rounded-[var(--radius-md)] border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
                 {apiError}
               </div>
             )}

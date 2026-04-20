@@ -306,6 +306,33 @@ export const documentTypeIconVariants = cva(
   }
 );
 
+export const inventoryItemCardVariants = cva(
+  'group/inventory cursor-pointer overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-base)] text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)] active:scale-[0.98]',
+  {
+    variants: {
+      state: {
+        default: '',
+        lowStock: 'bg-bg-warning',
+      },
+    },
+    defaultVariants: {
+      state: 'default',
+    },
+  }
+);
+
+export const inventoryPhotoFrameVariants = cva('relative h-32 overflow-hidden bg-bg-subtle', {
+  variants: {
+    tone: {
+      default: '',
+      empty: 'bg-[var(--surface-strong)]',
+    },
+  },
+  defaultVariants: {
+    tone: 'default',
+  },
+});
+
 export const serviceOrderCardVariants = cva(
   'group/service-order rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3 text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)]',
   {

@@ -18,7 +18,10 @@ export const credentialsApi = {
     }),
 
   revealSecret: (propertyId: string, id: string) =>
-    request<{ credential: RevealedAccessCredential }>(`/properties/${propertyId}/credentials/${id}/secret`),
+    request<{ credential: RevealedAccessCredential }>(
+      `/properties/${propertyId}/credentials/${id}/secret/reveal`,
+      { method: 'POST' }
+    ),
 
   delete: (propertyId: string, id: string) =>
     request<{ deleted: boolean }>(`/properties/${propertyId}/credentials/${id}`, { method: 'DELETE' }),

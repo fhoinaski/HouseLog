@@ -149,6 +149,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
   const [uploading, setUploading] = useState(false);
   const [ocrLoading, setOcrLoading] = useState<string | null>(null);
@@ -201,13 +202,16 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  async function handleDelete(docId: string) {
+  async function confirmDelete() {
+    if (!deleteTarget) return;
     try {
-      await documentsApi.delete(id, docId);
+      await documentsApi.delete(id, deleteTarget.id);
       await mutate();
       toast.success('Documento removido');
     } catch (e) {
       toast.error('Erro ao remover', { description: (e as Error).message });
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -304,7 +308,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               <DocRow
                 key={doc.id}
                 doc={doc}
-                onDelete={() => handleDelete(doc.id)}
+                onDelete={() => setDeleteTarget(doc)}
                 onOcr={() => handleOcr(doc.id)}
                 ocrLoading={ocrLoading === doc.id}
               />
@@ -403,6 +407,36 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover documento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm leading-6 text-text-secondary">
+              Tem certeza que deseja remover este documento do acervo técnico? Esta ação não pode ser desfeita.
+            </p>
+            {deleteTarget && (
+              <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2 text-sm">
+                <p className="truncate font-medium text-text-primary">{deleteTarget.title}</p>
+                <p className="mt-1 text-xs text-text-secondary">
+                  {DOC_TYPE_LABELS[deleteTarget.type] ?? deleteTarget.type}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="mt-4 flex gap-3">
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmDelete} className="flex-1">
+              <Trash2 className="h-4 w-4" />
+              Remover
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
