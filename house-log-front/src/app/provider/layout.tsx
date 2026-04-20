@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BottomNav, TopNav } from '@/components/navigation';
+import { AppShell } from '@/components/layout/app-shell';
 import { useAuth } from '@/lib/auth-context';
 
 export default function ProviderLayout({ children }: { children: React.ReactNode }) {
@@ -23,11 +23,5 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
   if (loading || !user) return null;
   if (user.role !== 'provider' && user.role !== 'admin' && user.role !== 'temp_provider') return null;
 
-  return (
-    <div className="flex min-h-screen flex-col bg-(--hl-bg-page)">
-      <TopNav />
-      <main className="flex flex-1 flex-col">{children}</main>
-      <BottomNav />
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }

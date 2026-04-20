@@ -1,478 +1,210 @@
-# AGENTS.md — HouseLog
+# AGENTS.md — HouseLog (Root)
 
 ## Objetivo
 
-Este arquivo define as regras permanentes para qualquer agente de engenharia, design, refatoração ou implementação que trabalhe no projeto HouseLog.
+Este arquivo define as regras globais para qualquer agente que trabalhe no repositório HouseLog.
 
-O agente deve atuar como:
-- arquiteto de software;
-- engenheiro full-stack sênior;
-- product designer sênior;
-- guardião do design system;
-- especialista em refatoração segura;
-- mantenedor de consistência entre frontend, backend, contratos e UX.
-
-O agente **não** deve agir como gerador aleatório de código.
-Toda alteração deve respeitar o sistema real, a arquitetura existente, os contratos de API, o design system oficial e a facilidade de manutenção futura.
-
----
-
-## Visão geral do produto
-
-HouseLog é uma plataforma SaaS mobile-first de gestão operacional e manutenção de imóveis.
-
-Perfis:
-- `admin`
-- `owner`
-- `provider`
-- `temp_provider`
-
-Focos principais do produto:
+O HouseLog é um sistema SaaS de gestão operacional de imóveis com foco em:
 - ordens de serviço;
 - manutenção preventiva;
-- bids e orçamentos;
-- inventário;
-- documentos;
+- histórico técnico do imóvel;
+- documentos e anexos;
 - financeiro;
-- comunicação por OS;
-- rastreabilidade operacional;
-- portal do prestador;
-- marketplace e perfil profissional do prestador.
+- colaboração entre owner, manager e provider.
 
-Estado atual:
-- backend funcional em Cloudflare Workers + Hono + D1 + Drizzle;
-- frontend funcional em Next.js App Router + Tailwind;
-- portal do prestador ampliado;
-- chat owner/provider em OS;
-- perfil profissional estruturado do prestador;
-- design system com tokens semânticos e melhoria forte em formulários, claro/escuro e mobile.
+Este arquivo é a autoridade global do repositório.
+Arquivos de agentes específicos por domínio complementam este documento:
+- `/house-log-front/AGENTS.md`
+- `/house-log-back/AGENTS.md`
 
----
-
-## Arquitetura obrigatória
-
-### Backend
-- Cloudflare Workers
-- Hono
-- D1
-- Drizzle
-- R2
-- KV
-- Queues
-- Workers AI
-- Resend
-
-### Frontend
-- Next.js App Router
-- React
-- TypeScript
-- Tailwind
-- SWR
-- React Hook Form
-- Zod
-- Sonner
-- PWA
-
-### Estrutura do workspace
-- `house-log-back`
-- `house-log-front`
-
-### Arquivos-chave
-- `house-log-back/apps/api/src/index.ts`
-- `house-log-back/apps/api/src/routes/*`
-- `house-log-back/apps/api/src/db/schema.ts`
-- `house-log-back/apps/api/src/db/migrations/*`
-- `house-log-front/src/app/*`
-- `house-log-front/src/components/*`
-- `house-log-front/src/lib/api.ts`
-- `house-log-front/src/lib/auth-context.tsx`
-- `house-log-front/src/app/globals.css`
+Quando houver conflito:
+1. este arquivo define a regra global;
+2. o agente específico do domínio define a execução local;
+3. nunca inventar comportamento fora da arquitetura real.
 
 ---
 
-## Regra crítica: nunca inventar sistema falso
+## Estrutura oficial do repositório
 
-O agente deve trabalhar sempre sobre o sistema real.
+- `house-log-front` → frontend web/PWA
+- `house-log-back` → backend/API
+
+Arquivos estratégicos:
+- `DOCUMENTACAO_COMPLETA_HOUSELOG.md`
+- `package.json`
+- `house-log-front/AGENTS.md`
+- `house-log-back/AGENTS.md`
+
+---
+
+## Princípios obrigatórios do projeto
+
+Toda alteração deve:
+- respeitar o produto real;
+- respeitar os contratos existentes;
+- preservar clareza arquitetural;
+- evitar duplicação;
+- manter facilidade de manutenção;
+- favorecer evolução incremental;
+- preservar compatibilidade entre frontend e backend.
 
 É proibido:
-- inventar endpoints inexistentes;
-- inventar payloads sem base no código;
-- criar fluxo que não exista no backend;
-- alterar contrato sem analisar impacto completo;
-- criar UI desconectada dos dados reais;
-- criar solução “bonita” mas impossível de integrar;
-- simular comportamentos sem respaldo no projeto.
-
-Sempre:
-1. validar o fluxo real;
-2. validar contratos;
-3. entender arquivos envolvidos;
-4. só então implementar.
+- inventar endpoints;
+- inventar entidades sem aderência ao domínio;
+- alterar payloads sem revisar impacto ponta a ponta;
+- criar fluxo visual que não exista no backend;
+- criar lógica paralela duplicando comportamento já existente;
+- quebrar tipagem por conveniência;
+- usar `any` sem justificativa forte;
+- criar solução “bonita” mas inconsistente com o produto real.
 
 ---
 
-## Rotas e domínios principais da API
+## Fonte única de verdade por domínio
 
-Base:
-- `/api/v1`
+### Produto e arquitetura geral
+- `DOCUMENTACAO_COMPLETA_HOUSELOG.md`
 
-Módulos principais montados:
-- `/auth`
-- `/push`
-- `/ai`
-- `/marketplace`
-- `/services`
-- `/properties`
-- `/provider`
-- `/audit`
-- `/search`
-- `/credentials`
-- `/share`
+### Frontend
+- `house-log-front/AGENTS.md`
 
-### Fluxos críticos
-- auth e MFA
-- properties
-- rooms
-- inventory
-- service orders
-- service requests
-- bids
-- messages por OS
-- provider portal
-- provider opportunities
-- provider services
-- documents
-- expenses
-- maintenance
-- finance
-- timeline
-- reports
-- marketplace
+### Backend
+- `house-log-back/AGENTS.md`
 
 ---
 
-## Design System oficial
+## Regras globais de implementação
 
-### Nome oficial
+Antes de implementar qualquer coisa:
+1. identificar o domínio afetado;
+2. ler os arquivos relevantes;
+3. validar os contratos impactados;
+4. mapear riscos de regressão;
+5. só então alterar.
+
+Toda entrega deve:
+1. explicar o diagnóstico;
+2. explicar o plano;
+3. implementar com menor risco possível;
+4. listar arquivos alterados;
+5. apontar validações manuais necessárias.
+
+---
+
+## Regra global de naming e consistência
+
+O design system oficial do HouseLog chama-se:
+
 **The Architectural Lens**
 
-### Direção obrigatória
-Toda UI nova ou refatorada deve seguir The Architectural Lens.
+É proibido:
+- usar nomes paralelos para o design system;
+- introduzir outra identidade visual concorrente;
+- criar segunda convenção visual conflitando com a oficial.
 
-Isso significa:
-- contemporâneo premium;
-- profundidade tonal;
-- assimetria intencional;
+Toda linguagem visual nova deve seguir:
+- tokens semânticos;
+- componentes base reutilizáveis;
 - hierarquia editorial;
-- superfícies com camadas;
-- glass surfaces com moderação;
-- clareza operacional;
-- menos ruído visual;
-- mais respiro;
-- mais sofisticação;
-- nada de dashboard genérico;
-- nada de layout engessado;
-- nada de blocos “caixa sobre caixa” sem intenção.
-
-### Experiência alvo
-O produto deve parecer:
-- premium;
-- confiável;
-- forte;
-- profissional;
-- fácil de usar;
-- rápido de entender;
-- moderno sem exageros;
-- implementável;
-- bonito sem prejudicar usabilidade.
-
----
-
-## Paleta oficial
-
-### Cores principais
-- Primary / Finance: `#b8c3ff`
-- Secondary / Health: `#4edea3`
-- Tertiary / Maintenance: `#ffb95f`
-- Base noturna: `#0b1326`
-- Neutros de camada: `#060e20` até `#31394d`
-
-### Regras
-- não usar preto puro como base;
-- não usar borda dura como separador padrão;
-- priorizar separação por camada tonal e espaçamento;
-- blur e glow apenas com moderação;
-- profundidade por superfície, não por sombra pesada.
-
----
-
-## No-Line Rule
-
-Regra obrigatória:
-- não usar divisores tradicionais como muleta visual;
-- não separar seções com linha sólida como padrão;
-- usar:
-  - mudança de superfície;
-  - hierarquia;
-  - espaçamento;
-  - agrupamento visual;
-  - contraste tonal controlado.
-
----
-
-## Tipografia
-
-### Fonte principal
-- `Inter`
-
-### Diretrizes
-- títulos fortes e claros;
-- metadata bem diferenciada;
-- label com boa legibilidade;
-- métricas importantes com destaque;
-- respiro vertical consistente;
-- leitura rápida em mobile e desktop;
-- contraste mínimo WCAG AA.
-
----
-
-## DNA dos componentes
-
-### Cards
-- raio externo: `1.5rem`
-- raio interno: `0.75rem`
-- sem divisores rígidos
-- profundidade por superfície
-- hover/tap com leve elevação
-- sem sombra material pesada
-- devem parecer modulares, premium e escaneáveis
-
-### Botões
-- primário com visual premium
-- secundário mais suave ou glass quando fizer sentido
-- terciário discreto
-- foco visível sempre
-- estados bem definidos
-- toque confortável no mobile
-
-### Inputs
-- usar componentes base existentes como fonte única
-- fundo suave
-- foco por lift e glow discreto
-- sem borda agressiva
-- legíveis em claro/escuro
-- confortáveis no mobile
-- não duplicar estilo de campo em páginas
-
-### Navegação mobile
-- floating dock
-- sem encostar nas bordas
-- linguagem de ilha flutuante
-- visual premium e claro
-
----
-
-## Tokens obrigatórios
-
-Usar como fonte única quando aplicável:
-- `--provider-accent`
-- `--provider-surface`
-- `--provider-surface-strong`
-- `--provider-divider`
-- `--field-bg`
-- `--field-bg-hover`
-- `--field-border`
-- `--field-border-strong`
-- `--field-text`
-- `--field-focus-ring`
-
-Arquivos de referência prioritários:
-- `house-log-front/src/app/globals.css`
-- `house-log-front/src/components/ui/input.tsx`
-- `house-log-front/src/components/ui/textarea.tsx`
-- `house-log-front/src/components/ui/select.tsx`
-- `house-log-front/src/app/provider/layout.tsx`
-- `house-log-front/src/app/provider/settings/page.tsx`
-- `house-log-front/src/app/provider/settings/provider-settings.module.css`
-- `house-log-front/src/components/services/service-chat.tsx`
-
----
-
-## Regra de personalização obrigatória
-
-O sistema deve ser fácil de modificar no futuro.
-
-Toda nova UI deve ser construída com foco em personalização segura de:
-- cores
-- superfícies
-- radius
-- spacing
-- blur
-- glow
-- tipografia
-- cards
-- botões
-- inputs
-- sidebar
-- dock mobile
-- estados de foco
-- densidade visual
-
-### Estratégia obrigatória
-1. tokens globais;
-2. tokens semânticos;
-3. componentes base;
-4. variantes reutilizáveis;
-5. páginas consumindo o sistema, nunca recriando o estilo.
-
-### Proibido
-- espalhar hardcode visual;
-- duplicar classes de campo;
-- criar variantes locais sem necessidade;
-- ignorar componentes base;
-- criar “mini design systems” dentro de páginas.
-
----
-
-## Regras técnicas obrigatórias
-
-- não quebrar contratos de `src/lib/api.ts`;
-- não criar endpoints falsos;
-- não criar fluxo sem respaldo no backend;
-- não usar `any` sem necessidade real;
-- manter tipagem forte;
-- manter loading, empty e error states;
-- preservar performance mobile;
-- evitar excesso de blur/glow;
-- validar viewport mobile e desktop;
-- manter min-height >= `44px` em controles mobile;
-- manter foco visível;
-- manter contraste mínimo AA;
-- não degradar o que já funciona.
-
----
-
-## Áreas prioritárias do sistema
-
-Ordem de atenção:
-1. Provider Settings
-2. Provider Opportunities
-3. Provider Opportunity Detail
-4. Provider Service Detail com Chat
-5. Provider Dashboard
-6. Dashboard Owner
-7. Property Detail
-
----
-
-## Método obrigatório de trabalho do agente
-
-### 1. Leitura
-Antes de codar:
-- leia os arquivos envolvidos;
-- entenda o fluxo;
-- identifique dependências;
-- identifique contratos;
-- entenda os componentes já existentes.
-
-### 2. Diagnóstico
-Antes de implementar, entregue:
-- estado atual;
-- inconsistências;
-- riscos;
-- oportunidades de melhoria.
-
-### 3. Plano
-Antes de editar, entregue:
-- arquivos que serão alterados;
-- o que será feito;
-- por que será feito;
-- impacto esperado;
-- como a mudança respeita este AGENTS.md.
-
-### 4. Implementação
-Implemente de forma:
-- incremental;
-- limpa;
-- revisável;
-- consistente;
-- bem tipada;
-- sem gambiarra.
-
-### 5. Verificação
-Sempre validar:
-- contratos;
-- responsividade;
+- profundidade tonal;
 - mobile-first;
-- contraste;
-- foco;
-- loading/empty/error;
-- consistência com The Architectural Lens;
-- aderência aos tokens e componentes base.
-
-### 6. Entrega
-Sempre informar:
-- resumo do que mudou;
-- arquivos alterados;
-- decisões importantes;
-- riscos residuais;
-- validações manuais recomendadas.
+- legibilidade operacional.
 
 ---
 
-## Critério de aceite
+## Regras globais de frontend + backend
 
-Uma implementação só pode ser considerada pronta se:
-- respeitar os fluxos reais;
-- respeitar os contratos reais;
-- respeitar The Architectural Lens;
-- reutilizar tokens e componentes base;
-- manter ou melhorar a experiência mobile;
-- manter ou melhorar a experiência desktop;
-- ter boa hierarquia;
-- ter foco visível;
-- ter campos confortáveis;
-- não criar regressão visual;
-- não criar dívida visual;
-- não duplicar estrutura;
-- estar pronta para revisão humana.
+Toda feature deve respeitar:
+- contrato real da API;
+- tipagem forte;
+- estados de erro previsíveis;
+- tratamento de loading/empty/error;
+- autorização por papel;
+- segurança mínima esperada;
+- UX consistente com o fluxo de negócio.
+
+Mudanças em contrato devem considerar:
+- rota backend;
+- schema e validação;
+- cliente frontend;
+- tipagem consumidora;
+- telas afetadas;
+- efeitos colaterais em cache, notificações e estados.
+
+---
+
+## Regra obrigatória para agentes
+
+O agente nunca deve assumir que o projeto é genérico.
+
+Sempre considerar que HouseLog possui:
+- fluxo por papéis (`owner`, `manager`, `provider`, `temp_provider`);
+- contexto por imóvel;
+- ordens de serviço como eixo operacional;
+- bids/orçamentos;
+- mensagens por OS;
+- documentos e financeiro integrados;
+- PWA e uso mobile em campo.
+
+Toda solução deve parecer:
+- profissional;
+- implementável;
+- consistente;
+- escalável;
+- revisável.
+
+---
+
+## Método obrigatório de trabalho
+
+### 1. Diagnóstico
+- ler os arquivos reais;
+- entender o fluxo atual;
+- identificar contratos;
+- identificar riscos;
+- identificar reaproveitamento possível.
+
+### 2. Plano
+- listar arquivos a alterar;
+- listar o que será preservado;
+- listar o que será melhorado;
+- justificar aderência à arquitetura real.
+
+### 3. Implementação
+- preferir mudanças incrementais;
+- evitar refatoração destrutiva sem necessidade;
+- manter código legível;
+- manter coesão com o padrão já aceito no projeto.
+
+### 4. Entrega
+Sempre informar:
+- diagnóstico;
+- plano;
+- implementação;
+- arquivos alterados;
+- riscos;
+- validações manuais.
+
+---
+
+## Critério de aceite global
+
+Uma alteração só está pronta se:
+- respeita a arquitetura do HouseLog;
+- respeita os contratos reais;
+- não cria fluxo fictício;
+- não duplica sistema;
+- melhora ou preserva manutenção;
+- mantém coerência entre frontend e backend;
+- está pronta para revisão humana.
 
 ---
 
 ## Em caso de ambiguidade
 
 Se houver ambiguidade:
-- escolha a solução mais conservadora;
-- preserve o sistema real;
-- não invente backend;
-- não invente fluxo;
-- explique rapidamente a decisão antes de aplicar.
-
-Se houver bloqueio:
-- não improvise solução frágil;
-- descreva a limitação;
-- proponha a menor correção segura possível.
-
----
-
-## Formato esperado de resposta do agente
-
-Sempre responder neste formato:
-1. Diagnóstico
-2. Plano
-3. Implementação
-4. Arquivos alterados
-5. Riscos / validações manuais
-
----
-
-## Tarefas recomendadas iniciais
-
-- consolidar o sistema de personalização visual;
-- refatorar Provider Settings;
-- melhorar Provider Opportunities;
-- melhorar Provider Opportunity Detail;
-- refinar Service Chat;
-- alinhar Owner Dashboard e Property Detail ao design system;
-- reforçar coesão entre fundo, superfícies, inputs e cards;
-- eliminar duplicação visual local.
+- escolher a solução mais conservadora;
+- preservar o comportamento existente;
+- não inventar domínio novo;
+- deixar explícita a limitação;
+- aplicar a menor alteração segura possível.

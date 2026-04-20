@@ -131,3 +131,144 @@ export const fieldVariants = cva('', {
     density: 'default',
   },
 });
+
+export const sensitiveFieldVariants = cva(
+  'group/sensitive flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--field-bg)] px-3 py-2 text-text-primary transition-all duration-150 focus-within:shadow-[var(--field-focus-ring)] hover:bg-[var(--field-bg-hover)]',
+  {
+    variants: {
+      tone: {
+        default: '',
+        subtle: 'bg-[var(--surface-base)]',
+        strong: 'bg-[var(--surface-strong)]',
+      },
+      state: {
+        masked: 'text-text-secondary',
+        revealed: 'text-text-primary',
+        empty: 'text-text-tertiary',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+      state: 'masked',
+    },
+  }
+);
+
+export const pageHeaderVariants = cva('flex flex-col gap-3 text-text-primary', {
+  variants: {
+    density: {
+      compact: 'py-1',
+      default: 'py-2',
+      spacious: 'py-4',
+    },
+  },
+  defaultVariants: {
+    density: 'default',
+  },
+});
+
+export const pageSectionVariants = cva('space-y-3', {
+  variants: {
+    tone: {
+      plain: '',
+      surface: 'rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4',
+      strong: 'rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-4',
+    },
+    density: {
+      compact: 'space-y-2',
+      default: 'space-y-3',
+      comfortable: 'space-y-4',
+    },
+  },
+  defaultVariants: {
+    tone: 'plain',
+    density: 'default',
+  },
+});
+
+export const metricCardVariants = cva(
+  'rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 text-text-primary transition-all duration-150',
+  {
+    variants: {
+      tone: {
+        default: '',
+        accent: 'bg-bg-accent-subtle',
+        success: 'bg-bg-success',
+        warning: 'bg-bg-warning',
+        danger: 'bg-bg-danger',
+        strong: 'bg-[var(--surface-strong)]',
+      },
+      density: {
+        compact: 'p-3',
+        default: 'p-4',
+        comfortable: 'p-5',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+      density: 'default',
+    },
+  }
+);
+
+export const metricIconVariants = cva(
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
+  {
+    variants: {
+      tone: {
+        default: 'bg-[var(--surface-strong)] text-text-secondary',
+        accent: 'bg-bg-accent-subtle text-text-accent',
+        success: 'bg-bg-success text-text-success',
+        warning: 'bg-bg-warning text-text-warning',
+        danger: 'bg-bg-danger text-text-danger',
+        strong: 'bg-[var(--surface-strong)] text-text-primary',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+    },
+  }
+);
+
+export const serviceOrderCardVariants = cva(
+  'group/service-order rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3 text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)]',
+  {
+    variants: {
+      density: {
+        compact: 'px-3 py-2',
+        default: 'px-4 py-3',
+        comfortable: 'px-5 py-4',
+      },
+      interactive: {
+        true: 'cursor-pointer active:scale-[0.99]',
+        false: '',
+      },
+    },
+    defaultVariants: {
+      density: 'default',
+      interactive: false,
+    },
+  }
+);
+
+export const emptyStateVariants = cva(
+  'flex flex-col items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-6 py-12 text-center text-text-primary',
+  {
+    variants: {
+      tone: {
+        default: '',
+        subtle: 'bg-[var(--surface-base)]',
+        strong: 'bg-[var(--surface-strong)]',
+      },
+      density: {
+        compact: 'py-8',
+        default: 'py-12',
+        spacious: 'py-16',
+      },
+    },
+    defaultVariants: {
+      tone: 'default',
+      density: 'default',
+    },
+  }
+);

@@ -1,30 +1,32 @@
-# AGENTS.md — HouseLog Frontend
+# DESIGN.md — The Architectural Lens
 
 ## Objetivo
 
-Este arquivo define as regras específicas de frontend para qualquer agente que trabalhe no `house-log-front`.
+Este arquivo define as regras específicas do design system oficial para qualquer agente que trabalhe em `house-log-front`.
 
 O agente deve atuar como:
 - engenheiro frontend sênior;
-- product designer sênior;
-- especialista em design system;
+- especialista em Next.js App Router;
+- especialista em TypeScript;
+- especialista em Tailwind CSS;
+- especialista em shadcn/ui;
 - especialista em UX/UI mobile-first;
-- mantenedor da consistência visual e estrutural do HouseLog.
+- mantenedor do design system oficial do HouseLog.
 
-Toda alteração no frontend deve:
+Toda alteração de frontend deve:
 - respeitar o sistema real;
-- respeitar os contratos existentes;
+- respeitar contratos existentes;
 - respeitar o design system oficial;
-- preservar facilidade de manutenção;
-- permitir personalização futura;
-- evitar duplicação visual e estrutural.
+- preservar acessibilidade;
+- preservar performance;
+- manter facilidade de manutenção;
+- permitir personalização futura.
 
 ---
 
 ## Stack obrigatória do frontend
 
 O frontend deve ser construído e mantido com:
-
 - Next.js App Router
 - React
 - TypeScript
@@ -37,72 +39,35 @@ O frontend deve ser construído e mantido com:
 - Sonner
 - PWA
 
-### Regra obrigatória de implementação
-No frontend, a base de componentes deve seguir:
+---
+
+## Regra principal do frontend
+
+A base oficial de UI do HouseLog é:
+
 - **Tailwind CSS para styling**
-- **shadcn/ui como sistema base de componentes**
+- **shadcn/ui como base de componentes**
 - **Radix UI como primitives acessíveis**
-- **tokens centralizados em `globals.css`**
-- **componentes reutilizáveis antes de criar estilos locais**
+- **tokens centralizados em `src/app/globals.css` e `src/app/tokens.css`**
+- **variantes reutilizáveis antes de estilos locais**
 
 É proibido:
-- criar um sistema paralelo ao shadcn/ui;
-- estilizar páginas ignorando os componentes base sem necessidade;
-- duplicar componentes equivalentes já existentes;
-- misturar padrões conflitantes de UI;
-- criar classes locais para campos/botões/cards se já houver variante reutilizável;
-- inventar biblioteca de componentes diferente sem justificativa forte.
+- criar um design system paralelo;
+- criar componentes concorrentes aos do `src/components/ui/*` sem necessidade real;
+- espalhar hardcode visual em páginas;
+- resolver inconsistência visual só com classes locais improvisadas;
+- duplicar botão/input/card/select já existentes;
+- misturar padrões visuais conflitantes.
 
 ---
 
-## Arquivos de referência prioritários
+## Design system oficial
 
-Antes de alterar UI ou comportamento, leia quando aplicável:
-- `src/app/globals.css`
-- `src/lib/api.ts`
-- `src/lib/auth-context.tsx`
-- `src/components/ui/input.tsx`
-- `src/components/ui/textarea.tsx`
-- `src/components/ui/select.tsx`
-- `src/components/ui/button.tsx`
-- `src/components/ui/card.tsx`
-- `src/components/ui/*`
-- `src/app/provider/layout.tsx`
-- `src/app/provider/settings/page.tsx`
-- `src/app/provider/settings/provider-settings.module.css`
-- `src/components/services/service-chat.tsx`
+O design system oficial do HouseLog chama-se:
 
----
+# The Architectural Lens
 
-## Regra crítica do frontend
-
-O agente nunca deve:
-- inventar fluxo inexistente;
-- inventar estrutura de dados;
-- quebrar contratos de `src/lib/api.ts`;
-- criar componente visual desalinhado do sistema;
-- duplicar estilos que já existem em componentes base;
-- fazer UI “bonita” mas menos usável;
-- espalhar hardcodes visuais em páginas;
-- contornar shadcn/ui sem necessidade real.
-
-Sempre:
-1. ler os arquivos envolvidos;
-2. validar contratos consumidos;
-3. entender os componentes base já existentes;
-4. verificar se há componente shadcn/ui reutilizável antes de criar novo;
-5. só depois implementar.
-
----
-
-## Design System oficial
-
-### Nome
-**The Architectural Lens**
-
-### Direção obrigatória
-Toda UI deve seguir esse padrão:
-
+Toda UI nova ou refatorada deve seguir:
 - contemporânea premium;
 - profundidade tonal;
 - hierarquia editorial;
@@ -114,119 +79,67 @@ Toda UI deve seguir esse padrão:
 - mais clareza;
 - mais respiro;
 - menos aparência de dashboard genérico;
-- menos blocos duros.
+- alta legibilidade em campo.
 
-### O produto deve parecer
+O produto deve parecer:
 - premium;
 - confiável;
+- operacional;
 - forte;
-- profissional;
 - elegante;
 - moderno;
-- implementável;
-- rápido de entender;
-- excelente em desktop e mobile.
+- implementável.
 
 ---
 
-## Paleta e superfícies
+## Arquivos de referência prioritários
 
-### Paleta principal
-- Primary / Finance: `#b8c3ff`
-- Secondary / Health: `#4edea3`
-- Tertiary / Maintenance: `#ffb95f`
-- Base noturna: `#0b1326`
-- Camadas: `#060e20` até `#31394d`
-
-### Regras
-- não usar preto puro absoluto;
-- não usar borda dura como padrão de composição;
-- separar por superfície e espaçamento;
-- usar blur/glow com moderação;
-- profundidade por camada tonal, não por sombra material pesada.
-
----
-
-## No-Line Rule
-
-Regra obrigatória:
-- não usar divisores sólidos como padrão;
-- não usar layout “caixa sobre caixa”;
-- separar blocos por:
-  - tonalidade;
-  - espaçamento;
-  - hierarquia;
-  - agrupamento;
-  - contraste sutil.
+Antes de alterar UI ou comportamento, ler quando aplicável:
+- `src/app/globals.css`
+- `src/app/tokens.css`
+- `src/lib/api.ts`
+- `src/lib/auth-context.tsx`
+- `src/components/ui/button.tsx`
+- `src/components/ui/input.tsx`
+- `src/components/ui/textarea.tsx`
+- `src/components/ui/select.tsx`
+- `src/components/ui/card.tsx`
+- `src/components/ui/*`
+- `src/components/navigation/*`
+- `src/app/layout.tsx`
+- `src/app/provider/layout.tsx`
+- `src/app/provider/settings/page.tsx`
+- `src/components/services/service-chat.tsx`
 
 ---
 
-## Tipografia
+## Regra crítica do frontend
 
-### Fonte principal
-- `Inter`
+O agente nunca deve:
+- inventar fluxo inexistente;
+- inventar dado inexistente;
+- quebrar contratos de `src/lib/api.ts`;
+- criar UI desalinhada do sistema;
+- duplicar estilos equivalentes já resolvidos em componentes base;
+- ignorar estados de loading/empty/error;
+- piorar UX mobile;
+- contornar shadcn/ui sem necessidade real;
+- criar uma segunda linguagem visual no sistema.
 
-### Regras
-- títulos fortes e claros;
-- metadata legível;
-- labels consistentes;
-- excelente leitura em mobile;
-- contraste mínimo WCAG AA;
-- espaçamento vertical com respiro.
-
----
-
-## DNA dos componentes
-
-### Base obrigatória
-Toda UI deve priorizar os componentes de `src/components/ui/*`.
-
-Sempre que possível:
-- reutilizar `Button`
-- reutilizar `Input`
-- reutilizar `Textarea`
-- reutilizar `Select`
-- reutilizar `Card`
-- criar variantes via `class-variance-authority` / padrão do projeto
-- manter coesão com shadcn/ui
-
-### Cards
-- raio externo: `1.5rem`
-- raio interno: `0.75rem`
-- sem divisores rígidos
-- profundidade por superfície
-- hover/tap com leve lift
-- sem exagero de sombra
-- devem ser elegantes, proporcionais e escaneáveis
-
-### Botões
-- primário com presença premium
-- secundário suave/glass quando fizer sentido
-- terciário discreto
-- foco visível
-- estados claros
-- toque confortável
-
-### Inputs
-- usar os componentes base como fonte única
-- fundo suave
-- foco por lift e glow discreto
-- sem borda agressiva
-- sem estilo local duplicado
-- confortáveis em mobile
-- excelente legibilidade em claro/escuro
-
-### Navegação mobile
-- floating dock
-- visual de ilha flutuante
-- sem encostar nas bordas
-- premium e clara
+Sempre:
+1. ler os arquivos envolvidos;
+2. validar contratos consumidos;
+3. verificar componentes base existentes;
+4. reutilizar antes de criar;
+5. só então implementar.
 
 ---
 
-## Tokens obrigatórios
+## Tokens e fonte única de verdade visual
 
-Sempre reutilizar antes de criar novos:
+Toda UI deve reutilizar tokens globais antes de criar novos.
+
+Tokens prioritários:
 - `--provider-accent`
 - `--provider-surface`
 - `--provider-surface-strong`
@@ -238,55 +151,163 @@ Sempre reutilizar antes de criar novos:
 - `--field-text`
 - `--field-focus-ring`
 
-### Regra
+Regra:
 - páginas não devem reinventar tokens;
-- componentes base devem concentrar o estilo;
-- novas variantes devem ser semânticas e reutilizáveis.
+- páginas não devem concentrar lógica de estilo;
+- componentes base devem concentrar estilo reutilizável;
+- novas variantes devem ser semânticas;
+- novas abstrações devem reduzir duplicação.
 
 ---
 
-## Regra de personalização
+## Paleta e superfícies
 
-O frontend deve permanecer fácil de personalizar.
+Paleta principal:
+- Primary / Finance: `#b8c3ff`
+- Secondary / Health: `#4edea3`
+- Tertiary / Maintenance: `#ffb95f`
+- Base: `#0b1326`
+- Camadas: `#060e20` até `#31394d`
 
-Toda nova implementação deve favorecer alteração futura de:
-- cores
-- superfícies
-- radius
-- spacing
-- blur
-- glow
-- tipografia
-- cards
-- inputs
-- botões
-- sidebar
-- dock mobile
-- hierarquia visual
-- densidade da UI
+Regras:
+- não usar preto absoluto como base;
+- não usar borda dura como principal recurso de composição;
+- separar blocos por superfície, espaçamento e hierarquia;
+- usar blur e glow com moderação;
+- priorizar profundidade tonal em vez de sombra pesada.
 
-### Estratégia obrigatória
+---
+
+## No-Line Rule
+
+Regra obrigatória:
+- evitar divisores sólidos como padrão;
+- evitar layout “caixa sobre caixa”;
+- separar blocos por:
+  - tonalidade;
+  - espaçamento;
+  - agrupamento;
+  - contraste sutil;
+  - hierarquia.
+
+---
+
+## Tipografia
+
+Fonte principal:
+- `Inter`
+
+Regras:
+- títulos claros e fortes;
+- metadata legível;
+- labels consistentes;
+- legibilidade excelente em mobile;
+- contraste mínimo WCAG AA;
+- espaçamento vertical respirável.
+
+---
+
+## DNA oficial dos componentes
+
+### Componentes base obrigatórios
+Priorizar `src/components/ui/*`.
+
+Sempre que possível:
+- reutilizar `Button`
+- reutilizar `Input`
+- reutilizar `Textarea`
+- reutilizar `Select`
+- reutilizar `Card`
+- criar variantes com padrão consistente
+- manter aderência ao shadcn/ui
+
+### Cards
+- elegantes;
+- escaneáveis;
+- proporcionais;
+- sem excesso de borda dura;
+- profundidade por superfície;
+- hover leve;
+- sem exagero de sombra.
+
+### Botões
+- foco visível;
+- estados claros;
+- toque confortável;
+- variantes semânticas;
+- não criar novos padrões de botão por página.
+
+### Inputs
+- usar componentes base como fonte única;
+- fundo suave;
+- foco por lift e glow discreto;
+- sem estilo duplicado;
+- excelente leitura em claro/escuro;
+- confortáveis em mobile.
+
+### Navegação
+- desktop com shell coerente;
+- mobile com dock flutuante quando aplicável;
+- sem improviso visual por página.
+
+---
+
+## Estrutura preferida de layout
+
+Preferir componentes estruturais como:
+- `app-shell`
+- `app-topbar`
+- `app-sidebar`
+- `mobile-dock`
+- `page-header`
+- `page-section`
+- `surface-card`
+- `metric-card`
+
+Evitar:
+- reconstruir layout estrutural em cada tela;
+- duplicar header/nav/card patterns;
+- resolver shell por repetição de classes.
+
+---
+
+## Regra de personalização futura
+
+Toda implementação deve facilitar alteração futura de:
+- cores;
+- superfícies;
+- radius;
+- spacing;
+- blur;
+- glow;
+- tipografia;
+- botões;
+- inputs;
+- cards;
+- navegação;
+- densidade visual.
+
+Estratégia obrigatória:
 1. tokens globais;
 2. tokens semânticos;
 3. variantes reutilizáveis;
-4. componentes base com shadcn/ui;
+4. componentes base;
 5. páginas apenas consumindo o sistema.
 
-### Proibido
+É proibido:
 - hardcode visual espalhado;
-- estilos locais redundantes;
+- estilos redundantes por página;
 - múltiplos padrões de card/input no sistema;
-- mini design systems por página.
+- mini design systems locais.
 
 ---
 
-## Regras de UX/UI obrigatórias
+## Regras obrigatórias de UX/UI
 
 Toda tela deve priorizar:
 - leitura imediata;
 - baixa fadiga visual;
 - clareza operacional;
-- bom uso em campo;
 - responsividade real;
 - contraste suficiente;
 - foco visível;
@@ -298,18 +319,6 @@ Toda tela deve priorizar:
 
 ---
 
-## Áreas prioritárias do frontend
-
-1. `Provider Settings`
-2. `Provider Opportunities`
-3. `Provider Opportunity Detail`
-4. `Provider Service Detail com Chat`
-5. `Provider Dashboard`
-6. `Owner Dashboard`
-7. `Property Detail`
-
----
-
 ## Regras técnicas obrigatórias
 
 - não quebrar `src/lib/api.ts`;
@@ -318,10 +327,10 @@ Toda tela deve priorizar:
 - manter tipagem forte;
 - validar mobile e desktop;
 - preservar dark/light quando aplicável;
-- evitar excesso de blur/glow;
+- não exagerar blur/glow;
 - manter performance boa;
-- não piorar UX atual;
-- usar Tailwind CSS e shadcn/ui como base oficial.
+- não piorar acessibilidade;
+- usar Tailwind + shadcn/ui como base oficial.
 
 ---
 
@@ -329,21 +338,21 @@ Toda tela deve priorizar:
 
 ### 1. Diagnóstico
 Antes de editar:
-- leia arquivos envolvidos;
-- identifique inconsistências;
-- identifique dependências;
-- identifique riscos;
-- identifique componentes base reutilizáveis.
+- ler os arquivos envolvidos;
+- identificar inconsistências;
+- identificar dependências;
+- identificar riscos;
+- identificar componentes base reutilizáveis.
 
 ### 2. Plano
 Antes de implementar:
-- liste arquivos que serão alterados;
-- liste melhorias propostas;
-- explique aderência ao design system;
-- explique como a solução reutiliza Tailwind + shadcn/ui.
+- listar arquivos a alterar;
+- listar o que será reutilizado;
+- listar o que será melhorado;
+- justificar aderência ao design system.
 
 ### 3. Implementação
-Implemente de forma:
+Implementar de forma:
 - incremental;
 - limpa;
 - consistente;
@@ -356,24 +365,25 @@ Sempre informar:
 2. plano
 3. implementação
 4. arquivos alterados
-5. riscos / validações manuais
+5. riscos
+6. validações manuais
 
 ---
 
 ## Critério de aceite
 
 Uma alteração de frontend só está pronta se:
-- respeitar The Architectural Lens;
-- respeitar tokens existentes;
-- respeitar contratos reais;
-- reutilizar corretamente Tailwind CSS + shadcn/ui;
-- melhorar ou preservar mobile;
-- melhorar ou preservar desktop;
-- manter foco visível;
-- manter boa legibilidade;
-- não gerar regressão visual;
-- não duplicar estrutura;
-- estar pronta para revisão humana.
+- respeita The Architectural Lens;
+- respeita tokens existentes;
+- respeita contratos reais;
+- reutiliza corretamente Tailwind + shadcn/ui;
+- melhora ou preserva mobile;
+- melhora ou preserva desktop;
+- mantém foco visível;
+- mantém boa legibilidade;
+- não gera regressão visual;
+- não duplica estrutura;
+- está pronta para revisão humana.
 
 ---
 
@@ -387,5 +397,5 @@ Se houver ambiguidade:
 
 Se houver bloqueio:
 - não improvisar;
-- descrever limitação;
+- descrever a limitação;
 - propor a menor correção segura possível.

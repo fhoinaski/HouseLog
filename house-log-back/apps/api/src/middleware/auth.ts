@@ -89,6 +89,33 @@ export async function assertPropertyAccess(
   }
 }
 
+// Sensitive property secrets require a direct owner/manager relationship.
+// Collaborator access is intentionally excluded until credential-specific
+// permissions exist.
+export async function assertPropertySecretAccess(
+  db: D1Database,
+  propertyId: string,
+  userId: string,
+  role: Role
+): Promise<boolean> {
+  if (role === 'provider' || role === 'temp_provider') return false;
+
+  const drizzle = getDb(db);
+  const [property] = await drizzle
+    .select({ id: properties.id })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, propertyId),
+        or(eq(properties.ownerId, userId), eq(properties.managerId, userId)),
+        isNull(properties.deletedAt)
+      )
+    )
+    .limit(1);
+
+  return !!property;
+}
+
 // Returns whether a user is allowed to open (create) a service order on a property.
 // - Owner or manager_id: always allowed
 // - Collaborator with role='manager' or 'provider': allowed only if can_open_os = 1

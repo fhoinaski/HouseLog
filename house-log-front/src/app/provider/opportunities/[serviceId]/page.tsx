@@ -55,9 +55,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
       await bidsApi.create(order.property_id, serviceId, form);
       await mutate();
       reset();
-      toast.success('Orçamento enviado com sucesso');
+      toast.success('Proposta enviada com sucesso');
     } catch (e) {
-      toast.error('Erro ao enviar orçamento', { description: (e as Error).message });
+      toast.error('Erro ao enviar proposta', { description: (e as Error).message });
     } finally {
       setSubmittingBid(false);
     }
@@ -112,7 +112,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
       {myBids.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Meus Orçamentos</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Minhas propostas</CardTitle></CardHeader>
           <CardContent className="p-0">
             {myBids.map((bid: ServiceBid) => (
               <div key={bid.id} className="flex items-center justify-between px-5 py-3 border-b border-border last:border-0">
@@ -132,16 +132,16 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
       {!hasPendingBid && (
         <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Send className="h-4 w-4" />Enviar Orçamento</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Send className="h-4 w-4" />Enviar proposta homologada</CardTitle></CardHeader>
           <CardContent className="p-5 pt-0">
             <form onSubmit={handleSubmit(onBidSubmit)} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="bid-amount">Valor do orçamento (R$) *</Label>
+                <Label htmlFor="bid-amount">Valor da proposta (R$) *</Label>
                 <Input id="bid-amount" type="number" step="0.01" placeholder="0.00" {...register('amount')} />
                 {errors.amount && <p className="text-xs text-(--color-danger)">{errors.amount.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="bid-notes">Observações</Label>
+                <Label htmlFor="bid-notes">Observações técnicas</Label>
                 <textarea
                   id="bid-notes"
                   rows={3}
@@ -151,14 +151,14 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                 />
               </div>
               <Button type="submit" loading={submittingBid} className="w-full">
-                <Send className="h-4 w-4" /> Enviar Orçamento
+                <Send className="h-4 w-4" /> Enviar proposta
               </Button>
             </form>
           </CardContent>
         </Card>
       )}
 
-      <ServiceChat serviceOrderId={serviceId} title="Chat sobre orçamento" />
+      <ServiceChat serviceOrderId={serviceId} title="Chat da operação privada" />
     </div>
   );
 }

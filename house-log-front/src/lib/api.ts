@@ -891,9 +891,11 @@ export type ProviderServiceOrder = ServiceOrder & {
   property_id: string;
 };
 
-export type ProviderOpportunity = ProviderServiceOrder & {
+export type ProviderNetworkOpportunity = ProviderServiceOrder & {
   my_bid: { id: string; amount: number; status: 'pending' | 'accepted' | 'rejected'; created_at: string } | null;
 };
+
+export type ProviderOpportunity = ProviderNetworkOpportunity;
 
 export type ServiceMessage = {
   id: string;
@@ -966,28 +968,47 @@ export type AccessCredential = {
   category: 'wifi' | 'alarm' | 'smart_lock' | 'gate' | 'app' | 'other';
   label: string;
   username: string | null;
-  secret: string;
   notes: string | null;
   integration_type: 'intelbras' | null;
   integration_config: Record<string, unknown> | null;
   share_with_os: boolean;
+  has_secret: boolean;
   created_at: string;
   updated_at: string;
+};
+
+export type AccessCredentialPayload = {
+  category?: AccessCredential['category'];
+  label: string;
+  username?: string;
+  secret: string;
+  notes?: string;
+  integration_type?: 'intelbras' | null;
+  integration_config?: Record<string, unknown> | null;
+  share_with_os?: boolean;
+};
+
+export type RevealedAccessCredential = AccessCredential & {
+  secret: string;
+  secret_revealed: true;
 };
 
 export const credentialsApi = {
   list: (propertyId: string) =>
     request<{ credentials: AccessCredential[] }>(`/properties/${propertyId}/credentials`),
 
-  create: (propertyId: string, data: Omit<AccessCredential, 'id' | 'property_id' | 'created_at' | 'updated_at'>) =>
+  create: (propertyId: string, data: AccessCredentialPayload) =>
     request<{ credential: AccessCredential }>(`/properties/${propertyId}/credentials`, {
       method: 'POST', body: JSON.stringify(data),
     }),
 
-  update: (propertyId: string, id: string, data: Partial<Omit<AccessCredential, 'id' | 'property_id' | 'created_at' | 'updated_at'>>) =>
+  update: (propertyId: string, id: string, data: Partial<AccessCredentialPayload>) =>
     request<{ credential: AccessCredential }>(`/properties/${propertyId}/credentials/${id}`, {
       method: 'PUT', body: JSON.stringify(data),
     }),
+
+  revealSecret: (propertyId: string, id: string) =>
+    request<{ credential: RevealedAccessCredential }>(`/properties/${propertyId}/credentials/${id}/secret`),
 
   delete: (propertyId: string, id: string) =>
     request<{ deleted: boolean }>(`/properties/${propertyId}/credentials/${id}`, { method: 'DELETE' }),
@@ -1019,7 +1040,13 @@ export type PublicServiceView = {
     notes_from_provider: string | null;
     share_credentials: boolean;
   };
-  credentials: Pick<AccessCredential, 'category' | 'label' | 'username' | 'secret' | 'notes'>[];
+  credentials: Array<{
+    category: AccessCredential['category'];
+    label: string;
+    username: string | null;
+    secret: string;
+    notes: string | null;
+  }>;
 };
 
 const PUBLIC_BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') ?? 'http://localhost:8787';
@@ -1065,7 +1092,7 @@ export const providerApi = {
     request<CursorPage<ProviderServiceOrder>>(`/provider/services${qs(params)}`),
 
   opportunities: (params?: { system_type?: string; cursor?: string }) =>
-    request<CursorPage<ProviderOpportunity>>(`/provider/opportunities${qs(params)}`),
+    request<CursorPage<ProviderNetworkOpportunity>>(`/provider/opportunities${qs(params)}`),
 
   getOpportunity: (id: string) =>
     request<{ order: ProviderServiceOrder; my_bids: ServiceBid[] }>(`/provider/opportunities/${id}`),
@@ -1077,7 +1104,10 @@ export const providerApi = {
     request<{ stats: Record<string, number>; total: number; recent_bids: ServiceBid[] }>('/provider/stats'),
 };
 
-export const marketplaceApi = {
+// Provider Network facade.
+// Backend routes still use /marketplace for compatibility, but frontend naming
+// should reflect the private curated provider network model.
+export const providerNetworkApi = {
   providerProfile: (providerId: string) =>
     request<ProviderPublicProfile>(`/marketplace/providers/${providerId}/profile`),
 
@@ -1087,6 +1117,8 @@ export const marketplaceApi = {
       body: JSON.stringify({ provider_id: providerId, notes }),
     }),
 };
+
+export const marketplaceApi = providerNetworkApi;
 
 export const messagesApi = {
   list: (serviceOrderId: string) =>

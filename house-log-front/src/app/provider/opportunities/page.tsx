@@ -3,12 +3,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
-import { Briefcase, ChevronRight, MapPin } from 'lucide-react';
-import { providerApi, type ProviderOpportunity } from '@/lib/api';
+import { Briefcase, MapPin } from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
+import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { cn, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/empty-state';
+import { providerApi, type ProviderNetworkOpportunity } from '@/lib/api';
+import { SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -16,88 +19,122 @@ const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   preventive: 'preventive',
 };
 
+const SYSTEM_FILTERS = [
+  '',
+  'electrical',
+  'plumbing',
+  'structural',
+  'waterproofing',
+  'painting',
+  'flooring',
+  'roofing',
+  'general',
+];
+
 export default function ProviderOpportunitiesPage() {
   const [systemFilter, setSystemFilter] = useState('');
 
-  const { data, isLoading } = useSWR(
-    ['provider-opportunities', systemFilter],
-    () => providerApi.opportunities(systemFilter ? { system_type: systemFilter } : undefined)
+  const { data, isLoading } = useSWR(['provider-opportunities', systemFilter], () =>
+    providerApi.opportunities(systemFilter ? { system_type: systemFilter } : undefined)
   );
 
   const opportunities = data?.data ?? [];
 
   return (
-    <div className="safe-bottom space-y-5">
-      <div>
-        <h1 className="text-[24px] font-medium">Oportunidades de orçamento</h1>
-        <p className="text-sm text-muted-foreground">OS abertas para envio de proposta</p>
-      </div>
+    <div className="safe-bottom space-y-6">
+      <PageHeader
+        eyebrow="Provider network"
+        title="Rede homologada"
+        description="Solicitacoes elegiveis para sua atuacao tecnica dentro da operacao privada HouseLog."
+      />
 
-      <div className="flex gap-2 flex-wrap">
-        {['', 'electrical', 'plumbing', 'structural', 'waterproofing', 'painting', 'flooring', 'roofing', 'general'].map((s) => (
+      <PageSection
+        title="Elegibilidade tecnica"
+        description="Filtre por sistema para priorizar os chamados mais aderentes ao seu perfil homologado."
+        contentClassName="flex flex-wrap gap-2"
+      >
+        {SYSTEM_FILTERS.map((system) => (
           <Button
-            key={s || 'all'}
+            key={system || 'all'}
             type="button"
             size="sm"
-            variant={systemFilter === s ? 'default' : 'outline'}
-            onClick={() => setSystemFilter(s)}
+            variant={systemFilter === system ? 'default' : 'outline'}
+            onClick={() => setSystemFilter(system)}
           >
-            {s ? SYSTEM_TYPE_LABELS[s] : 'Todos os sistemas'}
+            {system ? SYSTEM_TYPE_LABELS[system] : 'Todos os sistemas'}
           </Button>
         ))}
-      </div>
+      </PageSection>
 
-      {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="hl-skeleton h-24 rounded-xl" />
-          ))}
-        </div>
-      ) : opportunities.length === 0 ? (
-        <div className="py-20 text-center">
-          <Briefcase className="mx-auto mb-3 h-10 w-10 text-text-disabled" />
-          <p className="text-sm text-muted-foreground">Nenhuma oportunidade disponível no momento</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {opportunities.map((item: ProviderOpportunity) => (
-            <Link key={item.id} href={`/provider/opportunities/${item.id}`}>
-              <Card className="cursor-pointer transition-colors hover:bg-bg-subtle active:scale-[0.98]">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {SYSTEM_TYPE_LABELS[item.system_type]} · {item.room_name ?? 'Sem cômodo'}
-                      </p>
-                      <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {item.property_name}
-                      </div>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <Badge variant={PRIORITY_VARIANT[item.priority]} className="text-xs">
-                          {SERVICE_PRIORITY_LABELS[item.priority]}
+      <PageSection
+        title="Operacoes elegiveis"
+        description="Solicitacoes abertas para analise e proposta dentro da rede homologada."
+        tone="strong"
+      >
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
+            ))}
+          </div>
+        ) : opportunities.length === 0 ? (
+          <EmptyState
+            icon={<Briefcase className="h-6 w-6" />}
+            title="Nenhuma solicitacao elegivel no momento"
+            description="Quando uma operacao privada compativel com sua homologacao estiver disponivel, ela aparecera aqui para analise."
+            tone="subtle"
+            density="spacious"
+          />
+        ) : (
+          <div className="space-y-3">
+            {opportunities.map((item: ProviderNetworkOpportunity) => (
+              <Link key={item.id} href={`/provider/opportunities/${item.id}`} className="block">
+                <ServiceOrderCard
+                  interactive
+                  leadingIcon={<Briefcase className="h-4 w-4" />}
+                  title={item.title}
+                  meta={`${SYSTEM_TYPE_LABELS[item.system_type]} - ${item.room_name ?? 'Sem comodo'}`}
+                  value={item.my_bid ? formatCurrency(item.my_bid.amount) : undefined}
+                  status={
+                    <div className="flex max-w-[10rem] flex-wrap justify-end gap-1.5">
+                      <Badge variant={PRIORITY_VARIANT[item.priority]} className="text-xs">
+                        {SERVICE_PRIORITY_LABELS[item.priority]}
+                      </Badge>
+                      {item.my_bid ? (
+                        <Badge
+                          variant={
+                            item.my_bid.status === 'accepted'
+                              ? 'success'
+                              : item.my_bid.status === 'rejected'
+                                ? 'destructive'
+                                : 'secondary'
+                          }
+                          className="text-xs"
+                        >
+                          Proposta enviada
                         </Badge>
-                        {item.my_bid ? (
-                          <Badge variant={item.my_bid.status === 'accepted' ? 'success' : item.my_bid.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
-                            Meu orçamento: {formatCurrency(item.my_bid.amount)}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-xs">Sem proposta enviada</Badge>
-                        )}
-                      </div>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Elegivel
+                        </Badge>
+                      )}
                     </div>
-                    <div className={cn('text-right shrink-0', item.my_bid ? 'text-foreground' : 'text-muted-foreground')}>
-                      <p className="text-xs">{formatDate(item.created_at)}</p>
-                      <ChevronRight className="h-4 w-4 ml-auto mt-1" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+                  }
+                  footer={
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="inline-flex min-w-0 items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{item.property_name}</span>
+                      </span>
+                      <span>{formatDate(item.created_at)}</span>
+                    </span>
+                  }
+                />
+              </Link>
+            ))}
+          </div>
+        )}
+      </PageSection>
     </div>
   );
 }

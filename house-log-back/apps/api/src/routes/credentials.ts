@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { writeAuditLog } from '../lib/audit';
+import { authMiddleware, assertPropertyAccess, assertPropertySecretAccess } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { propertyAccessCredentials } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
@@ -24,21 +25,58 @@ const createSchema = z.object({
   share_with_os:     z.boolean().default(false),
 });
 
-type Credential = {
+type CredentialRecord = {
   id: string;
   property_id: string;
   created_by: string;
   category: string;
   label: string;
   username: string | null;
-  secret: string;
   notes: string | null;
   integration_type: string | null;
-  integration_config: string | null;
+  integration_config: Record<string, unknown> | null;
   share_with_os: number;
   created_at: string;
   updated_at: string;
 };
+
+type RevealedCredentialRecord = CredentialRecord & {
+  secret: string;
+};
+
+type CredentialResponse = Omit<CredentialRecord, 'share_with_os'> & {
+  share_with_os: boolean;
+  has_secret: boolean;
+};
+
+const credentialSelect = {
+  id: propertyAccessCredentials.id,
+  property_id: propertyAccessCredentials.propertyId,
+  created_by: propertyAccessCredentials.createdBy,
+  category: propertyAccessCredentials.category,
+  label: propertyAccessCredentials.label,
+  username: propertyAccessCredentials.username,
+  notes: propertyAccessCredentials.notes,
+  integration_type: propertyAccessCredentials.integrationType,
+  integration_config: propertyAccessCredentials.integrationConfig,
+  share_with_os: propertyAccessCredentials.shareWithOs,
+  created_at: propertyAccessCredentials.createdAt,
+  updated_at: propertyAccessCredentials.updatedAt,
+};
+
+const credentialRevealSelect = {
+  ...credentialSelect,
+  secret: propertyAccessCredentials.secret,
+};
+
+function toCredentialResponse(row: CredentialRecord): CredentialResponse {
+  return {
+    ...row,
+    integration_config: row.integration_config ?? null,
+    share_with_os: row.share_with_os === 1,
+    has_secret: true,
+  };
+}
 
 // ── GET /properties/:propertyId/credentials ──────────────────────────────────
 
@@ -52,21 +90,7 @@ credentials.get('/', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const results = await db
-    .select({
-      id: propertyAccessCredentials.id,
-      property_id: propertyAccessCredentials.propertyId,
-      created_by: propertyAccessCredentials.createdBy,
-      category: propertyAccessCredentials.category,
-      label: propertyAccessCredentials.label,
-      username: propertyAccessCredentials.username,
-      secret: propertyAccessCredentials.secret,
-      notes: propertyAccessCredentials.notes,
-      integration_type: propertyAccessCredentials.integrationType,
-      integration_config: propertyAccessCredentials.integrationConfig,
-      share_with_os: propertyAccessCredentials.shareWithOs,
-      created_at: propertyAccessCredentials.createdAt,
-      updated_at: propertyAccessCredentials.updatedAt,
-    })
+    .select(credentialSelect)
     .from(propertyAccessCredentials)
     .where(
       and(
@@ -74,13 +98,9 @@ credentials.get('/', async (c) => {
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
-    .orderBy(asc(propertyAccessCredentials.category), asc(propertyAccessCredentials.label)) as Credential[];
+    .orderBy(asc(propertyAccessCredentials.category), asc(propertyAccessCredentials.label)) as CredentialRecord[];
 
-  const items = results.map((r) => ({
-    ...r,
-    integration_config: r.integration_config ?? null,
-    share_with_os: r.share_with_os === 1,
-  }));
+  const items = results.map(toCredentialResponse);
 
   return ok(c, { credentials: items });
 });
@@ -120,32 +140,63 @@ credentials.post('/', async (c) => {
   });
 
   const [row] = await db
-    .select({
-      id: propertyAccessCredentials.id,
-      property_id: propertyAccessCredentials.propertyId,
-      created_by: propertyAccessCredentials.createdBy,
-      category: propertyAccessCredentials.category,
-      label: propertyAccessCredentials.label,
-      username: propertyAccessCredentials.username,
-      secret: propertyAccessCredentials.secret,
-      notes: propertyAccessCredentials.notes,
-      integration_type: propertyAccessCredentials.integrationType,
-      integration_config: propertyAccessCredentials.integrationConfig,
-      share_with_os: propertyAccessCredentials.shareWithOs,
-      created_at: propertyAccessCredentials.createdAt,
-      updated_at: propertyAccessCredentials.updatedAt,
-    })
+    .select(credentialSelect)
     .from(propertyAccessCredentials)
     .where(eq(propertyAccessCredentials.id, id))
-    .limit(1) as Credential[];
+    .limit(1) as CredentialRecord[];
+
+  if (!row) return err(c, 'Erro ao carregar credencial', 'SERVER_ERROR', 500);
+
+  return ok(c, { credential: toCredentialResponse(row) }, 201);
+});
+
+// ── GET /properties/:propertyId/credentials/:credId/secret ───────────────────
+// Explicit reveal path. Default credential responses intentionally omit secret.
+
+credentials.get('/:credId/secret', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const credId = c.req.param('credId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const hasAccess = await assertPropertySecretAccess(c.env.DB, propertyId, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [cred] = await db
+    .select(credentialRevealSelect)
+    .from(propertyAccessCredentials)
+    .where(
+      and(
+        eq(propertyAccessCredentials.id, credId),
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
+    )
+    .limit(1) as RevealedCredentialRecord[];
+
+  if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'property_access_credential',
+    entityId: cred.id,
+    action: 'secret_reveal',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      category: cred.category,
+      label: cred.label,
+    },
+  });
 
   return ok(c, {
     credential: {
-      ...row,
-      integration_config: row?.integration_config ?? null,
-      share_with_os: row?.share_with_os === 1,
-    }
-  }, 201);
+      ...toCredentialResponse(cred),
+      secret: cred.secret,
+      secret_revealed: true,
+    },
+  });
 });
 
 // ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────
@@ -200,32 +251,14 @@ credentials.put('/:credId', async (c) => {
     .where(eq(propertyAccessCredentials.id, credId));
 
   const [row] = await db
-    .select({
-      id: propertyAccessCredentials.id,
-      property_id: propertyAccessCredentials.propertyId,
-      created_by: propertyAccessCredentials.createdBy,
-      category: propertyAccessCredentials.category,
-      label: propertyAccessCredentials.label,
-      username: propertyAccessCredentials.username,
-      secret: propertyAccessCredentials.secret,
-      notes: propertyAccessCredentials.notes,
-      integration_type: propertyAccessCredentials.integrationType,
-      integration_config: propertyAccessCredentials.integrationConfig,
-      share_with_os: propertyAccessCredentials.shareWithOs,
-      created_at: propertyAccessCredentials.createdAt,
-      updated_at: propertyAccessCredentials.updatedAt,
-    })
+    .select(credentialSelect)
     .from(propertyAccessCredentials)
     .where(eq(propertyAccessCredentials.id, credId))
-    .limit(1) as Credential[];
+    .limit(1) as CredentialRecord[];
 
-  return ok(c, {
-    credential: {
-      ...row,
-      integration_config: row?.integration_config ?? null,
-      share_with_os: row?.share_with_os === 1,
-    }
-  });
+  if (!row) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+
+  return ok(c, { credential: toCredentialResponse(row) });
 });
 
 // ── DELETE /properties/:propertyId/credentials/:credId ───────────────────────
@@ -272,21 +305,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const expiresHours = body.expires_hours ?? 24;
 
   const [cred] = await db
-    .select({
-      id: propertyAccessCredentials.id,
-      property_id: propertyAccessCredentials.propertyId,
-      created_by: propertyAccessCredentials.createdBy,
-      category: propertyAccessCredentials.category,
-      label: propertyAccessCredentials.label,
-      username: propertyAccessCredentials.username,
-      secret: propertyAccessCredentials.secret,
-      notes: propertyAccessCredentials.notes,
-      integration_type: propertyAccessCredentials.integrationType,
-      integration_config: propertyAccessCredentials.integrationConfig,
-      share_with_os: propertyAccessCredentials.shareWithOs,
-      created_at: propertyAccessCredentials.createdAt,
-      updated_at: propertyAccessCredentials.updatedAt,
-    })
+    .select(credentialRevealSelect)
     .from(propertyAccessCredentials)
     .where(
       and(
@@ -295,7 +314,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
-    .limit(1) as Credential[];
+    .limit(1) as RevealedCredentialRecord[];
 
   if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
   if (cred.integration_type !== 'intelbras') {

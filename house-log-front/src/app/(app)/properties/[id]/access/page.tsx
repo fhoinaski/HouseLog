@@ -7,12 +7,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Wifi, Shield, Lock, KeyRound, AppWindow, HelpCircle,
-  Plus, Trash2, Eye, EyeOff, Copy, Pencil, Zap, X,
+  Plus, Trash2, Copy, Pencil, Zap, X,
   RefreshCw,
 } from 'lucide-react';
-import { credentialsApi, type AccessCredential } from '@/lib/api';
+import { credentialsApi, type AccessCredential, type AccessCredentialPayload } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { SensitiveField } from '@/components/ui/sensitive-field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,7 +37,7 @@ const credSchema = z.object({
   category:          z.enum(['wifi', 'alarm', 'smart_lock', 'gate', 'app', 'other']).default('other'),
   label:             z.string().min(1, 'Obrigatório'),
   username:          z.string().optional(),
-  secret:            z.string().min(1, 'Senha/código obrigatório'),
+  secret:            z.string().optional(),
   notes:             z.string().optional(),
   integration_type:  z.enum(['intelbras']).optional().nullable(),
   share_with_os:     z.boolean().default(false),
@@ -46,34 +47,6 @@ const credSchema = z.object({
 });
 
 type CredForm = z.infer<typeof credSchema>;
-
-function SecretCell({ secret }: { secret: string }) {
-  const [show, setShow] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(secret);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <code className={cn(
-        'flex-1 rounded px-1.5 py-0.5 text-xs font-mono bg-bg-subtle text-text-primary',
-        show ? '' : 'select-none text-transparent'
-      )}>
-        {secret}
-      </code>
-      <button onClick={() => setShow(!show)} className="p-1 text-text-tertiary transition-colors hover:text-text-primary" aria-label={show ? 'Ocultar credencial' : 'Mostrar credencial'}>
-        {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-      </button>
-      <button onClick={copy} className="p-1 text-text-tertiary transition-colors hover:text-text-accent" aria-label="Copiar credencial">
-        {copied ? <span className="text-xs font-medium text-text-success">✓</span> : <Copy className="h-3.5 w-3.5" />}
-      </button>
-    </div>
-  );
-}
 
 function TempCodeDialog({ credId, propertyId, label, onClose }: { credId: string; propertyId: string; label: string; onClose: () => void }) {
   const [hours, setHours] = useState(24);
@@ -182,7 +155,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
       category: cred.category,
       label: cred.label,
       username: cred.username ?? '',
-      secret: cred.secret,
+      secret: '',
       notes: cred.notes ?? '',
       integration_type: cred.integration_type ?? null,
       share_with_os: cred.share_with_os,
@@ -195,16 +168,21 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
   }
 
   async function onSubmit(form: CredForm) {
+    if (!editing && !form.secret?.trim()) {
+      toast.error('Informe a senha ou código da credencial');
+      return;
+    }
+
     const intelbrasConfig = form.integration_type === 'intelbras' ? {
       host: form.intelbras_host, username: form.intelbras_user, password: form.intelbras_pass,
     } : null;
 
-    const payload = {
+    const payload: Partial<AccessCredentialPayload> = {
       category: form.category,
       label: form.label,
-      username: form.username || null,
-      secret: form.secret,
-      notes: form.notes || null,
+      username: form.username || undefined,
+      ...(form.secret?.trim() ? { secret: form.secret } : {}),
+      notes: form.notes || undefined,
       integration_type: form.integration_type ?? null,
       integration_config: intelbrasConfig,
       share_with_os: form.share_with_os,
@@ -215,7 +193,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         await credentialsApi.update(propertyId, editing.id, payload);
         toast.success('Credencial atualizada');
       } else {
-        await credentialsApi.create(propertyId, payload);
+        await credentialsApi.create(propertyId, payload as AccessCredentialPayload);
         toast.success('Credencial salva');
       }
       await mutate();
@@ -296,7 +274,23 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                     {cred.username && (
                       <p className="text-xs text-text-secondary">Usuário: <span className="font-mono">{cred.username}</span></p>
                     )}
-                    <SecretCell secret={cred.secret} />
+                    <SensitiveField
+                      label="Segredo"
+                      hasValue={cred.has_secret}
+                      maskedText="Credencial protegida"
+                      emptyText="Sem segredo cadastrado"
+                      revealLabel={`Revelar credencial ${cred.label}`}
+                      hideLabel={`Ocultar credencial ${cred.label}`}
+                      copyLabel={`Copiar credencial ${cred.label}`}
+                      onReveal={async () => {
+                        const res = await credentialsApi.revealSecret(propertyId, cred.id);
+                        return res.credential.secret;
+                      }}
+                      onCopy={() => {
+                        toast.success('Credencial copiada');
+                      }}
+                      onError={(error) => toast.error('Erro ao acessar credencial', { description: (error as Error).message })}
+                    />
                     {cred.notes && <p className="text-xs text-text-secondary">{cred.notes}</p>}
                   </div>
 

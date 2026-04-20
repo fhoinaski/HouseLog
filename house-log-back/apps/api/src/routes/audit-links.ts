@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { and, eq, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
-import { authMiddleware } from '../middleware/auth';
+import { assertPropertyAccess, authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
@@ -20,6 +20,10 @@ auditLinks.post('/', authMiddleware, async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const serviceId = c.req.param('serviceId')!;
   const userId = c.get('userId');
+  const userRole = c.get('userRole');
+
+  const canAccessProperty = await assertPropertyAccess(c.env.DB, propertyId, userId, userRole);
+  if (!canAccessProperty) return err(c, 'Permissão insuficiente', 'FORBIDDEN', 403);
 
   // Verify the OS exists and belongs to the property
   const [order] = await db
