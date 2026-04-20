@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
+import { writeAuditLog } from '../lib/audit';
+import { canSubmitProviderProposal } from '../lib/authorization';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { properties, serviceBids, serviceOrders, users } from '../db/schema';
@@ -57,7 +59,7 @@ bids.post('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  if (role !== 'provider' && role !== 'admin') {
+  if (!canSubmitProviderProposal({ userId, role, propertyId, serviceOrderId: serviceId })) {
     return err(c, 'Apenas prestadores podem enviar orçamentos', 'FORBIDDEN', 403);
   }
 
@@ -116,6 +118,24 @@ bids.post('/', async (c) => {
     providerId: userId,
     amount: parsed.data.amount,
     notes: parsed.data.notes ?? null,
+  });
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'service_bid',
+    entityId: id,
+    action: 'provider_proposal_submitted',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      service_order_id: serviceId,
+      provider_id: userId,
+      proposal_id: id,
+      amount: parsed.data.amount,
+      status: 'pending',
+      actor_id: userId,
+      actor_role: role,
+    },
   });
 
   // Notify owner (non-blocking)

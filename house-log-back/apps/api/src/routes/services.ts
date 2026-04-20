@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
+import { canCreateServiceOrder, canMutateServiceOrder, canViewServiceOrder } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
-import { authMiddleware, assertPropertyAccess, canUserOpenOS } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
 import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/email';
 import { getDb } from '../db/client';
@@ -44,7 +45,7 @@ services.get('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
@@ -104,11 +105,8 @@ services.post('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
-
-  const allowed = await canUserOpenOS(c.env.DB, propertyId, userId);
-  if (!allowed) return err(c, 'Sem permissão para abrir OS neste imóvel', 'FORBIDDEN', 403);
+  const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) return err(c, 'Sem permissão para abrir OS neste imóvel', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
@@ -229,7 +227,7 @@ services.get('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -280,7 +278,7 @@ services.put('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -384,7 +382,7 @@ services.patch('/:id/status', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json<{ status: string }>().catch(() => null);
@@ -449,9 +447,16 @@ services.patch('/:id/status', async (c) => {
     .where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: `status_${body.status}`,
+    entityType: 'service_order', entityId: id, action: 'service_order_status_changed',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
-    oldData: { status: order.status }, newData: { status: body.status },
+    oldData: { previous_status: order.status },
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      previous_status: order.status,
+      next_status: body.status,
+      actor_id: userId,
+    },
   });
 
   const [updated] = await db
@@ -533,7 +538,7 @@ services.post('/:id/photos', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -591,7 +596,7 @@ services.post('/:id/video', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -636,7 +641,7 @@ services.post('/:id/audio', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -682,7 +687,7 @@ services.delete('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -733,7 +738,7 @@ services.patch('/:id/checklist', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json<{ checklist: { item: string; done: boolean }[] }>().catch(() => null);

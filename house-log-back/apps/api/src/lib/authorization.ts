@@ -12,6 +12,11 @@ export type PropertyAuthorizationInput = AuthorizationSubject & {
   propertyId: string;
 };
 
+export type ProviderProposalAuthorizationInput = AuthorizationSubject & {
+  propertyId: string;
+  serviceOrderId: string;
+};
+
 function isPropertyDashboardRole(role: Role): boolean {
   return role !== 'provider' && role !== 'temp_provider';
 }
@@ -144,6 +149,90 @@ export async function canRequestDocumentOCR(
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
   return canAccessProperty(db, input);
+}
+
+export async function canCreateServiceOrder(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  if (!isPropertyDashboardRole(input.role)) return false;
+
+  const drizzle = getDb(db);
+  const [owned] = await drizzle
+    .select({ id: properties.id })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, input.propertyId),
+        or(eq(properties.ownerId, input.userId), eq(properties.managerId, input.userId)),
+        isNull(properties.deletedAt)
+      )
+    )
+    .limit(1);
+  if (owned) return true;
+
+  try {
+    const [collab] = await drizzle
+      .select({
+        role: propertyCollaborators.role,
+        canOpenOs: propertyCollaborators.canOpenOs,
+      })
+      .from(propertyCollaborators)
+      .where(
+        and(
+          eq(propertyCollaborators.propertyId, input.propertyId),
+          eq(propertyCollaborators.userId, input.userId)
+        )
+      )
+      .limit(1);
+
+    if (!collab) return false;
+    if (collab.role === 'viewer') return false;
+    return collab.canOpenOs === 1;
+  } catch (e) {
+    if (String(e).includes('property_collaborators')) return false;
+    throw e;
+  }
+}
+
+export async function canViewServiceOrder(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canAccessProperty(db, input);
+}
+
+export async function canMutateServiceOrder(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canAccessProperty(db, input);
+}
+
+export async function canAccessProviderPortal(
+  db: D1Database,
+  subject: AuthorizationSubject
+): Promise<boolean> {
+  if (subject.role === 'provider' || subject.role === 'admin') return true;
+
+  const drizzle = getDb(db);
+  const [collaborator] = await drizzle
+    .select({ id: propertyCollaborators.id })
+    .from(propertyCollaborators)
+    .where(
+      and(
+        eq(propertyCollaborators.userId, subject.userId),
+        eq(propertyCollaborators.role, 'provider')
+      )
+    )
+    .limit(1);
+
+  return !!collaborator;
+}
+
+export function canSubmitProviderProposal(input: ProviderProposalAuthorizationInput): boolean {
+  const hasOpportunityContext = input.propertyId.length > 0 && input.serviceOrderId.length > 0;
+  return hasOpportunityContext && (input.role === 'provider' || input.role === 'admin');
 }
 
 export async function listAccessiblePropertyIds(

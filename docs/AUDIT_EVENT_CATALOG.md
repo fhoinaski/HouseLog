@@ -260,7 +260,7 @@ Nunca registrar:
 - **Boundary**: Service Operations / Audit and Governance
 - **Quando registrar**: qualquer transicao relevante de status da OS.
 - **Action relacionada**: fechamento, aprovacao, inicio, conclusao, verificacao ou futuro `closeServiceOrderWithEvidence`.
-- **Autorizacao esperada**: futuro `canMutateServiceOrder`, `canCloseServiceOrder` ou helper equivalente.
+- **Autorizacao esperada**: `canMutateServiceOrder` no fluxo atual; helpers mais granulares podem surgir para fechamento e evidencias.
 - **Payload minimo**:
   - `property_id`
   - `service_order_id`
@@ -271,7 +271,7 @@ Nunca registrar:
 - **Nao registrar**:
   - fotos ou arquivos brutos
   - payload de chat
-- **Observacao**: deve ser base para timeline e governanca operacional.
+- **Observacao**: evento implementado no fluxo principal de mudanca de status de OS. Deve ser base para timeline e governanca operacional.
 
 ### 5.10 `provider_proposal_submitted`
 
@@ -280,7 +280,7 @@ Nunca registrar:
 - **Boundary**: Provider Network / Service Operations
 - **Quando registrar**: envio de proposta por provider elegivel/homologado para uma OS ou oportunidade.
 - **Action relacionada**: envio de bid/proposta existente e futuro `requestProviderProposal`.
-- **Autorizacao esperada**: futuro `canBidOnOpportunity` ou helper de elegibilidade.
+- **Autorizacao esperada**: `canSubmitProviderProposal`.
 - **Payload minimo**:
   - `property_id`
   - `service_order_id`
@@ -293,6 +293,7 @@ Nunca registrar:
   - dados bancarios
   - detalhes pessoais excessivos do provider
 - **Observacao**: deve reforcar rede homologada, nao marketplace aberto.
+  Evento implementado no fluxo principal de bids com payload minimo e sem dados pessoais excessivos.
 
 ---
 

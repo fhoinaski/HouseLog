@@ -1,31 +1,22 @@
 import { Hono } from 'hono';
 import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { ok, err, paginate } from '../lib/response';
+import { canAccessProviderPortal } from '../lib/authorization';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
-import { documents, properties, propertyCollaborators, rooms, serviceBids, serviceOrders, users } from '../db/schema';
+import { documents, properties, rooms, serviceBids, serviceOrders, users } from '../db/schema';
 import { normalizeProviderCategories } from '../lib/provider-categories';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 
 const provider = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 provider.use('*', authMiddleware);
 
-async function canAccessProviderPortal(db: ReturnType<typeof getDb>, userId: string, role: string): Promise<boolean> {
-  if (role === 'provider' || role === 'admin') return true;
-  const [collaborator] = await db
-    .select({ id: propertyCollaborators.id })
-    .from(propertyCollaborators)
-    .where(and(eq(propertyCollaborators.userId, userId), eq(propertyCollaborators.role, 'provider')))
-    .limit(1);
-  return !!collaborator;
-}
-
 // GET /provider/services
 provider.get('/services', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!(await canAccessProviderPortal(db, userId, role))) {
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
@@ -87,7 +78,7 @@ provider.get('/opportunities', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!(await canAccessProviderPortal(db, userId, role))) {
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
@@ -204,7 +195,7 @@ provider.get('/opportunities/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const id = c.req.param('id')!;
-  if (!(await canAccessProviderPortal(db, userId, role))) {
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
@@ -269,7 +260,7 @@ provider.get('/services/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const id = c.req.param('id')!;
-  if (!(await canAccessProviderPortal(db, userId, role))) {
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
@@ -329,7 +320,7 @@ provider.get('/stats', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
-  if (!(await canAccessProviderPortal(db, userId, role))) {
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
@@ -371,7 +362,7 @@ provider.post('/services/:id/invoice', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const id = c.req.param('id')!;
-  if (!(await canAccessProviderPortal(db, userId, role))) {
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
