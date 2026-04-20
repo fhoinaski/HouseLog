@@ -50,11 +50,11 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 | `serviceOrderView` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Nao por padrao | `canViewServiceOrder` | Parcial | Helper existe, mas delega para `canAccessProperty`; provider atribuido exige regra futura propria |
 | `serviceOrderMutate` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim para mudancas relevantes | `canMutateServiceOrder` | Parcial | Helper existe, mas ainda cobre mutacoes amplas; faltam status, atribuicao, evidencias e fechamento |
 | `serviceOrderStatusChange` | Service Operations / Audit and Governance | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_status_changed` | `canChangeServiceOrderStatus`; `canCloseServiceOrderWithEvidence` quando `completed` | Parcial | Helper existe e preserva regra atual; fechamento com evidencia segue com helper adicional |
-| `serviceOrderUpdate` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_updated` | `canUpdateServiceOrder` | Parcial | Helper existe e preserva regra atual; policy ainda nao separa metadados, atribuicao e campos sensiveis |
+| `serviceOrderUpdate` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_updated` | `canUpdateServiceOrder` | Parcial | Helper existe e preserva regra atual; policy ainda nao separa metadados, campos sensiveis e atribuicao elegivel de provider |
 | `serviceOrderDelete` | Service Operations / Audit and Governance | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_deleted` | `canDeleteServiceOrder` | Parcial | Helper existe e preserva regra atual; ainda falta motivo/contexto e restricao por status |
 | `serviceOrderEvidenceUpload` | Service Operations / Documents and Evidence | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_evidence_uploaded` | `canUploadServiceEvidence` | Parcial | Helper existe e preserva regra atual; falta granularidade por tipo de evidencia |
 | `serviceOrderChecklistUpdate` | Service Operations / Property Operating System | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_checklist_updated` | `canUpdateServiceOrderChecklist` | Parcial | Helper existe e preserva regra atual; falta granularidade por responsabilidade e etapa da OS |
-| `providerProposalSubmit` | Provider Network / Service Operations | `provider` e `admin` no fluxo atual | owner, manager, temp_provider e usuarios sem papel provider/admin | Alta | Sim, `provider_proposal_submitted` | `canSubmitProviderProposal` | Parcial | Helper existe e e usado; elegibilidade da OS, duplicidade e status continuam na rota |
+| `providerProposalSubmit` | Provider Network / Service Operations | `provider` e `admin` no fluxo atual, com OS aberta a proposta | owner, manager, temp_provider, usuarios sem papel provider/admin, OS atribuida/fechada ou proposta pendente duplicada | Alta | Sim, `provider_proposal_submitted` | `canSubmitProviderProposal` | Parcial | Helper usa contexto minimo da OS/oportunidade; homologacao, categoria e tenant seguem pendentes |
 | `providerPortalAccess` | Provider Network | `provider`, `admin` ou colaborador com role `provider` | usuarios sem papel/contexto de provider | Media/Alta | Nao por padrao | `canAccessProviderPortal` | Implementado | Regra local foi movida para o core; elegibilidade por oportunidade/categoria ainda fica fora |
 
 ---
@@ -155,7 +155,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Status**: parcial.
 - **Policy atual**: acesso contextual ao imovel.
 - **Coerencia de dominio**: edicao de OS muda metadados operacionais e ja audita `service_order_updated`.
-- **Granularidade pendente**: separar metadados comuns, atribuicao de provider, campos de custo, agenda e campos sensiveis.
+- **Granularidade pendente**: separar metadados comuns, campos de custo, agenda e campos sensiveis; atribuicao de provider deve virar action/helper proprio apenas quando houver elegibilidade real de rede homologada.
 
 ### 5.13 `serviceOrderDelete`
 
@@ -185,9 +185,9 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 
 - **Helper atual**: `canSubmitProviderProposal`.
 - **Status**: parcial.
-- **Policy atual**: `provider` ou `admin`.
+- **Policy atual**: `provider` ou `admin`, com contexto minimo de OS aberta, sem execucao direta e sem proposta pendente duplicada.
 - **Coerencia de dominio**: proposta pertence a Provider Network privada, nao marketplace aberto.
-- **Granularidade pendente**: elegibilidade por oportunidade, categoria, homologacao, tenant e OS aberta.
+- **Granularidade pendente**: categoria, homologacao, tenant, disponibilidade e elegibilidade completa da oportunidade.
 
 ### 5.17 `providerPortalAccess`
 
@@ -195,7 +195,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Status**: implementado.
 - **Policy atual**: `provider`, `admin` ou colaborador com role `provider`.
 - **Coerencia de dominio**: portal e entrada operacional para rede homologada.
-- **Granularidade pendente**: separar acesso ao portal de visibilidade de oportunidades, servicos atribuidos e elegibilidade por categoria.
+- **Granularidade pendente**: separar acesso ao portal de visibilidade de oportunidades, servicos atribuidos e elegibilidade por categoria, homologacao, contexto e disponibilidade.
 
 ---
 
@@ -203,7 +203,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 
 - Helpers parciais podem ser lidos como policy final, mesmo ainda delegando para `canAccessProperty`.
 - Provider global ainda tem acesso amplo ao portal; a elegibilidade fina ainda depende de filtros e regras em rota.
-- Mutacoes de OS ainda precisam helpers menores para atribuicao e regras reais por status/evidencia.
+- Atribuicao de provider ainda nao deve ser lida como coberta por `canUpdateServiceOrder`; permanece gap de Provider Network ate existir regra real de elegibilidade.
 - Documentos e OCR exigem mais cuidado antes de ampliar automacoes ou busca sem policies por tipo.
 - Sem tenant/organization, `property_id` continua sendo o limite principal de autorizacao.
 
@@ -211,7 +211,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 
 ## 7. Proximos passos recomendados
 
-1. Priorizar granularidade de service orders: status, atribuicao, evidencias, checklist, exclusao e fechamento.
+1. Priorizar granularidade de service orders: status, evidencias, checklist, exclusao e fechamento; tratar atribuicao de provider como bloco proprio de Provider Network quando a elegibilidade estiver definida.
 2. Evoluir `canSubmitProviderProposal` para usar o contexto da OS/oportunidade em regras reais de elegibilidade sem alterar contrato publico.
 3. Separar policies documentais por tipo e criticidade antes de ampliar OCR e classificacao.
 4. Endurecer audit links com policy por OS, escopo, revogacao e auditoria sem token completo.

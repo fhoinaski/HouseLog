@@ -141,9 +141,10 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Contrato recomendado**: `POST /services/:serviceId/provider/assign` com provider alvo e motivo/contexto.
 - **Autorizacao esperada**: futuro `canAssignProvider` combinado com elegibilidade de rede homologada.
 - **Auditoria esperada**: obrigatoria, com provider, service order, regra de elegibilidade aplicada e ator.
+- **Criterios minimos antes de implementar**: provider com papel/relacao valida, homologacao quando exigida, categoria compativel, contexto de propriedade/tenant/convite, disponibilidade quando aplicavel e OS em estado atribuivel.
 - **Risco**: alto, por conceder visibilidade operacional ao provider.
 - **Beneficio**: alto, porque distancia o produto de marketplace aberto e reforca rede curada.
-- **Observacao**: depende de modelo mais claro de provider eligibility.
+- **Observacao**: revisado e adiado por enquanto; o fluxo atual ainda usa `assigned_to` na criacao/edicao de OS, mas nao ha contrato suficiente de elegibilidade, homologacao, disponibilidade ou escopo por propriedade. Nao criar helper ou endpoint dedicado ate esse modelo existir.
 
 ### 5.6 `markMaintenanceDone`
 
@@ -167,6 +168,7 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Contrato recomendado**: `POST /services/:serviceId/provider-proposals/request`
 - **Autorizacao esperada**: futuro `canRequestProviderProposal` e elegibilidade por provider/category/property.
 - **Auditoria esperada**: recomendada/obrigatoria conforme impacto comercial.
+- **Criterios minimos antes de implementar**: provider dentro da rede privada, categoria compativel, oportunidade visivel, OS aberta a proposta e ausencia de atribuicao direta conflitante.
 - **Risco**: medio/alto, por envolver provider, escopo de OS e possivel notificacao externa.
 - **Beneficio**: alto, porque alinha provider flow a rede homologada.
 - **Observacao**: nao deve reintroduzir linguagem ou comportamento de marketplace aberto. O envio atual de proposta pelo provider ja esta coberto por `canSubmitProviderProposal` e auditoria `provider_proposal_submitted`; este candidato trata da solicitacao ativa de proposta quando esse fluxo virar contrato real.

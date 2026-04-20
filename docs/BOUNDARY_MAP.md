@@ -175,6 +175,16 @@ Nao deve:
 Decisao:
 - marketplace e naming legado ou transicional; a direcao oficial e provider network curada.
 
+Criterios minimos para elegibilidade de provider:
+- identidade com papel `provider` ou relacao local de colaborador `provider`;
+- homologacao aprovada quando o fluxo exigir rede curada formal;
+- compatibilidade entre categoria/especialidade do provider e escopo tecnico da OS;
+- contexto valido de propriedade, tenant ou convite operacional;
+- disponibilidade operacional quando a agenda for parte da decisao;
+- ausencia de conflito com OS ja atribuida ou encerrada.
+
+Esses criterios orientam futuros helpers como `canAssignProvider`, `canViewProviderOpportunity` e `canRequestProviderProposal`. Eles nao criam policy executavel por si so.
+
 ---
 
 ### 3.6 Credentials and Sensitive Access
@@ -333,4 +343,3 @@ Uma nova fronteira so deve ser criada se:
 - melhorar seguranca ou governanca;
 - representar dominio real do produto;
 - nao duplicar uma fronteira existente.
-

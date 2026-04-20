@@ -153,12 +153,12 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - `canUpdateServiceOrderChecklist` ainda delega para a regra ampla de mutacao;
   - `canDeleteServiceOrder` ainda delega para a regra ampla de mutacao;
   - anexos adicionais ainda dependem da rota;
-  - atribuicao de provider;
+  - atribuicao de provider permanece embutida em criacao/edicao de OS e ainda nao tem elegibilidade/homologacao formalizada;
   - validacoes de OS pertencente ao imovel;
   - edicao, exclusao e checklist ja possuem auditoria canonica, mas ainda sao emitidos diretamente no handler.
 - **Policy futura mais granular**:
   - granularizar `canChangeServiceOrderStatus` por transicao, papel e provider atribuido;
-  - `canAssignProvider`;
+  - `canAssignProvider` somente depois de regra real de elegibilidade/homologacao;
   - granularizar `canUploadServiceEvidence` por tipo de evidencia e contexto;
   - granularizar `canUpdateServiceOrder` por campo, atribuicao e impacto operacional;
   - granularizar `canDeleteServiceOrder` por motivo, status e papel;
@@ -173,18 +173,16 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - `canSubmitProviderProposal`;
   - auditoria `provider_proposal_submitted` no fluxo principal de bids.
 - **Ainda depende de helper generico**:
-  - o helper atual recebe `property_id` e `service_order_id`, mas a regra efetiva ainda cobre role (`provider` ou `admin`), nao elegibilidade completa da oportunidade.
+  - o helper atual ja recebe contexto minimo da OS/oportunidade, mas ainda nao valida elegibilidade completa da rede homologada.
 - **Ainda espalhado em rota**:
   - OS existente;
-  - OS sem execucao direta;
-  - status `requested`;
-  - proposta pendente duplicada;
+  - retorno de erros especificos para execucao direta, status fechado e proposta pendente duplicada;
   - valor e dados da proposta.
 - **Policy futura mais granular**:
   - validar provider homologado/elegivel;
   - considerar categorias/especialidades;
   - bloquear provider fora da rede ou sem contexto;
-  - usar o contexto da OS em `canSubmitProviderProposal` para validar elegibilidade real quando o dominio suportar essa regra.
+  - usar o contexto da OS em `canSubmitProviderProposal` para validar elegibilidade real de rede quando o dominio suportar essa regra.
 - **Prioridade sugerida**: P1.
 
 ### 4.6 Provider Opportunities / Provider Portal
@@ -202,7 +200,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - `canAccessProviderPortal`;
   - `canViewProviderOpportunity`;
   - `canViewAssignedProviderService`;
-  - elegibilidade por categoria, homologacao, convite, tenant e rede privada.
+  - elegibilidade por categoria, homologacao, convite, tenant, rede privada, disponibilidade e estado da OS.
 - **Prioridade sugerida**: P1.
 
 ### 4.7 Public Links / Audit Links
@@ -278,8 +276,8 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 | OCR ja tem helper e auditoria canonica, mas ainda precisa policy mais especifica para conteudo sensivel e metadata ampliada | Documents | P1 |
 | Manutencao tem helper para concluir, mas criacao/edicao/exclusao ainda nao estao formalizadas por action | Maintenance | P1 |
 | Service orders ja alinham criacao, status, edicao, exclusao, checklist e uploads de evidencia a eventos canonicos; status, edicao, evidencia, checklist e exclusao ja tem helpers nomeados, mas ainda precisam regras granulares | Service Orders | P0/P1 |
-| Provider proposal submit ja recebe contexto minimo, mas ainda nao valida elegibilidade completa da oportunidade no core | Provider Proposals | P1 |
-| Provider portal tem helper formal, mas visibilidade e elegibilidade de oportunidades ainda ficam em rota | Provider Opportunities / Portal | P1 |
+| Provider proposal submit ja usa contexto minimo da OS/oportunidade no helper, mas ainda nao valida elegibilidade completa da rede homologada | Provider Proposals | P1 |
+| Provider portal tem helper formal; criterios minimos de elegibilidade estao documentados, mas visibilidade e elegibilidade de oportunidades ainda ficam em rota | Provider Opportunities / Portal | P1 |
 | Audit links ja usam helper e evento canonico na criacao, mas ainda precisam policy por uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
 | Search usa propriedades acessiveis, mas nao policies por tipo de resultado | Search | P1/P2 |
 | Falta tenant/organization como raiz formal de autorizacao | Multi-tenant | P0 |
@@ -299,8 +297,8 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 ## 7. Proximos passos recomendados
 
 1. Priorizar P0: public links/audit links, service order status/assignment e granularidade de credenciais.
-2. Evoluir `canSubmitProviderProposal` para usar o contexto da oportunidade/OS em regras reais de elegibilidade sem mudar contrato publico.
+2. Evoluir `canSubmitProviderProposal` para categoria, homologacao e contexto de rede homologada quando esses dados estiverem maduros, sem mudar contrato publico.
 3. Criar helpers especificos de visibilidade para oportunidades e servicos atribuidos no provider portal.
 4. Criar helpers especificos para search por tipo de resultado antes de adicionar novos indices.
-5. Evoluir helpers granulares de service orders por action real, comecando por atribuicao ou transicoes de status quando houver regra de dominio clara.
+5. Evoluir helpers granulares de service orders por action real; atribuicao de provider deve seguir os criterios minimos de elegibilidade, homologacao, disponibilidade e escopo por propriedade.
 6. Planejar multi-tenant como evolucao incremental, sem misturar schema, policies e UI em uma unica etapa.

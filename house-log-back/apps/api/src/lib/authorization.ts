@@ -15,6 +15,9 @@ export type PropertyAuthorizationInput = AuthorizationSubject & {
 export type ProviderProposalAuthorizationInput = AuthorizationSubject & {
   propertyId: string;
   serviceOrderId: string;
+  serviceOrderStatus?: string;
+  assignedProviderId?: string | null;
+  hasExistingPendingProposal?: boolean;
 };
 
 function isPropertyDashboardRole(role: Role): boolean {
@@ -295,7 +298,11 @@ export async function canAccessProviderPortal(
 
 export function canSubmitProviderProposal(input: ProviderProposalAuthorizationInput): boolean {
   const hasOpportunityContext = input.propertyId.length > 0 && input.serviceOrderId.length > 0;
-  return hasOpportunityContext && (input.role === 'provider' || input.role === 'admin');
+  if (!hasOpportunityContext || (input.role !== 'provider' && input.role !== 'admin')) return false;
+  if (input.assignedProviderId) return false;
+  if (input.serviceOrderStatus !== undefined && input.serviceOrderStatus !== 'requested') return false;
+  if (input.hasExistingPendingProposal) return false;
+  return true;
 }
 
 export async function listAccessiblePropertyIds(

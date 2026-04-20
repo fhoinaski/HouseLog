@@ -111,6 +111,18 @@ bids.post('/', async (c) => {
     .limit(1);
   if (existing) return err(c, 'Já existe um orçamento pendente seu para esta OS', 'DUPLICATE_BID', 409);
 
+  if (!canSubmitProviderProposal({
+    userId,
+    role,
+    propertyId,
+    serviceOrderId: serviceId,
+    serviceOrderStatus: order.status,
+    assignedProviderId: order.assigned_to,
+    hasExistingPendingProposal: !!existing,
+  })) {
+    return err(c, 'Apenas prestadores elegíveis podem enviar orçamentos', 'FORBIDDEN', 403);
+  }
+
   const id = nanoid();
   await db.insert(serviceBids).values({
     id,
