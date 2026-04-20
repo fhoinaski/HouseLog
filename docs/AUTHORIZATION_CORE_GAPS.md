@@ -50,6 +50,11 @@ Helpers ja existentes:
 - `canCreateServiceOrder`
 - `canViewServiceOrder`
 - `canMutateServiceOrder`
+- `canChangeServiceOrderStatus`
+- `canUpdateServiceOrder`
+- `canUploadServiceEvidence`
+- `canUpdateServiceOrderChecklist`
+- `canDeleteServiceOrder`
 - `canCloseServiceOrderWithEvidence`
 - `canAccessProviderPortal`
 - `canSubmitProviderProposal`
@@ -128,6 +133,11 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - `canCreateServiceOrder`
   - `canViewServiceOrder`
   - `canMutateServiceOrder`
+  - `canChangeServiceOrderStatus` na rota atual de status;
+  - `canUpdateServiceOrder` na edicao geral de OS;
+  - `canUploadServiceEvidence` nos uploads atuais de foto, video e audio;
+  - `canUpdateServiceOrderChecklist` no endpoint dedicado de checklist;
+  - `canDeleteServiceOrder` no soft delete de OS;
   - `canCloseServiceOrderWithEvidence` no caminho atual de conclusao com evidencia;
 - **Ainda depende de helper generico**:
   - visualizacao e mutacao delegam para `canAccessProperty`;
@@ -135,16 +145,24 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 - **Ainda espalhado em rota**:
   - service requests ainda mantem validacoes de payload, midia e presigned upload no handler;
   - leitura/listagem e mutacoes de service requests nao tem helpers dedicados porque nao ha rotas principais nesse modulo hoje;
-  - regras de transicao de status continuam no handler, com autorizacao via `canMutateServiceOrder`;
+  - regras de transicao de status continuam no handler;
   - conclusao com `completed` ainda acontece pela rota de status, embora ja use helper nomeado e exija foto "depois";
-  - anexos, fotos, audio, video e checklist;
+  - `canChangeServiceOrderStatus` ainda delega para a regra ampla de mutacao;
+  - `canUpdateServiceOrder` ainda delega para a regra ampla de mutacao;
+  - `canUploadServiceEvidence` ainda delega para a regra ampla de mutacao;
+  - `canUpdateServiceOrderChecklist` ainda delega para a regra ampla de mutacao;
+  - `canDeleteServiceOrder` ainda delega para a regra ampla de mutacao;
+  - anexos adicionais ainda dependem da rota;
   - atribuicao de provider;
   - validacoes de OS pertencente ao imovel;
-  - edicao, exclusao e uploads de evidencia de OS ainda usam nomes historicos de auditoria.
+  - edicao, exclusao e checklist ja possuem auditoria canonica, mas ainda sao emitidos diretamente no handler.
 - **Policy futura mais granular**:
-  - `canChangeServiceOrderStatus`;
+  - granularizar `canChangeServiceOrderStatus` por transicao, papel e provider atribuido;
   - `canAssignProvider`;
-  - `canUploadServiceEvidence`;
+  - granularizar `canUploadServiceEvidence` por tipo de evidencia e contexto;
+  - granularizar `canUpdateServiceOrder` por campo, atribuicao e impacto operacional;
+  - granularizar `canDeleteServiceOrder` por motivo, status e papel;
+  - granularizar `canUpdateServiceOrderChecklist` por responsabilidade e etapa/status da OS;
   - contrato explicito futuro para `closeServiceOrderWithEvidence`;
   - diferenciar owner/manager, provider atribuido, temp provider e link publico.
 - **Prioridade sugerida**: P0/P1.
@@ -259,7 +277,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 | Documentos ja alinham helpers e eventos canonicos, mas ainda dependem de acesso generico ao imovel | Documents | P1 |
 | OCR ja tem helper e auditoria canonica, mas ainda precisa policy mais especifica para conteudo sensivel e metadata ampliada | Documents | P1 |
 | Manutencao tem helper para concluir, mas criacao/edicao/exclusao ainda nao estao formalizadas por action | Maintenance | P1 |
-| Service orders ja alinham status e conclusao com evidencia ao Authorization Core, mas ainda precisam granularidade para atribuicao, evidencias e endpoint dedicado de fechamento | Service Orders | P0/P1 |
+| Service orders ja alinham criacao, status, edicao, exclusao, checklist e uploads de evidencia a eventos canonicos; status, edicao, evidencia, checklist e exclusao ja tem helpers nomeados, mas ainda precisam regras granulares | Service Orders | P0/P1 |
 | Provider proposal submit ja recebe contexto minimo, mas ainda nao valida elegibilidade completa da oportunidade no core | Provider Proposals | P1 |
 | Provider portal tem helper formal, mas visibilidade e elegibilidade de oportunidades ainda ficam em rota | Provider Opportunities / Portal | P1 |
 | Audit links ja usam helper e evento canonico na criacao, mas ainda precisam policy por uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
@@ -284,5 +302,5 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 2. Evoluir `canSubmitProviderProposal` para usar o contexto da oportunidade/OS em regras reais de elegibilidade sem mudar contrato publico.
 3. Criar helpers especificos de visibilidade para oportunidades e servicos atribuidos no provider portal.
 4. Criar helpers especificos para search por tipo de resultado antes de adicionar novos indices.
-5. Atualizar `ACTION_AUTHORIZATION_MATRIX.md` para refletir helpers ja criados em documentos, service orders e provider proposal.
+5. Evoluir helpers granulares de service orders por action real, comecando por atribuicao ou transicoes de status quando houver regra de dominio clara.
 6. Planejar multi-tenant como evolucao incremental, sem misturar schema, policies e UI em uma unica etapa.

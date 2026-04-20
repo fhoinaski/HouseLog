@@ -88,6 +88,10 @@ Nunca registrar:
 | P1 | `service_order_status_changed` | Service Operations | Alta | obrigatorio |
 | P1 | `maintenance_mark_done` | Property Operating System | Alta | recomendado como nome canonico |
 | P1 | `service_order_created` | Service Operations | Alta | recomendado |
+| P1 | `service_order_evidence_uploaded` | Service Operations / Documents and Evidence | Alta | obrigatorio sem arquivo bruto |
+| P1 | `service_order_updated` | Service Operations | Alta | obrigatorio com payload minimo |
+| P1 | `service_order_deleted` | Service Operations / Audit and Governance | Alta | obrigatorio |
+| P1 | `service_order_checklist_updated` | Service Operations / Property Operating System | Alta | recomendado |
 | P1 | `provider_proposal_submitted` | Provider Network / Service Operations | Alta | recomendado |
 | P2 | `document_ocr_requested` | Documents and Evidence | Media/Alta | recomendado |
 
@@ -341,7 +345,88 @@ Nunca registrar:
   - payload de chat
 - **Observacao**: evento implementado no fluxo principal de mudanca de status de OS. Deve ser base para timeline e governanca operacional.
 
-### 5.13 `provider_proposal_submitted`
+### 5.13 `service_order_evidence_uploaded`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Service Operations / Documents and Evidence
+- **Quando registrar**: upload de foto, video ou audio como evidencia operacional de OS.
+- **Action relacionada**: upload de evidencia em OS existente.
+- **Autorizacao esperada**: `canMutateServiceOrder` no fluxo atual; futuro `canUploadServiceEvidence`.
+- **Payload minimo**:
+  - `property_id`
+  - `service_order_id`
+  - `evidence_type`
+  - `photo_type` quando aplicavel
+  - `file_mime_type`
+  - `file_size`
+  - `actor_id`
+- **Nao registrar**:
+  - arquivo bruto
+  - URL publica ou assinada
+  - transcricao de audio ou conteudo visual
+- **Observacao**: evento implementado nos fluxos atuais de foto, video e audio sem alterar os contratos de upload.
+
+### 5.14 `service_order_updated`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Service Operations
+- **Quando registrar**: edicao de metadados operacionais de OS.
+- **Action relacionada**: atualizacao de OS existente.
+- **Autorizacao esperada**: `canMutateServiceOrder` no fluxo atual; helpers mais granulares podem surgir para atribuicao e campos sensiveis.
+- **Payload minimo**:
+  - `property_id`
+  - `service_order_id`
+  - `changed_fields`
+  - `status`
+  - `actor_id`
+- **Nao registrar**:
+  - snapshot completo da OS
+  - URLs de evidencias
+  - descricoes longas, anexos ou payload de checklist
+- **Observacao**: evento implementado no fluxo atual de edicao sem alterar contrato publico.
+
+### 5.15 `service_order_deleted`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Service Operations / Audit and Governance
+- **Quando registrar**: soft delete de OS.
+- **Action relacionada**: remocao operacional de OS existente.
+- **Autorizacao esperada**: `canMutateServiceOrder` no fluxo atual; futuro helper granular pode exigir motivo e contexto.
+- **Payload minimo**:
+  - `property_id`
+  - `service_order_id`
+  - `previous_status`
+  - `actor_id`
+- **Nao registrar**:
+  - snapshot completo da OS
+  - evidencias, URLs ou anexos
+  - conversas ou mensagens vinculadas
+- **Observacao**: evento implementado no fluxo atual de exclusao logica sem alterar contrato publico.
+
+### 5.16 `service_order_checklist_updated`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Service Operations / Property Operating System
+- **Quando registrar**: atualizacao do checklist operacional de OS.
+- **Action relacionada**: atualizacao de checklist existente.
+- **Autorizacao esperada**: `canMutateServiceOrder` no fluxo atual; futuro helper granular pode separar checklist de edicao ampla.
+- **Payload minimo**:
+  - `property_id`
+  - `service_order_id`
+  - `checklist_items_count`
+  - `completed_items_count`
+  - `actor_id`
+- **Nao registrar**:
+  - conteudo textual dos itens
+  - evidencias, anexos ou arquivos
+  - snapshots completos do checklist
+- **Observacao**: evento implementado no endpoint dedicado de checklist com payload de contagem para governanca sem excesso de dados.
+
+### 5.17 `provider_proposal_submitted`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta

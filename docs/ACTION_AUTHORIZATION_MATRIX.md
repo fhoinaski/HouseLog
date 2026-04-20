@@ -49,6 +49,11 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 | `serviceOrderCreate` | Service Operations | owner/manager ou colaborador autorizado com `can_open_os` | usuarios sem acesso; provider/temp_provider fora de fluxo autorizado | Alta | Sim, `service_order_created` | `canCreateServiceOrder` | Implementado | Preserva regra atual de abertura de OS; granularidade futura pode separar papeis e tenant |
 | `serviceOrderView` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Nao por padrao | `canViewServiceOrder` | Parcial | Helper existe, mas delega para `canAccessProperty`; provider atribuido exige regra futura propria |
 | `serviceOrderMutate` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim para mudancas relevantes | `canMutateServiceOrder` | Parcial | Helper existe, mas ainda cobre mutacoes amplas; faltam status, atribuicao, evidencias e fechamento |
+| `serviceOrderStatusChange` | Service Operations / Audit and Governance | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_status_changed` | `canChangeServiceOrderStatus`; `canCloseServiceOrderWithEvidence` quando `completed` | Parcial | Helper existe e preserva regra atual; fechamento com evidencia segue com helper adicional |
+| `serviceOrderUpdate` | Service Operations | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_updated` | `canUpdateServiceOrder` | Parcial | Helper existe e preserva regra atual; policy ainda nao separa metadados, atribuicao e campos sensiveis |
+| `serviceOrderDelete` | Service Operations / Audit and Governance | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_deleted` | `canDeleteServiceOrder` | Parcial | Helper existe e preserva regra atual; ainda falta motivo/contexto e restricao por status |
+| `serviceOrderEvidenceUpload` | Service Operations / Documents and Evidence | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_evidence_uploaded` | `canUploadServiceEvidence` | Parcial | Helper existe e preserva regra atual; falta granularidade por tipo de evidencia |
+| `serviceOrderChecklistUpdate` | Service Operations / Property Operating System | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_checklist_updated` | `canUpdateServiceOrderChecklist` | Parcial | Helper existe e preserva regra atual; falta granularidade por responsabilidade e etapa da OS |
 | `providerProposalSubmit` | Provider Network / Service Operations | `provider` e `admin` no fluxo atual | owner, manager, temp_provider e usuarios sem papel provider/admin | Alta | Sim, `provider_proposal_submitted` | `canSubmitProviderProposal` | Parcial | Helper existe e e usado; elegibilidade da OS, duplicidade e status continuam na rota |
 | `providerPortalAccess` | Provider Network | `provider`, `admin` ou colaborador com role `provider` | usuarios sem papel/contexto de provider | Media/Alta | Nao por padrao | `canAccessProviderPortal` | Implementado | Regra local foi movida para o core; elegibilidade por oportunidade/categoria ainda fica fora |
 
@@ -133,10 +138,50 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Helper atual**: `canMutateServiceOrder`.
 - **Status**: parcial.
 - **Policy atual**: acesso contextual ao imovel.
-- **Coerencia de dominio**: mutacoes de OS impactam rastreabilidade operacional.
-- **Granularidade pendente**: `canChangeServiceOrderStatus`, `canAssignProvider`, `canUploadServiceEvidence` e `canCloseServiceOrderWithEvidence`.
+- **Coerencia de dominio**: mutacoes de OS impactam rastreabilidade operacional e hoje funcionam como guarda amplo de compatibilidade.
+- **Granularidade pendente**: separar status, edicao, exclusao, atribuicao, evidencia, checklist e fechamento em helpers especificos quando a regra real existir.
 
-### 5.11 `providerProposalSubmit`
+### 5.11 `serviceOrderStatusChange`
+
+- **Helper atual**: `canChangeServiceOrderStatus`; `canCloseServiceOrderWithEvidence` quando o status alvo e `completed`.
+- **Status**: parcial.
+- **Policy atual**: acesso contextual ao imovel, com exigencia atual de foto "depois" para conclusao.
+- **Coerencia de dominio**: status de OS define a linha do tempo operacional do prontuario tecnico.
+- **Granularidade pendente**: transicoes por papel, provider atribuido e endpoint dedicado futuro para fechamento.
+
+### 5.12 `serviceOrderUpdate`
+
+- **Helper atual**: `canUpdateServiceOrder`.
+- **Status**: parcial.
+- **Policy atual**: acesso contextual ao imovel.
+- **Coerencia de dominio**: edicao de OS muda metadados operacionais e ja audita `service_order_updated`.
+- **Granularidade pendente**: separar metadados comuns, atribuicao de provider, campos de custo, agenda e campos sensiveis.
+
+### 5.13 `serviceOrderDelete`
+
+- **Helper atual**: `canDeleteServiceOrder`.
+- **Status**: parcial.
+- **Policy atual**: acesso contextual ao imovel.
+- **Coerencia de dominio**: exclusao logica afeta governanca e historico tecnico.
+- **Granularidade pendente**: exigir motivo/contexto e restringir por status, papel e relacionamento operacional.
+
+### 5.14 `serviceOrderEvidenceUpload`
+
+- **Helper atual**: `canUploadServiceEvidence`.
+- **Status**: parcial.
+- **Policy atual**: acesso contextual ao imovel.
+- **Coerencia de dominio**: evidencia operacional sustenta rastreabilidade da OS.
+- **Granularidade pendente**: tipo de evidencia, provider atribuido, link publico/auditavel e limites de arquivo.
+
+### 5.15 `serviceOrderChecklistUpdate`
+
+- **Helper atual**: `canUpdateServiceOrderChecklist`.
+- **Status**: parcial.
+- **Policy atual**: acesso contextual ao imovel.
+- **Coerencia de dominio**: checklist faz parte da execucao tecnica da OS e ja audita `service_order_checklist_updated`.
+- **Granularidade pendente**: responsabilidade por papel, provider atribuido e regras por etapa/status da OS.
+
+### 5.16 `providerProposalSubmit`
 
 - **Helper atual**: `canSubmitProviderProposal`.
 - **Status**: parcial.
@@ -144,7 +189,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Coerencia de dominio**: proposta pertence a Provider Network privada, nao marketplace aberto.
 - **Granularidade pendente**: elegibilidade por oportunidade, categoria, homologacao, tenant e OS aberta.
 
-### 5.12 `providerPortalAccess`
+### 5.17 `providerPortalAccess`
 
 - **Helper atual**: `canAccessProviderPortal`.
 - **Status**: implementado.
@@ -158,7 +203,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 
 - Helpers parciais podem ser lidos como policy final, mesmo ainda delegando para `canAccessProperty`.
 - Provider global ainda tem acesso amplo ao portal; a elegibilidade fina ainda depende de filtros e regras em rota.
-- Mutacoes de OS ainda precisam helpers menores para status, atribuicao e evidencias.
+- Mutacoes de OS ainda precisam helpers menores para atribuicao e regras reais por status/evidencia.
 - Documentos e OCR exigem mais cuidado antes de ampliar automacoes ou busca sem policies por tipo.
 - Sem tenant/organization, `property_id` continua sendo o limite principal de autorizacao.
 
@@ -166,7 +211,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 
 ## 7. Proximos passos recomendados
 
-1. Priorizar granularidade de service orders: status, atribuicao, evidencias e fechamento.
+1. Priorizar granularidade de service orders: status, atribuicao, evidencias, checklist, exclusao e fechamento.
 2. Evoluir `canSubmitProviderProposal` para usar o contexto da OS/oportunidade em regras reais de elegibilidade sem alterar contrato publico.
 3. Separar policies documentais por tipo e criticidade antes de ampliar OCR e classificacao.
 4. Endurecer audit links com policy por OS, escopo, revogacao e auditoria sem token completo.

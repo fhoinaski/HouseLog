@@ -230,6 +230,41 @@ export async function canMutateServiceOrder(
   return canAccessProperty(db, input);
 }
 
+export async function canUpdateServiceOrder(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canMutateServiceOrder(db, input);
+}
+
+export async function canChangeServiceOrderStatus(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canMutateServiceOrder(db, input);
+}
+
+export async function canUploadServiceEvidence(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canMutateServiceOrder(db, input);
+}
+
+export async function canUpdateServiceOrderChecklist(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canMutateServiceOrder(db, input);
+}
+
+export async function canDeleteServiceOrder(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canMutateServiceOrder(db, input);
+}
+
 export async function canCloseServiceOrderWithEvidence(
   db: D1Database,
   input: PropertyAuthorizationInput

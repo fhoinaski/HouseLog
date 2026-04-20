@@ -4,9 +4,14 @@ import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import {
+  canChangeServiceOrderStatus,
   canCloseServiceOrderWithEvidence,
   canCreateServiceOrder,
+  canDeleteServiceOrder,
   canMutateServiceOrder,
+  canUpdateServiceOrder,
+  canUpdateServiceOrderChecklist,
+  canUploadServiceEvidence,
   canViewServiceOrder,
 } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
@@ -41,6 +46,18 @@ const createSchema = z.object({
   scheduled_at: z.string().optional(),
   checklist: z.array(z.object({ item: z.string(), done: z.boolean() })).optional(),
 });
+
+const SERVICE_ORDER_AUDIT_FIELD_NAMES: Record<string, string> = {
+  title: 'title',
+  description: 'description',
+  systemType: 'system_type',
+  roomId: 'room_id',
+  priority: 'priority',
+  assignedTo: 'assigned_to',
+  warrantyUntil: 'warranty_until',
+  scheduledAt: 'scheduled_at',
+  checklist: 'checklist',
+};
 
 // ── GET /properties/:propertyId/services ─────────────────────────────────────
 
@@ -292,7 +309,7 @@ services.put('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUpdateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -379,9 +396,18 @@ services.put('/:id', async (c) => {
     .limit(1) as Array<ServiceOrder>;
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: 'update',
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_updated',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
-    oldData: old, newData: updated,
+    oldData: { previous_status: old.status },
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      changed_fields: Object.keys(updateData).map((field) => SERVICE_ORDER_AUDIT_FIELD_NAMES[field] ?? field),
+      status: updated.status,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { order: updated });
@@ -396,7 +422,7 @@ services.patch('/:id/status', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canChangeServiceOrderStatus(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json<{ status: string }>().catch(() => null);
@@ -559,7 +585,7 @@ services.post('/:id/photos', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -601,8 +627,20 @@ services.post('/:id/photos', async (c) => {
     .where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: `photo_upload_${photoType}`,
-    actorId: userId, newData: { url: fileUrl },
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_evidence_uploaded',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      evidence_type: 'photo',
+      photo_type: photoType,
+      file_mime_type: file.type,
+      file_size: file.size,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { url: fileUrl, type: photoType });
@@ -617,7 +655,7 @@ services.post('/:id/video', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -646,8 +684,19 @@ services.post('/:id/video', async (c) => {
   await db.update(serviceOrders).set({ videoUrl: fileUrl }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: 'video_upload',
-    actorId: userId, newData: { video_url: fileUrl },
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_evidence_uploaded',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      evidence_type: 'video',
+      file_mime_type: file.type,
+      file_size: file.size,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { video_url: fileUrl });
@@ -662,7 +711,7 @@ services.post('/:id/audio', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -692,8 +741,19 @@ services.post('/:id/audio', async (c) => {
   await db.update(serviceOrders).set({ audioUrl: fileUrl }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: 'audio_upload',
-    actorId: userId, newData: { audio_url: fileUrl },
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_evidence_uploaded',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      evidence_type: 'audio',
+      file_mime_type: file.type,
+      file_size: file.size,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { audio_url: fileUrl });
@@ -708,7 +768,7 @@ services.delete('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canDeleteServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -744,8 +804,18 @@ services.delete('/:id', async (c) => {
   await db.update(serviceOrders).set({ deletedAt: sql`datetime('now')` }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: 'delete',
-    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), oldData: old,
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_deleted',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    oldData: { previous_status: old.status },
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      previous_status: old.status,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { success: true });
@@ -759,7 +829,7 @@ services.patch('/:id/checklist', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
-  const hasAccess = await canMutateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUpdateServiceOrderChecklist(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json<{ checklist: { item: string; done: boolean }[] }>().catch(() => null);
@@ -768,10 +838,13 @@ services.patch('/:id/checklist', async (c) => {
   }
 
   const [order] = await db
-    .select({ id: serviceOrders.id })
+    .select({
+      id: serviceOrders.id,
+      checklist: serviceOrders.checklist,
+    })
     .from(serviceOrders)
     .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
-    .limit(1) as Array<{ id: string }>;
+    .limit(1) as Array<{ id: string; checklist: { item: string; done: boolean }[] | null }>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -781,6 +854,27 @@ services.patch('/:id/checklist', async (c) => {
   }));
 
   await db.update(serviceOrders).set({ checklist: sanitized }).where(eq(serviceOrders.id, id));
+
+  const previousChecklist = Array.isArray(order.checklist) ? order.checklist : [];
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_checklist_updated',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    oldData: {
+      checklist_items_count: previousChecklist.length,
+      completed_items_count: previousChecklist.filter((item) => item.done).length,
+    },
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      checklist_items_count: sanitized.length,
+      completed_items_count: sanitized.filter((item) => item.done).length,
+      actor_id: userId,
+    },
+  });
 
   return ok(c, { checklist: sanitized });
 });

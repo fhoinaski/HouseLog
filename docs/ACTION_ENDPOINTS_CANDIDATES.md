@@ -130,7 +130,7 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Auditoria esperada**: obrigatoria, com status anterior, status novo, evidencias anexadas e ator.
 - **Risco**: alto, porque altera estado final e pode afetar historico tecnico/financeiro.
 - **Beneficio**: alto, porque reforca prontuario tecnico e confianca operacional.
-- **Observacao**: o fluxo atual ainda usa `PATCH /properties/:propertyId/services/:id/status` com `status = completed`, exige ao menos uma foto "depois" e audita `service_order_status_changed`. O endpoint dedicado deve aguardar contrato de evidencias, checklist e fechamento mais consolidado.
+- **Observacao**: o fluxo atual ainda usa `PATCH /properties/:propertyId/services/:id/status` com `status = completed`, exige ao menos uma foto "depois" e audita `service_order_status_changed`. Uploads de evidencia e checklist ja possuem eventos canonicos separados. O endpoint dedicado deve aguardar contrato de evidencias, checklist, responsabilidade por papel e fechamento mais consolidado.
 
 ### 5.5 `assignEligibleProvider`
 
@@ -247,7 +247,7 @@ Nao criar action endpoint quando:
 1. Manter `revealCredentialSecret` como referencia de action endpoint sensivel e concluir a remocao futura do `GET` legado.
 2. Adicionar auditoria formal a `generateTemporaryCredentialAccess`.
 3. Revisar `createAuditLink` como referencia de Public Access Boundary.
-4. Definir helpers do Authorization Core para service order e maintenance antes de novas actions.
+4. Granularizar helpers do Authorization Core para service orders e maintenance antes de novas actions.
 5. Evoluir `closeServiceOrderWithEvidence` para endpoint dedicado apenas depois de consolidar contrato de evidencias, checklist e responsabilidades por papel.
 6. Evoluir `extractDocumentMetadata` apenas depois de consolidar metadata documental alem do OCR atual.
 7. Revisar este documento sempre que um candidato virar contrato implementado.
