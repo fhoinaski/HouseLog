@@ -127,11 +127,11 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - visualizacao e mutacao delegam para `canAccessProperty`;
   - criacao preserva a regra atual de owner/manager/colaborador com `can_open_os`.
 - **Ainda espalhado em rota**:
-  - transicoes de status;
+  - regras de transicao de status continuam no handler, com autorizacao via `canMutateServiceOrder`;
   - anexos, fotos, audio, video e checklist;
   - atribuicao de provider;
   - validacoes de OS pertencente ao imovel;
-  - auditoria ainda usa nomes parcialmente historicos em algumas actions.
+  - algumas actions de OS ainda usam nomes historicos de auditoria.
 - **Policy futura mais granular**:
   - `canChangeServiceOrderStatus`;
   - `canAssignProvider`;
@@ -250,7 +250,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 | Documentos usam helpers nomeados, mas ainda baseados em acesso generico ao imovel | Documents | P1 |
 | OCR ainda precisa policy mais especifica para conteudo sensivel | Documents | P1 |
 | Manutencao tem helper para concluir, mas criacao/edicao/exclusao ainda nao estao formalizadas por action | Maintenance | P1 |
-| Service orders ainda precisam helpers para status, atribuicao, evidencias e fechamento | Service Orders | P0/P1 |
+| Service orders ja alinham status ao helper e evento canonico, mas ainda precisam granularidade para atribuicao, evidencias e fechamento | Service Orders | P0/P1 |
 | Provider proposal submit ja recebe contexto minimo, mas ainda nao valida elegibilidade completa da oportunidade no core | Provider Proposals | P1 |
 | Provider portal tem helper formal, mas visibilidade e elegibilidade de oportunidades ainda ficam em rota | Provider Opportunities / Portal | P1 |
 | Audit links ainda precisam policy por OS, uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
