@@ -167,9 +167,8 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 ## 7. Proximos passos recomendados
 
 1. Priorizar granularidade de service orders: status, atribuicao, evidencias e fechamento.
-2. Evoluir `canSubmitProviderProposal` para receber contexto da OS/oportunidade sem alterar contrato publico.
+2. Evoluir `canSubmitProviderProposal` para usar o contexto da OS/oportunidade em regras reais de elegibilidade sem alterar contrato publico.
 3. Separar policies documentais por tipo e criticidade antes de ampliar OCR e classificacao.
 4. Endurecer audit links com policy por OS, escopo, revogacao e auditoria sem token completo.
 5. Atualizar `AUTHORIZATION_CORE_GAPS.md` quando novos helpers forem promovidos de parcial para implementado.
 6. Planejar tenant/organization como evolucao arquitetural incremental.
-

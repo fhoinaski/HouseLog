@@ -89,6 +89,18 @@ function toCredentialResponse(row: CredentialRecord): CredentialResponse {
   };
 }
 
+function credentialAuditData(propertyId: string, row: CredentialRecord, actorId: string) {
+  return {
+    property_id: propertyId,
+    credential_id: row.id,
+    category: row.category,
+    label: row.label,
+    integration_type: row.integration_type,
+    share_with_os: row.share_with_os === 1,
+    actor_id: actorId,
+  };
+}
+
 async function revealCredentialSecret(c: CredentialsContext) {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
@@ -204,6 +216,15 @@ credentials.post('/', async (c) => {
 
   if (!row) return err(c, 'Erro ao carregar credencial', 'SERVER_ERROR', 500);
 
+  await writeAuditLog(c.env.DB, {
+    entityType: 'property_access_credential',
+    entityId: row.id,
+    action: 'credential_created',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: credentialAuditData(propertyId, row, userId),
+  });
+
   return ok(c, { credential: toCredentialResponse(row) }, 201);
 });
 
@@ -280,7 +301,7 @@ credentials.put('/:credId', async (c) => {
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
 
   const [existing] = await db
-    .select({ id: propertyAccessCredentials.id })
+    .select(credentialSelect)
     .from(propertyAccessCredentials)
     .where(
       and(
@@ -289,7 +310,7 @@ credentials.put('/:credId', async (c) => {
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
-    .limit(1);
+    .limit(1) as CredentialRecord[];
   if (!existing) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
 
   const { category, label, username, secret, notes, integration_type, integration_config, share_with_os } = parsed.data;
@@ -320,6 +341,20 @@ credentials.put('/:credId', async (c) => {
 
   if (!row) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
 
+  await writeAuditLog(c.env.DB, {
+    entityType: 'property_access_credential',
+    entityId: row.id,
+    action: 'credential_updated',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    oldData: credentialAuditData(propertyId, existing, userId),
+    newData: {
+      ...credentialAuditData(propertyId, row, userId),
+      changed_fields: Object.keys(parsed.data).filter((field) => field !== 'secret'),
+      secret_changed: secret !== undefined,
+    },
+  });
+
   return ok(c, { credential: toCredentialResponse(row) });
 });
 
@@ -335,6 +370,18 @@ credentials.delete('/:credId', async (c) => {
   const hasAccess = await canDeleteCredential(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
+  const [existing] = await db
+    .select(credentialSelect)
+    .from(propertyAccessCredentials)
+    .where(
+      and(
+        eq(propertyAccessCredentials.id, credId),
+        eq(propertyAccessCredentials.propertyId, propertyId),
+        isNull(propertyAccessCredentials.deletedAt)
+      )
+    )
+    .limit(1) as CredentialRecord[];
+
   await db
     .update(propertyAccessCredentials)
     .set({ deletedAt: new Date().toISOString() })
@@ -345,6 +392,17 @@ credentials.delete('/:credId', async (c) => {
         isNull(propertyAccessCredentials.deletedAt)
       )
     );
+
+  if (existing) {
+    await writeAuditLog(c.env.DB, {
+      entityType: 'property_access_credential',
+      entityId: existing.id,
+      action: 'credential_deleted',
+      actorId: userId,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      oldData: credentialAuditData(propertyId, existing, userId),
+    });
+  }
 
   return ok(c, { deleted: true });
 });
@@ -390,6 +448,21 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   // In production: POST to Intelbras controller API to create a temporary user/card
   // const config = JSON.parse(cred.integration_config ?? '{}');
   // await callIntelbrasApi(config, tempPin, expiresAt);
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'property_access_credential',
+    entityId: cred.id,
+    action: 'temporary_credential_access_generated',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      credential_id: cred.id,
+      expires_at: expiresAt,
+      expires_hours: expiresHours,
+      provider_name: body.provider_name ?? null,
+    },
+  });
 
   return ok(c, {
     temp_pin: tempPin,

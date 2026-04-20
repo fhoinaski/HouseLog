@@ -46,9 +46,11 @@ Helpers ja existentes:
 - `canUploadDocument`
 - `canDeleteDocument`
 - `canRequestDocumentOCR`
+- `canCreateServiceRequest`
 - `canCreateServiceOrder`
 - `canViewServiceOrder`
 - `canMutateServiceOrder`
+- `canCloseServiceOrderWithEvidence`
 - `canAccessProviderPortal`
 - `canSubmitProviderProposal`
 - `listAccessiblePropertyIds`
@@ -74,7 +76,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 - **Ainda espalhado em rota**:
   - validacoes de existencia da credencial;
   - compatibilidade com rota legada de revelacao via `GET`;
-  - detalhes de auditoria e payload minimo por acao.
+  - auditoria de criacao, edicao, remocao, revelacao e geracao temporaria ja existe, mas ainda e emitida por cada handler.
 - **Policy futura mais granular**:
   - diferenciar metadados, segredo, acesso temporario, compartilhamento e revogacao;
   - exigir contexto operacional ou motivo para revelacao;
@@ -87,16 +89,18 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - `canUploadDocument`
   - `canDeleteDocument`
   - `canRequestDocumentOCR`
+  - auditoria canonica `document_ocr_requested` no fluxo atual de OCR.
 - **Ainda depende de helper generico**:
   - os tres helpers delegam para `canAccessProperty`.
 - **Ainda espalhado em rota**:
   - validacao de documento pertencente ao imovel;
   - lifecycle de soft delete;
-  - regras de arquivo, OCR, R2 e metadata;
-  - parte da auditoria documental ainda depende de cada handler.
+  - regras de arquivo, R2 e metadata;
+  - auditoria documental ja usa nomes canonicos, mas ainda e emitida por cada handler.
 - **Policy futura mais granular**:
   - diferenciar documento patrimonial, evidencia de OS, nota fiscal, contrato e documento sensivel;
-  - restringir OCR por tipo, tamanho, origem e risco de dado sensivel;
+  - restringir OCR por tipo, tamanho, origem e risco de dado sensivel alem da regra atual de nota fiscal;
+  - evoluir `extractDocumentMetadata` apenas quando houver contrato de metadata mais amplo que OCR;
   - exigir motivo para exclusao em documentos criticos.
 - **Prioridade sugerida**: P1.
 
@@ -120,23 +124,28 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 ### 4.4 Service Orders
 
 - **Coberto hoje**:
+  - `canCreateServiceRequest` para criacao owner-only de solicitacao de servico;
   - `canCreateServiceOrder`
   - `canViewServiceOrder`
   - `canMutateServiceOrder`
+  - `canCloseServiceOrderWithEvidence` no caminho atual de conclusao com evidencia;
 - **Ainda depende de helper generico**:
   - visualizacao e mutacao delegam para `canAccessProperty`;
   - criacao preserva a regra atual de owner/manager/colaborador com `can_open_os`.
 - **Ainda espalhado em rota**:
+  - service requests ainda mantem validacoes de payload, midia e presigned upload no handler;
+  - leitura/listagem e mutacoes de service requests nao tem helpers dedicados porque nao ha rotas principais nesse modulo hoje;
   - regras de transicao de status continuam no handler, com autorizacao via `canMutateServiceOrder`;
+  - conclusao com `completed` ainda acontece pela rota de status, embora ja use helper nomeado e exija foto "depois";
   - anexos, fotos, audio, video e checklist;
   - atribuicao de provider;
   - validacoes de OS pertencente ao imovel;
-  - algumas actions de OS ainda usam nomes historicos de auditoria.
+  - edicao, exclusao e uploads de evidencia de OS ainda usam nomes historicos de auditoria.
 - **Policy futura mais granular**:
   - `canChangeServiceOrderStatus`;
   - `canAssignProvider`;
   - `canUploadServiceEvidence`;
-  - `canCloseServiceOrderWithEvidence`;
+  - contrato explicito futuro para `closeServiceOrderWithEvidence`;
   - diferenciar owner/manager, provider atribuido, temp provider e link publico.
 - **Prioridade sugerida**: P0/P1.
 
@@ -190,7 +199,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - escopo do link;
   - expiracao;
   - uso publico sem identidade autenticada;
-  - payload de auditoria ainda inclui token em ponto legado e precisa ser endurecido.
+  - submissao publica de evidencia ainda depende da rota.
 - **Policy futura mais granular**:
   - `canCreateAuditLinkForServiceOrder`;
   - `canUseAuditLink`;
@@ -246,14 +255,14 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 | Gap | Dominio | Prioridade |
 | --- | --- | --- |
 | Revelacao e acesso temporario de credenciais ainda sem policy granular por contexto/motivo | Credentials | P0 |
-| Rotas legadas e detalhes de auditoria de credenciais ainda precisam consolidacao | Credentials | P0 |
-| Documentos usam helpers nomeados, mas ainda baseados em acesso generico ao imovel | Documents | P1 |
-| OCR ainda precisa policy mais especifica para conteudo sensivel | Documents | P1 |
+| Rota legada de revelacao e policy granular de credenciais ainda precisam consolidacao | Credentials | P0 |
+| Documentos ja alinham helpers e eventos canonicos, mas ainda dependem de acesso generico ao imovel | Documents | P1 |
+| OCR ja tem helper e auditoria canonica, mas ainda precisa policy mais especifica para conteudo sensivel e metadata ampliada | Documents | P1 |
 | Manutencao tem helper para concluir, mas criacao/edicao/exclusao ainda nao estao formalizadas por action | Maintenance | P1 |
-| Service orders ja alinham status ao helper e evento canonico, mas ainda precisam granularidade para atribuicao, evidencias e fechamento | Service Orders | P0/P1 |
+| Service orders ja alinham status e conclusao com evidencia ao Authorization Core, mas ainda precisam granularidade para atribuicao, evidencias e endpoint dedicado de fechamento | Service Orders | P0/P1 |
 | Provider proposal submit ja recebe contexto minimo, mas ainda nao valida elegibilidade completa da oportunidade no core | Provider Proposals | P1 |
 | Provider portal tem helper formal, mas visibilidade e elegibilidade de oportunidades ainda ficam em rota | Provider Opportunities / Portal | P1 |
-| Audit links ainda precisam policy por OS, uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
+| Audit links ja usam helper e evento canonico na criacao, mas ainda precisam policy por uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
 | Search usa propriedades acessiveis, mas nao policies por tipo de resultado | Search | P1/P2 |
 | Falta tenant/organization como raiz formal de autorizacao | Multi-tenant | P0 |
 

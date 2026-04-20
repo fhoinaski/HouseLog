@@ -151,8 +151,17 @@ documents.post('/', async (c) => {
     .limit(1) as Document[];
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'document', entityId: id, action: 'upload',
-    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: doc,
+    entityType: 'document', entityId: id, action: 'document_uploaded',
+    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      document_id: id,
+      type: doc.type,
+      title: doc.title,
+      file_mime_type: file.type,
+      file_size: doc.file_size,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { document: doc }, 201);
@@ -240,8 +249,16 @@ documents.delete('/:id', async (c) => {
     .where(eq(documentsTable.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'document', entityId: id, action: 'delete',
-    actorId: userId, oldData: doc,
+    entityType: 'document', entityId: id, action: 'document_deleted',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    oldData: {
+      property_id: propertyId,
+      document_id: id,
+      type: doc.type,
+      title: doc.title,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { success: true });
@@ -328,8 +345,16 @@ documents.post('/:id/ocr', async (c) => {
     .where(eq(documentsTable.id, id));
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'document', entityId: id, action: 'ocr',
-    actorId: userId, newData: ocrResult,
+    entityType: 'document', entityId: id, action: 'document_ocr_requested',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      document_id: id,
+      ocr_provider: 'workers_ai_llava',
+      requested_by: userId,
+      request_source: 'api',
+    },
   });
 
   return ok(c, { ocr_data: ocrResult });

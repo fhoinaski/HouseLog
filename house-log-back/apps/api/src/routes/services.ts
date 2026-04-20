@@ -3,7 +3,12 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
-import { canCreateServiceOrder, canMutateServiceOrder, canViewServiceOrder } from '../lib/authorization';
+import {
+  canCloseServiceOrderWithEvidence,
+  canCreateServiceOrder,
+  canMutateServiceOrder,
+  canViewServiceOrder,
+} from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
 import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
@@ -211,8 +216,17 @@ services.post('/', async (c) => {
   })();
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'service_order', entityId: id, action: 'create',
-    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: order,
+    entityType: 'service_order', entityId: id, action: 'service_order_created',
+    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      service_order_id: id,
+      system_type: order.system_type,
+      priority: order.priority,
+      status: order.status,
+      requested_by: order.requested_by,
+      actor_id: userId,
+    },
   });
 
   return ok(c, { order }, 201);
@@ -428,11 +442,17 @@ services.patch('/:id/status', async (c) => {
     );
   }
 
+  let evidenceCount: number | undefined;
+
   // Rule: completing requires at least 1 after photo
   if (body.status === 'completed') {
+    const canCloseWithEvidence = await canCloseServiceOrderWithEvidence(c.env.DB, { propertyId, userId, role });
+    if (!canCloseWithEvidence) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
     const afterPhotos = Array.isArray(order.after_photos)
       ? order.after_photos
       : JSON.parse((order.after_photos as string | null) || '[]') as string[];
+    evidenceCount = afterPhotos.length;
     if (afterPhotos.length === 0) {
       return err(c, 'OS requer ao menos 1 foto "depois" para ser concluída', 'MISSING_AFTER_PHOTO', 422);
     }
@@ -456,6 +476,7 @@ services.patch('/:id/status', async (c) => {
       previous_status: order.status,
       next_status: body.status,
       actor_id: userId,
+      ...(evidenceCount !== undefined ? { evidence_count: evidenceCount } : {}),
     },
   });
 

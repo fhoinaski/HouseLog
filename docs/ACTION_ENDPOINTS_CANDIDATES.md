@@ -68,11 +68,11 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 | P0 | `revealCredentialSecret` | Credentials and Sensitive Access | Alto | Alto | manter como action endpoint e remover legado `GET` depois |
 | P0 | `generateTemporaryCredentialAccess` | Credentials and Sensitive Access | Alto | Alto | formalizar auditoria e policy granular |
 | P0 | `createAuditLink` | Audit and Governance / Service Operations | Alto | Alto | manter action endpoint com Authorization Core |
-| P1 | `closeServiceOrderWithEvidence` | Service Operations / Documents and Evidence | Alto | Alto | introduzir quando fechamento exigir evidencia formal |
+| P1 | `closeServiceOrderWithEvidence` | Service Operations / Documents and Evidence | Alto | Alto | evoluir depois do passo minimo ja iniciado no fluxo de status |
 | P1 | `assignEligibleProvider` | Provider Network / Service Operations | Alto | Alto | introduzir com elegibilidade real |
 | P1 | `markMaintenanceDone` | Property Operating System | Medio | Alto | explicitar conclusao preventiva |
 | P1 | `requestProviderProposal` | Provider Network / Service Operations | Medio/Alto | Alto | substituir semantica de marketplace por rede elegivel |
-| P1 | `extractDocumentMetadata` | Documents and Evidence | Medio | Medio/Alto | separar processamento de upload |
+| P1 | `extractDocumentMetadata` | Documents and Evidence | Medio | Medio/Alto | manter OCR atual como action; evoluir metadata depois |
 | P2 | `classifyDocument` | Documents and Evidence | Medio | Medio | evoluir apos metadata e taxonomia ficarem estaveis |
 | P2 | `createServiceOrderDraft` | Service Operations | Medio | Medio | util quando houver fluxo real de rascunho |
 
@@ -126,11 +126,11 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Operacao atual relacionada**: conclusao/fechamento de OS, fotos finais, checklist, custo e verificacao.
 - **Motivo para action endpoint**: fechar OS com evidencia e uma decisao operacional, nao simples update de status.
 - **Contrato recomendado**: `POST /services/:serviceId/close-with-evidence` ou rota contextual por propriedade quando o modelo estiver consolidado.
-- **Autorizacao esperada**: futuro `canMutateServiceOrder` ou `canCloseServiceOrder`
+- **Autorizacao esperada**: `canCloseServiceOrderWithEvidence` no passo minimo atual; futuro helper mais granular quando o contrato explicito existir.
 - **Auditoria esperada**: obrigatoria, com status anterior, status novo, evidencias anexadas e ator.
 - **Risco**: alto, porque altera estado final e pode afetar historico tecnico/financeiro.
 - **Beneficio**: alto, porque reforca prontuario tecnico e confianca operacional.
-- **Observacao**: nao deve ser criado antes de validar o fluxo atual de fechamento e evidencias.
+- **Observacao**: o fluxo atual ainda usa `PATCH /properties/:propertyId/services/:id/status` com `status = completed`, exige ao menos uma foto "depois" e audita `service_order_status_changed`. O endpoint dedicado deve aguardar contrato de evidencias, checklist e fechamento mais consolidado.
 
 ### 5.5 `assignEligibleProvider`
 
@@ -169,7 +169,7 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Auditoria esperada**: recomendada/obrigatoria conforme impacto comercial.
 - **Risco**: medio/alto, por envolver provider, escopo de OS e possivel notificacao externa.
 - **Beneficio**: alto, porque alinha provider flow a rede homologada.
-- **Observacao**: nao deve reintroduzir linguagem ou comportamento de marketplace aberto.
+- **Observacao**: nao deve reintroduzir linguagem ou comportamento de marketplace aberto. O envio atual de proposta pelo provider ja esta coberto por `canSubmitProviderProposal` e auditoria `provider_proposal_submitted`; este candidato trata da solicitacao ativa de proposta quando esse fluxo virar contrato real.
 
 ### 5.8 `extractDocumentMetadata`
 
@@ -177,12 +177,13 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Boundary**: Documents and Evidence / Property Operating System
 - **Operacao atual relacionada**: OCR e extracao de dados de documentos.
 - **Motivo para action endpoint**: extrair metadata e processamento rastreavel sobre acervo tecnico, separado de upload.
-- **Contrato recomendado**: `POST /properties/:propertyId/documents/:documentId/extract-metadata`
-- **Autorizacao esperada**: helper contextual de acesso ao documento/propriedade.
-- **Auditoria esperada**: recomendada, registrando processamento e ator/sistema, sem expor conteudo sensivel desnecessario.
+- **Contrato atual**: `POST /properties/:propertyId/documents/:documentId/ocr`
+- **Contrato recomendado futuro**: `POST /properties/:propertyId/documents/:documentId/extract-metadata` somente quando metadata documental for alem do OCR de nota fiscal.
+- **Autorizacao esperada**: `canRequestDocumentOCR` no fluxo atual; helper mais granular quando houver tipos documentais e metadata mais amplos.
+- **Auditoria esperada**: `document_ocr_requested` no fluxo atual, registrando processamento e ator/sistema sem expor conteudo sensivel desnecessario.
 - **Risco**: medio, por envolver documento potencialmente sensivel.
 - **Beneficio**: medio/alto, porque melhora qualidade de dados para busca, timeline e AI-ready.
-- **Observacao**: deve ser idempotente ou ter controle claro de reprocessamento.
+- **Observacao**: nao criar endpoint novo agora. O passo atual ja e action suficiente para OCR de nota fiscal; `extractDocumentMetadata` deve aguardar contrato de metadata, idempotencia e reprocessamento mais claros.
 
 ### 5.9 `classifyDocument`
 
@@ -247,6 +248,6 @@ Nao criar action endpoint quando:
 2. Adicionar auditoria formal a `generateTemporaryCredentialAccess`.
 3. Revisar `createAuditLink` como referencia de Public Access Boundary.
 4. Definir helpers do Authorization Core para service order e maintenance antes de novas actions.
-5. Escolher um candidato P1 por vez, preferencialmente `markMaintenanceDone` ou `closeServiceOrderWithEvidence`, conforme maturidade do fluxo atual.
-6. Revisar este documento sempre que um candidato virar contrato implementado.
-
+5. Evoluir `closeServiceOrderWithEvidence` para endpoint dedicado apenas depois de consolidar contrato de evidencias, checklist e responsabilidades por papel.
+6. Evoluir `extractDocumentMetadata` apenas depois de consolidar metadata documental alem do OCR atual.
+7. Revisar este documento sempre que um candidato virar contrato implementado.

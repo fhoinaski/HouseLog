@@ -80,6 +80,9 @@ Nunca registrar:
 | P0 | `secret_reveal` | Credentials and Sensitive Access | Critica | obrigatorio |
 | P0 | `temporary_credential_access_generated` | Credentials and Sensitive Access | Critica | obrigatorio |
 | P0 | `audit_link_created` | Audit and Governance / Public Access Boundary | Critica | obrigatorio |
+| P1 | `credential_created` | Credentials and Sensitive Access | Alta | obrigatorio sem segredo |
+| P1 | `credential_updated` | Credentials and Sensitive Access | Alta | obrigatorio sem segredo |
+| P1 | `credential_deleted` | Credentials and Sensitive Access | Alta | obrigatorio sem segredo |
 | P1 | `document_uploaded` | Documents and Evidence | Alta | obrigatorio para acervo tecnico |
 | P1 | `document_deleted` | Documents and Evidence | Alta | obrigatorio |
 | P1 | `service_order_status_changed` | Service Operations | Alta | obrigatorio |
@@ -129,7 +132,7 @@ Nunca registrar:
 - **Nao registrar**:
   - PIN gerado
   - segredo base da credencial
-- **Observacao**: deve ser priorizado porque a geracao de acesso temporario pode ter impacto fisico no imovel.
+- **Observacao**: evento implementado no fluxo atual de geracao temporaria sem registrar PIN ou segredo base.
 
 ### 5.3 `audit_link_created`
 
@@ -150,7 +153,72 @@ Nunca registrar:
   - payload publico excessivo
 - **Observacao**: links publicos devem sempre ter escopo minimo, expiracao e trilha.
 
-### 5.4 `maintenance_mark_done`
+### 5.4 `credential_created`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Credentials and Sensitive Access
+- **Quando registrar**: criacao de credencial de acesso do imovel.
+- **Action relacionada**: criacao de credencial existente.
+- **Autorizacao esperada**: `canCreateCredential`.
+- **Payload minimo**:
+  - `property_id`
+  - `credential_id`
+  - `category`
+  - `label`
+  - `integration_type`
+  - `share_with_os`
+  - `actor_id`
+- **Nao registrar**:
+  - `secret`
+  - username, notas ou config de integracao
+- **Observacao**: evento implementado no fluxo principal de criacao de credencial com DTO mascarado.
+
+### 5.5 `credential_updated`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Credentials and Sensitive Access
+- **Quando registrar**: edicao de metadados ou segredo de credencial.
+- **Action relacionada**: edicao de credencial existente.
+- **Autorizacao esperada**: `canUpdateCredential`.
+- **Payload minimo**:
+  - `property_id`
+  - `credential_id`
+  - `category`
+  - `label`
+  - `integration_type`
+  - `share_with_os`
+  - `changed_fields`
+  - `secret_changed`
+  - `actor_id`
+- **Nao registrar**:
+  - `secret`
+  - username, notas ou config de integracao
+- **Observacao**: evento implementado sem gravar valor anterior ou novo do segredo; apenas `secret_changed`.
+
+### 5.6 `credential_deleted`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Credentials and Sensitive Access / Audit and Governance
+- **Quando registrar**: soft delete de credencial do imovel.
+- **Action relacionada**: remocao de credencial existente.
+- **Autorizacao esperada**: `canDeleteCredential`.
+- **Payload minimo**:
+  - `property_id`
+  - `credential_id`
+  - `category`
+  - `label`
+  - `integration_type`
+  - `share_with_os`
+  - `actor_id`
+- **Nao registrar**:
+  - `secret`
+  - username, notas ou config de integracao
+- **Observacao**: evento implementado no fluxo principal de remocao, preservando resposta atual.
+
+### 5.7 `maintenance_mark_done`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -171,14 +239,14 @@ Nunca registrar:
   - dados nao relacionados ao agendamento
 - **Observacao**: `maintenance_mark_done` e o nome canonico para a conclusao preventiva, incluindo o endpoint preferencial `POST /mark-done` e o caminho legado `/done`.
 
-### 5.5 `document_uploaded`
+### 5.8 `document_uploaded`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
 - **Boundary**: Documents and Evidence / Property Operating System
 - **Quando registrar**: upload de documento para o acervo tecnico do imovel.
 - **Action relacionada**: upload documental existente.
-- **Autorizacao esperada**: helper contextual de acesso a propriedade/documento.
+- **Autorizacao esperada**: `canUploadDocument`.
 - **Payload minimo**:
   - `property_id`
   - `document_id`
@@ -191,16 +259,16 @@ Nunca registrar:
   - arquivo bruto
   - URL assinada temporaria
   - conteudo integral extraido
-- **Observacao**: essencial para governanca de acervo tecnico.
+- **Observacao**: evento implementado no fluxo principal de upload documental. Essencial para governanca de acervo tecnico.
 
-### 5.6 `document_deleted`
+### 5.9 `document_deleted`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
 - **Boundary**: Documents and Evidence / Audit and Governance
 - **Quando registrar**: exclusao ou soft delete de documento.
 - **Action relacionada**: exclusao documental existente.
-- **Autorizacao esperada**: helper contextual de acesso a propriedade/documento.
+- **Autorizacao esperada**: `canDeleteDocument`.
 - **Payload minimo**:
   - `property_id`
   - `document_id`
@@ -211,16 +279,16 @@ Nunca registrar:
 - **Nao registrar**:
   - conteudo do documento
   - URL permanente ou temporaria sem necessidade
-- **Observacao**: deve ser acompanhado de confirmacao explicita no frontend.
+- **Observacao**: evento implementado no fluxo principal de exclusao documental. Deve ser acompanhado de confirmacao explicita no frontend.
 
-### 5.7 `document_ocr_requested`
+### 5.10 `document_ocr_requested`
 
 - **Prioridade**: P2
 - **Sensibilidade**: Media/Alta
 - **Boundary**: Documents and Evidence
 - **Quando registrar**: solicitacao de OCR ou extracao de metadados de documento.
 - **Action relacionada**: `extractDocumentMetadata`
-- **Autorizacao esperada**: helper contextual de acesso a propriedade/documento.
+- **Autorizacao esperada**: `canRequestDocumentOCR`.
 - **Payload minimo**:
   - `property_id`
   - `document_id`
@@ -230,16 +298,16 @@ Nunca registrar:
 - **Nao registrar**:
   - texto integral extraido quando nao for necessario
   - dados sensiveis detectados no OCR
-- **Observacao**: recomendado antes de automatizar classificacao ou resumo documental.
+- **Observacao**: evento implementado no fluxo principal de OCR documental. Recomendado antes de automatizar classificacao ou resumo documental.
 
-### 5.8 `service_order_created`
+### 5.11 `service_order_created`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
 - **Boundary**: Service Operations / Property Operating System
 - **Quando registrar**: criacao de ordem de servico ou solicitacao operacional equivalente.
 - **Action relacionada**: criacao de OS existente e futuro `createServiceOrderDraft` quando virar fluxo real.
-- **Autorizacao esperada**: futuro `canCreateServiceOrder` ou helper equivalente.
+- **Autorizacao esperada**: `canCreateServiceOrder`.
 - **Payload minimo**:
   - `property_id`
   - `service_order_id`
@@ -251,9 +319,9 @@ Nunca registrar:
 - **Nao registrar**:
   - anexos brutos
   - dados pessoais excessivos
-- **Observacao**: OS e unidade operacional central do HouseLog.
+- **Observacao**: evento implementado no fluxo principal de criacao de OS com payload minimo. OS e unidade operacional central do HouseLog.
 
-### 5.9 `service_order_status_changed`
+### 5.12 `service_order_status_changed`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -273,12 +341,12 @@ Nunca registrar:
   - payload de chat
 - **Observacao**: evento implementado no fluxo principal de mudanca de status de OS. Deve ser base para timeline e governanca operacional.
 
-### 5.10 `provider_proposal_submitted`
+### 5.13 `provider_proposal_submitted`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
 - **Boundary**: Provider Network / Service Operations
-- **Quando registrar**: envio de proposta por provider elegivel/homologado para uma OS ou oportunidade.
+- **Quando registrar**: envio de proposta por provider no fluxo de OS ou oportunidade da rede homologada.
 - **Action relacionada**: envio de bid/proposta existente e futuro `requestProviderProposal`.
 - **Autorizacao esperada**: `canSubmitProviderProposal`.
 - **Payload minimo**:
@@ -293,7 +361,7 @@ Nunca registrar:
   - dados bancarios
   - detalhes pessoais excessivos do provider
 - **Observacao**: deve reforcar rede homologada, nao marketplace aberto.
-  Evento implementado no fluxo principal de bids com payload minimo e sem dados pessoais excessivos.
+  Evento implementado no fluxo principal de bids com payload minimo e sem dados pessoais excessivos. Elegibilidade granular permanece como evolucao futura do Authorization Core.
 
 ---
 
@@ -324,8 +392,8 @@ Ao adicionar ou alterar eventos auditaveis:
 ## 8. Proximos passos recomendados
 
 1. Mapear eventos ja existentes no backend e comparar com este catalogo.
-2. Priorizar P0: `secret_reveal`, `temporary_credential_access_generated` e `audit_link_created`.
+2. Manter P0 alinhados no backend: `secret_reveal`, `temporary_credential_access_generated` e `audit_link_created`.
 3. Alinhar `maintenance_mark_done` com a action explicita de manutencao.
 4. Padronizar eventos de documentos: upload, exclusao e OCR.
-5. Definir helpers do Authorization Core para service order e provider proposal antes de expandir auditoria nessas areas.
+5. Evoluir helpers de service order e provider proposal para granularidade maior antes de expandir auditoria nessas areas.
 6. Quando multi-tenant real for introduzido, adicionar `tenant_id` e `organization_id` aos eventos prioritarios.

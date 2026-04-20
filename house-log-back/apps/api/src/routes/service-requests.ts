@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
+import { canCreateServiceRequest } from '../lib/authorization';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
-import { properties, serviceRequests } from '../db/schema';
+import { serviceRequests } from '../db/schema';
 import { buildR2Key, getPublicUrl } from '../lib/r2';
 import { buildR2S3PublicObjectUrl, generateR2PresignedPutUrl } from '../lib/r2-presigned';
 
@@ -66,6 +67,7 @@ function buildFileUrl(c: { env: Bindings }, objectKey: string): string {
 serviceRequestsRoute.post('/', async (c) => {
   const propertyId = c.req.param('propertyId');
   const ownerId = c.get('userId');
+  const role = c.get('userRole');
 
   if (!propertyId) {
     return err(c, 'Imovel nao informado', 'INVALID_PROPERTY', 422);
@@ -81,13 +83,8 @@ serviceRequestsRoute.post('/', async (c) => {
 
   const db = getDb(c.env.DB);
 
-  const [property] = await db
-    .select({ id: properties.id })
-    .from(properties)
-    .where(and(eq(properties.id, propertyId), eq(properties.ownerId, ownerId)))
-    .limit(1);
-
-  if (!property) {
+  const canCreateRequest = await canCreateServiceRequest(c.env.DB, { propertyId, userId: ownerId, role });
+  if (!canCreateRequest) {
     return err(c, 'Sem permissao para este imovel', 'FORBIDDEN', 403);
   }
 

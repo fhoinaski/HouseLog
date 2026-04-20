@@ -64,11 +64,11 @@ Esta restricao existe porque ainda nao ha `CredentialAccessPolicy` granular por 
 | Acao | Helper backend | Politica atual | Retorna `secret` | Auditoria |
 | --- | --- | --- | --- | --- |
 | Listar credenciais | `canListCredentials` | acesso geral a propriedade | Nao | Nao obrigatoria nesta etapa |
-| Criar credencial | `canCreateCredential` | acesso geral a propriedade | Nao | Recomendado futuro |
-| Editar credencial | `canUpdateCredential` | acesso geral a propriedade | Nao | Recomendado futuro |
-| Remover credencial | `canDeleteCredential` | acesso geral a propriedade | Nao | Recomendado futuro |
+| Criar credencial | `canCreateCredential` | acesso geral a propriedade | Nao | Sim, `credential_created`, sem segredo |
+| Editar credencial | `canUpdateCredential` | acesso geral a propriedade | Nao | Sim, `credential_updated`, sem segredo |
+| Remover credencial | `canDeleteCredential` | acesso geral a propriedade | Nao | Sim, `credential_deleted`, sem segredo |
 | Revelar segredo | `canRevealCredentialSecret` | owner ou manager direto | Sim | Sim, `secret_reveal` |
-| Gerar acesso temporario | `canGenerateTemporaryCredentialAccess` | mesma regra de revelacao | Sim, uso interno para gerar PIN | Recomendado futuro |
+| Gerar acesso temporario | `canGenerateTemporaryCredentialAccess` | mesma regra de revelacao | Sim, uso interno para gerar PIN | Sim, `temporary_credential_access_generated`, sem PIN |
 
 ---
 
@@ -86,17 +86,23 @@ Deve retornar metadados e `has_secret`, mas nao deve retornar `secret`.
 
 Recebe `secret`, persiste a credencial e retorna DTO mascarado.
 
+Deve auditar `credential_created` sem gravar `secret`, username, notas ou config de integracao.
+
 ### Edicao
 
 `PUT /properties/:propertyId/credentials/:credId`
 
 Pode atualizar `secret`, mas retorna DTO mascarado.
 
+Deve auditar `credential_updated` sem gravar valor anterior ou novo do segredo. Quando `secret` for alterado, registrar apenas `secret_changed: true`.
+
 ### Remocao
 
 `DELETE /properties/:propertyId/credentials/:credId`
 
 Aplica soft delete.
+
+Deve auditar `credential_deleted` sem gravar segredo ou payload sensivel.
 
 ### Revelacao
 
@@ -142,7 +148,7 @@ Esta versao nao implementa:
 - liberacao temporaria por prestador;
 - regras por tenant ou organizacao;
 - criptografia/rotacao de segredos;
-- auditoria completa de criar, editar, remover e gerar PIN;
+- motivo/contexto obrigatorio para criar, editar, remover, revelar e gerar acesso temporario;
 - revogacao granular de permissao de credencial.
 
 Esses pontos permanecem no roadmap de Authorization Core, multi-tenant e governanca de credenciais.
@@ -156,7 +162,7 @@ Esses pontos permanecem no roadmap de Authorization Core, multi-tenant e governa
 3. Criar entidade futura `CredentialAccessPolicy`.
 4. Diferenciar permissao de listar, criar, editar, remover, revelar, compartilhar e gerar acesso temporario.
 5. Integrar policy a tenant/organization quando multi-tenant real for introduzido.
-6. Auditar operacoes mutaveis sem gravar valores sensiveis.
+6. Evoluir auditoria para motivo/contexto operacional sem gravar valores sensiveis.
 7. Avaliar criptografia forte e rotacao de segredos.
 
 ---

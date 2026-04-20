@@ -69,9 +69,15 @@ auditLinks.post('/', authMiddleware, async (c) => {
   });
 
   await writeAuditLog(c.env.DB, {
-    entityType: 'audit_link', entityId: id, action: 'create',
+    entityType: 'audit_link', entityId: id, action: 'audit_link_created',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
-    newData: { token, service_order_id: serviceId, expires_at: expiresAt },
+    newData: {
+      property_id: propertyId,
+      service_order_id: serviceId,
+      scope,
+      expires_at: expiresAt,
+      actor_id: userId,
+    },
   });
 
   // Build the public URL for sharing

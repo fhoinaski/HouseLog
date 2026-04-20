@@ -195,6 +195,27 @@ export async function canCreateServiceOrder(
   }
 }
 
+export async function canCreateServiceRequest(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  if (input.role !== 'owner') return false;
+
+  const drizzle = getDb(db);
+  const [property] = await drizzle
+    .select({ id: properties.id })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.id, input.propertyId),
+        eq(properties.ownerId, input.userId)
+      )
+    )
+    .limit(1);
+
+  return !!property;
+}
+
 export async function canViewServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
@@ -207,6 +228,13 @@ export async function canMutateServiceOrder(
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
   return canAccessProperty(db, input);
+}
+
+export async function canCloseServiceOrderWithEvidence(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canMutateServiceOrder(db, input);
 }
 
 export async function canAccessProviderPortal(
