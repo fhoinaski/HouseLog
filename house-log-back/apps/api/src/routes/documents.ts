@@ -307,7 +307,6 @@ documents.post('/:id/ocr', async (c) => {
   if (!r2Object) return err(c, 'Arquivo não encontrado no storage', 'STORAGE_ERROR', 404);
 
   const fileBytes = await r2Object.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBytes)));
 
   // Workers AI — LLaVA for image OCR / text extraction
   // For PDFs we'd need a different approach; here we handle image invoices

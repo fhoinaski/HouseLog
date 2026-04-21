@@ -56,6 +56,15 @@ Helpers ja existentes:
 - `canUpdateServiceOrderChecklist`
 - `canDeleteServiceOrder`
 - `canCloseServiceOrderWithEvidence`
+- `canViewServiceMessages`
+- `canSendServiceMessage`
+- `canViewInternalServiceMessages`
+- `canSendInternalServiceMessage`
+- `canSearchProperty`
+- `canSearchServiceOrders`
+- `canSearchDocuments`
+- `canSearchInventory`
+- `canSearchMaintenance`
 - `canAccessProviderPortal`
 - `canSubmitProviderProposal`
 - `listAccessiblePropertyIds`
@@ -152,6 +161,9 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - `canUploadServiceEvidence` ainda delega para a regra ampla de mutacao;
   - `canUpdateServiceOrderChecklist` ainda delega para a regra ampla de mutacao;
   - `canDeleteServiceOrder` ainda delega para a regra ampla de mutacao;
+  - helpers de mensagens ainda recebem `hasActiveProviderBid` e `hasPropertyAccess` calculados na rota;
+  - mensagens internas ja bloqueiam provider e nao notificam providers com bid ativo;
+  - anexos de mensagem continuam como URLs simples e nao devem ser tratados como evidencia/documento sem passar pelos fluxos dedicados.
   - anexos adicionais ainda dependem da rota;
   - atribuicao de provider permanece embutida em criacao/edicao de OS e ainda nao tem elegibilidade/homologacao formalizada;
   - validacoes de OS pertencente ao imovel;
@@ -163,6 +175,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - granularizar `canUpdateServiceOrder` por campo, atribuicao e impacto operacional;
   - granularizar `canDeleteServiceOrder` por motivo, status e papel;
   - granularizar `canUpdateServiceOrderChecklist` por responsabilidade e etapa/status da OS;
+  - granularizar mensagens por participante, bid ativo, provider atribuido e anexos somente quando existir contrato de anexo com metadados seguros;
   - contrato explicito futuro para `closeServiceOrderWithEvidence`;
   - diferenciar owner/manager, provider atribuido, temp provider e link publico.
 - **Prioridade sugerida**: P0/P1.
@@ -189,17 +202,27 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 
 - **Coberto hoje**:
   - acesso ao portal existe no Authorization Core via `canAccessProviderPortal`;
+  - visibilidade minima de oportunidade existe no Authorization Core via `canViewProviderOpportunity`;
+  - leitura/acesso minimo a OS atribuida existe no Authorization Core via `canViewAssignedProviderService`;
+  - upload de nota fiscal do provider existe no Authorization Core via `canUploadProviderInvoice`;
+  - upload de nota fiscal audita `document_uploaded` com `upload_source = provider_invoice`;
   - filtros de oportunidades usam status `requested`, sem provider atribuido e categorias do provider.
 - **Ainda depende de helper generico**:
-  - elegibilidade de oportunidade fica fora do core.
+  - elegibilidade completa de rede homologada fica fora do core.
 - **Ainda espalhado em rota**:
   - filtros por categoria;
-  - visibilidade de oportunidade;
-  - leitura de OS atribuida ao provider.
+  - montagem da query e enriquecimento com proposta do provider;
+  - agregacoes de stats do provider;
+  - chat do provider continua no modulo geral `messages.ts`, agora com helpers gerais de mensagens de OS;
+  - nao existe endpoint provider-specific de evidencia; fotos, video e audio continuam no modulo geral de service orders.
 - **Policy futura mais granular**:
   - `canAccessProviderPortal`;
   - `canViewProviderOpportunity`;
-  - `canViewAssignedProviderService`;
+  - granularizar `canViewAssignedProviderService` para leitura e stats;
+  - manter mensagens no modulo geral de chat da OS, evoluindo os helpers gerais antes de qualquer endpoint provider-specific;
+  - criar helper de evidencia do provider apenas quando houver endpoint/fluxo real para provider atribuido;
+  - criar helper de status do provider apenas quando houver endpoint/fluxo real para provider atribuido;
+  - granularizar `canUploadProviderInvoice` por status da OS e tipo fiscal/documental somente quando houver regra operacional clara;
   - elegibilidade por categoria, homologacao, convite, tenant, rede privada, disponibilidade e estado da OS.
 - **Prioridade sugerida**: P1.
 
@@ -228,17 +251,23 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 
 - **Coberto hoje**:
   - busca usa `canAccessProperty` quando ha `propertyId`;
-  - busca global usa `listAccessiblePropertyIds`.
+  - busca por propriedade agora passa por `canSearchProperty`;
+  - service orders, documentos, inventario e manutencao tem helpers nomeados de search;
+  - busca global usa `listAccessiblePropertyIds`;
+  - frontend documentado para tratar search como metadados navegaveis, nao conteudo completo.
 - **Ainda depende de helper generico**:
-  - autorizacao e baseada em propriedades acessiveis, nao em permissao por tipo de resultado.
+  - helpers de search ainda delegam para acesso contextual ao imovel;
+  - autorizacao e baseada em propriedades acessiveis, nao em sensibilidade por campo.
 - **Ainda espalhado em rota**:
   - filtros por documentos, inventario, manutencao e OS;
   - composicao de resultados e `href`;
-  - busca em OCR/documentos via query local.
+  - allowlist de campos pesquisaveis por tipo ainda fica local em `search.ts`;
+  - descricao livre de OS foi removida da busca ampla ate existir policy especifica para texto operacional;
+  - OCR documental foi removido da busca ampla ate existir policy especifica.
 - **Policy futura mais granular**:
-  - `canSearchProperty`;
-  - `canSearchDocuments`;
-  - `canSearchServiceOrders`;
+  - granularizar `canSearchDocuments` por tipo documental e OCR;
+  - granularizar `canSearchServiceOrders` por status, provider atribuido e evidencias;
+  - criar helpers para novos tipos antes de adiciona-los ao indice;
   - limites para dados sensiveis em OCR, credenciais e evidencias;
   - considerar tenant e indice dedicado quando existir.
 - **Prioridade sugerida**: P1/P2.
@@ -275,11 +304,11 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 | Documentos ja alinham helpers e eventos canonicos, mas ainda dependem de acesso generico ao imovel | Documents | P1 |
 | OCR ja tem helper e auditoria canonica, mas ainda precisa policy mais especifica para conteudo sensivel e metadata ampliada | Documents | P1 |
 | Manutencao tem helper para concluir, mas criacao/edicao/exclusao ainda nao estao formalizadas por action | Maintenance | P1 |
-| Service orders ja alinham criacao, status, edicao, exclusao, checklist e uploads de evidencia a eventos canonicos; status, edicao, evidencia, checklist e exclusao ja tem helpers nomeados, mas ainda precisam regras granulares | Service Orders | P0/P1 |
+| Service orders ja alinham criacao, status, edicao, exclusao, checklist, mensagens e uploads de evidencia a helpers/actions nomeados; status, edicao, evidencia, checklist, mensagens e exclusao ainda precisam regras granulares | Service Orders | P0/P1 |
 | Provider proposal submit ja usa contexto minimo da OS/oportunidade no helper, mas ainda nao valida elegibilidade completa da rede homologada | Provider Proposals | P1 |
-| Provider portal tem helper formal; criterios minimos de elegibilidade estao documentados, mas visibilidade e elegibilidade de oportunidades ainda ficam em rota | Provider Opportunities / Portal | P1 |
+| Provider portal tem helpers formais para acesso, oportunidade, OS atribuida e upload de invoice com auditoria documental; mensagens ficam no modulo geral de OS; evidencia/status provider-specific ainda nao tem fluxo proprio e deve aguardar contrato real | Provider Opportunities / Portal | P1 |
 | Audit links ja usam helper e evento canonico na criacao, mas ainda precisam policy por uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
-| Search usa propriedades acessiveis, mas nao policies por tipo de resultado | Search | P1/P2 |
+| Search tem helpers nomeados por tipo, usa propriedades acessiveis e possui allowlist local de campos; OCR e descricao livre de OS foram retirados da busca ampla, mas ainda falta policy formal por campo sensivel e indice multi-tenant | Search | P1/P2 |
 | Falta tenant/organization como raiz formal de autorizacao | Multi-tenant | P0 |
 
 ---
@@ -289,7 +318,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 - Tratar helpers que delegam para `canAccessProperty` como policy final pode cristalizar acesso amplo demais.
 - Regras locais em rota tendem a divergir quando novas actions forem criadas.
 - Provider e temp provider exigem contexto operacional, nao devem ganhar acesso amplo por role global.
-- Search pode expor metadados sensiveis se novos tipos de resultado forem adicionados sem helper especifico.
+- Search pode expor metadados sensiveis se novos campos/tipos de resultado forem adicionados sem helper especifico.
 - Sem tenant/organization, `property_id` continua sendo o principal limite de seguranca, o que limita escala B2B.
 
 ---
@@ -298,7 +327,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 
 1. Priorizar P0: public links/audit links, service order status/assignment e granularidade de credenciais.
 2. Evoluir `canSubmitProviderProposal` para categoria, homologacao e contexto de rede homologada quando esses dados estiverem maduros, sem mudar contrato publico.
-3. Criar helpers especificos de visibilidade para oportunidades e servicos atribuidos no provider portal.
-4. Criar helpers especificos para search por tipo de resultado antes de adicionar novos indices.
+3. Granularizar policy fiscal/documental de invoice quando houver regra operacional clara; mensagens devem evoluir no modulo geral de OS, enquanto evidencias e status do provider devem aguardar endpoint real.
+4. Granularizar search por campo sensivel e tipo de resultado antes de adicionar novos indices.
 5. Evoluir helpers granulares de service orders por action real; atribuicao de provider deve seguir os criterios minimos de elegibilidade, homologacao, disponibilidade e escopo por propriedade.
 6. Planejar multi-tenant como evolucao incremental, sem misturar schema, policies e UI em uma unica etapa.

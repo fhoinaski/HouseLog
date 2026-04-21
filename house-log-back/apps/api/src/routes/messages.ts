@@ -9,7 +9,15 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware } from '../middleware/auth';
+import {
+  canAccessProperty,
+  canSendInternalServiceMessage,
+  canSendServiceMessage,
+  canViewInternalServiceMessages,
+  canViewServiceMessages,
+  type ServiceMessageAuthorizationInput,
+} from '../lib/authorization';
 import { err, ok } from '../lib/response';
 import { getDb } from '../db/client';
 import { properties, serviceBids, serviceMessages, serviceOrders, users } from '../db/schema';
@@ -52,18 +60,21 @@ async function loadParticipants(
   };
 }
 
-function isParticipant(p: Participants, userId: string): boolean {
-  return (
-    userId === p.ownerId ||
-    userId === p.managerId ||
-    userId === p.assignedTo ||
-    userId === p.requestedBy
-  );
-}
-
-function isInternalRole(p: Participants, userId: string): boolean {
-  // Provider (assigned_to) não vê internas; demais participantes vêem.
-  return userId !== p.assignedTo;
+function toMessageAuthorizationInput(
+  p: Participants,
+  userId: string,
+  role: Variables['userRole'],
+  extras: Pick<ServiceMessageAuthorizationInput, 'hasActiveProviderBid' | 'hasPropertyAccess'> = {}
+): ServiceMessageAuthorizationInput {
+  return {
+    userId,
+    role,
+    propertyOwnerId: p.ownerId,
+    propertyManagerId: p.managerId,
+    requestedById: p.requestedBy,
+    assignedProviderId: p.assignedTo,
+    ...extras,
+  };
 }
 
 async function hasActiveBidAccess(
@@ -94,15 +105,18 @@ messages.get('/:serviceOrderId/messages', async (c) => {
 
   const p = await loadParticipants(db, soId);
   if (!p) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
-  if (!isParticipant(p, userId)) {
-    const bidderAccess = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
-    if (!bidderAccess) {
-      const hasAccess = await assertPropertyAccess(c.env.DB, p.propertyId, userId, role);
-      if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  let authInput = toMessageAuthorizationInput(p, userId, role);
+  if (!canViewServiceMessages(authInput)) {
+    const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
+    authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid });
+    if (!canViewServiceMessages(authInput)) {
+      const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role });
+      authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid, hasPropertyAccess });
+      if (!canViewServiceMessages(authInput)) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
     }
   }
 
-  const canSeeInternal = isInternalRole(p, userId);
+  const canSeeInternal = canViewInternalServiceMessages(authInput);
   const rows = await db
     .select({
       id: serviceMessages.id,
@@ -142,11 +156,14 @@ messages.post('/:serviceOrderId/messages', async (c) => {
 
   const p = await loadParticipants(db, soId);
   if (!p) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
-  if (!isParticipant(p, userId)) {
-    const bidderAccess = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
-    if (!bidderAccess) {
-      const hasAccess = await assertPropertyAccess(c.env.DB, p.propertyId, userId, role);
-      if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  let authInput = toMessageAuthorizationInput(p, userId, role);
+  if (!canSendServiceMessage(authInput)) {
+    const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
+    authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid });
+    if (!canSendServiceMessage(authInput)) {
+      const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role });
+      authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid, hasPropertyAccess });
+      if (!canSendServiceMessage(authInput)) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
     }
   }
 
@@ -154,8 +171,8 @@ messages.post('/:serviceOrderId/messages', async (c) => {
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   const b = parsed.data;
 
-  // Provider não pode criar mensagem internal
-  if (b.internal && userId === p.assignedTo) {
+  // Providers can participate in the operational thread, but not in internal notes.
+  if (b.internal && !canSendInternalServiceMessage(authInput)) {
     return err(c, 'Provider não pode enviar mensagem interna', 'FORBIDDEN', 403);
   }
 
@@ -171,6 +188,7 @@ messages.post('/:serviceOrderId/messages', async (c) => {
 
   // Notifica o outro lado (provider se internal=0; dono/manager caso contrário)
   const recipients = new Set<string>();
+  const activeBidderIds = new Set<string>();
   const candidates = [p.ownerId, p.managerId, p.assignedTo, p.requestedBy].filter(
     (x): x is string => Boolean(x) && x !== userId
   );
@@ -181,12 +199,13 @@ messages.post('/:serviceOrderId/messages', async (c) => {
       .from(serviceBids)
       .where(and(eq(serviceBids.serviceId, soId), sql`${serviceBids.status} IN ('pending', 'accepted')`));
     for (const b of activeBidders) {
+      activeBidderIds.add(b.provider_id);
       if (b.provider_id !== userId) candidates.push(b.provider_id);
     }
   }
 
   for (const uid of candidates) {
-    if (b.internal && uid === p.assignedTo) continue;
+    if (b.internal && (uid === p.assignedTo || activeBidderIds.has(uid))) continue;
     recipients.add(uid);
   }
 

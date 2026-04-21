@@ -229,12 +229,16 @@ credentials.post('/', async (c) => {
 });
 
 // ── GET /properties/:propertyId/credentials/:credId/secret ───────────────────
-// Explicit reveal path. Default credential responses intentionally omit secret.
+// Legacy reveal path kept temporarily for compatibility.
+// New consumers must use POST /properties/:propertyId/credentials/:credId/secret/reveal.
 
 credentials.get('/:credId/secret', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const credId = c.req.param('credId')!;
+  c.header('Deprecation', 'true');
+  c.header('Warning', '299 - "Deprecated credential reveal endpoint; use POST /secret/reveal"');
+  c.header('Link', `</properties/${propertyId}/credentials/${credId}/secret/reveal>; rel="successor-version"`);
   const userId = c.get('userId');
   const role = c.get('userRole');
 

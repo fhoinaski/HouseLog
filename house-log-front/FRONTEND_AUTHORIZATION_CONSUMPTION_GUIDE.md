@@ -179,7 +179,33 @@ Copy sugerida:
 
 ---
 
-## 6. Segredos nao sao dados comuns
+## 6. Search e metadados seguros
+
+Search e uma leitura transversal de descoberta. Ele nao deve ser tratado como acesso ao conteudo completo do recurso.
+
+Regras de frontend:
+
+- exibir apenas metadados retornados pelo endpoint de search;
+- usar o resultado como navegacao para a rota contextual do recurso;
+- deixar a tela de destino confirmar autorizacao e carregar o conteudo completo;
+- nao tentar reconstruir detalhes sensiveis a partir de `title`, `subtitle`, `href` ou `property_id`;
+- nao usar search para testar permissao de documento, OS, credencial, evidencia ou provider flow;
+- nao esperar OCR, descricoes livres de OS, segredos, URLs de evidencia ou conteudo de mensagem nos resultados.
+
+Padrao de UX:
+
+- tratar `403` na rota de destino como autorizacao contextual, nao como erro de search;
+- quando o item nao abrir por `403` ou `404`, orientar retorno ao contexto anterior;
+- nao mostrar "sem dados" quando o caso for falta de permissao na rota de destino;
+- evitar snippets de conteudo sensivel em cards de resultado.
+
+Regra de compatibilidade:
+
+- se o backend reduzir campos pesquisaveis por seguranca, o frontend deve aceitar menos resultados sem tentar compensar com busca local em dados sensiveis.
+
+---
+
+## 7. Segredos nao sao dados comuns
 
 Credenciais seguem `CREDENTIAL_ACCESS_POLICY.md`.
 
@@ -205,7 +231,7 @@ Para `generateTemporaryCredentialAccess`:
 
 ---
 
-## 7. Nao assumir permissao por papel sem contexto
+## 8. Nao assumir permissao por papel sem contexto
 
 Papel global nao basta para action sensivel.
 
@@ -227,9 +253,9 @@ Fazer:
 
 ---
 
-## 8. Consumo de actions prioritarias
+## 9. Consumo de actions prioritarias
 
-### 8.1 `revealCredentialSecret`
+### 9.1 `revealCredentialSecret`
 
 Contrato preferencial:
 
@@ -253,8 +279,9 @@ Regra de compatibilidade:
 - novos consumidores devem usar `POST /secret/reveal`;
 - manter suporte ao legado apenas em wrappers de API enquanto a migracao nao for concluida;
 - nao criar novas telas dependentes do `GET` legado.
+- estado atual: `credentialsApi.revealSecret` ja usa `POST /secret/reveal`; nao reintroduzir chamada direta ao `GET /secret`.
 
-### 8.2 `generateTemporaryCredentialAccess`
+### 9.2 `generateTemporaryCredentialAccess`
 
 Contrato atual:
 
@@ -274,7 +301,7 @@ Observacao:
 - o backend audita `temporary_credential_access_generated`;
 - o frontend nao deve tentar criar auditoria paralela.
 
-### 8.3 `markMaintenanceDone`
+### 9.3 `markMaintenanceDone`
 
 Contrato:
 
@@ -289,7 +316,7 @@ UX esperada:
 - em `409`, recarregar a rotina antes de nova tentativa;
 - em `403`, explicar que a conclusao exige acesso ao contexto do imovel.
 
-### 8.4 `providerProposalSubmit`
+### 9.4 `providerProposalSubmit`
 
 Contrato:
 
@@ -306,7 +333,7 @@ UX esperada:
 
 ---
 
-## 9. Endpoints legados e compatibilidade
+## 10. Endpoints legados e compatibilidade
 
 Enquanto houver endpoint legado compativel:
 
@@ -325,7 +352,7 @@ Caso exista `GET` legado para uma action sensivel:
 
 ---
 
-## 10. Estados de UI recomendados
+## 11. Estados de UI recomendados
 
 Para actions sensiveis, cada tela deve prever:
 
@@ -347,7 +374,7 @@ Evite:
 
 ---
 
-## 11. Componentes e linguagem
+## 12. Componentes e linguagem
 
 Use componentes existentes:
 
@@ -368,7 +395,7 @@ Linguagem:
 
 ---
 
-## 12. Checklist para novas telas
+## 13. Checklist para novas telas
 
 Antes de consumir uma action:
 
@@ -385,7 +412,7 @@ Antes de consumir uma action:
 
 ---
 
-## 13. Anti-patterns
+## 14. Anti-patterns
 
 Nao fazer:
 
@@ -396,16 +423,17 @@ Nao fazer:
 - tratar `secret` como campo comum do DTO;
 - manter PIN temporario em store global;
 - usar role global como unica condicao para provider proposal;
+- usar search como substituto de autorizacao ou carregamento contextual;
 - criar botoes para actions que ainda nao existem no backend;
 - usar endpoint legado em tela nova sem necessidade;
 - criar auditoria paralela no frontend.
 
 ---
 
-## 14. Proximos passos recomendados
+## 15. Proximos passos recomendados
 
-1. Revisar wrappers de `src/lib/api/credentials.ts` para garantir preferencia por actions explicitas.
-2. Usar este guia em refatoracoes de credenciais, manutencao, documentos e provider opportunities.
-3. Atualizar este documento quando actions novas passarem de candidata para contrato real.
-4. Manter alinhamento com `ACTION_AUTHORIZATION_MATRIX.md` sempre que helper mudar de parcial para implementado.
-5. Revisar telas sensiveis para remover auto-fetch, optimistic update inseguro e mensagens genericas de autorizacao.
+1. Usar este guia em refatoracoes de credenciais, manutencao, documentos e provider opportunities.
+2. Atualizar este documento quando actions novas passarem de candidata para contrato real.
+3. Manter alinhamento com `ACTION_AUTHORIZATION_MATRIX.md` sempre que helper mudar de parcial para implementado.
+4. Revisar telas sensiveis para remover auto-fetch, optimistic update inseguro e mensagens genericas de autorizacao.
+5. Revalidar wrappers de actions sensiveis antes de remover endpoints legados no backend.

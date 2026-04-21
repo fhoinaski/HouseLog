@@ -91,7 +91,7 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Auditoria esperada**: obrigatoria, action `secret_reveal`, sem registrar valor do segredo.
 - **Risco**: alto, por exposicao de credencial.
 - **Beneficio**: alto, porque corrige semantica HTTP, melhora governanca e prepara policy granular.
-- **Observacao**: o `GET /secret` legado deve permanecer apenas durante janela de compatibilidade.
+- **Observacao**: o `GET /secret` legado deve permanecer apenas durante janela de compatibilidade; enquanto existir, deve ser sinalizado como depreciado e apontar para `POST /secret/reveal`.
 
 ### 5.2 `generateTemporaryCredentialAccess`
 

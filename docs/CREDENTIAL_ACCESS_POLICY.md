@@ -114,7 +114,7 @@ Legado temporario:
 
 `GET /properties/:propertyId/credentials/:credId/secret`
 
-O fluxo preferencial agora usa `POST`, porque revelar segredo e uma acao explicita, sensivel e auditavel. A rota `GET` permanece temporariamente por compatibilidade com consumidores legados durante a migracao.
+O fluxo preferencial agora usa `POST`, porque revelar segredo e uma acao explicita, sensivel e auditavel. A rota `GET` permanece temporariamente por compatibilidade com consumidores legados durante a migracao e deve retornar headers de depreciacao.
 
 Deve:
 
@@ -127,6 +127,8 @@ Regra de migracao:
 
 - novos consumidores devem usar `POST /secret/reveal`;
 - consumidores existentes em `GET /secret` devem ser migrados antes da remocao;
+- frontend atual usa `credentialsApi.revealSecret` com `POST /secret/reveal`; nao foram encontrados consumidores diretos de `GET /secret` em `house-log-front/src` nesta revisao;
+- rota `GET /secret` permanece funcional, mas marcada com `Deprecation: true`, `Warning` e `Link` para o endpoint sucessor;
 - a remocao da rota legada exige busca previa de consumidores, comunicacao de release e validacao de auditoria;
 - corpo com motivo/contexto de revelacao ainda nao e obrigatorio nesta etapa, mas permanece como evolucao prevista.
 

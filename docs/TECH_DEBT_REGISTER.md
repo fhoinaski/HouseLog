@@ -89,11 +89,12 @@ Este registro deve ser lido em conjunto com:
 - **Severidade**: Alta
 - **Area**: Backend / Seguranca / Credenciais
 - **Status**: Mitigado parcialmente
-- **Evidencia**: `house-log-back/apps/api/src/routes/credentials.ts` ainda expoe `GET /properties/:propertyId/credentials/:credId/secret` por compatibilidade, mas ja existe `POST /properties/:propertyId/credentials/:credId/secret/reveal` como acao preferencial. O frontend passou a consumir o endpoint `POST` em `credentialsApi.revealSecret`.
-- **Impacto**: a semantica principal foi corrigida para novos consumidores, mas a rota `GET` legada ainda precisa existir temporariamente e continua sendo um ponto de atencao para caches/proxies e clareza operacional ate sua remocao.
+- **Evidencia**: `house-log-back/apps/api/src/routes/credentials.ts` ainda expoe `GET /properties/:propertyId/credentials/:credId/secret` por compatibilidade, mas ja existe `POST /properties/:propertyId/credentials/:credId/secret/reveal` como acao preferencial. O frontend consome o endpoint `POST` em `credentialsApi.revealSecret`, nao foram encontrados consumidores diretos de `GET /secret` em `house-log-front/src`, e a rota legada agora retorna headers de depreciacao.
+- **Impacto**: a semantica principal foi corrigida para novos consumidores, e o legado esta sinalizado; a rota `GET` ainda continua sendo ponto de atencao para caches/proxies e clareza operacional ate sua remocao.
 - **Recomendacao**:
-  - mapear e remover consumidores restantes de `GET /secret`;
+  - fazer busca final de consumidores em frontend, backend, docs e integracoes antes da remocao;
   - manter compatibilidade temporaria durante a janela de migracao;
+  - monitorar qualquer uso remanescente do endpoint legado sinalizado por headers de depreciacao;
   - exigir body opcional com motivo/contexto quando a policy evoluir;
   - remover a rota `GET` apenas apos validacao de auditoria e comunicacao de release.
 - **Relacionamento com roadmap/ADRs**: Fase 2; ADR-004.
@@ -198,6 +199,22 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
+### TD-011 - Search ainda nao possui policy formal por campo sensivel
+
+- **Severidade**: Media
+- **Area**: Backend / Search / Seguranca
+- **Status**: Mitigado parcialmente
+- **Evidencia**: `house-log-back/apps/api/src/routes/search.ts` centraliza busca por OS, documentos, inventario e manutencao. O search ja possui helpers por tipo no Authorization Core, busca ampla em OCR documental e descricao livre de OS foram removidas, e ha uma allowlist local de campos pesquisaveis por tipo.
+- **Impacto**: novos campos ou indices podem expor metadados sensiveis por inferencia, especialmente OCR, descricoes operacionais, evidencias, documentos criticos e futuros dados multi-tenant.
+- **Recomendacao**:
+  - manter credenciais e segredos fora de search;
+  - so reintroduzir OCR com policy documental explicita por tipo, origem e sensibilidade;
+  - evoluir a allowlist local para policy formal se novos indices ou campos sensiveis forem adicionados;
+  - considerar tenant/organization antes de search dedicado.
+- **Relacionamento com roadmap/ADRs**: Fase 3 e Fase 7; Authorization Core, AI-ready checklist e ADR-005.
+
+---
+
 ## 4. Priorizacao recomendada
 
 ### Curto prazo
@@ -213,7 +230,8 @@ Este registro deve ser lido em conjunto com:
 1. TD-009 - iniciar base multi-tenant incremental.
 2. TD-007 - reduzir e remover alias `marketplaceApi`.
 3. TD-008 - seguir consolidacao visual por rota.
-4. TD-001 - automatizar verificacao de encoding.
+4. TD-011 - evoluir allowlist local de search antes de novos indices.
+5. TD-001 - automatizar verificacao de encoding.
 
 ### Monitoramento continuo
 

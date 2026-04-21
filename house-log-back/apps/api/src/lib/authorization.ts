@@ -20,6 +20,29 @@ export type ProviderProposalAuthorizationInput = AuthorizationSubject & {
   hasExistingPendingProposal?: boolean;
 };
 
+export type ProviderOpportunityAuthorizationInput = AuthorizationSubject & {
+  serviceOrderStatus?: string;
+  assignedProviderId?: string | null;
+  deletedAt?: string | null;
+  serviceOrderSystemType?: string | null;
+  providerCategories?: string[];
+  requestedSystemType?: string | null;
+};
+
+export type AssignedProviderServiceAuthorizationInput = AuthorizationSubject & {
+  assignedProviderId?: string | null;
+  deletedAt?: string | null;
+};
+
+export type ServiceMessageAuthorizationInput = AuthorizationSubject & {
+  propertyOwnerId: string;
+  propertyManagerId?: string | null;
+  requestedById: string;
+  assignedProviderId?: string | null;
+  hasActiveProviderBid?: boolean;
+  hasPropertyAccess?: boolean;
+};
+
 function isPropertyDashboardRole(role: Role): boolean {
   return role !== 'provider' && role !== 'temp_provider';
 }
@@ -275,6 +298,41 @@ export async function canCloseServiceOrderWithEvidence(
   return canMutateServiceOrder(db, input);
 }
 
+export async function canSearchProperty(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canAccessProperty(db, input);
+}
+
+export async function canSearchServiceOrders(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canSearchProperty(db, input);
+}
+
+export async function canSearchDocuments(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canSearchProperty(db, input);
+}
+
+export async function canSearchInventory(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canSearchProperty(db, input);
+}
+
+export async function canSearchMaintenance(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  return canSearchProperty(db, input);
+}
+
 export async function canAccessProviderPortal(
   db: D1Database,
   subject: AuthorizationSubject
@@ -303,6 +361,60 @@ export function canSubmitProviderProposal(input: ProviderProposalAuthorizationIn
   if (input.serviceOrderStatus !== undefined && input.serviceOrderStatus !== 'requested') return false;
   if (input.hasExistingPendingProposal) return false;
   return true;
+}
+
+export function canViewProviderOpportunity(input: ProviderOpportunityAuthorizationInput): boolean {
+  if (input.role !== 'provider' && input.role !== 'admin') return false;
+  if (input.deletedAt) return false;
+  if (input.assignedProviderId) return false;
+  if (input.serviceOrderStatus !== undefined && input.serviceOrderStatus !== 'requested') return false;
+
+  const shouldApplyCategoryMatch = !input.requestedSystemType && (input.providerCategories?.length ?? 0) > 0;
+  if (shouldApplyCategoryMatch && !input.providerCategories?.includes(input.serviceOrderSystemType ?? '')) {
+    return false;
+  }
+
+  return true;
+}
+
+export function canViewAssignedProviderService(input: AssignedProviderServiceAuthorizationInput): boolean {
+  if (input.role === 'admin') return !input.deletedAt;
+  if (input.role !== 'provider') return false;
+  if (input.deletedAt) return false;
+  return input.assignedProviderId === input.userId;
+}
+
+export function canUploadProviderInvoice(input: AssignedProviderServiceAuthorizationInput): boolean {
+  return canViewAssignedProviderService(input);
+}
+
+function isServiceMessageParticipant(input: ServiceMessageAuthorizationInput): boolean {
+  return (
+    input.userId === input.propertyOwnerId ||
+    input.userId === input.propertyManagerId ||
+    input.userId === input.assignedProviderId ||
+    input.userId === input.requestedById
+  );
+}
+
+export function canViewServiceMessages(input: ServiceMessageAuthorizationInput): boolean {
+  return (
+    isServiceMessageParticipant(input) ||
+    (input.role === 'provider' && input.hasActiveProviderBid === true) ||
+    input.hasPropertyAccess === true
+  );
+}
+
+export function canSendServiceMessage(input: ServiceMessageAuthorizationInput): boolean {
+  return canViewServiceMessages(input);
+}
+
+export function canViewInternalServiceMessages(input: ServiceMessageAuthorizationInput): boolean {
+  return input.role !== 'provider' && input.role !== 'temp_provider';
+}
+
+export function canSendInternalServiceMessage(input: ServiceMessageAuthorizationInput): boolean {
+  return canViewInternalServiceMessages(input);
 }
 
 export async function listAccessiblePropertyIds(

@@ -1,7 +1,13 @@
 import { Hono } from 'hono';
 import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { ok, err, paginate } from '../lib/response';
-import { canAccessProviderPortal } from '../lib/authorization';
+import { writeAuditLog } from '../lib/audit';
+import {
+  canAccessProviderPortal,
+  canUploadProviderInvoice,
+  canViewAssignedProviderService,
+  canViewProviderOpportunity,
+} from '../lib/authorization';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { documents, properties, rooms, serviceBids, serviceOrders, users } from '../db/schema';
@@ -70,7 +76,14 @@ provider.get('/services', async (c) => {
     property_name: string; property_address: string;
   }>;
 
-  return ok(c, paginate(results, limit, 'created_at'));
+  const visibleResults = results.filter((row) => canViewAssignedProviderService({
+    userId,
+    role,
+    assignedProviderId: row.assigned_to,
+    deletedAt: row.deleted_at,
+  }));
+
+  return ok(c, paginate(visibleResults, limit, 'created_at'));
 });
 
 // GET /provider/opportunities
@@ -154,7 +167,18 @@ provider.get('/opportunities', async (c) => {
     property_address: string;
   }>;
 
-  const serviceIds = results.map((r) => r.id);
+  const visibleResults = results.filter((row) => canViewProviderOpportunity({
+    userId,
+    role,
+    serviceOrderStatus: row.status,
+    assignedProviderId: row.assigned_to,
+    deletedAt: row.deleted_at,
+    serviceOrderSystemType: row.system_type,
+    providerCategories: categories,
+    requestedSystemType: systemType,
+  }));
+
+  const serviceIds = visibleResults.map((r) => r.id);
   const myBids = serviceIds.length
     ? await db
       .select({
@@ -181,7 +205,7 @@ provider.get('/opportunities', async (c) => {
     }
   }
 
-  const enriched = results.map((row) => ({
+  const enriched = visibleResults.map((row) => ({
     ...row,
     my_bid: bidByService.get(row.id) ?? null,
   }));
@@ -235,6 +259,16 @@ provider.get('/opportunities/:id', async (c) => {
     .limit(1);
 
   if (!order) return err(c, 'Oportunidade não encontrada', 'NOT_FOUND', 404);
+
+  if (!canViewProviderOpportunity({
+    userId,
+    role,
+    serviceOrderStatus: order.status,
+    assignedProviderId: order.assigned_to,
+    deletedAt: order.deleted_at,
+  })) {
+    return err(c, 'Oportunidade não encontrada', 'NOT_FOUND', 404);
+  }
 
   const myBids = await db
     .select({
@@ -305,6 +339,15 @@ provider.get('/services/:id', async (c) => {
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
+  if (!canViewAssignedProviderService({
+    userId,
+    role,
+    assignedProviderId: order.assigned_to,
+    deletedAt: order.deleted_at,
+  })) {
+    return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
+  }
+
   // Fetch bids for this order submitted by this provider
   const myBids = await db
     .select()
@@ -371,12 +414,21 @@ provider.post('/services/:id/invoice', async (c) => {
     : and(eq(serviceOrders.id, id), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
 
   const [order] = await db
-    .select({ id: serviceOrders.id, property_id: serviceOrders.propertyId })
+    .select({ id: serviceOrders.id, property_id: serviceOrders.propertyId, assigned_to: serviceOrders.assignedTo, deleted_at: serviceOrders.deletedAt })
     .from(serviceOrders)
     .where(whereClause)
-    .limit(1) as Array<{ id: string; property_id: string }>;
+    .limit(1) as Array<{ id: string; property_id: string; assigned_to: string | null; deleted_at: string | null }>;
 
   if (!order) return err(c, 'OS não encontrada ou sem acesso', 'NOT_FOUND', 404);
+
+  if (!canUploadProviderInvoice({
+    userId,
+    role,
+    assignedProviderId: order.assigned_to,
+    deletedAt: order.deleted_at,
+  })) {
+    return err(c, 'OS não encontrada ou sem acesso', 'NOT_FOUND', 404);
+  }
 
   const formData = await c.req.formData().catch(() => null);
   if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
@@ -406,6 +458,26 @@ provider.post('/services/:id/invoice', async (c) => {
     fileUrl,
     fileSize: file.size,
     uploadedBy: userId,
+  });
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'document',
+    entityId: docId,
+    action: 'document_uploaded',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: order.property_id,
+      service_order_id: id,
+      document_id: docId,
+      type: 'invoice',
+      title: `Nota Fiscal - ${id.slice(0, 8).toUpperCase()}`,
+      file_mime_type: file.type,
+      file_size: file.size,
+      upload_source: 'provider_invoice',
+      actor_id: userId,
+      actor_role: role,
+    },
   });
 
   return ok(c, { invoice_url: fileUrl, document_id: docId });

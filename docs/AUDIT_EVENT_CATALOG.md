@@ -248,22 +248,24 @@ Nunca registrar:
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
 - **Boundary**: Documents and Evidence / Property Operating System
-- **Quando registrar**: upload de documento para o acervo tecnico do imovel.
+- **Quando registrar**: upload de documento para o acervo tecnico do imovel, incluindo nota fiscal enviada por provider quando ela vira documento vinculado a OS.
 - **Action relacionada**: upload documental existente.
 - **Autorizacao esperada**: `canUploadDocument`.
 - **Payload minimo**:
   - `property_id`
+  - `service_order_id` quando o documento estiver vinculado a OS
   - `document_id`
   - `type`
   - `title`
   - `file_mime_type` quando disponivel
   - `file_size` quando disponivel
+  - `upload_source` quando o fluxo de origem for relevante
   - `actor_id`
 - **Nao registrar**:
   - arquivo bruto
   - URL assinada temporaria
   - conteudo integral extraido
-- **Observacao**: evento implementado no fluxo principal de upload documental. Essencial para governanca de acervo tecnico.
+- **Observacao**: evento implementado no fluxo principal de upload documental e no upload de nota fiscal por provider com `upload_source = provider_invoice`. Essencial para governanca de acervo tecnico.
 
 ### 5.9 `document_deleted`
 
@@ -366,6 +368,17 @@ Nunca registrar:
   - URL publica ou assinada
   - transcricao de audio ou conteudo visual
 - **Observacao**: evento implementado nos fluxos atuais de foto, video e audio sem alterar os contratos de upload.
+
+#### Anexos de mensagem da OS
+
+- **Decisao atual**: anexos enviados no chat da OS nao devem gerar evento canonico proprio por enquanto.
+- **Motivo**: `service_messages.attachments` armazena apenas URLs simples, sem contrato de tipo documental, origem, tamanho, classificacao, storage owner ou papel operacional do anexo.
+- **Regra operacional**: quando o arquivo for evidencia da OS, deve usar o fluxo dedicado de evidencia e auditar `service_order_evidence_uploaded`; quando for documento do acervo, deve usar o fluxo documental e auditar `document_uploaded`.
+- **Nao registrar**:
+  - URL de anexo de chat
+  - corpo da mensagem
+  - arquivo bruto
+- **Proximo passo**: revisar somente quando o chat tiver contrato explicito de anexo com metadados seguros ou quando anexos forem promovidos para documento/evidencia formal.
 
 ### 5.14 `service_order_updated`
 

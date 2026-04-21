@@ -1,7 +1,14 @@
 import { Hono } from 'hono';
 import { and, eq, inArray, isNull, like as sqlLike, or } from 'drizzle-orm';
 import { ok } from '../lib/response';
-import { canAccessProperty, listAccessiblePropertyIds } from '../lib/authorization';
+import {
+  canSearchDocuments,
+  canSearchInventory,
+  canSearchMaintenance,
+  canSearchProperty,
+  canSearchServiceOrders,
+  listAccessiblePropertyIds,
+} from '../lib/authorization';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import {
@@ -25,6 +32,28 @@ export type SearchResult = {
   href: string;
 };
 
+const SEARCH_FIELD_ALLOWLIST = {
+  service: ['title', 'system_type'],
+  document: ['title'],
+  inventory: ['name', 'brand', 'category'],
+  maintenance: ['title', 'system_type'],
+} as const;
+
+type SearchEntity = keyof typeof SEARCH_FIELD_ALLOWLIST;
+type AllowedSearchPredicate = ReturnType<typeof sqlLike>;
+
+function allowedSearchLike(
+  entity: SearchEntity,
+  field: string,
+  predicate: AllowedSearchPredicate
+): AllowedSearchPredicate {
+  const allowedFields = SEARCH_FIELD_ALLOWLIST[entity] as readonly string[];
+  if (!allowedFields.includes(field)) {
+    throw new Error(`Search field not allowed: ${entity}.${field}`);
+  }
+  return predicate;
+}
+
 // GET /search?q=&propertyId=
 search.get('/', async (c) => {
   const db = getDb(c.env.DB);
@@ -39,7 +68,7 @@ search.get('/', async (c) => {
   const results: SearchResult[] = [];
 
   const accessiblePropertyIds = propertyId
-    ? (await canAccessProperty(c.env.DB, { propertyId, userId, role }) ? [propertyId] : [])
+    ? (await canSearchProperty(c.env.DB, { propertyId, userId, role }) ? [propertyId] : [])
     : await listAccessiblePropertyIds(c.env.DB, { userId, role });
 
   if (accessiblePropertyIds.length === 0) return ok(c, { results });
@@ -53,8 +82,11 @@ search.get('/', async (c) => {
   }
   const accessWhere = and(...accessFilters);
 
-  // Service orders — title, description, system_type
-  const svcs = await db
+  // Service orders — title and system_type. Description is free-form operational text.
+  const canSearchServices = propertyId
+    ? await canSearchServiceOrders(c.env.DB, { propertyId, userId, role })
+    : true;
+  const svcs = canSearchServices ? await db
     .select({
       id: serviceOrders.id,
       title: serviceOrders.title,
@@ -69,13 +101,12 @@ search.get('/', async (c) => {
         accessWhere,
         isNull(serviceOrders.deletedAt),
         or(
-          sqlLike(serviceOrders.title, pattern),
-          sqlLike(serviceOrders.description, pattern),
-          sqlLike(serviceOrders.systemType, pattern)
+          allowedSearchLike('service', 'title', sqlLike(serviceOrders.title, pattern)),
+          allowedSearchLike('service', 'system_type', sqlLike(serviceOrders.systemType, pattern))
         )
       )
     )
-    .limit(5);
+    .limit(5) : [];
 
   for (const s of svcs) {
     results.push({
@@ -86,8 +117,11 @@ search.get('/', async (c) => {
     });
   }
 
-  // Documents — title and OCR extracted text
-  const docs = await db
+  // Documents — title only. OCR search needs document-specific sensitivity policy.
+  const canSearchDocs = propertyId
+    ? await canSearchDocuments(c.env.DB, { propertyId, userId, role })
+    : true;
+  const docs = canSearchDocs ? await db
     .select({
       id: documents.id,
       title: documents.title,
@@ -101,10 +135,10 @@ search.get('/', async (c) => {
       and(
         accessWhere,
         isNull(documents.deletedAt),
-        or(sqlLike(documents.title, pattern), sqlLike(documents.ocrData, pattern))
+        allowedSearchLike('document', 'title', sqlLike(documents.title, pattern))
       )
     )
-    .limit(5);
+    .limit(5) : [];
 
   for (const d of docs) {
     results.push({
@@ -116,7 +150,10 @@ search.get('/', async (c) => {
   }
 
   // Inventory items — name, brand, category
-  const items = await db
+  const canSearchItems = propertyId
+    ? await canSearchInventory(c.env.DB, { propertyId, userId, role })
+    : true;
+  const items = canSearchItems ? await db
     .select({
       id: inventoryItems.id,
       name: inventoryItems.name,
@@ -132,13 +169,13 @@ search.get('/', async (c) => {
         accessWhere,
         isNull(inventoryItems.deletedAt),
         or(
-          sqlLike(inventoryItems.name, pattern),
-          sqlLike(inventoryItems.brand, pattern),
-          sqlLike(inventoryItems.category, pattern)
+          allowedSearchLike('inventory', 'name', sqlLike(inventoryItems.name, pattern)),
+          allowedSearchLike('inventory', 'brand', sqlLike(inventoryItems.brand, pattern)),
+          allowedSearchLike('inventory', 'category', sqlLike(inventoryItems.category, pattern))
         )
       )
     )
-    .limit(5);
+    .limit(5) : [];
 
   for (const i of items) {
     results.push({
@@ -150,7 +187,10 @@ search.get('/', async (c) => {
   }
 
   // Maintenance schedules — title, system_type
-  const maint = await db
+  const canSearchMaint = propertyId
+    ? await canSearchMaintenance(c.env.DB, { propertyId, userId, role })
+    : true;
+  const maint = canSearchMaint ? await db
     .select({
       id: maintenanceSchedules.id,
       title: maintenanceSchedules.title,
@@ -165,12 +205,12 @@ search.get('/', async (c) => {
         accessWhere,
         isNull(maintenanceSchedules.deletedAt),
         or(
-          sqlLike(maintenanceSchedules.title, pattern),
-          sqlLike(maintenanceSchedules.systemType, pattern)
+          allowedSearchLike('maintenance', 'title', sqlLike(maintenanceSchedules.title, pattern)),
+          allowedSearchLike('maintenance', 'system_type', sqlLike(maintenanceSchedules.systemType, pattern))
         )
       )
     )
-    .limit(5);
+    .limit(5) : [];
 
   for (const m of maint) {
     results.push({

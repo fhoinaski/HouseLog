@@ -54,8 +54,13 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 | `serviceOrderDelete` | Service Operations / Audit and Governance | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_deleted` | `canDeleteServiceOrder` | Parcial | Helper existe e preserva regra atual; ainda falta motivo/contexto e restricao por status |
 | `serviceOrderEvidenceUpload` | Service Operations / Documents and Evidence | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_evidence_uploaded` | `canUploadServiceEvidence` | Parcial | Helper existe e preserva regra atual; falta granularidade por tipo de evidencia |
 | `serviceOrderChecklistUpdate` | Service Operations / Property Operating System | usuarios com acesso contextual ao imovel | provider nao vinculado, temp_provider fora de escopo e usuarios sem acesso | Alta | Sim, `service_order_checklist_updated` | `canUpdateServiceOrderChecklist` | Parcial | Helper existe e preserva regra atual; falta granularidade por responsabilidade e etapa da OS |
+| `serviceMessageAccess` | Service Operations / Provider Network | participantes da OS, provider com bid ativo e usuarios com acesso contextual ao imovel; providers veem apenas mensagens nao internas | usuarios sem relacao com a OS, provider sem bid/atribuicao e temp_provider fora de escopo | Alta | Nao por padrao | `canViewServiceMessages`; `canSendServiceMessage`; `canViewInternalServiceMessages`; `canSendInternalServiceMessage` | Parcial | Helper nomeia leitura/envio do chat da OS; acesso por bid e propriedade ainda e montado na rota |
+| `searchPropertyResults` | Search / Property Operating System | usuarios com acesso contextual ao imovel | provider/temp_provider sem contexto e usuarios sem acesso | Media/Alta | Nao por padrao | `canSearchProperty`; `canSearchServiceOrders`; `canSearchDocuments`; `canSearchInventory`; `canSearchMaintenance` | Parcial | Helpers nomeiam busca por tipo; allowlist local limita campos; documentos buscam apenas titulo e OS nao busca descricao livre |
 | `providerProposalSubmit` | Provider Network / Service Operations | `provider` e `admin` no fluxo atual, com OS aberta a proposta | owner, manager, temp_provider, usuarios sem papel provider/admin, OS atribuida/fechada ou proposta pendente duplicada | Alta | Sim, `provider_proposal_submitted` | `canSubmitProviderProposal` | Parcial | Helper usa contexto minimo da OS/oportunidade; homologacao, categoria e tenant seguem pendentes |
 | `providerPortalAccess` | Provider Network | `provider`, `admin` ou colaborador com role `provider` | usuarios sem papel/contexto de provider | Media/Alta | Nao por padrao | `canAccessProviderPortal` | Implementado | Regra local foi movida para o core; elegibilidade por oportunidade/categoria ainda fica fora |
+| `providerOpportunityView` | Provider Network / Service Operations | `provider` e `admin` com oportunidade aberta, sem atribuicao e dentro dos filtros atuais de categoria | owner, manager, temp_provider, usuarios sem provider/admin e oportunidades atribuidas/fechadas/deletadas | Media/Alta | Nao por padrao | `canViewProviderOpportunity` | Parcial | Helper cobre visibilidade minima; homologacao, tenant, convite e disponibilidade seguem pendentes |
+| `assignedProviderServiceView` | Provider Network / Service Operations | provider atribuido e `admin` | provider nao atribuido, owner/manager via provider portal, temp_provider e usuarios sem acesso ao portal | Alta | Nao por padrao | `canViewAssignedProviderService` | Parcial | Helper cobre leitura/acesso minimo a OS atribuida; stats, invoice e mutacoes ainda precisam policies especificas |
+| `providerInvoiceUpload` | Provider Network / Documents and Evidence | provider atribuido e `admin` | provider nao atribuido, owner/manager via provider portal, temp_provider e usuarios sem acesso ao portal | Alta | Sim, `document_uploaded` com `upload_source = provider_invoice` | `canUploadProviderInvoice` | Parcial | Helper nomeia a action e preserva regra atual; policy por status e documento fiscal fica pendente |
 
 ---
 
@@ -181,7 +186,24 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Coerencia de dominio**: checklist faz parte da execucao tecnica da OS e ja audita `service_order_checklist_updated`.
 - **Granularidade pendente**: responsabilidade por papel, provider atribuido e regras por etapa/status da OS.
 
-### 5.16 `providerProposalSubmit`
+### 5.16 `serviceMessageAccess`
+
+- **Helper atual**: `canViewServiceMessages`, `canSendServiceMessage`, `canViewInternalServiceMessages` e `canSendInternalServiceMessage`.
+- **Status**: parcial.
+- **Policy atual**: participantes da OS, provider com bid ativo e usuarios com acesso contextual ao imovel podem ler/enviar mensagens; providers nao podem ler/enviar mensagens internas.
+- **Coerencia de dominio**: chat de OS e colaboracao operacional vinculada ao prontuario da ordem de servico, nao feature isolada do provider portal.
+- **Granularidade pendente**: mover busca de bid ativo e acesso contextual para uma policy mais completa quando houver contexto de thread/mensagem mais formal; anexos de chat continuam URLs simples e nao devem ser tratados como evidencia/documento sem passar pelos fluxos dedicados.
+
+### 5.17 `searchPropertyResults`
+
+- **Helper atual**: `canSearchProperty`, `canSearchServiceOrders`, `canSearchDocuments`, `canSearchInventory` e `canSearchMaintenance`.
+- **Status**: parcial.
+- **Policy atual**: busca por propriedade usa acesso contextual ao imovel; busca global usa `listAccessiblePropertyIds` e limita resultados a propriedades acessiveis; allowlist local define campos pesquisaveis. OS pesquisa `title` e `system_type`; documentos pesquisam apenas `title`, sem OCR.
+- **Coerencia de dominio**: busca e leitura transversal de metadados do prontuario tecnico, nao permissao propria para expor dados sensiveis.
+- **Consumo frontend**: resultados devem ser tratados como metadados navegaveis; a rota de destino continua responsavel por confirmar autorizacao e carregar conteudo completo.
+- **Granularidade pendente**: separar campos pesquisaveis por tipo, especialmente OCR/documentos, evidencias e futuros indices multi-tenant; nao incluir credenciais ou segredos em search.
+
+### 5.18 `providerProposalSubmit`
 
 - **Helper atual**: `canSubmitProviderProposal`.
 - **Status**: parcial.
@@ -189,7 +211,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Coerencia de dominio**: proposta pertence a Provider Network privada, nao marketplace aberto.
 - **Granularidade pendente**: categoria, homologacao, tenant, disponibilidade e elegibilidade completa da oportunidade.
 
-### 5.17 `providerPortalAccess`
+### 5.19 `providerPortalAccess`
 
 - **Helper atual**: `canAccessProviderPortal`.
 - **Status**: implementado.
@@ -197,12 +219,54 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 - **Coerencia de dominio**: portal e entrada operacional para rede homologada.
 - **Granularidade pendente**: separar acesso ao portal de visibilidade de oportunidades, servicos atribuidos e elegibilidade por categoria, homologacao, contexto e disponibilidade.
 
+### 5.20 `providerOpportunityView`
+
+- **Helper atual**: `canViewProviderOpportunity`.
+- **Status**: parcial.
+- **Policy atual**: `provider` ou `admin`, oportunidade `requested`, sem provider atribuido, nao deletada e, na listagem, respeitando os filtros atuais de categoria quando nao ha `system_type` explicito.
+- **Coerencia de dominio**: oportunidades pertencem a Provider Network privada e nao devem expor OS atribuida ou fechada como oferta aberta.
+- **Granularidade pendente**: homologacao, tenant, convite, disponibilidade e elegibilidade fina por propriedade/rede.
+
+### 5.21 `assignedProviderServiceView`
+
+- **Helper atual**: `canViewAssignedProviderService`.
+- **Status**: parcial.
+- **Policy atual**: `admin` pode ler OS nao deletada; provider comum so pode ler OS atribuida a si mesmo.
+- **Coerencia de dominio**: servicos atribuidos sao execucao operacional privada, nao oportunidade aberta.
+- **Granularidade pendente**: separar leitura, stats e mutacoes por fase/status da OS; mensagens ja possuem helpers gerais no modulo de chat da OS, enquanto evidencia e status provider-specific devem aguardar endpoint/fluxo real.
+
+### 5.22 `providerInvoiceUpload`
+
+- **Helper atual**: `canUploadProviderInvoice`.
+- **Status**: parcial.
+- **Policy atual**: mesma regra atual de OS atribuida/admin, agora nomeada como action de upload.
+- **Coerencia de dominio**: nota fiscal enviada por provider vira documento vinculado a OS e ao acervo tecnico.
+- **Auditoria**: usa `document_uploaded` com `upload_source = provider_invoice`.
+- **Decisao de status atual**: nao restringir por fase da OS nesta etapa; o fluxo existente permite invoice em qualquer OS atribuida/admin nao deletada.
+- **Granularidade pendente**: definir regra operacional para status permitido, tipo fiscal/documental e relacao com documentos sensiveis antes de bloquear upload.
+
+### 5.23 `providerEvidenceUpload`
+
+- **Helper atual**: nenhum helper provider-specific.
+- **Status**: gap adiado.
+- **Policy atual**: nao ha endpoint de evidencia especifico do provider portal; fotos, video e audio seguem no modulo geral de service orders com `canUploadServiceEvidence`.
+- **Coerencia de dominio**: evidencia operacional deve continuar como parte da OS, mas o provider portal ainda nao tem contrato proprio para essa action.
+- **Granularidade pendente**: criar helper apenas quando existir fluxo real para provider atribuido enviar evidencia sem depender de acesso generico ao imovel.
+
+### 5.24 `providerServiceStatusChange`
+
+- **Helper atual**: nenhum helper provider-specific.
+- **Status**: gap adiado.
+- **Policy atual**: nao ha endpoint de mudanca de status especifico do provider portal; transicoes continuam no modulo geral de service orders com `canChangeServiceOrderStatus` e `canCloseServiceOrderWithEvidence` quando aplicavel.
+- **Coerencia de dominio**: status de OS atribuida e decisao operacional sensivel e deve continuar governado pelo fluxo principal ate existir contrato proprio do provider.
+- **Granularidade pendente**: criar helper apenas quando houver action real para provider atribuido iniciar, pausar, concluir ou sinalizar execucao sem depender da mutacao geral de OS.
+
 ---
 
 ## 6. Riscos
 
 - Helpers parciais podem ser lidos como policy final, mesmo ainda delegando para `canAccessProperty`.
-- Provider global ainda tem acesso amplo ao portal; a elegibilidade fina ainda depende de filtros e regras em rota.
+- Provider global ainda tem acesso amplo ao portal; visibilidade minima de oportunidades tem helper, mas elegibilidade fina ainda depende de filtros e regras em rota.
 - Atribuicao de provider ainda nao deve ser lida como coberta por `canUpdateServiceOrder`; permanece gap de Provider Network ate existir regra real de elegibilidade.
 - Documentos e OCR exigem mais cuidado antes de ampliar automacoes ou busca sem policies por tipo.
 - Sem tenant/organization, `property_id` continua sendo o limite principal de autorizacao.
@@ -212,7 +276,7 @@ A maior parte dos gaps restantes nao e ausencia total de helper. O gap principal
 ## 7. Proximos passos recomendados
 
 1. Priorizar granularidade de service orders: status, evidencias, checklist, exclusao e fechamento; tratar atribuicao de provider como bloco proprio de Provider Network quando a elegibilidade estiver definida.
-2. Evoluir `canSubmitProviderProposal` para usar o contexto da OS/oportunidade em regras reais de elegibilidade sem alterar contrato publico.
+2. Evoluir provider opportunities para homologacao, tenant, convite e disponibilidade quando esses dados estiverem maduros.
 3. Separar policies documentais por tipo e criticidade antes de ampliar OCR e classificacao.
 4. Endurecer audit links com policy por OS, escopo, revogacao e auditoria sem token completo.
 5. Atualizar `AUTHORIZATION_CORE_GAPS.md` quando novos helpers forem promovidos de parcial para implementado.

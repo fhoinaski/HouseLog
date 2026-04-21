@@ -1,7 +1,8 @@
 'use client';
 
-import { type ReactNode, useMemo } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import {
   BarChart2,
@@ -20,6 +21,7 @@ import { propertiesApi, servicesApi, type Property, type ServiceOrder } from '@/
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn, formatCurrency } from '@/lib/utils';
 
 type PropertyListItem = Property & {
@@ -56,6 +58,15 @@ type MetricItem = {
   icon: LucideIcon;
 };
 
+type QuickActionIntent = 'new-service' | 'schedule' | 'inventory' | 'report';
+
+type QuickActionItem = {
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  intent: QuickActionIntent;
+};
+
 function getGreeting() {
   const h = new Date().getHours();
   if (h < 12) return 'Bom dia,';
@@ -82,11 +93,37 @@ function getInitials(name: string) {
 }
 
 const QUICK_ACTIONS = [
-  { label: 'Nova OS', description: 'Abrir demanda', icon: FilePlus, href: '/properties' },
-  { label: 'Agendar', description: 'Organizar visita', icon: CalendarDays, href: '/schedule' },
-  { label: 'Inventário', description: 'Mapear ativos', icon: Package, href: '/properties' },
-  { label: 'Relatórios', description: 'Ver finanças', icon: BarChart2, href: '/financial' },
-];
+  { label: 'Nova OS', description: 'Abrir demanda', icon: FilePlus, intent: 'new-service' },
+  { label: 'Agendar', description: 'Rotina preventiva', icon: CalendarDays, intent: 'schedule' },
+  { label: 'Inventário', description: 'Mapear ativos', icon: Package, intent: 'inventory' },
+  { label: 'Relatórios', description: 'Saúde do imóvel', icon: BarChart2, intent: 'report' },
+] satisfies QuickActionItem[];
+
+const QUICK_ACTION_ROUTE: Record<QuickActionIntent, (propertyId: string) => string> = {
+  'new-service': (propertyId) => `/properties/${propertyId}/services/new`,
+  schedule: (propertyId) => `/properties/${propertyId}/maintenance`,
+  inventory: (propertyId) => `/properties/${propertyId}/inventory`,
+  report: (propertyId) => `/properties/${propertyId}/report`,
+};
+
+const QUICK_ACTION_DIALOG_COPY: Record<QuickActionIntent, { title: string; description: string }> = {
+  'new-service': {
+    title: 'Escolha o imóvel da nova OS',
+    description: 'A ordem de serviço precisa nascer dentro do prontuário correto para manter histórico, anexos e responsáveis no contexto certo.',
+  },
+  schedule: {
+    title: 'Escolha onde agendar',
+    description: 'Os agendamentos preventivos são organizados por imóvel para preservar recorrências e histórico técnico.',
+  },
+  inventory: {
+    title: 'Escolha o inventário',
+    description: 'Cada inventário pertence a um imóvel específico e deve ser acessado no contexto do ativo.',
+  },
+  report: {
+    title: 'Escolha o relatório',
+    description: 'Os relatórios disponíveis hoje são calculados por imóvel, com score técnico, manutenção e documentação.',
+  },
+};
 
 function SectionHeading({
   eyebrow,
@@ -152,34 +189,127 @@ function MetricCard({ label, value, detail, icon: Icon }: MetricItem) {
   );
 }
 
-function QuickActions() {
+function QuickActions({
+  properties,
+  isLoading,
+}: {
+  properties: PropertyListItem[];
+  isLoading: boolean;
+}) {
+  const router = useRouter();
+  const [pendingAction, setPendingAction] = useState<QuickActionItem | null>(null);
+
+  const selectedCopy = pendingAction ? QUICK_ACTION_DIALOG_COPY[pendingAction.intent] : null;
+
+  function destinationFor(action: QuickActionItem, propertyId: string) {
+    return QUICK_ACTION_ROUTE[action.intent](propertyId);
+  }
+
+  function handleAction(action: QuickActionItem) {
+    if (isLoading) return;
+
+    if (properties.length === 0) {
+      router.push('/properties/new');
+      return;
+    }
+
+    const onlyProperty = properties[0];
+    if (properties.length === 1 && onlyProperty) {
+      router.push(destinationFor(action, onlyProperty.id));
+      return;
+    }
+
+    setPendingAction(action);
+  }
+
+  function chooseProperty(propertyId: string) {
+    if (!pendingAction) return;
+    router.push(destinationFor(pendingAction, propertyId));
+    setPendingAction(null);
+  }
+
   return (
-    <Card variant="tonal" density="comfortable">
-      <CardHeader className="pb-3">
-        <SectionHeading eyebrow="Ações rápidas" title="Operação sem atrito" />
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {QUICK_ACTIONS.map(({ label, description, icon: Icon, href }) => (
-            <Link
-              key={`${href}-${label}`}
-              href={href}
-              className="group rounded-xl bg-[var(--surface-base)] p-3 shadow-[var(--shadow-xs)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-[var(--surface-raised)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
-            >
-              <div className="flex min-h-24 flex-col justify-between gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--button-tonal-bg)] transition-colors group-hover:bg-[var(--button-tonal-hover)]">
-                  <Icon className="h-5 w-5 text-text-accent" strokeWidth={1.8} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">{label}</p>
-                  <p className="mt-0.5 text-xs leading-snug text-text-tertiary">{description}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <>
+      <Card variant="tonal" density="comfortable">
+        <CardHeader className="pb-3">
+          <SectionHeading eyebrow="Ações rápidas" title="Operação sem atrito" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon;
+
+              return (
+                <button
+                  key={action.intent}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => handleAction(action)}
+                  className="group rounded-xl bg-[var(--surface-base)] p-3 text-left shadow-[var(--shadow-xs)] transition-all duration-150 hover:-translate-y-0.5 hover:bg-[var(--surface-raised)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] disabled:pointer-events-none disabled:opacity-60"
+                >
+                  <div className="flex min-h-24 flex-col justify-between gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--button-tonal-bg)] transition-colors group-hover:bg-[var(--button-tonal-hover)]">
+                      <Icon className="h-5 w-5 text-text-accent" strokeWidth={1.8} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-text-primary">{action.label}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-text-tertiary">{action.description}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
+        <DialogContent className="max-h-[88vh] overflow-hidden p-0 sm:max-w-xl">
+          <div className="p-4 pb-2 sm:p-5 sm:pb-2">
+            <DialogHeader>
+              <DialogTitle>{selectedCopy?.title}</DialogTitle>
+              <DialogDescription className="leading-6">{selectedCopy?.description}</DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="max-h-[64vh] overflow-y-auto px-4 pb-4 sm:px-5 sm:pb-5">
+            <div className="space-y-2">
+              {properties.map((property) => (
+                <button
+                  key={property.id}
+                  type="button"
+                  onClick={() => chooseProperty(property.id)}
+                  className="flex min-h-[72px] w-full items-center gap-3 rounded-xl bg-[var(--surface-base)] px-3 py-3 text-left transition-colors hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                >
+                  <PropertyThumbnail name={property.name} photoUrl={property.coverPhotoUrl ?? property.photoUrl} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-text-primary">{property.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-text-secondary">{property.address}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {property.activeServicesCount > 0 ? (
+                        <Badge variant="requested">{property.activeServicesCount} OS aberta(s)</Badge>
+                      ) : (
+                        <Badge variant="normal">Sem OS abertas</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight size={17} strokeWidth={1.8} className="shrink-0 text-text-disabled" />
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-xl bg-[var(--surface-base)] p-3">
+              <p className="text-xs leading-5 text-text-secondary">
+                Não encontrou o ativo certo? Cadastre um novo imóvel antes de iniciar a ação operacional.
+              </p>
+              <Button asChild variant="ghost" size="sm" className="mt-2">
+                <Link href="/properties/new">Adicionar imóvel</Link>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -549,7 +679,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <QuickActions />
+      <QuickActions properties={properties} isLoading={isLoadingDashboard} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.45fr_1fr]">
         <PropertiesSection properties={properties} isLoading={isLoadingDashboard} />
