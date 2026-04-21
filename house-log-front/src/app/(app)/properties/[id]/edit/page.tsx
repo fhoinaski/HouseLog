@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Camera, Trash2 } from 'lucide-react';
-import { propertiesApi } from '@/lib/api';
+import { BASE, getToken, normalizeApiMediaUrls, propertiesApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,15 +74,14 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
         setUploadingCover(true);
         const fd = new FormData();
         fd.append('file', coverFile);
-        const token = localStorage.getItem('hl_token');
-        const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787/api/v1';
+        const token = getToken();
         const res = await fetch(`${BASE}/properties/${id}/cover`, {
           method: 'POST',
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: fd,
         });
         if (res.ok) {
-          const json = await res.json() as { cover_url: string };
+          const json = normalizeApiMediaUrls(await res.json() as { cover_url: string });
           coverUrl = json.cover_url;
         }
         setUploadingCover(false);

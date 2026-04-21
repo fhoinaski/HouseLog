@@ -36,7 +36,7 @@ const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
 
 const BID_STATUS_LABEL: Record<ServiceBid['status'], string> = {
   accepted: 'Aceita',
-  pending: 'Em análise',
+  pending: 'Em analise',
   rejected: 'Recusada',
 };
 
@@ -108,9 +108,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
       <div className="safe-bottom space-y-6">
         <PageHeader
           density="editorial"
-          eyebrow="Provider network"
-          title="Análise da operação"
-          description="Carregando os dados da solicitação elegível."
+          eyebrow="Rede homologada"
+          title="Analise da operacao"
+          description="Carregando os dados da solicitacao elegivel."
           actions={
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
@@ -133,9 +133,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
       <div className="safe-bottom space-y-6">
         <PageHeader
           density="editorial"
-          eyebrow="Provider network"
-          title="Oportunidade indisponível"
-          description="Não foi possível carregar esta solicitação da rede homologada."
+          eyebrow="Rede homologada"
+          title="Oportunidade indisponivel"
+          description="Nao foi possivel carregar esta solicitacao da rede homologada."
           actions={
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
@@ -145,8 +145,8 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
         />
         <EmptyState
           icon={<Briefcase className="h-6 w-6" />}
-          title="Solicitação não encontrada"
-          description="A operação pode ter sido encerrada, atribuída ou removida da sua fila elegível."
+          title="Solicitacao nao encontrada"
+          description="A operacao pode ter sido encerrada, atribuida ou removida da sua fila elegivel."
           tone="strong"
         />
       </div>
@@ -157,9 +157,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
     <div className="safe-bottom space-y-6">
       <PageHeader
         density="editorial"
-        eyebrow="Provider network"
+        eyebrow="Rede homologada"
         title={order.title}
-        description="Análise técnica de uma solicitação elegível dentro da operação privada HouseLog."
+        description="Analise tecnica de uma solicitacao elegivel dentro da operacao privada HouseLog."
         actions={
           <Button type="button" variant="ghost" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
@@ -171,8 +171,8 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="space-y-6">
           <PageSection
-            title="Dossiê da operação"
-            description="Dados essenciais para validar escopo, prioridade e aderência antes de enviar proposta."
+            title="Dossie da operacao"
+            description="Dados essenciais para validar escopo, prioridade e aderencia antes de enviar proposta."
             tone="strong"
             density="editorial"
             actions={
@@ -191,25 +191,25 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
               />
               <DetailItem
                 icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
-                label="Imóvel"
+                label="Imovel"
                 value={order.property_name}
               />
-              <DetailItem label="Ambiente" value={order.room_name ?? 'Não informado'} />
+              <DetailItem label="Ambiente" value={order.room_name ?? 'Nao informado'} />
             </dl>
 
             {order.description ? (
               <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
                 <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">
                   <FileText className="h-3.5 w-3.5" />
-                  Descrição técnica
+                  Descricao tecnica
                 </p>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{order.description}</p>
               </div>
             ) : (
               <EmptyState
                 icon={<FileText className="h-5 w-5" />}
-                title="Sem descrição complementar"
-                description="Use o chat da operação privada para alinhar dúvidas de escopo antes de executar qualquer compromisso."
+                title="Sem descricao complementar"
+                description="Use o chat da operacao privada para alinhar duvidas de escopo antes de assumir qualquer compromisso."
                 tone="subtle"
                 density="compact"
               />
@@ -217,7 +217,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           </PageSection>
 
           <PageSection density="compact">
-            <ServiceChat serviceOrderId={serviceId} title="Chat da operação privada" />
+            <ServiceChat serviceOrderId={serviceId} title="Chat da operacao privada" />
           </PageSection>
         </div>
 
@@ -226,8 +226,8 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             title="Proposta homologada"
             description={
               hasPendingBid
-                ? 'Sua proposta está em análise pela operação privada.'
-                : 'Envie uma proposta objetiva para avaliação do owner ou gestor responsável.'
+                ? 'Sua proposta esta em analise pela operacao privada.'
+                : 'Envie uma proposta objetiva para avaliacao do owner ou gestor responsavel.'
             }
             tone="surface"
             density="editorial"
@@ -235,8 +235,8 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             {hasPendingBid ? (
               <EmptyState
                 icon={<ShieldCheck className="h-6 w-6" />}
-                title="Proposta em análise"
-                description="Aguarde o retorno antes de enviar uma nova proposta para esta solicitação."
+                title="Proposta em analise"
+                description="Aguarde o retorno antes de enviar uma nova proposta para esta solicitacao."
                 tone="strong"
                 density="compact"
               />
@@ -255,11 +255,11 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                   {errors.amount && <p className="text-xs text-text-danger">{errors.amount.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="bid-notes">Observações técnicas</Label>
+                  <Label htmlFor="bid-notes">Observacoes tecnicas</Label>
                   <Textarea
                     id="bid-notes"
                     rows={4}
-                    placeholder="Escopo, prazo, condições e evidências relevantes..."
+                    placeholder="Escopo, prazo, condicoes e evidencias relevantes..."
                     aria-invalid={Boolean(errors.notes)}
                     {...register('notes')}
                   />
@@ -274,8 +274,8 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           </PageSection>
 
           <PageSection
-            title="Histórico de propostas"
-            description="Registro das propostas enviadas por você para esta operação."
+            title="Historico de propostas"
+            description="Registro das propostas enviadas por voce para esta operacao."
             tone="strong"
             density="editorial"
           >
@@ -283,7 +283,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
               <EmptyState
                 icon={<CheckCircle2 className="h-6 w-6" />}
                 title="Nenhuma proposta enviada"
-                description="Quando uma proposta for registrada, ela aparecerá aqui com o status de avaliação."
+                description="Quando uma proposta for registrada, ela aparecera aqui com o status de avaliacao."
                 tone="subtle"
                 density="compact"
               />

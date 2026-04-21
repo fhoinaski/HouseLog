@@ -32,7 +32,7 @@ export function validateUpload(
 
 export function buildR2Key(opts: {
   propertyId: string;
-  category: 'photos' | 'videos' | 'documents' | 'avatars' | 'inventory';
+  category: 'photos' | 'videos' | 'documents' | 'avatars' | 'inventory' | 'invoices';
   filename: string;
 }): string {
   const ext = opts.filename.split('.').pop() ?? 'bin';
@@ -58,7 +58,35 @@ export async function deleteFromR2(bucket: R2Bucket, key: string): Promise<void>
 }
 
 // Build a public URL for a stored object
-// In production, configure a custom domain on R2 bucket
 export function getPublicUrl(key: string, baseUrl: string): string {
-  return `${baseUrl.replace(/\/$/, '')}/${key}`;
+  const trimmedKey = key.trim();
+  if (/^https?:\/\//i.test(trimmedKey)) return trimmedKey;
+
+  const publicBaseUrl = baseUrl.trim().replace(/\/$/, '');
+  if (!publicBaseUrl) {
+    throw new Error('R2_PUBLIC_URL is required to build public file URLs');
+  }
+
+  return `${publicBaseUrl}/${trimmedKey.replace(/^\/+/, '')}`;
+}
+
+export function extractR2KeyFromPublicUrl(fileUrl: string, publicBaseUrl?: string): string {
+  const value = fileUrl.trim();
+  const base = publicBaseUrl?.trim().replace(/\/$/, '');
+
+  if (!value) return value;
+
+  if (base && value.startsWith(`${base}/`)) {
+    return decodeURIComponent(value.slice(base.length + 1));
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (parsed.pathname.startsWith('/r2/')) {
+      return decodeURIComponent(parsed.pathname.slice('/r2/'.length));
+    }
+    return decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+  } catch {
+    return value.replace(/^\/+/, '');
+  }
 }

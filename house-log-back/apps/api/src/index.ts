@@ -56,6 +56,27 @@ app.use('/api/*', rateLimitMiddleware);
 app.get('/', (c) => c.json({ service: 'HouseLog API', version: '1.0.0', status: 'ok' }));
 app.get('/health', (c) => c.json({ status: 'ok', ts: new Date().toISOString() }));
 
+app.get('/api/v1/media/*', async (c) => {
+  const prefix = '/api/v1/media/';
+  const key = decodeURIComponent(c.req.path.slice(prefix.length));
+
+  if (!key || key.includes('..')) {
+    return c.json({ error: 'Arquivo nao encontrado', code: 'NOT_FOUND' }, 404);
+  }
+
+  const object = await c.env.STORAGE.get(key);
+  if (!object) {
+    return c.json({ error: 'Arquivo nao encontrado', code: 'NOT_FOUND' }, 404);
+  }
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+
+  return new Response(object.body, { headers });
+});
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 const api = app.basePath('/api/v1');

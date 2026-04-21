@@ -6,21 +6,45 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  Bar, PieChart, Pie, Cell, ComposedChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  AlertTriangle,
+  BarChart3,
+  LineChart,
+  PieChart as PieChartIcon,
+  Plus,
+  RefreshCw,
+  Ruler,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react';
+import {
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Legend,
+  Line,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { Plus, TrendingUp, TrendingDown, RefreshCw, Ruler } from 'lucide-react';
-import { expensesApi, propertiesApi } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { MetricCard } from '@/components/ui/metric-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { toast } from 'sonner';
-import { formatCurrency, formatMonth, EXPENSE_CATEGORY_LABELS, cn } from '@/lib/utils';
+import { expensesApi, propertiesApi } from '@/lib/api';
+import { cn, EXPENSE_CATEGORY_LABELS, formatCurrency, formatMonth } from '@/lib/utils';
 
-const COLORS = [
+const CHART_COLORS = [
   'var(--interactive-primary-bg)',
   'var(--text-warning)',
   'var(--text-success)',
@@ -34,19 +58,28 @@ const COLORS = [
 const ALL_CATEGORIES = {
   ...EXPENSE_CATEGORY_LABELS,
   rent: 'Aluguel',
-  service: 'Serviços',
+  service: 'Servicos',
 } as Record<string, string>;
 
 const expenseSchema = z.object({
   type: z.enum(['expense', 'revenue']).default('expense'),
-  category: z.string().min(1),
-  amount: z.coerce.number().positive('Valor obrigatório'),
+  category: z.string().min(1, 'Categoria obrigatoria'),
+  amount: z.coerce.number().positive('Valor obrigatorio'),
   reference_month: z.string().regex(/^\d{4}-\d{2}$/, 'Formato YYYY-MM'),
   notes: z.string().optional(),
   is_recurring: z.boolean().default(false),
 });
 
 type ExpenseForm = z.infer<typeof expenseSchema>;
+
+const tooltipStyle = {
+  borderRadius: '12px',
+  border: '0',
+  background: 'var(--surface-raised)',
+  boxShadow: 'var(--surface-shadow-raised)',
+  color: 'var(--text-primary)',
+  fontSize: '12px',
+};
 
 export default function FinancialPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -57,15 +90,24 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   const currentMonth = new Date(nowTs).toISOString().slice(0, 7);
   const sixMonthsAgo = new Date(nowTs - 6 * 30 * 86400000).toISOString().slice(0, 7);
 
-  const { data, mutate } = useSWR(
-    ['expenses-summary', id],
-    () => expensesApi.summary(id, { from: sixMonthsAgo, to: currentMonth })
-  );
+  const {
+    data,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR(['expenses-summary', id], () => expensesApi.summary(id, { from: sixMonthsAgo, to: currentMonth }));
 
   const { data: propData } = useSWR(['property', id], () => propertiesApi.get(id));
   const area = propData?.property?.area_m2 ?? null;
 
-  const { register, handleSubmit, reset, setValue, control, formState: { errors, isSubmitting } } = useForm<ExpenseForm>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    control,
+    formState: { errors, isSubmitting },
+  } = useForm<ExpenseForm>({
     resolver: zodResolver(expenseSchema),
     defaultValues: { reference_month: currentMonth, type: 'expense', is_recurring: false },
   });
@@ -81,30 +123,28 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
 
   async function onSubmit(form: ExpenseForm) {
     try {
-      const res = await expensesApi.create(id, { ...form, is_recurring: form.is_recurring ? 1 : 0 } as Parameters<typeof expensesApi.create>[1]);
+      const res = await expensesApi.create(id, {
+        ...form,
+        is_recurring: form.is_recurring ? 1 : 0,
+      } as Parameters<typeof expensesApi.create>[1]);
       await mutate();
       reset({ reference_month: currentMonth, type: 'expense', is_recurring: false });
       setDialogOpen(false);
       const generated = (res as { generated?: number }).generated ?? 1;
       toast.success(
         generated > 1
-          ? `${generated} lançamentos criados (recorrência 12 meses)`
-          : 'Lançamento criado'
+          ? `${generated} lancamentos criados com recorrencia anual`
+          : 'Lancamento criado'
       );
-    } catch (e) {
-      toast.error('Erro ao salvar', { description: (e as Error).message });
+    } catch (submitError) {
+      toast.error('Erro ao salvar lancamento', { description: (submitError as Error).message });
     }
   }
 
   const expenseByMonth = new Map((data?.by_month ?? []).map((m) => [m.reference_month, m.total]));
-  const revenueByMonth = new Map(
-    ((data as { by_month_revenue?: { reference_month: string; total: number }[] })?.by_month_revenue ?? [])
-      .map((m) => [m.reference_month, m.total])
-  );
+  const revenueByMonth = new Map((data?.by_month_revenue ?? []).map((m) => [m.reference_month, m.total]));
 
-  const allMonths = Array.from(
-    new Set([...expenseByMonth.keys(), ...revenueByMonth.keys()])
-  ).sort();
+  const allMonths = Array.from(new Set([...expenseByMonth.keys(), ...revenueByMonth.keys()])).sort();
 
   const dreData = allMonths.map((m) => ({
     month: formatMonth(m),
@@ -114,221 +154,264 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   }));
 
   const totalExpenses = data?.total ?? 0;
-  const totalRevenue = (data as { total_revenue?: number })?.total_revenue ?? 0;
+  const totalRevenue = data?.total_revenue ?? 0;
   const balance = totalRevenue - totalExpenses;
   const costPerSqm = area && area > 0 ? totalExpenses / area : null;
 
-  const categoryData = (data?.by_category ?? []).map((c, i) => ({
-    name: ALL_CATEGORIES[c.category] ?? c.category,
-    value: c.total,
-    color: COLORS[i % COLORS.length],
+  const categoryData = (data?.by_category ?? []).map((category, index) => ({
+    name: ALL_CATEGORIES[category.category] ?? category.category,
+    value: category.total,
+    color: CHART_COLORS[index % CHART_COLORS.length],
   }));
 
   return (
     <div className="space-y-6 safe-bottom">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-medium text-text-primary">Saúde financeira</h2>
-          <p className="text-sm text-text-secondary">Últimos 6 meses</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => openDialog('revenue')}>
-            <TrendingUp className="h-4 w-4" />
-            Receita
-          </Button>
-          <Button onClick={() => openDialog('expense')}>
-            <Plus className="h-4 w-4" />
-            Despesa
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        density="editorial"
+        eyebrow="Governanca financeira"
+        title="Saude financeira do imovel"
+        description="Leitura operacional de receitas, despesas, saldo e custo por metro quadrado nos ultimos seis meses."
+        actions={
+          <>
+            <Button variant="outline" onClick={() => openDialog('revenue')}>
+              <TrendingUp className="h-4 w-4" />
+              Receita
+            </Button>
+            <Button onClick={() => openDialog('expense')}>
+              <Plus className="h-4 w-4" />
+              Despesa
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-5">
-            <p className="hl-section-title">Despesas</p>
-            <p className="mt-1 text-2xl font-medium text-text-danger">{formatCurrency(totalExpenses)}</p>
-            <p className="text-xs text-text-secondary">6 meses</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <p className="hl-section-title">Receitas</p>
-            <p className="mt-1 text-2xl font-medium text-text-success">{formatCurrency(totalRevenue)}</p>
-            <p className="text-xs text-text-secondary">6 meses</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <p className="hl-section-title">Saldo</p>
-            <p className={cn('mt-1 text-2xl font-medium', balance >= 0 ? 'text-text-success' : 'text-text-danger')}>
-              {formatCurrency(balance)}
-            </p>
-            <p className="text-xs text-text-secondary">período</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start gap-2">
-              <Ruler className="mt-1 h-4 w-4 shrink-0 text-text-accent" />
-              <div>
-                <p className="hl-section-title">Custo/m²</p>
-                <p className="mt-1 text-2xl font-medium text-text-primary">
-                  {costPerSqm != null ? formatCurrency(costPerSqm) : '—'}
-                </p>
-                <p className="text-xs text-text-secondary">
-                  {area ? `${area} m²` : 'área não informada'}
-                </p>
+      {error ? (
+        <EmptyState
+          tone="strong"
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title="Nao foi possivel carregar o resumo financeiro."
+          description="Verifique a conexao e tente novamente antes de registrar novas analises."
+          actions={<Button variant="outline" onClick={() => void mutate()}>Tentar novamente</Button>}
+        />
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              tone="danger"
+              icon={TrendingDown}
+              label="Despesas nos ultimos 6 meses"
+              value={isLoading ? '...' : formatCurrency(totalExpenses)}
+              valueClassName="text-text-danger"
+            />
+            <MetricCard
+              tone="success"
+              icon={TrendingUp}
+              label="Receitas nos ultimos 6 meses"
+              value={isLoading ? '...' : formatCurrency(totalRevenue)}
+              valueClassName="text-text-success"
+            />
+            <MetricCard
+              tone={balance >= 0 ? 'success' : 'danger'}
+              icon={LineChart}
+              label="Saldo do periodo"
+              value={isLoading ? '...' : formatCurrency(balance)}
+              valueClassName={cn(balance >= 0 ? 'text-text-success' : 'text-text-danger')}
+            />
+            <MetricCard
+              tone="accent"
+              icon={Ruler}
+              label={area ? `Base: ${area} m2` : 'Area nao informada'}
+              value={isLoading ? '...' : costPerSqm != null ? formatCurrency(costPerSqm) : '-'}
+              helper="Custo operacional por metro quadrado."
+            />
+          </div>
+
+          <PageSection
+            tone="surface"
+            density="editorial"
+            title="Resultado operacional"
+            description="Comparativo mensal de receitas, despesas e saldo para leitura rapida de tendencia."
+          >
+            {dreData.length === 0 ? (
+              <EmptyState
+                tone="strong"
+                icon={<BarChart3 className="h-5 w-5" />}
+                title="Sem lancamentos no periodo."
+                description="Registre receitas ou despesas para formar o historico financeiro deste imovel."
+                actions={<Button onClick={() => openDialog('expense')}>Adicionar lancamento</Button>}
+              />
+            ) : (
+              <div className="rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-3 sm:p-4">
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={dreData} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => `R$${(Number(v) / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip
+                        formatter={(value: number, name: string) => [
+                          formatCurrency(value),
+                          name === 'despesas' ? 'Despesas' : name === 'receitas' ? 'Receitas' : 'Saldo',
+                        ]}
+                        contentStyle={tooltipStyle}
+                      />
+                      <Legend
+                        iconType="circle"
+                        iconSize={8}
+                        formatter={(value) => <span className="text-xs capitalize text-text-secondary">{value}</span>}
+                      />
+                      <Bar dataKey="despesas" fill="var(--text-danger)" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="receitas" fill="var(--text-success)" radius={[6, 6, 0, 0]} />
+                      <Line dataKey="saldo" stroke="var(--interactive-primary-bg)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            )}
+          </PageSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base text-text-primary">
-            <TrendingUp className="h-4 w-4 text-text-accent" />
-            DRE — Receitas vs despesas
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6 pt-0">
-          {dreData.length === 0 ? (
-            <p className="text-sm text-center py-8 text-text-secondary">Nenhum dado ainda</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={dreData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`}
-                />
-                <Tooltip
-                  formatter={(v: number, name: string) => [
-                    formatCurrency(v),
-                    name === 'despesas' ? 'Despesas' : name === 'receitas' ? 'Receitas' : 'Saldo',
-                  ]}
-                  contentStyle={{ borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '12px' }}
-                />
-                <Legend iconType="circle" iconSize={8} formatter={(v) => <span className="text-xs capitalize">{v}</span>} />
-                <Bar dataKey="despesas" fill="var(--text-danger)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="receitas" fill="var(--text-success)" radius={[4, 4, 0, 0]} />
-                <Line dataKey="saldo" stroke="var(--interactive-primary-bg)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {categoryData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base text-text-primary">Despesas por categoria</CardTitle>
-          </CardHeader>
-          <CardContent className="p-6 pt-0">
-            <div className="flex flex-col lg:flex-row items-center gap-6">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={85}
-                    innerRadius={45}
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v: number) => [formatCurrency(v)]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid var(--border-subtle)', fontSize: '12px' }}
-                  />
-                  <Legend iconType="circle" iconSize={8} formatter={(value) => <span className="text-xs">{value}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+          <PageSection
+            tone="surface"
+            density="editorial"
+            title="Composicao de despesas"
+            description="Distribuicao por categoria para apoiar revisao de contratos, manutencao e custos recorrentes."
+          >
+            {categoryData.length === 0 ? (
+              <EmptyState
+                tone="strong"
+                density="compact"
+                icon={<PieChartIcon className="h-5 w-5" />}
+                title="Ainda nao ha despesas categorizadas."
+                description="As categorias aparecem aqui conforme os lancamentos forem registrados."
+              />
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+                <div className="rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-3 sm:p-4">
+                  <div className="h-[240px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={88}
+                          innerRadius={48}
+                        >
+                          {categoryData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => [formatCurrency(value)]} contentStyle={tooltipStyle} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {categoryData.map((entry) => (
+                    <div key={entry.name} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-3 py-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.color }} />
+                        <span className="truncate text-sm text-text-secondary">{entry.name}</span>
+                      </div>
+                      <span className="shrink-0 text-sm font-medium text-text-primary">{formatCurrency(entry.value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </PageSection>
+        </>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {formType === 'revenue'
-                ? <><TrendingUp className="h-4 w-4 text-text-success" />Nova receita</>
-                : <><TrendingDown className="h-4 w-4 text-text-danger" />Nova despesa</>
-              }
+              {formType === 'revenue' ? (
+                <>
+                  <TrendingUp className="h-4 w-4 text-text-success" />
+                  Nova receita
+                </>
+              ) : (
+                <>
+                  <TrendingDown className="h-4 w-4 text-text-danger" />
+                  Nova despesa
+                </>
+              )}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
+
+          <form onSubmit={handleSubmit(onSubmit)} className="mt-2 space-y-4">
             <div className="space-y-1.5">
               <Label>Categoria *</Label>
-              <Select onValueChange={(v) => setValue('category', v)}>
-                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+              <Select onValueChange={(value) => setValue('category', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecionar categoria" />
+                </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ALL_CATEGORIES).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  {Object.entries(ALL_CATEGORIES).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {errors.category && <p className="text-xs text-text-danger">{errors.category.message}</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="amount">Valor (R$) *</Label>
                 <Input id="amount" type="number" step="0.01" placeholder="0,00" {...register('amount')} />
                 {errors.amount && <p className="text-xs text-text-danger">{errors.amount.message}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="ref-month">Mês de referência *</Label>
+                <Label htmlFor="ref-month">Mes de referencia *</Label>
                 <Input id="ref-month" type="month" {...register('reference_month')} />
                 {errors.reference_month && <p className="text-xs text-text-danger">{errors.reference_month.message}</p>}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="notes">Observações</Label>
-              <Input id="notes" placeholder="Opcional..." {...register('notes')} />
+              <Label htmlFor="notes">Observacoes</Label>
+              <Input id="notes" placeholder="Opcional" {...register('notes')} />
             </div>
 
             {watchType === 'expense' && (
-              <label className="flex items-center gap-3 cursor-pointer select-none">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    {...register('is_recurring')}
-                  />
-                  <div className="peer h-5 w-9 rounded-full bg-border-subtle after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-interactive-primary-bg peer-checked:after:translate-x-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium flex items-center gap-1.5 text-text-primary">
+              <label className="flex cursor-pointer select-none items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3">
+                <span className="relative">
+                  <input type="checkbox" className="peer sr-only" {...register('is_recurring')} />
+                  <span className="block h-5 w-9 rounded-full bg-border-subtle transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-interactive-primary-bg peer-checked:after:translate-x-4" />
+                </span>
+                <span>
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
                     <RefreshCw className="h-3.5 w-3.5 text-text-accent" />
                     Fixa mensal
-                  </p>
-                  <p className="text-xs text-text-secondary">
+                  </span>
+                  <span className="block text-xs leading-5 text-text-secondary">
                     {watchIsRecurring
-                      ? 'Gera 12 lançamentos a partir deste mês'
-                      : 'Ativar para criar recorrência anual'}
-                  </p>
-                </div>
+                      ? 'Gera 12 lancamentos a partir deste mes.'
+                      : 'Ative para criar recorrencia anual.'}
+                  </span>
+                </span>
               </label>
             )}
 
             {watchIsRecurring && (
-              <div className="flex items-center gap-2 rounded-lg border-half border-border-accent bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
+              <div className="flex items-center gap-2 rounded-[var(--radius-lg)] bg-bg-accent-subtle px-3 py-2 text-xs leading-5 text-text-accent">
                 <RefreshCw className="h-3.5 w-3.5 shrink-0" />
-                Serão criados automaticamente 12 lançamentos mensais.
+                Serao criados automaticamente 12 lancamentos mensais.
               </div>
             )}
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
                 Cancelar
               </Button>

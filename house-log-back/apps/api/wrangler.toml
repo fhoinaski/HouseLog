@@ -52,7 +52,7 @@ name = "houselog-api-dev"
 [env.dev.vars]
 ENVIRONMENT = "development"
 CORS_ORIGIN = "*"
-R2_PUBLIC_URL = "http://localhost:8787/r2"
+R2_PUBLIC_URL = "https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev"
 R2_ACCOUNT_ID = ""
 R2_BUCKET_NAME = "houselog-assets-dev"
 R2_ACCESS_KEY_ID = ""

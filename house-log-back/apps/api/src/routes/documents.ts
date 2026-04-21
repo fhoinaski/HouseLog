@@ -6,7 +6,7 @@ import { writeAuditLog } from '../lib/audit';
 import { canDeleteDocument, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
-import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { validateUpload, buildR2Key, uploadToR2, getPublicUrl, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
 import { documents as documentsTable, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
@@ -149,6 +149,8 @@ documents.post('/', async (c) => {
     .from(documentsTable)
     .where(eq(documentsTable.id, id))
     .limit(1) as Document[];
+
+  if (!doc) return err(c, 'Documento nao encontrado apos upload', 'DOCUMENT_UPLOAD_READ_FAILED', 500);
 
   await writeAuditLog(c.env.DB, {
     entityType: 'document', entityId: id, action: 'document_uploaded',
@@ -302,7 +304,7 @@ documents.post('/:id/ocr', async (c) => {
   if (doc.type !== 'invoice') return err(c, 'OCR disponível apenas para notas fiscais', 'INVALID_TYPE', 422);
 
   // Fetch the file from R2 to send to Workers AI
-  const key = doc.file_url.split('/').slice(-3).join('/'); // extract key from URL
+  const key = extractR2KeyFromPublicUrl(doc.file_url, c.env.R2_PUBLIC_URL);
   const r2Object = await c.env.STORAGE.get(key);
   if (!r2Object) return err(c, 'Arquivo não encontrado no storage', 'STORAGE_ERROR', 404);
 

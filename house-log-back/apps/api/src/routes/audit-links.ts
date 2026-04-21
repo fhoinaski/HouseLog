@@ -7,6 +7,7 @@ import { canCreateAuditLink } from '../lib/authorization';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
+import { getPublicUrl } from '../lib/r2';
 import type { Bindings, Variables } from '../lib/types';
 
 type AuditScope = { canUploadPhotos: boolean; canUploadVideo: boolean; requiredFields: string[] };
@@ -237,9 +238,5 @@ auditLinks.post('/public/:token/submit', async (c) => {
 
   return ok(c, { success: true, photos_uploaded: uploadedUrls.length });
 });
-
-function getPublicUrl(key: string, baseUrl: string): string {
-  return `${baseUrl.replace(/\/$/, '')}/${key}`;
-}
 
 export default auditLinks;

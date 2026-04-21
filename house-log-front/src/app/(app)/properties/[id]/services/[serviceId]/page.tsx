@@ -1,32 +1,55 @@
 'use client';
 
+import type * as React from 'react';
 import { use, useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
-import dynamic from 'next/dynamic';
 import {
-  ArrowLeft, Camera, Video, Share2, CheckCircle2,
-  AlertTriangle, MapPin, User, DollarSign, Calendar,
-  ShieldCheck, Copy, Download, Send, KeyRound,
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  Camera,
+  CheckCircle2,
+  Copy,
+  DollarSign,
+  Download,
+  FileText,
+  KeyRound,
+  MapPin,
+  Send,
+  Share2,
+  ShieldCheck,
+  User,
+  Video,
 } from 'lucide-react';
-import { servicesApi, propertiesApi, shareApi } from '@/lib/api';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderPDF } from '@/components/pdf/ServiceOrderPDF';
-import { BeforeAfterSlider } from '@/components/ui/before-after-slider';
 import { ServiceChat } from '@/components/services/service-chat';
-
-const PDFDownloadLink = dynamic(
-  () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
-  { ssr: false, loading: () => <Button variant="outline" size="sm" disabled><Download className="h-3.5 w-3.5" />PDF</Button> }
-);
+import { BeforeAfterSlider } from '@/components/ui/before-after-slider';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
+import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
-import {
-  SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS,
-  formatDate, formatCurrency, cn,
-} from '@/lib/utils';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((module) => module.PDFDownloadLink),
+  {
+    ssr: false,
+    loading: () => (
+      <Button variant="outline" size="sm" disabled>
+        <Download className="h-3.5 w-3.5" />
+        PDF
+      </Button>
+    ),
+  }
+);
 
 const STATUS_TRANSITIONS: Record<string, string[]> = {
   requested: ['approved'],
@@ -37,20 +60,37 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 };
 
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  requested: 'requested', approved: 'approved', in_progress: 'in_progress',
-  completed: 'completed', verified: 'verified',
+  requested: 'requested',
+  approved: 'approved',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  verified: 'verified',
 };
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
-  urgent: 'urgent', normal: 'normal', preventive: 'preventive',
+  urgent: 'urgent',
+  normal: 'normal',
+  preventive: 'preventive',
 };
 
+const labelClass = 'text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary';
+
 function safeParseStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === 'string')
+      .map(normalizeMediaUrl)
+      .filter(Boolean);
+  }
   if (typeof value !== 'string' || value.trim() === '') return [];
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed
+        .filter((item): item is string => typeof item === 'string')
+        .map(normalizeMediaUrl)
+        .filter(Boolean)
+      : [];
   } catch {
     return [];
   }
@@ -72,6 +112,48 @@ function safeParseChecklist(value: unknown): { item: string; done: boolean }[] {
   } catch {
     return [];
   }
+}
+
+function DetailItem({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3">
+      <dt className={labelClass}>{label}</dt>
+      <dd className="mt-2 flex min-w-0 items-center gap-2 text-sm font-medium text-text-primary">
+        {icon}
+        <span className="min-w-0 truncate">{value}</span>
+      </dd>
+    </div>
+  );
+}
+
+function PhotoGrid({ title, photos }: { title: string; photos: string[] }) {
+  if (photos.length === 0) return null;
+
+  return (
+    <div>
+      <p className={cn('mb-2', labelClass)}>{title}</p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+        {photos.map((url, index) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={`${url}-${index}`}
+            src={url}
+            alt={`${title} ${index + 1}`}
+            className="aspect-square w-full cursor-pointer rounded-[var(--radius-lg)] bg-[var(--surface-strong)] object-cover transition-opacity hover:opacity-90"
+            onClick={() => window.open(url, '_blank')}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function ServiceDetailPage({
@@ -98,14 +180,12 @@ export default function ServiceDetailPage({
   const [shareProviderEmail, setShareProviderEmail] = useState('');
   const [checklist, setChecklist] = useState<{ item: string; done: boolean }[]>([]);
 
-  const { data, mutate } = useSWR(
-    ['service', propertyId, serviceId],
-    () => servicesApi.get(propertyId, serviceId)
+  const { data, mutate } = useSWR(['service', propertyId, serviceId], () =>
+    servicesApi.get(propertyId, serviceId)
   );
 
   const { data: propData } = useSWR(['property', propertyId], () => propertiesApi.get(propertyId));
   const property = propData?.property;
-
   const order = data?.order;
 
   useEffect(() => {
@@ -150,7 +230,7 @@ export default function ServiceDetailPage({
     try {
       await servicesApi.uploadVideo(propertyId, serviceId, file);
       await mutate();
-      toast.success('Vídeo enviado');
+      toast.success('Video enviado');
     } catch (e) {
       toast.error('Erro no upload', { description: (e as Error).message });
     } finally {
@@ -177,7 +257,7 @@ export default function ServiceDetailPage({
   async function copyAuditLink() {
     if (!auditLink) return;
     await navigator.clipboard.writeText(auditLink.url);
-    toast.success('Link copiado!');
+    toast.success('Link copiado');
   }
 
   async function generateShareLink() {
@@ -199,23 +279,35 @@ export default function ServiceDetailPage({
   async function copyShareLink() {
     if (!shareLink) return;
     await navigator.clipboard.writeText(shareLink.url);
-    toast.success('Link copiado!');
+    toast.success('Link copiado');
   }
 
   if (!order) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-interactive-primary-bg border-t-transparent" />
+      <div className="mx-auto max-w-3xl space-y-6 safe-bottom">
+        <PageHeader
+          density="editorial"
+          eyebrow="Ordem de servico"
+          title="Carregando OS"
+          description="Preparando o dossie operacional e a trilha tecnica da ordem."
+        />
+        <PageSection tone="strong" density="editorial">
+          <div className="hl-skeleton h-36 rounded-[var(--radius-xl)]" />
+          <div className="hl-skeleton h-56 rounded-[var(--radius-xl)]" />
+        </PageSection>
       </div>
     );
   }
 
   const beforePhotos = safeParseStringArray(order.before_photos);
   const afterPhotos = safeParseStringArray(order.after_photos);
+  const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
+  const completedChecklistItems = checklist.filter((item) => item.done).length;
+  const checklistProgress = checklist.length ? (completedChecklistItems / checklist.length) * 100 : 0;
 
   async function toggleChecklistItem(index: number) {
-    const updated = checklist.map((item, i) =>
-      i === index ? { ...item, done: !item.done } : item
+    const updated = checklist.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, done: !item.done } : item
     );
     setChecklist(updated);
     try {
@@ -224,318 +316,300 @@ export default function ServiceDetailPage({
       setChecklist(checklist);
     }
   }
-  const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
 
   return (
-    <div className="max-w-3xl space-y-5 safe-bottom">
-      <div className="flex items-start gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="truncate text-xl font-medium text-text-primary">{order.title}</h1>
-            {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 shrink-0 text-text-danger" />}
-          </div>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
+    <div className="mx-auto max-w-4xl space-y-6 safe-bottom">
+      <PageHeader
+        density="editorial"
+        eyebrow="Ordem de servico"
+        title={order.title}
+        description="Dossie operacional com escopo, evidencias, historico e comunicacao privada."
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShareDialogOpen(true)}>
+              <Send className="h-3.5 w-3.5" />
+              Enviar
+            </Button>
+            {property && (
+              <PDFDownloadLink
+                document={<ServiceOrderPDF order={order} propertyName={property.name} />}
+                fileName={`os-${order.id.slice(0, 8)}-${new Date().toISOString().slice(0, 10)}.pdf`}
+              >
+                {({ loading }) => (
+                  <Button variant="outline" size="sm" disabled={loading}>
+                    <Download className="h-3.5 w-3.5" />
+                    {loading ? '...' : 'PDF'}
+                  </Button>
+                )}
+              </PDFDownloadLink>
+            )}
+          </>
+        }
+      />
+
+      <PageSection
+        title="Dossie tecnico"
+        description="Dados essenciais para aprovar, executar e verificar a ordem dentro do prontuario do imovel."
+        tone="strong"
+        density="editorial"
+        actions={
+          <div className="flex flex-wrap gap-2">
             <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
             <Badge variant={PRIORITY_VARIANT[order.priority]}>{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
+            {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 text-text-danger" />}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShareDialogOpen(true)}>
-            <Send className="h-3.5 w-3.5" />
-            Enviar
-          </Button>
-          {order && property && (
-            <PDFDownloadLink
-              document={<ServiceOrderPDF order={order} propertyName={property.name} />}
-              fileName={`os-${order.id.slice(0,8)}-${new Date().toISOString().slice(0,10)}.pdf`}
-            >
-              {({ loading }) => (
-                <Button variant="outline" size="sm" disabled={loading}>
-                  <Download className="h-3.5 w-3.5" />
-                  {loading ? '...' : 'PDF'}
-                </Button>
-              )}
-            </PDFDownloadLink>
+        }
+      >
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <DetailItem label="Sistema" value={SYSTEM_TYPE_LABELS[order.system_type]} />
+          {order.room_name && (
+            <DetailItem
+              icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+              label="Comodo"
+              value={order.room_name}
+            />
           )}
-        </div>
-      </div>
+          <DetailItem
+            icon={<User className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+            label="Solicitado por"
+            value={order.requested_by_name}
+          />
+          {order.assigned_to_name && <DetailItem label="Atribuido a" value={order.assigned_to_name} />}
+          <DetailItem
+            icon={<Calendar className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+            label="Criada em"
+            value={formatDate(order.created_at)}
+          />
+          {order.cost && (
+            <DetailItem
+              icon={<DollarSign className="h-3.5 w-3.5 shrink-0 text-text-success" />}
+              label="Custo"
+              value={formatCurrency(order.cost)}
+            />
+          )}
+          {order.warranty_until && (
+            <DetailItem
+              icon={<ShieldCheck className="h-3.5 w-3.5 shrink-0 text-text-success" />}
+              label="Garantia ate"
+              value={formatDate(order.warranty_until)}
+            />
+          )}
+          {order.scheduled_at && <DetailItem label="Agendada para" value={formatDate(order.scheduled_at)} />}
+        </dl>
 
-      <Card>
-        <CardContent className="p-5">
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="mb-0.5 text-xs text-text-secondary">Sistema</dt>
-              <dd className="font-medium text-text-primary">{SYSTEM_TYPE_LABELS[order.system_type]}</dd>
-            </div>
-            {order.room_name && (
-              <div>
-                <dt className="mb-0.5 text-xs text-text-secondary">Cômodo</dt>
-                <dd className="font-medium flex items-center gap-1 text-text-primary">
-                  <MapPin className="h-3.5 w-3.5" /> {order.room_name}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className="mb-0.5 text-xs text-text-secondary">Solicitado por</dt>
-              <dd className="font-medium flex items-center gap-1 text-text-primary">
-                <User className="h-3.5 w-3.5" /> {order.requested_by_name}
-              </dd>
-            </div>
-            {order.assigned_to_name && (
-              <div>
-                <dt className="mb-0.5 text-xs text-text-secondary">Atribuído a</dt>
-                <dd className="font-medium text-text-primary">{order.assigned_to_name}</dd>
-              </div>
-            )}
-            <div>
-              <dt className="mb-0.5 text-xs text-text-secondary">Criada em</dt>
-              <dd className="font-medium flex items-center gap-1 text-text-primary">
-                <Calendar className="h-3.5 w-3.5" /> {formatDate(order.created_at)}
-              </dd>
-            </div>
-            {order.cost && (
-              <div>
-                <dt className="mb-0.5 text-xs text-text-secondary">Custo</dt>
-                <dd className="font-medium flex items-center gap-1 text-text-success">
-                  <DollarSign className="h-3.5 w-3.5" /> {formatCurrency(order.cost)}
-                </dd>
-              </div>
-            )}
-            {order.warranty_until && (
-              <div>
-                <dt className="mb-0.5 text-xs text-text-secondary">Garantia até</dt>
-                <dd className="font-medium flex items-center gap-1 text-text-primary">
-                  <ShieldCheck className="h-3.5 w-3.5 text-text-success" /> {formatDate(order.warranty_until)}
-                </dd>
-              </div>
-            )}
-            {order.scheduled_at && (
-              <div>
-                <dt className="mb-0.5 text-xs text-text-secondary">Agendado</dt>
-                <dd className="font-medium text-text-primary">{formatDate(order.scheduled_at)}</dd>
-              </div>
-            )}
-          </dl>
-          {order.description && (
-            <div className="mt-4 border-t border-border-subtle pt-4">
-              <p className="mb-1 text-xs text-text-secondary">Descrição</p>
-              <p className="text-sm text-text-primary whitespace-pre-wrap">{order.description}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {order.description ? (
+          <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
+            <p className={cn('flex items-center gap-2', labelClass)}>
+              <FileText className="h-3.5 w-3.5" />
+              Descricao
+            </p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{order.description}</p>
+          </div>
+        ) : (
+          <EmptyState
+            icon={<FileText className="h-5 w-5" />}
+            title="Sem descricao complementar"
+            description="Use o chat privado para alinhar escopo, evidencias e proximos passos."
+            tone="subtle"
+            density="compact"
+          />
+        )}
+      </PageSection>
 
       {checklist.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base text-text-primary">Checklist</CardTitle>
-              <span className="text-xs text-text-secondary">
-                {checklist.filter((i) => i.done).length}/{checklist.length} concluídos
-              </span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-subtle">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${checklist.length ? (checklist.filter((i) => i.done).length / checklist.length) * 100 : 0}%`,
-                  background: 'var(--text-success)',
-                }}
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 pt-0 space-y-1">
-            {checklist.map((item, i) => (
+        <PageSection
+          title="Checklist de execucao"
+          description="Itens de controle vinculados a esta OS."
+          tone="surface"
+          density="editorial"
+          actions={<span className="text-xs text-text-secondary">{completedChecklistItems}/{checklist.length} concluidos</span>}
+        >
+          <div className="h-1.5 overflow-hidden rounded-full bg-bg-subtle">
+            <div
+              className="h-full rounded-full bg-text-success transition-all duration-300"
+              style={{ width: `${checklistProgress}%` }}
+            />
+          </div>
+          <div className="space-y-1">
+            {checklist.map((item, index) => (
               <button
-                key={i}
-                onClick={() => toggleChecklistItem(i)}
-                className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-bg-subtle"
+                key={`${item.item}-${index}`}
+                onClick={() => toggleChecklistItem(index)}
+                className="flex w-full items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
               >
-                <CheckCircle2 className={cn(
-                  'h-4 w-4 shrink-0 transition-colors',
-                  item.done ? 'text-text-success' : 'text-text-tertiary'
-                )} />
-                <span className={item.done ? 'line-through text-text-tertiary' : 'text-text-primary'}>
-                  {item.item}
-                </span>
+                <CheckCircle2
+                  className={cn('h-4 w-4 shrink-0 transition-colors', item.done ? 'text-text-success' : 'text-text-tertiary')}
+                />
+                <span className={item.done ? 'line-through text-text-tertiary' : 'text-text-primary'}>{item.item}</span>
               </button>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </PageSection>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base text-text-primary">Fotos</CardTitle>
-            <div className="flex gap-2">
-              <Button
-                variant="outline" size="sm"
-                loading={uploadingMedia}
-                onClick={() => { setPhotoType('before'); photoRef.current?.click(); }}
-              >
-                <Camera className="h-3.5 w-3.5" /> Antes
-              </Button>
-              <Button
-                variant="outline" size="sm"
-                loading={uploadingMedia}
-                onClick={() => { setPhotoType('after'); photoRef.current?.click(); }}
-              >
-                <Camera className="h-3.5 w-3.5" /> Depois
-              </Button>
-            </div>
+      <PageSection
+        title="Evidencias"
+        description="Fotos e video associados ao antes, durante e depois da execucao."
+        tone="surface"
+        density="editorial"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              loading={uploadingMedia}
+              onClick={() => {
+                setPhotoType('before');
+                photoRef.current?.click();
+              }}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Antes
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              loading={uploadingMedia}
+              onClick={() => {
+                setPhotoType('after');
+                photoRef.current?.click();
+              }}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Depois
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent className="p-6 pt-0 space-y-4">
-          {beforePhotos.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-text-secondary">Antes</p>
-              <div className="flex gap-2 flex-wrap">
-                {beforePhotos.map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={url} alt={`antes-${i}`}
-                    className="h-24 w-24 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => window.open(url, '_blank')}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {afterPhotos.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-text-secondary">Depois</p>
-              <div className="flex gap-2 flex-wrap">
-                {afterPhotos.map((url, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={i} src={url} alt={`depois-${i}`}
-                    className="h-24 w-24 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => window.open(url, '_blank')}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          {beforePhotos.length === 0 && afterPhotos.length === 0 && (
-            <p className="py-4 text-center text-sm text-text-secondary">Nenhuma foto enviada</p>
-          )}
-          {order.video_url && (
-            <div>
-              <p className="mb-2 text-xs font-medium text-text-secondary">Vídeo</p>
-              <a href={order.video_url} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-text-accent hover:underline">
-                <Video className="h-4 w-4" /> Ver vídeo
+        }
+      >
+        {beforePhotos.length === 0 && afterPhotos.length === 0 && !order.video_url ? (
+          <EmptyState
+            icon={<Camera className="h-5 w-5" />}
+            title="Nenhuma evidencia enviada"
+            description="Anexe fotos de antes e depois para qualificar a trilha tecnica."
+            tone="subtle"
+            density="compact"
+          />
+        ) : (
+          <div className="space-y-4">
+            <PhotoGrid title="Antes" photos={beforePhotos} />
+            <PhotoGrid title="Depois" photos={afterPhotos} />
+            {order.video_url && (
+              <a
+                href={normalizeMediaUrl(order.video_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--surface-base)] px-3 py-2 text-sm text-text-accent transition-colors hover:bg-[var(--field-bg-hover)]"
+              >
+                <Video className="h-4 w-4" />
+                Ver video
               </a>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </div>
+        )}
+      </PageSection>
 
       {beforePhotos.length > 0 && afterPhotos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base text-text-primary">Comparação antes / depois</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <BeforeAfterSlider
-              before={beforePhotos[beforePhotos.length - 1]}
-              after={afterPhotos[afterPhotos.length - 1]}
-              className="max-h-72"
-            />
-            <p className="mt-2 text-center text-xs text-text-secondary">
-              Arraste para comparar
-            </p>
-          </CardContent>
-        </Card>
+        <PageSection title="Comparacao antes / depois" description="Arraste para comparar a evolucao visual." tone="strong" density="editorial">
+          <BeforeAfterSlider
+            before={beforePhotos[beforePhotos.length - 1]}
+            after={afterPhotos[afterPhotos.length - 1]}
+            className="max-h-72"
+          />
+        </PageSection>
       )}
 
-      <div className="flex gap-3 flex-wrap">
-        <Button
-          variant="outline"
-          loading={uploadingMedia}
-          onClick={() => videoRef.current?.click()}
-        >
-          <Video className="h-4 w-4" /> Enviar vídeo
-        </Button>
-        <Button variant="outline" onClick={() => setAuditDialogOpen(true)}>
-          <Share2 className="h-4 w-4" /> Link de auditoria
-        </Button>
-      </div>
+      <PageSection title="Acoes externas" description="Links temporarios para prestador, auditoria e evidencias." tone="strong" density="editorial">
+        <div className="flex flex-wrap gap-3">
+          <Button variant="outline" loading={uploadingMedia} onClick={() => videoRef.current?.click()}>
+            <Video className="h-4 w-4" />
+            Enviar video
+          </Button>
+          <Button variant="outline" onClick={() => setAuditDialogOpen(true)}>
+            <Share2 className="h-4 w-4" />
+            Link de auditoria
+          </Button>
+        </div>
+      </PageSection>
 
-      <ServiceChat serviceOrderId={serviceId} title="Chat com prestador" />
+      <ServiceChat serviceOrderId={serviceId} title="Chat da operacao privada" />
 
       {nextStatuses.length > 0 && (
-        <div className="flex flex-wrap gap-3 border-t border-border-subtle pt-4">
-          {nextStatuses.map((next) => (
-            <Button key={next} onClick={() => advanceStatus(next)}>
-              <CheckCircle2 className="h-4 w-4" />
-              Mover para: {SERVICE_STATUS_LABELS[next]}
-            </Button>
-          ))}
-        </div>
+        <PageSection title="Avanco de status" description="Atualize o trilho operacional da OS." tone="surface" density="editorial">
+          <div className="flex flex-wrap gap-3">
+            {nextStatuses.map((next) => (
+              <Button key={next} onClick={() => advanceStatus(next)}>
+                <CheckCircle2 className="h-4 w-4" />
+                Mover para: {SERVICE_STATUS_LABELS[next]}
+              </Button>
+            ))}
+          </div>
+        </PageSection>
       )}
 
       <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
       <input ref={videoRef} type="file" accept="video/mp4" className="hidden" onChange={handleVideoUpload} />
 
-      <Dialog open={shareDialogOpen} onOpenChange={(o) => { setShareDialogOpen(o); if (!o) setShareLink(null); }}>
+      <Dialog open={shareDialogOpen} onOpenChange={(open) => { setShareDialogOpen(open); if (!open) setShareLink(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-text-accent" /> Enviar OS ao prestador
+              <Send className="h-4 w-4 text-text-accent" />
+              Enviar OS ao prestador
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-text-secondary">
-            Gere um link público. O prestador pode visualizar a OS, aceitar, iniciar e marcar como concluído — sem precisar de conta.
+          <p className="text-sm leading-6 text-text-secondary">
+            Gere um link publico para visualizacao, aceite, inicio e conclusao sem exigir conta.
           </p>
           {!shareLink ? (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-text-primary">Nome do prestador (opcional)</label>
-                <input
-                  type="text"
-                  placeholder="Ex: João Silva — Elétrica"
+                <Label htmlFor="share-provider-name" className={labelClass}>Nome do prestador</Label>
+                <Input
+                  id="share-provider-name"
+                  placeholder="Ex: Joao Silva - Eletrica"
                   value={shareProviderName}
-                  onChange={(e) => setShareProviderName(e.target.value)}
-                  className="w-full rounded-lg border-half border-border-subtle bg-bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  onChange={(event) => setShareProviderName(event.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-text-primary">Email do prestador (opcional)</label>
-                <input
+                <Label htmlFor="share-provider-email" className={labelClass}>Email do prestador</Label>
+                <Input
+                  id="share-provider-email"
                   type="email"
                   placeholder="prestador@email.com"
                   value={shareProviderEmail}
-                  onChange={(e) => setShareProviderEmail(e.target.value)}
-                  className="w-full rounded-lg border-half border-border-subtle bg-bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-border-focus"
+                  onChange={(event) => setShareProviderEmail(event.target.value)}
                 />
               </div>
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border-half border-border-subtle p-3 transition-colors hover:bg-bg-subtle">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3 transition-colors hover:bg-[var(--field-bg-hover)]">
                 <input
                   type="checkbox"
                   className="mt-0.5 rounded"
                   checked={shareIncludeCreds}
-                  onChange={(e) => setShareIncludeCreds(e.target.checked)}
+                  onChange={(event) => setShareIncludeCreds(event.target.checked)}
                 />
-                <div>
-                  <p className="text-sm font-medium flex items-center gap-1.5 text-text-primary">
+                <span>
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
                     <KeyRound className="h-3.5 w-3.5 text-text-warning" />
-                    Incluir senhas de acesso
-                  </p>
-                  <p className="text-xs text-text-secondary">
-                    Credenciais marcadas como &ldquo;incluir em OS&rdquo; serão visíveis no link.
-                  </p>
-                </div>
+                    Incluir credenciais de acesso
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-text-secondary">
+                    Credenciais marcadas para OS serao visiveis no link publico.
+                  </span>
+                </span>
               </label>
               <Button onClick={generateShareLink} loading={generatingShare} className="w-full">
-                <Send className="h-4 w-4" /> Gerar link
+                <Send className="h-4 w-4" />
+                Gerar link
               </Button>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="break-all rounded-xl border-half border-border-subtle bg-bg-subtle px-3 py-2.5 font-mono text-xs text-text-secondary">
+              <div className="break-all rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2.5 font-mono text-xs text-text-secondary">
                 {shareLink.url}
               </div>
               <p className="text-xs text-text-secondary">
@@ -543,21 +617,21 @@ export default function ServiceDetailPage({
               </p>
               <div className="flex gap-2">
                 <Button onClick={copyShareLink} variant="outline" className="flex-1">
-                  <Copy className="h-4 w-4" /> Copiar link
+                  <Copy className="h-4 w-4" />
+                  Copiar link
                 </Button>
                 <Button
                   variant="outline"
                   className="flex-1"
                   onClick={() => {
                     if (shareProviderEmail) {
-                      window.open(`mailto:${shareProviderEmail}?subject=Ordem de Serviço — ${order?.title}&body=Olá ${shareProviderName || ''},\n\nVocê tem uma OS para executar:\n\n${shareLink.url}\n\nAcesse o link para ver todos os detalhes.`);
+                      window.open(`mailto:${shareProviderEmail}?subject=Ordem de Servico - ${order.title}&body=Ola ${shareProviderName || ''},\n\nVoce tem uma OS para executar:\n\n${shareLink.url}\n\nAcesse o link para ver todos os detalhes.`);
                     } else {
-                      copyShareLink();
+                      void copyShareLink();
                     }
                   }}
                 >
-                  {shareProviderEmail ? 'Enviar email' : <Copy className="h-4 w-4" />}
-                  {shareProviderEmail ? '' : 'Copiar'}
+                  {shareProviderEmail ? 'Enviar email' : 'Copiar'}
                 </Button>
               </div>
               <Button variant="ghost" className="w-full text-xs" onClick={() => setShareLink(null)}>
@@ -572,26 +646,27 @@ export default function ServiceDetailPage({
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Share2 className="h-4 w-4" /> Link de auditoria
+              <Share2 className="h-4 w-4" />
+              Link de auditoria
             </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-text-secondary">
-            Gere um link temporário para que o prestador envie fotos e notas sem criar uma conta.
+          <p className="text-sm leading-6 text-text-secondary">
+            Gere um link temporario para envio de fotos e notas sem criar uma conta.
           </p>
           {!auditLink ? (
             <Button onClick={generateAuditLink} loading={generatingLink} className="w-full">
-              <Share2 className="h-4 w-4" /> Gerar link (48h)
+              <Share2 className="h-4 w-4" />
+              Gerar link (48h)
             </Button>
           ) : (
             <div className="space-y-3">
-              <div className="break-all rounded-lg bg-bg-subtle px-3 py-2 font-mono text-xs text-text-secondary">
+              <div className="break-all rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2 font-mono text-xs text-text-secondary">
                 {auditLink.url}
               </div>
-              <p className="text-xs text-text-secondary">
-                Expira em: {formatDate(auditLink.expires_at)}
-              </p>
+              <p className="text-xs text-text-secondary">Expira em: {formatDate(auditLink.expires_at)}</p>
               <Button onClick={copyAuditLink} variant="outline" className="w-full">
-                <Copy className="h-4 w-4" /> Copiar link
+                <Copy className="h-4 w-4" />
+                Copiar link
               </Button>
             </div>
           )}

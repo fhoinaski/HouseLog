@@ -1,45 +1,106 @@
 'use client';
 
+import type * as React from 'react';
 import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { providerApi, bidsApi, type ServiceBid } from '@/lib/api';
+import { ArrowLeft, Calendar, CheckCircle2, Clock, FileText, ImageIcon, MapPin, Send, ShieldCheck, XCircle } from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
 import { ServiceChat } from '@/components/services/service-chat';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import { bidsApi, normalizeMediaUrl, providerApi, type ServiceBid } from '@/lib/api';
 import {
-  SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS,
-  formatDate, formatCurrency,
+  SERVICE_PRIORITY_LABELS,
+  SERVICE_STATUS_LABELS,
+  SYSTEM_TYPE_LABELS,
+  formatCurrency,
+  formatDate,
 } from '@/lib/utils';
-import { ArrowLeft, MapPin, Calendar, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { toast } from 'sonner';
 
 const bidSchema = z.object({
   amount: z.coerce.number().positive('Valor deve ser positivo'),
   notes: z.string().max(500).optional(),
 });
+
 type BidForm = z.infer<typeof bidSchema>;
 
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  requested: 'requested', approved: 'approved', in_progress: 'in_progress',
-  completed: 'completed', verified: 'verified',
+  requested: 'requested',
+  approved: 'approved',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  verified: 'verified',
+};
+
+const BID_STATUS_LABEL: Record<ServiceBid['status'], string> = {
+  accepted: 'Aceita',
+  pending: 'Em analise',
+  rejected: 'Recusada',
+};
+
+const BID_STATUS_VARIANT: Record<ServiceBid['status'], BadgeProps['variant']> = {
+  accepted: 'success',
+  pending: 'secondary',
+  rejected: 'destructive',
+};
+
+const BID_STATUS_ICON: Record<ServiceBid['status'], React.ReactNode> = {
+  accepted: <CheckCircle2 className="h-4 w-4 text-text-success" />,
+  pending: <Clock className="h-4 w-4 text-text-warning" />,
+  rejected: <XCircle className="h-4 w-4 text-text-danger" />,
 };
 
 function safeParseStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === 'string')
+      .map(normalizeMediaUrl)
+      .filter(Boolean);
+  }
   if (typeof value !== 'string' || value.trim() === '') return [];
   try {
     const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed
+        .filter((item): item is string => typeof item === 'string')
+        .map(normalizeMediaUrl)
+        .filter(Boolean)
+      : [];
   } catch {
     return [];
   }
+}
+
+function DetailItem({
+  icon,
+  label,
+  value,
+  wide = false,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? 'rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3 sm:col-span-2' : 'rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3'}>
+      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">{label}</dt>
+      <dd className="mt-2 flex min-w-0 items-center gap-2 text-sm font-medium text-text-primary">
+        {icon}
+        <span className="min-w-0 truncate">{value}</span>
+      </dd>
+    </div>
+  );
 }
 
 export default function ProviderServiceDetailPage({ params }: { params: Promise<{ serviceId: string }> }) {
@@ -47,18 +108,22 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
   const router = useRouter();
   const [submittingBid, setSubmittingBid] = useState(false);
 
-  const { data, mutate } = useSWR(
-    ['provider-service', serviceId],
-    () => providerApi.getService(serviceId)
+  const { data, error, isLoading, mutate } = useSWR(['provider-service', serviceId], () =>
+    providerApi.getService(serviceId)
   );
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<BidForm>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<BidForm>({
     resolver: zodResolver(bidSchema),
   });
 
   const order = data?.order;
   const myBids = data?.my_bids ?? [];
-  const hasPendingBid = myBids.some((b: ServiceBid) => b.status === 'pending');
+  const hasPendingBid = myBids.some((bid: ServiceBid) => bid.status === 'pending');
   const isDirectExecution = Boolean(order?.assigned_to);
 
   async function onBidSubmit(form: BidForm) {
@@ -68,18 +133,60 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
       await bidsApi.create(order.property_id, serviceId, form);
       await mutate();
       reset();
-      toast.success('Orçamento enviado com sucesso!');
+      toast.success('Proposta enviada com sucesso');
     } catch (e) {
-      toast.error('Erro ao enviar orçamento', { description: (e as Error).message });
+      toast.error('Erro ao enviar proposta', { description: (e as Error).message });
     } finally {
       setSubmittingBid(false);
     }
   }
 
-  if (!order) {
+  if (isLoading && !order) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+      <div className="safe-bottom space-y-6">
+        <PageHeader
+          density="editorial"
+          eyebrow="Operacao privada"
+          title="Carregando servico"
+          description="Preparando o dossie operacional da ordem de servico."
+          actions={
+            <Button type="button" variant="ghost" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+          }
+        />
+        <PageSection tone="strong" density="editorial">
+          <div className="space-y-3">
+            <div className="hl-skeleton h-28 rounded-[var(--radius-xl)]" />
+            <div className="hl-skeleton h-44 rounded-[var(--radius-xl)]" />
+          </div>
+        </PageSection>
+      </div>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <div className="safe-bottom space-y-6">
+        <PageHeader
+          density="editorial"
+          eyebrow="Operacao privada"
+          title="Servico indisponivel"
+          description="Nao foi possivel carregar esta ordem de servico."
+          actions={
+            <Button type="button" variant="ghost" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+              Voltar
+            </Button>
+          }
+        />
+        <EmptyState
+          icon={<ShieldCheck className="h-6 w-6" />}
+          title="Ordem de servico nao encontrada"
+          description="A operacao pode ter sido encerrada, removida ou nao estar mais disponivel para o seu perfil."
+          tone="strong"
+        />
       </div>
     );
   }
@@ -87,145 +194,208 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
   const beforePhotos = safeParseStringArray(order.before_photos);
 
   return (
-    <div className="space-y-5 max-w-2xl">
-      <div className="flex items-start gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className="truncate text-xl font-medium">{order.title}</h1>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
-          </div>
-        </div>
-      </div>
+    <div className="safe-bottom space-y-6">
+      <PageHeader
+        density="editorial"
+        eyebrow="Operacao privada"
+        title={order.title}
+        description="Acompanhamento tecnico da ordem de servico vinculada a um imovel sob gestao HouseLog."
+        actions={
+          <Button type="button" variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
+            Voltar
+          </Button>
+        }
+      />
 
-      {/* Details */}
-      <Card>
-        <CardContent className="p-5">
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="mb-0.5 text-xs text-muted-foreground">Sistema</dt>
-              <dd className="font-medium">{SYSTEM_TYPE_LABELS[order.system_type]}</dd>
-            </div>
-            <div>
-              <dt className="mb-0.5 text-xs text-muted-foreground">Prioridade</dt>
-              <dd className="font-medium">{SERVICE_PRIORITY_LABELS[order.priority]}</dd>
-            </div>
-            <div className="col-span-2">
-              <dt className="mb-0.5 text-xs text-muted-foreground">Imóvel</dt>
-              <dd className="font-medium flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {order.property_name} — {order.property_address}
-              </dd>
-            </div>
-            <div>
-              <dt className="mb-0.5 text-xs text-muted-foreground">Criada em</dt>
-              <dd className="font-medium flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5" />{formatDate(order.created_at)}
-              </dd>
-            </div>
-            {order.scheduled_at && (
-              <div>
-                <dt className="mb-0.5 text-xs text-muted-foreground">Agendado para</dt>
-                <dd className="font-medium">{formatDate(order.scheduled_at)}</dd>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="space-y-6">
+          <PageSection
+            title="Dossie operacional"
+            description="Dados essenciais para executar, alinhar escopo e manter rastreabilidade da operacao."
+            tone="strong"
+            density="editorial"
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
+                <Badge variant="outline">{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
+              </div>
+            }
+          >
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <DetailItem label="Sistema" value={SYSTEM_TYPE_LABELS[order.system_type]} />
+              <DetailItem
+                icon={<Calendar className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                label="Criada em"
+                value={formatDate(order.created_at)}
+              />
+              <DetailItem
+                icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                label="Imovel"
+                value={`${order.property_name} - ${order.property_address}`}
+                wide
+              />
+              {order.scheduled_at && (
+                <DetailItem
+                  icon={<Clock className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                  label="Agendada para"
+                  value={formatDate(order.scheduled_at)}
+                />
+              )}
+            </dl>
+
+            {order.description ? (
+              <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
+                <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">
+                  <FileText className="h-3.5 w-3.5" />
+                  Descricao tecnica
+                </p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{order.description}</p>
+              </div>
+            ) : (
+              <EmptyState
+                icon={<FileText className="h-5 w-5" />}
+                title="Sem descricao complementar"
+                description="Use o chat privado para alinhar escopo, evidencias e proximos passos."
+                tone="subtle"
+                density="compact"
+              />
+            )}
+          </PageSection>
+
+          {beforePhotos.length > 0 && (
+            <PageSection
+              title="Evidencias iniciais"
+              description="Registros visuais anexados antes da execucao."
+              tone="surface"
+              density="editorial"
+            >
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {beforePhotos.map((url, index) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={url}
+                    src={url}
+                    alt={`Evidencia ${index + 1}`}
+                    className="aspect-square w-full cursor-pointer rounded-[var(--radius-lg)] bg-[var(--surface-strong)] object-cover transition-opacity hover:opacity-90"
+                    onClick={() => window.open(url, '_blank')}
+                  />
+                ))}
+              </div>
+            </PageSection>
+          )}
+
+          <PageSection density="compact">
+            <ServiceChat serviceOrderId={serviceId} title="Chat da operacao privada" />
+          </PageSection>
+        </div>
+
+        <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+          <PageSection
+            title={isDirectExecution ? 'Execucao homologada' : 'Proposta tecnica'}
+            description={
+              isDirectExecution
+                ? 'Esta ordem foi atribuida diretamente para execucao dentro da operacao privada.'
+                : 'Registre uma proposta objetiva para avaliacao do owner ou gestor responsavel.'
+            }
+            tone="surface"
+            density="editorial"
+          >
+            {isDirectExecution ? (
+              <EmptyState
+                icon={<ShieldCheck className="h-6 w-6" />}
+                title="Execucao direta ativa"
+                description="Nao e necessario enviar proposta para esta ordem de servico."
+                tone="strong"
+                density="compact"
+              />
+            ) : hasPendingBid ? (
+              <EmptyState
+                icon={<Clock className="h-6 w-6" />}
+                title="Proposta em analise"
+                description="Aguarde o retorno da operacao privada antes de registrar nova proposta."
+                tone="strong"
+                density="compact"
+              />
+            ) : order.status === 'verified' ? (
+              <EmptyState
+                icon={<CheckCircle2 className="h-6 w-6" />}
+                title="Operacao verificada"
+                description="Esta ordem ja foi verificada e nao aceita novas propostas."
+                tone="strong"
+                density="compact"
+              />
+            ) : (
+              <form onSubmit={handleSubmit(onBidSubmit)} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="bid-amount">Valor da proposta (R$) *</Label>
+                  <Input
+                    id="bid-amount"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    aria-invalid={Boolean(errors.amount)}
+                    {...register('amount')}
+                  />
+                  {errors.amount && <p className="text-xs text-text-danger">{errors.amount.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="bid-notes">Observacoes tecnicas</Label>
+                  <Textarea
+                    id="bid-notes"
+                    rows={4}
+                    placeholder="Escopo, prazo, condicoes e evidencias relevantes..."
+                    aria-invalid={Boolean(errors.notes)}
+                    {...register('notes')}
+                  />
+                  {errors.notes && <p className="text-xs text-text-danger">{errors.notes.message}</p>}
+                </div>
+                <Button type="submit" loading={submittingBid} className="w-full">
+                  <Send className="h-4 w-4" />
+                  Enviar proposta
+                </Button>
+              </form>
+            )}
+          </PageSection>
+
+          <PageSection
+            title="Historico de propostas"
+            description="Registro das propostas enviadas por voce para esta operacao."
+            tone="strong"
+            density="editorial"
+          >
+            {myBids.length === 0 ? (
+              <EmptyState
+                icon={<ImageIcon className="h-6 w-6" />}
+                title="Nenhuma proposta registrada"
+                description="Quando uma proposta for enviada, ela aparecera aqui com o status de avaliacao."
+                tone="subtle"
+                density="compact"
+              />
+            ) : (
+              <div className="space-y-3">
+                {myBids.map((bid: ServiceBid) => (
+                  <article key={bid.id} className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-lg font-medium text-text-primary">{formatCurrency(bid.amount)}</p>
+                        {bid.notes && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{bid.notes}</p>}
+                        <p className="mt-1 text-xs text-text-tertiary">{formatDate(bid.created_at)}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {BID_STATUS_ICON[bid.status]}
+                        <Badge variant={BID_STATUS_VARIANT[bid.status]} className="text-xs">
+                          {BID_STATUS_LABEL[bid.status]}
+                        </Badge>
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
             )}
-          </dl>
-          {order.description && (
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="mb-1 text-xs text-muted-foreground">Descrição</p>
-              <p className="text-sm whitespace-pre-wrap">{order.description}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Before photos */}
-      {beforePhotos.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Fotos do Problema</CardTitle></CardHeader>
-          <CardContent className="p-5 pt-0">
-            <div className="flex gap-2 flex-wrap">
-              {beforePhotos.map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={url} alt={`foto-${i}`}
-                  className="h-24 w-24 rounded-lg object-cover cursor-pointer hover:opacity-90"
-                  onClick={() => window.open(url, '_blank')}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* My bids */}
-      {myBids.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Meus Orçamentos</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            {myBids.map((bid: ServiceBid) => (
-              <div key={bid.id} className="flex items-center justify-between border-b border-border px-5 py-3 last:border-0">
-                <div>
-                  <p className="text-lg font-medium">{formatCurrency(bid.amount)}</p>
-                  {bid.notes && <p className="text-xs text-muted-foreground">{bid.notes}</p>}
-                  <p className="text-xs text-muted-foreground">{formatDate(bid.created_at)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {bid.status === 'pending' && <Clock className="h-4 w-4 text-(--color-warning)" />}
-                  {bid.status === 'accepted' && <CheckCircle2 className="h-4 w-4 text-(--color-success)" />}
-                  {bid.status === 'rejected' && <XCircle className="h-4 w-4 text-(--color-danger)" />}
-                  <Badge variant={bid.status === 'accepted' ? 'success' : bid.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
-                    {bid.status === 'accepted' ? 'Aceito' : bid.status === 'rejected' ? 'Recusado' : 'Pendente'}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Bid form */}
-      {!isDirectExecution && !hasPendingBid && order.status !== 'verified' && (
-        <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Send className="h-4 w-4" />Enviar Orçamento</CardTitle></CardHeader>
-          <CardContent className="p-5 pt-0">
-            <form onSubmit={handleSubmit(onBidSubmit)} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="bid-amount">Valor do orçamento (R$) *</Label>
-                <Input id="bid-amount" type="number" step="0.01" placeholder="0.00" {...register('amount')} />
-                {errors.amount && <p className="text-xs text-(--color-danger)">{errors.amount.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="bid-notes">Observações</Label>
-                <textarea
-                  id="bid-notes"
-                  rows={3}
-                  placeholder="Descreva o que está incluso, prazo de execução..."
-                  className="w-full resize-none rounded-lg border border-border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-(--color-primary-border)"
-                  {...register('notes')}
-                />
-              </div>
-              <Button type="submit" loading={submittingBid} className="w-full">
-                <Send className="h-4 w-4" /> Enviar Orçamento
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {isDirectExecution && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Execução Direta</CardTitle></CardHeader>
-          <CardContent className="p-5 pt-0">
-            <p className="text-sm text-muted-foreground">
-              Esta OS foi atribuída diretamente para execução. Não é necessário enviar orçamento.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      <ServiceChat serviceOrderId={serviceId} title="Chat com proprietário" />
+          </PageSection>
+        </aside>
+      </div>
     </div>
   );
 }

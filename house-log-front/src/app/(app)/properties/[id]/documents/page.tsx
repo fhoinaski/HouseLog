@@ -7,7 +7,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ExternalLink, FileSearch, FileText, Filter, Sparkles, Trash2, Upload } from 'lucide-react';
-import { documentsApi, type Document } from '@/lib/api';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { documentRowVariants, documentTypeIconVariants } from '@/components/ui/visual-system';
+import { documentsApi, type Document } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -27,7 +27,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   project: 'Projeto',
   contract: 'Contrato',
   deed: 'Escritura',
-  permit: 'Licença/Alvará',
+  permit: 'Licenca/Alvara',
   insurance: 'Seguro',
   other: 'Outro',
 };
@@ -45,7 +45,7 @@ const DOC_TYPE_TONES: Record<string, 'default' | 'accent' | 'warning' | 'success
 
 const metaSchema = z.object({
   type: z.string().min(1),
-  title: z.string().min(1, 'Título obrigatório'),
+  title: z.string().min(1, 'Titulo obrigatorio'),
   vendor_cnpj: z.string().optional(),
   amount: z.coerce.number().positive().optional().or(z.literal('')),
   issue_date: z.string().optional(),
@@ -220,10 +220,10 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     try {
       const result = await documentsApi.ocr(id, docId);
       await mutate();
-      toast.success('OCR concluído', {
+      toast.success('OCR concluido', {
         description: result.ocr_data?.vendor_name
           ? `Fornecedor: ${String(result.ocr_data.vendor_name)}`
-          : 'Dados extraídos com sucesso',
+          : 'Dados extraidos com sucesso',
       });
     } catch (e) {
       toast.error('Erro no OCR', { description: (e as Error).message });
@@ -236,9 +236,9 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
     <div className="safe-bottom space-y-6">
       <PageHeader
         density="editorial"
-        eyebrow="Acervo técnico"
-        title="Documentos do imóvel"
-        description="Repositório documental do prontuário técnico: notas, manuais, contratos, projetos, seguros e licenças."
+        eyebrow="Acervo tecnico"
+        title="Documentos do imovel"
+        description="Repositorio documental do prontuario tecnico: notas, manuais, contratos, projetos, seguros e licencas."
         actions={
           <>
             <Button type="button" onClick={() => fileRef.current?.click()}>
@@ -257,8 +257,8 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
       />
 
       <PageSection
-        title="Governança documental"
-        description="Filtre o acervo para localizar evidências técnicas, comprovantes fiscais e documentos com validade operacional."
+        title="Governanca documental"
+        description="Filtre o acervo para localizar evidencias tecnicas, comprovantes fiscais e documentos com validade operacional."
         tone="strong"
         density="editorial"
         actions={
@@ -290,7 +290,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             title={typeFilter === 'all' ? 'Nenhum documento no acervo' : 'Nenhum documento neste filtro'}
             description={
               typeFilter === 'all'
-                ? 'Envie notas, manuais, projetos e comprovantes para compor o prontuário técnico do imóvel.'
+                ? 'Envie notas, manuais, projetos e comprovantes para compor o prontuario tecnico do imovel.'
                 : 'Ajuste o filtro ou envie um novo documento para este tipo de registro.'
             }
             tone="subtle"
@@ -353,7 +353,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="doc-title">Título *</Label>
+                <Label htmlFor="doc-title">Titulo *</Label>
                 <Input id="doc-title" {...register('title')} />
                 {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
               </div>
@@ -372,7 +372,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
               )}
 
               <div className="space-y-1.5">
-                <Label htmlFor="doc-issue">Data de emissão</Label>
+                <Label htmlFor="doc-issue">Data de emissao</Label>
                 <Input id="doc-issue" type="date" {...register('issue_date')} />
               </div>
 
@@ -383,9 +383,9 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             </div>
 
             {watchType === 'invoice' && (
-              <div className="flex items-center gap-2 rounded-[var(--radius-lg)] border-half border-border-accent bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
+              <div className="flex items-center gap-2 rounded-[var(--radius-lg)] bg-bg-accent-subtle px-3 py-2 text-xs text-text-accent">
                 <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                Após enviar, use o botão IA para extrair dados automaticamente da nota fiscal.
+                Apos enviar, use o botao IA para extrair dados automaticamente da nota fiscal.
               </div>
             )}
 
@@ -417,7 +417,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm leading-6 text-text-secondary">
-              Tem certeza que deseja remover este documento do acervo técnico? Esta ação não pode ser desfeita.
+              Tem certeza que deseja remover este documento do acervo tecnico? Esta acao nao pode ser desfeita.
             </p>
             {deleteTarget && (
               <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2 text-sm">

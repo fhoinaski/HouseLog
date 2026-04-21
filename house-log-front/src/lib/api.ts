@@ -1,5 +1,5 @@
 // API client for HouseLog backend (Cloudflare Workers)
-import { BASE, getToken, qs, request } from '@/lib/api/_core';
+import { BASE, getToken, normalizeApiMediaUrls, qs, request } from '@/lib/api/_core';
 import { providerNetworkApi } from '@/lib/api/provider';
 import type {
   AuthPairResponse,
@@ -10,7 +10,17 @@ import type {
   ServiceOrder,
 } from '@/lib/api/_core';
 
-export { BASE, apiFetcher, clearToken, getToken, qs, request, setToken } from '@/lib/api/_core';
+export {
+  BASE,
+  apiFetcher,
+  clearToken,
+  getToken,
+  normalizeApiMediaUrls,
+  normalizeMediaUrl,
+  qs,
+  request,
+  setToken,
+} from '@/lib/api/_core';
 export type {
   AccessCredential,
   AccessCredentialPayload,
@@ -185,7 +195,7 @@ export const inventoryApi = {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
-    }).then((r) => r.json() as Promise<{ photo_url: string }>);
+    }).then(async (r) => normalizeApiMediaUrls(await r.json() as { photo_url: string }));
   },
 };
 
@@ -226,7 +236,7 @@ export const servicesApi = {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
-    }).then((r) => r.json() as Promise<{ url: string; type: string }>);
+    }).then(async (r) => normalizeApiMediaUrls(await r.json() as { url: string; type: string }));
   },
 
   uploadVideo: (propertyId: string, id: string, file: File) => {
@@ -237,7 +247,7 @@ export const servicesApi = {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
-    }).then((r) => r.json() as Promise<{ video_url: string }>);
+    }).then(async (r) => normalizeApiMediaUrls(await r.json() as { video_url: string }));
   },
 
   uploadAudio: (propertyId: string, id: string, file: File) => {
@@ -248,7 +258,7 @@ export const servicesApi = {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
-    }).then((r) => r.json() as Promise<{ audio_url: string }>);
+    }).then(async (r) => normalizeApiMediaUrls(await r.json() as { audio_url: string }));
   },
 
   createAuditLink: (

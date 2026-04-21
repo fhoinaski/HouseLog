@@ -4,7 +4,7 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, ImageIcon, Loader2, GitCommitVertical, X } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
-import { type ServiceOrder } from '@/lib/api';
+import { normalizeMediaUrl, type ServiceOrder } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn, SYSTEM_TYPE_LABELS, formatDate, formatCurrency } from '@/lib/utils';
@@ -31,8 +31,23 @@ const SYSTEM_DOT_VAR: Record<string, string> = {
   general:       'var(--text-tertiary)',
 };
 
-function parsePhotos(raw: string | undefined): string[] {
-  try { return JSON.parse(raw ?? '[]') as string[]; } catch { return []; }
+function parsePhotos(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw
+      .filter((item): item is string => typeof item === 'string')
+      .map(normalizeMediaUrl);
+  }
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed
+        .filter((item): item is string => typeof item === 'string')
+        .map(normalizeMediaUrl)
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function Lightbox({ url, onClose }: { url: string; onClose: () => void }) {

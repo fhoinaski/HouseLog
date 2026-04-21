@@ -9,7 +9,7 @@ import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
 import { serviceRequests } from '../db/schema';
 import { buildR2Key, getPublicUrl } from '../lib/r2';
-import { buildR2S3PublicObjectUrl, generateR2PresignedPutUrl } from '../lib/r2-presigned';
+import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
 
 const serviceRequestsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -50,18 +50,6 @@ function mapKindToCategory(kind: MediaKind): 'photos' | 'videos' | 'documents' {
   if (kind === 'photo') return 'photos';
   if (kind === 'video') return 'videos';
   return 'documents';
-}
-
-function buildFileUrl(c: { env: Bindings }, objectKey: string): string {
-  if (c.env.R2_PUBLIC_URL) {
-    return getPublicUrl(objectKey, c.env.R2_PUBLIC_URL);
-  }
-
-  if (c.env.R2_ACCOUNT_ID && c.env.R2_BUCKET_NAME) {
-    return buildR2S3PublicObjectUrl(c.env.R2_ACCOUNT_ID, c.env.R2_BUCKET_NAME, objectKey);
-  }
-
-  return objectKey;
 }
 
 serviceRequestsRoute.post('/', async (c) => {
@@ -127,7 +115,7 @@ serviceRequestsRoute.post('/', async (c) => {
         kind: file.kind,
         mimeType: file.mimeType,
         uploadUrl,
-        fileUrl: buildFileUrl(c, key),
+        fileUrl: getPublicUrl(key, c.env.R2_PUBLIC_URL ?? ''),
       };
     })
   );

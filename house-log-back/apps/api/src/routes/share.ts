@@ -192,8 +192,8 @@ share.get('/public/share/service/:token', async (c) => {
       scheduled_at: link.scheduled_at,
       cost: link.cost,
       checklist: link.checklist ? JSON.parse(link.checklist as string) : [],
-      before_photos: link.before_photos ? JSON.parse(link.before_photos as string) : [],
-      after_photos: link.after_photos ? JSON.parse(link.after_photos as string) : [],
+      before_photos: parseStringArray(link.before_photos),
+      after_photos: parseStringArray(link.after_photos),
       warranty_until: link.warranty_until,
       completed_at: link.completed_at,
       room_name: link.room_name,
@@ -227,6 +227,19 @@ const providerStatusSchema = z.object({
   provider_name: z.string().optional(),
   notes: z.string().optional(),
 });
+
+function parseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 share.patch('/public/share/service/:token/status', async (c) => {
   const db = getDb(c.env.DB);

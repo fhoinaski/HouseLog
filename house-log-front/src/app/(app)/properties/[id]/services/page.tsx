@@ -1,19 +1,22 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSWRConfig } from 'swr';
-import { Loader2, Plus, Wrench, ChevronRight, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
-import { servicesApi, type ServiceOrder } from '@/lib/api';
-import { usePagination } from '@/hooks/usePagination';
+import useSWR, { useSWRConfig } from 'swr';
+import { AlertTriangle, CheckCircle2, Clock, Loader2, MessageCircle, Plus, ReceiptText, Wrench } from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
+import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatDate, cn
-} from '@/lib/utils';
+import { EmptyState } from '@/components/ui/empty-state';
+import { MetricCard } from '@/components/ui/metric-card';
+import { usePagination } from '@/hooks/usePagination';
+import { bidsApi, type ServiceBid, type ServiceOrder } from '@/lib/api';
+import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
+
+const STATUS_FILTERS = ['', 'requested', 'approved', 'in_progress', 'completed', 'verified'] as const;
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -29,177 +32,250 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
   verified: 'verified',
 };
 
-const STATUS_ICON: Record<string, React.ElementType> = {
-  requested: Clock,
-  approved: Clock,
-  in_progress: Wrench,
-  completed: CheckCircle2,
-  verified: CheckCircle2,
+type BidSummary = {
+  total: number;
+  pending: number;
+  accepted: number;
+  bestAmount: number | null;
 };
 
-function safeParseStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string');
-  }
-  if (typeof value !== 'string' || value.trim() === '') return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === 'string')
-      : [];
-  } catch {
-    return [];
-  }
+function summarizeBids(bids: ServiceBid[]): BidSummary {
+  const amounts = bids.map((bid) => Number(bid.amount)).filter((amount) => Number.isFinite(amount));
+
+  return {
+    total: bids.length,
+    pending: bids.filter((bid) => bid.status === 'pending').length,
+    accepted: bids.filter((bid) => bid.status === 'accepted').length,
+    bestAmount: amounts.length > 0 ? Math.min(...amounts) : null,
+  };
 }
 
-function OrderRow({ order, onClick }: { order: ServiceOrder; onClick: () => void }) {
-  const StatusIcon = STATUS_ICON[order.status] ?? Clock;
+function getOperationalStage(order: ServiceOrder, bidSummary?: BidSummary) {
+  if (order.status === 'requested') {
+    if ((bidSummary?.total ?? 0) > 0) return 'Proposta em analise';
+    if (!order.assigned_to) return 'Orcamento solicitado';
+    return 'Solicitada';
+  }
 
-  return (
-    <Card className="cursor-pointer transition-colors hover:bg-bg-subtle active:scale-[0.98]" onClick={onClick}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className={cn(
-              'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
-              order.priority === 'urgent' ? 'bg-bg-danger' : 'bg-bg-accent-subtle'
-            )}>
-              <StatusIcon className={cn(
-                'h-4 w-4',
-                order.priority === 'urgent' ? 'text-text-danger' : 'text-text-accent'
-              )} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-medium text-sm text-text-primary">{order.title}</p>
-                {order.priority === 'urgent' && (
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-text-danger" />
-                )}
-              </div>
-              <p className="mt-0.5 text-xs text-text-secondary">
-                {SYSTEM_TYPE_LABELS[order.system_type]} · {order.room_name ?? 'Sem cômodo'}
-              </p>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <Badge variant={STATUS_VARIANT[order.status]} className="text-xs">
-                  {SERVICE_STATUS_LABELS[order.status]}
-                </Badge>
-                <Badge variant={PRIORITY_VARIANT[order.priority]} className="text-xs">
-                  {SERVICE_PRIORITY_LABELS[order.priority]}
-                </Badge>
-              </div>
-            </div>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-xs text-text-secondary">{formatDate(order.created_at)}</p>
-            {order.assigned_to_name && (
-              <p className="mt-0.5 text-xs text-text-secondary">{order.assigned_to_name}</p>
-            )}
-            <ChevronRight className="ml-auto mt-1 h-4 w-4 text-text-tertiary" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  if (order.status === 'approved') return order.assigned_to ? 'Aprovada para execucao' : 'Aprovada';
+  if (order.status === 'in_progress') return 'Em execucao';
+  if (order.status === 'completed') return 'Aguardando verificacao';
+  if (order.status === 'verified') return 'Verificada';
+  return SERVICE_STATUS_LABELS[order.status] ?? order.status;
+}
+
+function getBidSummaryLabel(order: ServiceOrder, bidSummary?: BidSummary) {
+  const hasBids = (bidSummary?.total ?? 0) > 0;
+
+  if (hasBids) {
+    if (bidSummary?.bestAmount !== null && bidSummary?.bestAmount !== undefined) {
+      return `Menor: ${formatCurrency(bidSummary.bestAmount)}`;
+    }
+    return `${bidSummary?.pending ?? 0} pendente(s)`;
+  }
+
+  return order.assigned_to ? 'Execucao direta' : 'Aguardando proposta';
 }
 
 export default function ServicesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState('');
-  const { mutate: globalMutate } = useSWRConfig();
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const { mutate: globalMutate } = useSWRConfig();
 
-  const { data: orders, isLoadingMore, hasMore, loadMore, mutate } =
-    usePagination<ServiceOrder>(
-      `/properties/${id}/services`,
-      statusFilter ? { status: statusFilter } : undefined
+  const { data: orders, isLoadingMore, hasMore, loadMore, mutate } = usePagination<ServiceOrder>(
+    `/properties/${id}/services`,
+    statusFilter ? { status: statusFilter } : undefined
+  );
+
+  const orderIds = useMemo(() => orders.map((order) => order.id), [orders]);
+
+  const { data: bidSummaryMap } = useSWR(
+    orderIds.length > 0 ? ['service-bid-summary', id, ...orderIds] : null,
+    async () => {
+      const entries = await Promise.all(
+        orderIds.map(async (orderId) => {
+          const response = await bidsApi.list(id, orderId);
+          return [orderId, summarizeBids(response.bids)] as const;
+        })
+      );
+      return new Map<string, BidSummary>(entries);
+    },
+    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  );
+
+  const operationalCounts = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        const bids = bidSummaryMap?.get(order.id);
+        if (order.status === 'requested' && !order.assigned_to) acc.quote += 1;
+        if ((bids?.total ?? 0) > 0) acc.bids += 1;
+        if (order.status === 'in_progress') acc.active += 1;
+        if (order.status === 'completed') acc.review += 1;
+        return acc;
+      },
+      { quote: 0, bids: 0, active: 0, review: 0 }
     );
-
-  async function updateStatus(orderId: string, status: string) {
-    try {
-      await servicesApi.updateStatus(id, orderId, status);
-      await mutate();
-      void globalMutate(['dashboard', id]);
-      setDetailOpen(false);
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  }
+  }, [bidSummaryMap, orders]);
 
   function openDetail(order: ServiceOrder) {
-    setSelectedOrder(order);
-    setDetailOpen(true);
+    router.push(`/properties/${id}/services/${order.id}`);
   }
 
-  const STATUS_TRANSITIONS: Record<string, string[]> = {
-    requested: ['approved'],
-    approved: ['in_progress'],
-    in_progress: ['completed'],
-    completed: ['verified'],
-    verified: [],
-  };
-
-  const selectedBeforePhotos = selectedOrder
-    ? safeParseStringArray(selectedOrder.before_photos)
-    : [];
-  const selectedAfterPhotos = selectedOrder
-    ? safeParseStringArray(selectedOrder.after_photos)
-    : [];
-
   return (
-    <div className="space-y-5 safe-bottom">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-medium text-text-primary">Ordens de serviço</h2>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Nova OS
-        </Button>
-      </div>
-
-      <div className="flex gap-2 flex-wrap tap-highlight-none">
-        {['', 'requested', 'approved', 'in_progress', 'completed', 'verified'].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className="hl-chip"
-            data-active={statusFilter === s ? 'true' : undefined}
-          >
-            {s ? SERVICE_STATUS_LABELS[s] : 'Todas'}
-          </button>
-        ))}
-      </div>
-
-      {orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <Wrench className="mb-3 h-10 w-10 text-text-disabled" />
-          <p className="text-sm text-text-secondary">Nenhuma OS encontrada</p>
-          <Button variant="outline" className="mt-3" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Criar OS
+    <div className="mx-auto max-w-[1040px] space-y-6 safe-bottom">
+      <PageHeader
+        density="editorial"
+        eyebrow="Centro operacional"
+        title="Ordens de servico"
+        description="Acompanhe solicitacoes, propostas, execucao e verificacao em um unico trilho operacional."
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nova OS
           </Button>
-        </div>
-      ) : (
-        <>
-          <div className="space-y-3 tap-highlight-none">
-            {orders.map((order) => (
-              <OrderRow key={order.id} order={order} onClick={() => openDetail(order)} />
-            ))}
-          </div>
+        }
+      />
 
-          {hasMore && (
-            <div className="flex justify-center pt-2">
-              <Button variant="outline" onClick={loadMore} disabled={isLoadingMore}>
-                {isLoadingMore ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  'Carregar mais'
-                )}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          icon={ReceiptText}
+          label="Orcamento solicitado"
+          value={operationalCounts.quote}
+          helper="aguardando proposta"
+          tone="warning"
+          density="compact"
+        />
+        <MetricCard
+          icon={MessageCircle}
+          label="Com proposta"
+          value={operationalCounts.bids}
+          helper="para analise"
+          tone="accent"
+          density="compact"
+        />
+        <MetricCard
+          icon={Wrench}
+          label="Em execucao"
+          value={operationalCounts.active}
+          helper="servicos ativos"
+          tone="default"
+          density="compact"
+        />
+        <MetricCard
+          icon={CheckCircle2}
+          label="Para verificar"
+          value={operationalCounts.review}
+          helper="conclusao pendente"
+          tone="success"
+          density="compact"
+        />
+      </div>
+
+      <PageSection
+        title="Filtros operacionais"
+        description="Ajuste a leitura por etapa do ciclo da ordem de servico."
+        contentClassName="flex flex-wrap gap-2"
+      >
+        {STATUS_FILTERS.map((status) => (
+          <Button
+            key={status || 'all'}
+            type="button"
+            size="sm"
+            variant={statusFilter === status ? 'default' : 'outline'}
+            onClick={() => setStatusFilter(status)}
+          >
+            {status ? SERVICE_STATUS_LABELS[status] : 'Todas'}
+          </Button>
+        ))}
+      </PageSection>
+
+      <PageSection
+        title="Trilho de OS"
+        description="Lista escaneavel das ordens vinculadas ao prontuario tecnico do imovel."
+        tone="strong"
+        density="editorial"
+      >
+        {orders.length === 0 ? (
+          <EmptyState
+            icon={<Wrench className="h-6 w-6" />}
+            title="Nenhuma OS encontrada"
+            description="Quando houver solicitacao, orcamento, execucao ou verificacao, o trilho aparece aqui."
+            actions={
+              <Button variant="outline" onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Criar OS
               </Button>
+            }
+            tone="subtle"
+            density="spacious"
+          />
+        ) : (
+          <>
+            <div className="grid gap-3 tap-highlight-none lg:grid-cols-2">
+              {orders.map((order) => {
+                const bidSummary = bidSummaryMap?.get(order.id);
+                const hasBids = (bidSummary?.total ?? 0) > 0;
+                const urgent = order.priority === 'urgent';
+
+                return (
+                  <button
+                    key={order.id}
+                    type="button"
+                    className="text-left focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                    onClick={() => openDetail(order)}
+                  >
+                    <ServiceOrderCard
+                      interactive
+                      leadingIcon={
+                        urgent ? (
+                          <AlertTriangle className="h-4 w-4 text-text-danger" />
+                        ) : (
+                          <Clock className="h-4 w-4" />
+                        )
+                      }
+                      title={order.title}
+                      meta={`${SYSTEM_TYPE_LABELS[order.system_type]} - ${order.room_name ?? 'Sem comodo'}`}
+                      value={getBidSummaryLabel(order, bidSummary)}
+                      status={
+                        <div className="flex max-w-[10rem] flex-wrap justify-end gap-1.5">
+                          <Badge variant={STATUS_VARIANT[order.status]} className="text-xs">
+                            {getOperationalStage(order, bidSummary)}
+                          </Badge>
+                          <Badge variant={PRIORITY_VARIANT[order.priority]} className="text-xs">
+                            {SERVICE_PRIORITY_LABELS[order.priority]}
+                          </Badge>
+                          {hasBids && (
+                            <Badge variant={bidSummary?.accepted ? 'approved' : 'requested'} className="text-xs">
+                              {bidSummary?.total} proposta(s)
+                            </Badge>
+                          )}
+                        </div>
+                      }
+                      footer={
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span>{formatDate(order.created_at)}</span>
+                          {order.assigned_to_name && <span>{order.assigned_to_name}</span>}
+                          <span>Chat no detalhe</span>
+                        </span>
+                      }
+                    />
+                  </button>
+                );
+              })}
             </div>
-          )}
-        </>
-      )}
+
+            {hasMore && (
+              <div className="flex justify-center pt-2">
+                <Button variant="outline" onClick={loadMore} disabled={isLoadingMore}>
+                  {isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Carregar mais'}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </PageSection>
 
       <ServiceOrderCreateModal
         open={createOpen}
@@ -211,98 +287,6 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
           router.push(`/properties/${id}/services/${orderId}`);
         }}
       />
-
-      {selectedOrder && (
-        <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="pr-8">{selectedOrder.title}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 mt-2">
-              <div className="flex gap-2 flex-wrap">
-                <Badge variant={STATUS_VARIANT[selectedOrder.status]}>
-                  {SERVICE_STATUS_LABELS[selectedOrder.status]}
-                </Badge>
-                <Badge variant={PRIORITY_VARIANT[selectedOrder.priority]}>
-                  {SERVICE_PRIORITY_LABELS[selectedOrder.priority]}
-                </Badge>
-              </div>
-
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-text-secondary">Sistema</dt>
-                  <dd className="text-text-primary">{SYSTEM_TYPE_LABELS[selectedOrder.system_type]}</dd>
-                </div>
-                {selectedOrder.room_name && (
-                  <div className="flex justify-between">
-                    <dt className="text-text-secondary">Cômodo</dt>
-                    <dd className="text-text-primary">{selectedOrder.room_name}</dd>
-                  </div>
-                )}
-                {selectedOrder.cost && (
-                  <div className="flex justify-between">
-                    <dt className="text-text-secondary">Custo</dt>
-                    <dd className="text-text-primary">R$ {selectedOrder.cost.toFixed(2)}</dd>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <dt className="text-text-secondary">Criada por</dt>
-                  <dd className="text-text-primary">{selectedOrder.requested_by_name}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-text-secondary">Data</dt>
-                  <dd className="text-text-primary">{formatDate(selectedOrder.created_at)}</dd>
-                </div>
-              </dl>
-
-              {selectedOrder.description && (
-                <div>
-                  <p className="mb-1 text-xs font-medium text-text-secondary">Descrição</p>
-                  <p className="text-sm text-text-primary">{selectedOrder.description}</p>
-                </div>
-              )}
-
-              {selectedBeforePhotos.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-medium text-text-secondary">Fotos antes</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {selectedBeforePhotos.map((url, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={i} src={url} alt="antes" className="h-16 w-16 rounded object-cover" />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedAfterPhotos.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs font-medium text-text-secondary">Fotos depois</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {selectedAfterPhotos.map((url, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={i} src={url} alt="depois" className="h-16 w-16 rounded object-cover" />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {STATUS_TRANSITIONS[selectedOrder.status]?.length > 0 && (
-                <div className="flex gap-2 border-t border-border-subtle pt-2">
-                  {STATUS_TRANSITIONS[selectedOrder.status].map((next) => (
-                    <Button
-                      key={next}
-                      onClick={() => updateStatus(selectedOrder.id, next)}
-                      className="flex-1"
-                    >
-                      {SERVICE_STATUS_LABELS[next]}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }

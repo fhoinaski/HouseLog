@@ -36,6 +36,20 @@ CORS_ORIGIN=http://localhost:3000
 ENVIRONMENT=development
 
 # -----------------------------------------------------------------------------
+# R2 / arquivos publicos
+# -----------------------------------------------------------------------------
+
+# Base publica do bucket R2. Deve apontar para o dominio publico do bucket,
+# sem barra no final. Trocar este valor muda a base usada nos novos uploads.
+R2_PUBLIC_URL=https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev
+
+# Necessarios apenas para fluxos com URL preassinada.
+# R2_ACCOUNT_ID=
+# R2_BUCKET_NAME=houselog-assets-dev
+# R2_ACCESS_KEY_ID=
+# R2_SECRET_ACCESS_KEY=
+
+# -----------------------------------------------------------------------------
 # Observabilidade
 # -----------------------------------------------------------------------------
 # DSN do projeto Sentry (opcional). Sem isso, o logger cai só para console.

@@ -1,4 +1,4 @@
-import { BASE, getToken, qs, request } from './_core';
+import { BASE, getToken, normalizeApiMediaUrls, qs, request } from './_core';
 import type { CursorPage, Document } from './_core';
 
 export const documentsApi = {
@@ -28,7 +28,7 @@ export const documentsApi = {
         throw error;
       }
 
-      return r.json() as Promise<{ document: Document }>;
+      return normalizeApiMediaUrls(await r.json() as { document: Document });
     });
   },
 

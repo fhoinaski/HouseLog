@@ -18,7 +18,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
+
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
@@ -30,11 +30,12 @@ import { Label } from '@/components/ui/label';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { inventoryItemCardVariants, inventoryPhotoFrameVariants } from '@/components/ui/visual-system';
-import { INVENTORY_CATEGORY_LABELS, cn } from '@/lib/utils';
+import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
+import { cn, INVENTORY_CATEGORY_LABELS } from '@/lib/utils';
 
 const schema = z.object({
-  category: z.string().min(1),
-  name: z.string().min(1, 'Nome obrigatório'),
+  category: z.string().min(1, 'Categoria obrigatoria'),
+  name: z.string().min(1, 'Nome obrigatorio'),
   room_id: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
@@ -59,14 +60,17 @@ function ItemCard({
   item: InventoryItem;
   propertyId: string;
   uploading: boolean;
-  onPhotoClick: (e: React.MouseEvent) => void;
+  onPhotoClick: (event: React.MouseEvent) => void;
   onClick: () => void;
 }) {
   const isLowStock = item.quantity <= item.reserve_qty;
   const warrantyExpired = Boolean(item.warranty_until && new Date(item.warranty_until) < new Date());
 
   return (
-    <article className={inventoryItemCardVariants({ state: isLowStock ? 'lowStock' : 'default' })} onClick={onClick}>
+    <article
+      className={inventoryItemCardVariants({ state: isLowStock ? 'lowStock' : 'default' })}
+      onClick={onClick}
+    >
       <div className={inventoryPhotoFrameVariants({ tone: item.photo_url ? 'default' : 'empty' })}>
         {item.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -87,7 +91,7 @@ function ItemCard({
             onClick={onPhotoClick}
             title="Alterar foto"
             className={cn(
-              'absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-colors group-hover/inventory:opacity-100',
+              'absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-colors focus-visible:opacity-100 focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] group-hover/inventory:opacity-100',
               item.photo_url ? 'group-hover/inventory:bg-black/30' : 'group-hover/inventory:bg-black/10'
             )}
           >
@@ -102,6 +106,7 @@ function ItemCard({
             title={item.color_code}
           />
         )}
+
         {isLowStock && (
           <div className="absolute left-2 top-2">
             <Badge variant="urgent" className="gap-1 text-xs">
@@ -110,8 +115,9 @@ function ItemCard({
             </Badge>
           </div>
         )}
+
         {item.warranty_until && (
-          <div className="absolute right-2 top-2" title={`Garantia até ${item.warranty_until}`}>
+          <div className="absolute right-2 top-2" title={`Garantia ate ${item.warranty_until}`}>
             <div
               className={cn(
                 'flex h-6 w-6 items-center justify-center rounded-[var(--radius-md)]',
@@ -122,10 +128,11 @@ function ItemCard({
             </div>
           </div>
         )}
+
         <Link
           href={`/properties/${propertyId}/inventory/${item.id}/qr`}
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-2 left-2 flex h-7 w-7 items-center justify-center rounded-[var(--radius-md)] bg-black/50 text-white opacity-0 transition-opacity group-hover/inventory:opacity-100"
+          onClick={(event) => event.stopPropagation()}
+          className="absolute bottom-2 left-2 flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-black/55 text-white opacity-0 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] group-hover/inventory:opacity-100"
           title="Ver QR Code"
         >
           <QrCode className="h-3.5 w-3.5" />
@@ -153,8 +160,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   const { id } = use(params);
   const { mutate: globalMutate } = useSWRConfig();
   const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [roomFilter, setRoomFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [roomFilter, setRoomFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -162,7 +169,12 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<string | null>(null);
 
-  const { data, mutate, isLoading } = useSWR(['inventory', id, categoryFilter, roomFilter], () =>
+  const {
+    data,
+    error,
+    isLoading,
+    mutate,
+  } = useSWR(['inventory', id, categoryFilter, roomFilter], () =>
     inventoryApi.list(id, {
       category: categoryFilter === 'all' ? undefined : categoryFilter,
       room_id: roomFilter === 'all' ? undefined : roomFilter,
@@ -183,9 +195,10 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   });
 
   const allItems = data?.data ?? [];
-  const items = allItems.filter((item) =>
-    !search || item.name.toLowerCase().includes(search.toLowerCase()) || item.brand?.toLowerCase().includes(search.toLowerCase())
-  );
+  const items = allItems.filter((item) => {
+    const term = search.trim().toLowerCase();
+    return !term || item.name.toLowerCase().includes(term) || item.brand?.toLowerCase().includes(term);
+  });
   const lowStockCount = allItems.filter((item) => item.quantity <= item.reserve_qty).length;
   const warrantyCount = allItems.filter((item) => Boolean(item.warranty_until)).length;
   const roomTrackedCount = allItems.filter((item) => Boolean(item.room_id)).length;
@@ -217,32 +230,38 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
     setDialogOpen(true);
   }
 
-  function handlePhotoClick(e: React.MouseEvent, itemId: string) {
-    e.stopPropagation();
+  function handlePhotoClick(event: React.MouseEvent, itemId: string) {
+    event.stopPropagation();
     uploadTargetRef.current = itemId;
     fileInputRef.current?.click();
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     const itemId = uploadTargetRef.current;
     if (!file || !itemId) return;
-    e.target.value = '';
 
+    event.target.value = '';
     setUploadingId(itemId);
+
     try {
       await inventoryApi.uploadPhoto(id, itemId, file);
       await mutate();
     } catch {
-      // Preserva o comportamento anterior: falha silenciosa e permite nova tentativa.
+      toastPhotoError();
     } finally {
       setUploadingId(null);
       uploadTargetRef.current = null;
     }
   }
 
+  function toastPhotoError() {
+    setApiError('Nao foi possivel enviar a foto. Tente novamente.');
+  }
+
   async function onSubmit(form: FormData) {
     setApiError(null);
+
     try {
       const payload = { ...form, price_paid: form.price_paid === '' ? undefined : Number(form.price_paid) };
       if (editItem) {
@@ -253,8 +272,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       await mutate();
       void globalMutate(['dashboard', id]);
       setDialogOpen(false);
-    } catch (e) {
-      setApiError((e as Error).message);
+    } catch (submitError) {
+      setApiError((submitError as Error).message);
     }
   }
 
@@ -262,9 +281,9 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
     <div className="safe-bottom space-y-6">
       <PageHeader
         density="editorial"
-        eyebrow="Prontuário técnico"
-        title="Inventário técnico"
-        description="Materiais, equipamentos, reservas, garantias e rastreabilidade física que sustentam a operação do imóvel."
+        eyebrow="Prontuario tecnico"
+        title="Inventario tecnico"
+        description="Materiais, equipamentos, reservas, garantias e rastreabilidade fisica que sustentam a operacao do imovel."
         actions={
           <Button type="button" onClick={openNew}>
             <Plus className="h-4 w-4" />
@@ -274,8 +293,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       />
 
       <PageSection
-        title="Rastreabilidade do acervo físico"
-        description="Acompanhe itens por categoria, cômodo, estoque mínimo, garantia e QR Code para consulta em campo."
+        title="Rastreabilidade do acervo fisico"
+        description="Acompanhe itens por categoria, comodo, estoque minimo, garantia e QR Code para consulta em campo."
         tone="strong"
         density="editorial"
       >
@@ -289,13 +308,13 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             tone={lowStockCount > 0 ? 'warning' : 'default'}
           />
           <MetricCard label="Com garantia" value={warrantyCount} helper="Itens com validade" icon={ShieldCheck} tone="success" />
-          <MetricCard label="Com cômodo" value={roomTrackedCount} helper="Localização rastreada" icon={QrCode} tone="accent" />
+          <MetricCard label="Com comodo" value={roomTrackedCount} helper="Localizacao rastreada" icon={QrCode} tone="accent" />
         </div>
       </PageSection>
 
       <PageSection
-        title="Itens do inventário"
-        description="Filtre o acervo técnico para localizar materiais, equipamentos e reservas por uso operacional."
+        title="Itens do inventario"
+        description="Filtre o acervo tecnico para localizar materiais, equipamentos e reservas por uso operacional."
         density="editorial"
         actions={
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
@@ -303,8 +322,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary" />
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar item..."
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar item"
                 className="pl-9"
               />
             </div>
@@ -315,9 +334,9 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
-                {Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
+                {Object.entries(INVENTORY_CATEGORY_LABELS).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>
+                    {label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -325,13 +344,13 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
             <Select value={roomFilter} onValueChange={setRoomFilter}>
               <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Cômodo" />
+                <SelectValue placeholder="Comodo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os cômodos</SelectItem>
-                {(roomsData?.rooms ?? []).map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
+                <SelectItem value="all">Todos os comodos</SelectItem>
+                {(roomsData?.rooms ?? []).map((room) => (
+                  <SelectItem key={room.id} value={room.id}>
+                    {room.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -339,20 +358,28 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
           </div>
         }
       >
-        {isLoading ? (
+        {error ? (
+          <EmptyState
+            icon={<AlertTriangle className="h-6 w-6" />}
+            title="Nao foi possivel carregar o inventario."
+            description="Verifique a conexao e tente novamente para acessar o acervo tecnico do imovel."
+            tone="strong"
+            actions={<Button variant="outline" onClick={() => void mutate()}>Tentar novamente</Button>}
+          />
+        ) : isLoading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="hl-skeleton h-52 rounded-[var(--radius-xl)]" />
+            {[...Array(8)].map((_, index) => (
+              <div key={index} className="hl-skeleton h-52 rounded-[var(--radius-xl)]" />
             ))}
           </div>
         ) : items.length === 0 ? (
           <EmptyState
             icon={<Package className="h-6 w-6" />}
-            title={allItems.length === 0 ? 'Nenhum item no inventário técnico' : 'Nenhum item encontrado'}
+            title={allItems.length === 0 ? 'Nenhum item no inventario tecnico' : 'Nenhum item encontrado'}
             description={
               allItems.length === 0
-                ? 'Adicione materiais, equipamentos e reservas para compor a rastreabilidade técnica do imóvel.'
-                : 'Ajuste busca, categoria ou cômodo para localizar outro registro do acervo.'
+                ? 'Adicione materiais, equipamentos e reservas para compor a rastreabilidade tecnica do imovel.'
+                : 'Ajuste busca, categoria ou comodo para localizar outro registro do acervo.'
             }
             tone="subtle"
             density="spacious"
@@ -371,7 +398,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
                 item={item}
                 propertyId={id}
                 uploading={uploadingId === item.id}
-                onPhotoClick={(e) => handlePhotoClick(e, item.id)}
+                onPhotoClick={(event) => handlePhotoClick(event, item.id)}
                 onClick={() => openEdit(item)}
               />
             ))}
@@ -396,14 +423,14 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Categoria *</Label>
-                <Select defaultValue={editItem?.category} onValueChange={(v) => setValue('category', v)}>
+                <Select defaultValue={editItem?.category} onValueChange={(value) => setValue('category', value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecionar..." />
+                    <SelectValue placeholder="Selecionar categoria" />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(INVENTORY_CATEGORY_LABELS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>
-                        {v}
+                    {Object.entries(INVENTORY_CATEGORY_LABELS).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>
+                        {label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -413,22 +440,22 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="item-name">Nome *</Label>
-                <Input id="item-name" placeholder="Tinta acrílica, cerâmica..." {...register('name')} />
+                <Input id="item-name" placeholder="Tinta acrilica, ceramica, filtro..." {...register('name')} />
                 {errors.name && <p className="text-xs text-text-danger">{errors.name.message}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="brand">Marca</Label>
-                <Input id="brand" placeholder="Suvinil..." {...register('brand')} />
+                <Input id="brand" placeholder="Marca ou fabricante" {...register('brand')} />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="model">Modelo</Label>
-                <Input id="model" {...register('model')} />
+                <Input id="model" placeholder="Codigo ou referencia" {...register('model')} />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="color-code">Código de cor</Label>
+                <Label htmlFor="color-code">Codigo de cor</Label>
                 <div className="flex gap-2">
                   <input
                     type="color"
@@ -440,19 +467,19 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               </div>
 
               <div className="space-y-1.5">
-                <Label>Cômodo</Label>
+                <Label>Comodo</Label>
                 <Select
                   defaultValue={editItem?.room_id ?? '__none__'}
-                  onValueChange={(v) => setValue('room_id', v === '__none__' ? undefined : v)}
+                  onValueChange={(value) => setValue('room_id', value === '__none__' ? undefined : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Nenhum" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Nenhum</SelectItem>
-                    {(roomsData?.rooms ?? []).map((r) => (
-                      <SelectItem key={r.id} value={r.id}>
-                        {r.name}
+                    {(roomsData?.rooms ?? []).map((room) => (
+                      <SelectItem key={room.id} value={room.id}>
+                        {room.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -466,25 +493,30 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5">
                 <Label htmlFor="unit">Unidade</Label>
-                <Input id="unit" placeholder="un, L, kg, m²..." {...register('unit')} />
+                <Input id="unit" placeholder="un, L, kg, m2" {...register('unit')} />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="reserve">Estoque mínimo</Label>
+                <Label htmlFor="reserve">Estoque minimo</Label>
                 <Input id="reserve" type="number" step="0.1" min={0} {...register('reserve_qty')} />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="price">Preço pago (R$)</Label>
+                <Label htmlFor="price">Preco pago (R$)</Label>
                 <Input id="price" type="number" step="0.01" placeholder="0.00" {...register('price_paid')} />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="warranty" className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-text-success" />
-                  Garantia até
+                  Garantia ate
                 </Label>
                 <Input id="warranty" type="date" {...register('warranty_until')} />
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="notes">Observacoes</Label>
+                <Input id="notes" placeholder="Detalhes de uso, lote ou local de armazenamento" {...register('notes')} />
               </div>
             </div>
 
@@ -494,7 +526,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               </div>
             )}
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} className="flex-1">
                 Cancelar
               </Button>

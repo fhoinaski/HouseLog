@@ -1,4 +1,4 @@
-import { request } from './_core';
+import { normalizeApiMediaUrls, request } from './_core';
 import type { PublicServiceView, ServiceShareLink } from './_core';
 
 const PUBLIC_BASE = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') ?? 'http://localhost:8787';
@@ -12,7 +12,7 @@ async function publicRequest<T>(path: string, options: RequestInit = {}): Promis
     const body = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
     throw new Error((body as { error: string }).error ?? 'Request failed');
   }
-  return res.json() as Promise<T>;
+  return normalizeApiMediaUrls(await res.json() as T);
 }
 
 export const shareApi = {
