@@ -538,7 +538,7 @@ export default function DashboardPage() {
 
       <PageSection tone="strong" density="editorial">
         <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
-          <div className="rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-5">
+          <div className="hidden rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-5 md:block">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Sistema operacional privado</p>
             <h2 className="mt-3 text-2xl font-medium leading-tight text-text-primary md:text-3xl">
               Clareza tecnica para cada decisao do imovel.

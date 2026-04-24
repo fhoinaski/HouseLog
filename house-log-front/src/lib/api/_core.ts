@@ -33,9 +33,17 @@ export function normalizeMediaUrl(value: string): string {
       ['localhost', '127.0.0.1', '0.0.0.0'].includes(parsed.hostname) &&
       parsed.pathname.startsWith('/r2/');
 
-    if (!isLocalR2Url) return mediaUrl;
+    if (isLocalR2Url) {
+      return `${BASE}/media/${parsed.pathname.slice('/r2/'.length)}${parsed.search}`;
+    }
 
-    return `${BASE}/media/${parsed.pathname.slice('/r2/'.length)}${parsed.search}`;
+    // Proxy Cloudflare R2 public bucket URLs through the backend media endpoint.
+    // This covers data stored before the backend was fixed to store raw keys.
+    if (parsed.hostname.endsWith('.r2.dev') && R2_KEY_PATTERN.test(parsed.pathname)) {
+      return `${BASE}/media/${parsed.pathname.replace(/^\//, '')}${parsed.search}`;
+    }
+
+    return mediaUrl;
   } catch {
     // Relative R2 keys are normalized below.
   }

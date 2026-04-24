@@ -8,7 +8,6 @@ import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { providerApi, type ProviderServiceOrder } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatDate } from '@/lib/utils';
@@ -39,36 +38,27 @@ export default function ProviderServicesPage() {
   const orders = data?.data ?? [];
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        eyebrow="Operacao privada"
-        title="Minhas operacoes"
-        description="Ordens de servico atribuidas ou acompanhadas dentro da rede homologada HouseLog."
+        eyebrow="Operação privada"
+        title="Minhas operações"
       />
 
-      <PageSection
-        title="Status operacional"
-        description="Filtre sua fila para priorizar execucao, conclusao e verificacao."
-        contentClassName="flex flex-wrap gap-2"
-      >
+      <div className="flex flex-wrap gap-2">
         {STATUS_FILTERS.map((status) => (
-          <Button
+          <button
             key={status || 'all'}
             type="button"
-            size="sm"
-            variant={statusFilter === status ? 'default' : 'outline'}
+            className="hl-chip"
+            data-active={statusFilter === status ? 'true' : undefined}
             onClick={() => setStatusFilter(status)}
           >
             {status ? SERVICE_STATUS_LABELS[status] : 'Todas'}
-          </Button>
+          </button>
         ))}
-      </PageSection>
+      </div>
 
-      <PageSection
-        title="Fila operacional"
-        description="Servicos ativos para acompanhamento tecnico, comunicacao e rastreabilidade."
-        tone="strong"
-      >
+      <PageSection tone="strong">
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((item) => (
