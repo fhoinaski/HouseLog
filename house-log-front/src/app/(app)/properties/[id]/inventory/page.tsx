@@ -188,11 +188,16 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { quantity: 0, unit: 'un', reserve_qty: 0 },
+    defaultValues: { quantity: 0, unit: 'un', reserve_qty: 0, category: '' },
   });
+
+  const watchCategory = watch('category');
+  const watchRoomId = watch('room_id');
+  const watchColorCode = watch('color_code') ?? '';
 
   const allItems = data?.data ?? [];
   const items = allItems.filter((item) => {
@@ -205,7 +210,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
   function openNew() {
     setEditItem(null);
-    reset({ quantity: 0, unit: 'un', reserve_qty: 0 });
+    reset({ category: '', quantity: 0, unit: 'un', reserve_qty: 0 });
     setApiError(null);
     setDialogOpen(true);
   }
@@ -280,11 +285,10 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   return (
     <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="compact"
         eyebrow="Prontuário técnico"
         title="Inventário técnico"
         actions={
-          <Button type="button" onClick={openNew}>
+          <Button type="button" variant="tonal" onClick={openNew}>
             <Plus className="h-4 w-4" />
             Novo item
           </Button>
@@ -306,7 +310,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             tone={lowStockCount > 0 ? 'warning' : 'default'}
           />
           <MetricCard label="Com garantia" value={warrantyCount} helper="Itens com validade" icon={ShieldCheck} tone="success" />
-          <MetricCard label="Com comodo" value={roomTrackedCount} helper="Localizacao rastreada" icon={QrCode} tone="accent" />
+          <MetricCard label="Com cômodo" value={roomTrackedCount} helper="Localização rastreada" icon={QrCode} tone="accent" />
         </div>
       </PageSection>
 
@@ -341,10 +345,10 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
             <Select value={roomFilter} onValueChange={setRoomFilter}>
               <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Comodo" />
+                <SelectValue placeholder="Cômodo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos os comodos</SelectItem>
+                <SelectItem value="all">Todos os cômodos</SelectItem>
                 {(roomsData?.rooms ?? []).map((room) => (
                   <SelectItem key={room.id} value={room.id}>
                     {room.name}
@@ -358,8 +362,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         {error ? (
           <EmptyState
             icon={<AlertTriangle className="h-6 w-6" />}
-            title="Nao foi possivel carregar o inventario."
-            description="Verifique a conexao e tente novamente para acessar o acervo tecnico do imovel."
+            title="Não foi possível carregar o inventário."
+            description="Verifique a conexão e tente novamente para acessar o acervo técnico do imóvel."
             tone="strong"
             actions={<Button variant="outline" onClick={() => void mutate()}>Tentar novamente</Button>}
           />
@@ -372,11 +376,11 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         ) : items.length === 0 ? (
           <EmptyState
             icon={<Package className="h-6 w-6" />}
-            title={allItems.length === 0 ? 'Nenhum item no inventario tecnico' : 'Nenhum item encontrado'}
+            title={allItems.length === 0 ? 'Nenhum item no inventário técnico' : 'Nenhum item encontrado'}
             description={
               allItems.length === 0
-                ? 'Adicione materiais, equipamentos e reservas para compor a rastreabilidade tecnica do imovel.'
-                : 'Ajuste busca, categoria ou comodo para localizar outro registro do acervo.'
+                ? 'Adicione materiais, equipamentos e reservas para compor a rastreabilidade técnica do imóvel.'
+                : 'Ajuste busca, categoria ou cômodo para localizar outro registro do acervo.'
             }
             tone="subtle"
             density="spacious"
@@ -420,7 +424,10 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Categoria *</Label>
-                <Select defaultValue={editItem?.category} onValueChange={(value) => setValue('category', value)}>
+                <Select
+                  value={watchCategory ?? ''}
+                  onValueChange={(value) => setValue('category', value, { shouldValidate: true })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecionar categoria" />
                   </SelectTrigger>
@@ -437,7 +444,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5 sm:col-span-2">
                 <Label htmlFor="item-name">Nome *</Label>
-                <Input id="item-name" placeholder="Tinta acrilica, ceramica, filtro..." {...register('name')} />
+                <Input id="item-name" placeholder="Tinta acrílica, cerâmica, filtro..." {...register('name')} />
                 {errors.name && <p className="text-xs text-text-danger">{errors.name.message}</p>}
               </div>
 
@@ -448,25 +455,26 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5">
                 <Label htmlFor="model">Modelo</Label>
-                <Input id="model" placeholder="Codigo ou referencia" {...register('model')} />
+                <Input id="model" placeholder="Código ou referência" {...register('model')} />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="color-code">Codigo de cor</Label>
+                <Label htmlFor="color-code">Código de cor</Label>
                 <div className="flex gap-2">
                   <input
                     type="color"
+                    value={watchColorCode || '#ffffff'}
+                    onChange={(e) => setValue('color_code', e.target.value)}
                     className="h-11 w-12 cursor-pointer rounded-[var(--radius-md)] border-half border-border-subtle"
-                    {...register('color_code')}
                   />
                   <Input id="color-code" placeholder="#FFFFFF" {...register('color_code')} />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label>Comodo</Label>
+                <Label>Cômodo</Label>
                 <Select
-                  defaultValue={editItem?.room_id ?? '__none__'}
+                  value={watchRoomId ?? '__none__'}
                   onValueChange={(value) => setValue('room_id', value === '__none__' ? undefined : value)}
                 >
                   <SelectTrigger>
@@ -490,11 +498,11 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
               <div className="space-y-1.5">
                 <Label htmlFor="unit">Unidade</Label>
-                <Input id="unit" placeholder="un, L, kg, m2" {...register('unit')} />
+                <Input id="unit" placeholder="un, L, kg, m²" {...register('unit')} />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="reserve">Estoque minimo</Label>
+                <Label htmlFor="reserve">Estoque mínimo</Label>
                 <Input id="reserve" type="number" step="0.1" min={0} {...register('reserve_qty')} />
               </div>
 
@@ -512,7 +520,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="notes">Observacoes</Label>
+                <Label htmlFor="notes">Observações</Label>
                 <Input id="notes" placeholder="Detalhes de uso, lote ou local de armazenamento" {...register('notes')} />
               </div>
             </div>
