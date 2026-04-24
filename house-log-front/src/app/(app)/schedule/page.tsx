@@ -18,7 +18,7 @@ export default function SchedulePage() {
   const properties = data?.data ?? [];
 
   return (
-    <div className="mx-auto max-w-[980px] space-y-4 safe-bottom">
+    <div className="mx-auto max-w-[980px] space-y-4 px-4 py-4 safe-bottom sm:px-5 sm:py-5">
       <Card variant="raised" density="comfortable">
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

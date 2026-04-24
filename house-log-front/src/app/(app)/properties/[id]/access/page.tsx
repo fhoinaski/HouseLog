@@ -282,7 +282,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
   })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="safe-bottom space-y-6">
+    <div className="safe-bottom space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Governanca de acesso"

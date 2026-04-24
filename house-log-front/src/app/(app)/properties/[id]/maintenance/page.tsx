@@ -266,7 +266,7 @@ export default function MaintenancePage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div className="space-y-6 safe-bottom">
+    <div className="space-y-6 px-4 py-4 safe-bottom sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Prontuário técnico"

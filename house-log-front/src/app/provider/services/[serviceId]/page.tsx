@@ -143,7 +143,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
   if (isLoading && !order) {
     return (
-      <div className="safe-bottom space-y-6">
+      <div className="safe-bottom space-y-6 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Operacao privada"
@@ -168,7 +168,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
   if (error || !order) {
     return (
-      <div className="safe-bottom space-y-6">
+      <div className="safe-bottom space-y-6 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Operacao privada"
@@ -194,7 +194,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
   const beforePhotos = safeParseStringArray(order.before_photos);
 
   return (
-    <div className="safe-bottom space-y-6">
+    <div className="safe-bottom space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Operacao privada"

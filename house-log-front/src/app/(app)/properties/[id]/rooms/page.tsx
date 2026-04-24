@@ -154,7 +154,7 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
   }
 
   return (
-    <div className="space-y-6 safe-bottom">
+    <div className="space-y-6 px-4 py-4 safe-bottom sm:px-5 sm:py-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-medium text-text-primary">Cômodos</h2>

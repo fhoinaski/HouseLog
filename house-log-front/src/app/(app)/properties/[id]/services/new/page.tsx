@@ -131,7 +131,7 @@ export default function NewServicePage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 safe-bottom">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-4 safe-bottom sm:px-5 sm:py-5">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
