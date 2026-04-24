@@ -164,12 +164,11 @@ export default function ProviderSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="mx-auto max-w-5xl space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="editorial"
+        density="compact"
         eyebrow="Rede homologada"
         title="Perfil profissional"
-        description="Dados de elegibilidade, sinais tecnicos e evidencias que sustentam sua atuacao na operacao privada HouseLog."
         actions={
           <div className="rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-4 py-3 text-left">
             <p className="text-xl font-medium leading-none text-text-primary">{filledProfileFields}</p>
@@ -179,10 +178,9 @@ export default function ProviderSettingsPage() {
       />
 
       <PageSection
-        title="Pontuacao e confianca"
-        description="Indicadores publicos usados para leitura de reputacao dentro da rede homologada."
+        title="Pontuação e confiança"
         tone="strong"
-        density="editorial"
+        density="compact"
         actions={<Badge variant="outline">Provider network</Badge>}
       >
         {profileError ? (
@@ -202,7 +200,7 @@ export default function ProviderSettingsPage() {
                 value={(score.avg_stars ?? 0).toFixed(1)}
                 tone="warning"
               />
-              <MetricCard label="Avaliacoes" value={score.total_ratings} tone="default" />
+              <MetricCard label="Avaliações" value={score.total_ratings} tone="default" />
               <MetricCard label="Endossos" value={score.endorsements} tone="success" />
               <MetricCard label="Top score" value={score.top_score.toFixed(0)} tone="accent" />
             </div>
@@ -237,10 +235,9 @@ export default function ProviderSettingsPage() {
       </PageSection>
 
       <PageSection
-        title="Perfil profissional e servicos"
-        description="Mantenha dados, especialidades e evidencias atualizados para qualificar sua elegibilidade operacional."
+        title="Perfil profissional e serviços"
         tone="surface"
-        density="editorial"
+        density="compact"
         actions={<Settings2 className="h-4 w-4 text-text-tertiary" />}
       >
         <div className="grid gap-3 sm:grid-cols-2">
@@ -255,8 +252,8 @@ export default function ProviderSettingsPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="provider-area" className={labelClass}>Area de atendimento</Label>
-          <Input id="provider-area" value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} placeholder="Ex.: Sao Paulo capital e ABC" />
+          <Label htmlFor="provider-area" className={labelClass}>Área de atendimento</Label>
+          <Input id="provider-area" value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} placeholder="Ex.: São Paulo capital e ABC" />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -310,7 +307,7 @@ export default function ProviderSettingsPage() {
               rows={4}
               value={coursesText}
               onChange={(e) => setCoursesText(e.target.value)}
-              placeholder={'NR-10\nInstalacoes eletricas prediais'}
+              placeholder={'NR-10\nInstalações elétricas prediais'}
             />
           </div>
           <div className="space-y-1.5">
@@ -320,7 +317,7 @@ export default function ProviderSettingsPage() {
               rows={4}
               value={specializationsText}
               onChange={(e) => setSpecializationsText(e.target.value)}
-              placeholder={'Quadros de distribuicao\nReforma de banheiros'}
+              placeholder={'Quadros de distribuição\nReforma de banheiros'}
             />
           </div>
         </div>
@@ -499,10 +496,9 @@ export default function ProviderSettingsPage() {
       </PageSection>
 
       <PageSection
-        title="Seguranca da conta"
-        description="Atualize sua senha mantendo o acesso alinhado a uma operacao privada e controlada."
+        title="Segurança da conta"
         tone="strong"
-        density="editorial"
+        density="compact"
         actions={<KeyRound className="h-4 w-4 text-text-tertiary" />}
       >
         <div className="grid gap-3 sm:grid-cols-2">
