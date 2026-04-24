@@ -39,7 +39,7 @@ export default function ProviderServicesPage() {
   const orders = data?.data ?? [];
 
   return (
-    <div className="safe-bottom space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         eyebrow="Operacao privada"
         title="Minhas operacoes"

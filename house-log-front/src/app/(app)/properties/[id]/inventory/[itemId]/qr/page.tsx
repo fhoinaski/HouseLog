@@ -56,7 +56,7 @@ export default function QrCodePage({
   const filename = `qr-${item.name.toLowerCase().replace(/\s+/g, '-')}-${itemId.slice(0, 8)}.png`;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 px-4 py-6 safe-bottom">
+    <div className="mx-auto max-w-lg space-y-6 px-4 py-6">
       {/* Toolbar */}
       <div className="flex items-center justify-between print:hidden">
         <div className="flex items-center gap-3">

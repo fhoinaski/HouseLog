@@ -229,7 +229,7 @@ export default function TimelinePage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="max-w-2xl space-y-6 px-4 py-4 safe-bottom sm:px-5 sm:py-5">
+    <div className="max-w-2xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
 
       {/* Header */}
       <div className="flex items-start gap-3">

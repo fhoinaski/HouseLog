@@ -522,7 +522,7 @@ export default function DashboardPage() {
   const isLoadingDashboard = propertiesLoading || servicesLoading;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] space-y-6 px-4 py-4 safe-bottom md:px-6 md:py-6 md:pb-8">
+    <div className="mx-auto w-full max-w-[1180px] space-y-6 px-4 py-4 md:px-6 md:py-6 md:pb-8">
       <PageHeader
         density="editorial"
         eyebrow="The Architectural Lens"

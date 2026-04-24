@@ -97,7 +97,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6 px-4 py-4 safe-bottom sm:px-5 sm:py-5">
+    <div className="max-w-2xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <div>
         <h1 className="text-2xl font-medium">Configurações</h1>
         <p className="text-sm text-muted-foreground">Gerencie sua conta e preferências</p>
