@@ -256,7 +256,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   }
 
   function toastPhotoError() {
-    setApiError('Nao foi possivel enviar a foto. Tente novamente.');
+    setApiError('Não foi possível enviar a foto. Tente novamente.');
   }
 
   async function onSubmit(form: FormData) {
@@ -278,12 +278,11 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="editorial"
-        eyebrow="Prontuario tecnico"
-        title="Inventario tecnico"
-        description="Materiais, equipamentos, reservas, garantias e rastreabilidade fisica que sustentam a operacao do imovel."
+        density="compact"
+        eyebrow="Prontuário técnico"
+        title="Inventário técnico"
         actions={
           <Button type="button" onClick={openNew}>
             <Plus className="h-4 w-4" />
@@ -293,10 +292,9 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       />
 
       <PageSection
-        title="Rastreabilidade do acervo fisico"
-        description="Acompanhe itens por categoria, comodo, estoque minimo, garantia e QR Code para consulta em campo."
+        title="Rastreabilidade do acervo físico"
         tone="strong"
-        density="editorial"
+        density="compact"
       >
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <MetricCard label="Itens" value={allItems.length} helper="Registros filtrados" icon={Package} />
@@ -313,9 +311,8 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       </PageSection>
 
       <PageSection
-        title="Itens do inventario"
-        description="Filtre o acervo tecnico para localizar materiais, equipamentos e reservas por uso operacional."
-        density="editorial"
+        title="Itens do inventário"
+        density="compact"
         actions={
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <div className="relative min-w-0 sm:w-64">
@@ -502,14 +499,14 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="price">Preco pago (R$)</Label>
+                <Label htmlFor="price">Preço pago (R$)</Label>
                 <Input id="price" type="number" step="0.01" placeholder="0.00" {...register('price_paid')} />
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="warranty" className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-text-success" />
-                  Garantia ate
+                  Garantia até
                 </Label>
                 <Input id="warranty" type="date" {...register('warranty_until')} />
               </div>
