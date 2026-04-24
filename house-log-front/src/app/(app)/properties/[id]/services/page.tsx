@@ -124,12 +124,11 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="mx-auto max-w-[1040px] space-y-6 safe-bottom">
+    <div className="mx-auto max-w-[1040px] space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="editorial"
+        density="compact"
         eyebrow="Centro operacional"
-        title="Ordens de servico"
-        description="Acompanhe solicitacoes, propostas, execucao e verificacao em um unico trilho operacional."
+        title="Ordens de serviço"
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -138,7 +137,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetricCard
           icon={ReceiptText}
           label="Orcamento solicitado"
@@ -173,29 +172,23 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         />
       </div>
 
-      <PageSection
-        title="Filtros operacionais"
-        description="Ajuste a leitura por etapa do ciclo da ordem de servico."
-        contentClassName="flex flex-wrap gap-2"
-      >
+      <div className="flex flex-wrap gap-2 tap-highlight-none">
         {STATUS_FILTERS.map((status) => (
-          <Button
+          <button
             key={status || 'all'}
             type="button"
-            size="sm"
-            variant={statusFilter === status ? 'default' : 'outline'}
+            className="hl-chip"
+            data-active={statusFilter === status ? 'true' : undefined}
             onClick={() => setStatusFilter(status)}
           >
             {status ? SERVICE_STATUS_LABELS[status] : 'Todas'}
-          </Button>
+          </button>
         ))}
-      </PageSection>
+      </div>
 
       <PageSection
-        title="Trilho de OS"
-        description="Lista escaneavel das ordens vinculadas ao prontuario tecnico do imovel."
         tone="strong"
-        density="editorial"
+        density="default"
       >
         {orders.length === 0 ? (
           <EmptyState

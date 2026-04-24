@@ -624,12 +624,26 @@ body {
 }
 
 @layer utilities {
+  /* mobile: reserve space for bottom nav pill */
   .safe-bottom {
     padding-bottom: calc(var(--nav-height-bottom) + env(safe-area-inset-bottom));
   }
+  /* desktop: no bottom nav — only inset (safe area for non-standard displays) */
+  @media (min-width: 768px) {
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
 
+  /* mobile: top nav is hidden — only the device safe-area inset (notch/island) */
   .safe-top {
-    padding-top: calc(var(--nav-height-top) + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+  /* desktop: account for the fixed top nav height */
+  @media (min-width: 768px) {
+    .safe-top {
+      padding-top: calc(var(--nav-height-top) + env(safe-area-inset-top));
+    }
   }
 
   .scroll-hidden {

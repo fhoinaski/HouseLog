@@ -105,7 +105,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
   if (isLoading && !order) {
     return (
-      <div className="safe-bottom space-y-6">
+      <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Rede homologada"
@@ -130,7 +130,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
   if (error || !order) {
     return (
-      <div className="safe-bottom space-y-6">
+      <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Rede homologada"
@@ -154,7 +154,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
   }
 
   return (
-    <div className="safe-bottom space-y-6">
+    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Rede homologada"

@@ -29,7 +29,7 @@ export default function ProviderDashboard() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         eyebrow="Provider network"
         title={`Olá, ${user?.name?.split(' ')[0]}`}

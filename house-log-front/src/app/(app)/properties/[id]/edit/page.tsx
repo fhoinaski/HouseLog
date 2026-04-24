@@ -112,7 +112,7 @@ export default function EditPropertyPage({ params }: { params: Promise<{ id: str
   const effectiveCoverPreview = coverPreview === undefined ? property.cover_url : coverPreview;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 safe-bottom">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />

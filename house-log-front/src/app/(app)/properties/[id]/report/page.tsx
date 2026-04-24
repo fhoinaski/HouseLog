@@ -148,7 +148,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   }
 
   return (
-    <div className="max-w-3xl space-y-6 safe-bottom">
+    <div className="max-w-3xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

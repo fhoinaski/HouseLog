@@ -164,7 +164,7 @@ export default function ProviderSettingsPage() {
   }
 
   return (
-    <div className="safe-bottom mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Rede homologada"

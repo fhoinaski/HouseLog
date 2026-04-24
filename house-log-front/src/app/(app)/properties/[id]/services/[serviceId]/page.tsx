@@ -284,7 +284,7 @@ export default function ServiceDetailPage({
 
   if (!order) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 safe-bottom">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Ordem de servico"
@@ -318,7 +318,7 @@ export default function ServiceDetailPage({
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 safe-bottom">
+    <div className="mx-auto max-w-4xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Ordem de servico"
