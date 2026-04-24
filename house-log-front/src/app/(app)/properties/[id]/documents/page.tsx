@@ -233,7 +233,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="safe-bottom space-y-6">
+    <div className="safe-bottom space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
         eyebrow="Acervo tecnico"
