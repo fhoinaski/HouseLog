@@ -154,25 +154,21 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
   }
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="editorial"
-        eyebrow="Rede homologada"
+        density="compact"
+        eyebrow="Oportunidade"
         title={order.title}
-        description="Analise tecnica de uma solicitacao elegivel dentro da operacao privada HouseLog."
         actions={
-          <Button type="button" variant="ghost" onClick={() => router.back()}>
+          <Button type="button" variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
-            Voltar
           </Button>
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="space-y-6">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="space-y-5">
           <PageSection
-            title="Dossie da operacao"
-            description="Dados essenciais para validar escopo, prioridade e aderencia antes de enviar proposta."
             tone="strong"
             density="editorial"
             actions={
@@ -221,14 +217,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           </PageSection>
         </div>
 
-        <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+        <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start">
           <PageSection
-            title="Proposta homologada"
-            description={
-              hasPendingBid
-                ? 'Sua proposta esta em analise pela operacao privada.'
-                : 'Envie uma proposta objetiva para avaliacao do owner ou gestor responsavel.'
-            }
+            title={hasPendingBid ? 'Proposta em análise' : 'Enviar proposta'}
             tone="surface"
             density="editorial"
           >
@@ -274,8 +265,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           </PageSection>
 
           <PageSection
-            title="Historico de propostas"
-            description="Registro das propostas enviadas por voce para esta operacao."
+            title="Histórico de propostas"
             tone="strong"
             density="editorial"
           >

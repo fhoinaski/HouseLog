@@ -7,7 +7,6 @@ import { canCreateAuditLink } from '../lib/authorization';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
-import { getPublicUrl } from '../lib/r2';
 import type { Bindings, Variables } from '../lib/types';
 
 type AuditScope = { canUploadPhotos: boolean; canUploadVideo: boolean; requiredFields: string[] };
@@ -205,7 +204,7 @@ auditLinks.post('/public/:token/submit', async (c) => {
       const key = `${link.property_id}/photos/audit_${Date.now()}_${nanoid(8)}.jpg`;
       const buf = await file.arrayBuffer();
       await c.env.STORAGE.put(key, buf, { httpMetadata: { contentType: file.type } });
-      uploadedUrls.push(getPublicUrl(key, c.env.R2_PUBLIC_URL ?? ''));
+      uploadedUrls.push(key);
     }
 
     if (uploadedUrls.length > 0) {

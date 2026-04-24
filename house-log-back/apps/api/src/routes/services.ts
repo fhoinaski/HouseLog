@@ -16,7 +16,7 @@ import {
 } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
-import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { validateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
 import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/email';
 import { getDb } from '../db/client';
 import { properties, rooms, serviceOrders, users } from '../db/schema';
@@ -614,12 +614,10 @@ services.post('/:id/photos', async (c) => {
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
 
-  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
-
   const current = photoType === 'after'
     ? [...(order.after_photos ?? [])]
     : [...(order.before_photos ?? [])];
-  current.push(fileUrl);
+  current.push(key);
 
   await db
     .update(serviceOrders)
@@ -643,7 +641,7 @@ services.post('/:id/photos', async (c) => {
     },
   });
 
-  return ok(c, { url: fileUrl, type: photoType });
+  return ok(c, { url: key, type: photoType });
 });
 
 // ── POST /properties/:propertyId/services/:id/video ──────────────────────────
@@ -679,9 +677,7 @@ services.post('/:id/video', async (c) => {
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, 'video/mp4');
 
-  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
-
-  await db.update(serviceOrders).set({ videoUrl: fileUrl }).where(eq(serviceOrders.id, id));
+  await db.update(serviceOrders).set({ videoUrl: key }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
@@ -699,7 +695,7 @@ services.post('/:id/video', async (c) => {
     },
   });
 
-  return ok(c, { video_url: fileUrl });
+  return ok(c, { video_url: key });
 });
 
 // ── POST /properties/:propertyId/services/:id/audio ──────────────────────────
@@ -736,9 +732,7 @@ services.post('/:id/audio', async (c) => {
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
 
-  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
-
-  await db.update(serviceOrders).set({ audioUrl: fileUrl }).where(eq(serviceOrders.id, id));
+  await db.update(serviceOrders).set({ audioUrl: key }).where(eq(serviceOrders.id, id));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
@@ -756,7 +750,7 @@ services.post('/:id/audio', async (c) => {
     },
   });
 
-  return ok(c, { audio_url: fileUrl });
+  return ok(c, { audio_url: key });
 });
 
 // ── DELETE /properties/:propertyId/services/:id ──────────────────────────────
