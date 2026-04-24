@@ -4,7 +4,6 @@ import type { ComponentProps } from 'react';
 import Link from 'next/link';
 import {
   AlertCircle,
-  ArrowUpRight,
   Building2,
   ChevronRight,
   FileText,
@@ -272,37 +271,29 @@ export default function PropertiesPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1240px] space-y-5 px-4 py-4 safe-bottom sm:px-6 md:px-8 md:py-6 lg:px-10">
+    <div className="mx-auto w-full max-w-[1240px] space-y-5 px-4 py-4 sm:px-6 md:px-8 md:py-5 lg:px-10">
       <Card variant="raised" density="compact" className="overflow-hidden shadow-[var(--shadow-lg)]">
-        <CardContent className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(21rem,0.72fr)] lg:items-center lg:p-6">
+        <CardContent className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(17rem,auto)] sm:items-center sm:p-5">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-accent">Portfólio operacional</p>
-            <h1 className="mt-2 max-w-3xl text-2xl font-medium leading-tight text-text-primary md:text-3xl">
+            <h1 className="mt-1.5 text-xl font-medium leading-tight text-text-primary sm:text-2xl">
               Seus imóveis
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">
-              Acesse os ativos cadastrados e navegue rapidamente por inventário, serviços, documentos e financeiro.
+            <p className="mt-2 max-w-xl text-sm leading-snug text-text-secondary">
+              Inventário, serviços, documentos e financeiro por ativo.
             </p>
-            <div className="mt-4 flex flex-col gap-2.5 sm:flex-row">
-              <Button asChild className="w-full sm:w-auto">
-                <Link href="/properties/new">
-                  <Plus className="h-4 w-4" />
-                  Novo imóvel
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link href="/dashboard">
-                  Voltar ao dashboard
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+            <Button asChild className="mt-3 w-full sm:w-auto">
+              <Link href="/properties/new">
+                <Plus className="h-4 w-4" />
+                Novo imóvel
+              </Link>
+            </Button>
           </div>
 
           <div className="grid grid-cols-3 gap-2 rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-2 shadow-[var(--shadow-xs)]">
             {portfolioMetrics.map((metric) => (
               <div key={metric.label} className="min-w-0 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3">
-                <p className="truncate text-2xl font-medium leading-none text-text-primary">{metric.value}</p>
+                <p className="truncate text-xl font-medium leading-none text-text-primary sm:text-2xl">{metric.value}</p>
                 <p className="mt-1.5 truncate text-xs text-text-tertiary">{metric.label}</p>
               </div>
             ))}

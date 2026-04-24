@@ -283,12 +283,12 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
   if (propLoading) {
     return (
-      <div className="mx-auto max-w-[1180px] space-y-6 safe-bottom">
-        <div className="hl-skeleton h-48 rounded-[var(--radius-2xl)]" />
-        <div className="hl-skeleton h-14 rounded-[var(--radius-xl)]" />
+      <div className="mx-auto max-w-[1180px] space-y-4 px-4 py-4 sm:px-5">
+        <div className="hl-skeleton h-44 rounded-[var(--radius-2xl)]" />
+        <div className="hl-skeleton h-11 rounded-[var(--radius-xl)]" />
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
+            <div key={i} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
           ))}
         </div>
       </div>
@@ -299,7 +299,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
   if (!property) {
     return (
-      <div className="mx-auto max-w-[760px] safe-bottom">
+      <div className="mx-auto max-w-[760px] px-4 py-4 sm:px-5">
         <EmptyState
           icon={<Building2 className="h-6 w-6" />}
           title="Imóvel não encontrado"
@@ -329,7 +329,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   ];
 
   return (
-    <div className="mx-auto max-w-[1180px] space-y-0 safe-bottom">
+    <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
 
       {/* ── EDITORIAL HERO ──────────────────────────────────────────────── */}
       <div className="relative mb-6 overflow-hidden rounded-[var(--radius-2xl)] bg-[var(--surface-base)]">
@@ -350,7 +350,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           <div className="absolute inset-0 bg-gradient-to-br from-[rgba(184,195,255,0.06)] via-transparent to-[rgba(78,222,163,0.04)]" />
         )}
 
-        <div className="relative z-10 px-6 pb-0 pt-6 md:px-8 md:pt-8">
+        <div className="relative z-10 px-4 pb-0 pt-4 sm:px-6 sm:pt-5 md:px-7 md:pt-6">
           {/* Top bar */}
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-text-tertiary">
@@ -384,69 +384,65 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             <h1 className="mt-2 text-3xl font-light leading-tight tracking-tight text-text-primary md:text-4xl">
               {property.name}
             </h1>
-            <p className="mt-2 flex items-center gap-1.5 text-sm text-text-secondary">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />
-              {property.address}, {property.city}
-              {property.area_m2 && (
-                <span className="ml-2 text-text-tertiary">· {property.area_m2} m²</span>
-              )}
-              {property.year_built && (
-                <span className="text-text-tertiary">· {property.year_built}</span>
+            <p className="mt-2 flex flex-wrap items-start gap-x-1.5 gap-y-0.5 text-sm text-text-secondary">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-text-tertiary" />
+              <span className="min-w-0 break-words">{property.address}, {property.city}</span>
+              {(property.area_m2 || property.year_built) && (
+                <span className="shrink-0 text-text-tertiary">
+                  {property.area_m2 ? `· ${property.area_m2} m²` : ''}
+                  {property.year_built ? ` · ${property.year_built}` : ''}
+                </span>
               )}
             </p>
           </div>
 
           {/* Stats trio + health */}
-          <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-border-subtle sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-border-subtle sm:grid-cols-4">
             {/* Saúde */}
-            <div className="flex flex-col gap-1.5 bg-[var(--surface-base)] px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-[0.07em] text-text-tertiary">Saúde</p>
-              <div className="flex items-baseline gap-1.5">
-                <span className={cn('text-2xl font-light tabular-nums', scoreColor(healthScore))}>
+            <div className="flex flex-col gap-1 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Saúde</p>
+              <div className="flex items-baseline gap-1">
+                <span className={cn('text-xl font-light tabular-nums sm:text-2xl', scoreColor(healthScore))}>
                   {healthScore}
                 </span>
                 <span className="text-xs text-text-tertiary">/100</span>
               </div>
-              <p className="text-xs text-text-tertiary">{healthLabel}</p>
+              <p className="text-[10px] text-text-tertiary">{healthLabel}</p>
             </div>
 
             {/* Dias de memória */}
-            <div className="flex flex-col gap-1.5 bg-[var(--surface-base)] px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-[0.07em] text-text-tertiary">Memória</p>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-light tabular-nums text-text-primary">
-                  {memoriaEmDias.toLocaleString('pt-BR')}
-                </span>
-              </div>
-              <p className="text-xs text-text-tertiary">dias rastreados</p>
+            <div className="flex flex-col gap-1 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Memória</p>
+              <span className="text-xl font-light tabular-nums text-text-primary sm:text-2xl">
+                {memoriaEmDias.toLocaleString('pt-BR')}
+              </span>
+              <p className="text-[10px] text-text-tertiary">dias rastreados</p>
             </div>
 
             {/* Eventos */}
-            <div className="flex flex-col gap-1.5 bg-[var(--surface-base)] px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-[0.07em] text-text-tertiary">Eventos</p>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-light tabular-nums text-text-primary">
-                  {totalEvents}
-                </span>
-              </div>
-              <p className="text-xs text-text-tertiary">OS registradas</p>
+            <div className="flex flex-col gap-1 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Eventos</p>
+              <span className="text-xl font-light tabular-nums text-text-primary sm:text-2xl">
+                {totalEvents}
+              </span>
+              <p className="text-[10px] text-text-tertiary">OS registradas</p>
             </div>
 
             {/* Health bar visual */}
-            <div className="flex flex-col justify-between bg-[var(--surface-base)] px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-[0.07em] text-text-tertiary">Estado técnico</p>
+            <div className="flex flex-col justify-between gap-1.5 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
+              <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Estado técnico</p>
               <ScoreBar score={healthScore} />
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="-mx-6 mt-6 flex gap-0 border-t border-border-subtle px-6 md:-mx-8 md:px-8">
+          <div className="-mx-4 mt-5 flex border-t border-border-subtle px-0 sm:-mx-6 md:-mx-7">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'relative px-4 py-3.5 text-sm font-medium transition-colors focus-visible:outline-none',
+                  'relative min-h-11 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none',
                   activeTab === tab.id
                     ? 'text-text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--border-focus)]'
                     : 'text-text-tertiary hover:text-text-secondary'
