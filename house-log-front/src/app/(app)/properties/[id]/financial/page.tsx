@@ -58,7 +58,7 @@ const CHART_COLORS = [
 const ALL_CATEGORIES = {
   ...EXPENSE_CATEGORY_LABELS,
   rent: 'Aluguel',
-  service: 'Servicos',
+  service: 'Serviços',
 } as Record<string, string>;
 
 const expenseSchema = z.object({
@@ -165,12 +165,11 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   }));
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="editorial"
-        eyebrow="Governanca financeira"
-        title="Saude financeira do imovel"
-        description="Leitura operacional de receitas, despesas, saldo e custo por metro quadrado nos ultimos seis meses."
+        density="compact"
+        eyebrow="Governança financeira"
+        title="Saúde financeira"
         actions={
           <>
             <Button variant="outline" onClick={() => openDialog('revenue')}>
@@ -189,7 +188,7 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
         <EmptyState
           tone="strong"
           icon={<AlertTriangle className="h-5 w-5" />}
-          title="Nao foi possivel carregar o resumo financeiro."
+          title="Não foi possível carregar o resumo financeiro."
           description="Verifique a conexao e tente novamente antes de registrar novas analises."
           actions={<Button variant="outline" onClick={() => void mutate()}>Tentar novamente</Button>}
         />
@@ -220,7 +219,7 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
             <MetricCard
               tone="accent"
               icon={Ruler}
-              label={area ? `Base: ${area} m2` : 'Area nao informada'}
+              label={area ? `Base: ${area} m²` : 'Área não informada'}
               value={isLoading ? '...' : costPerSqm != null ? formatCurrency(costPerSqm) : '-'}
               helper="Custo operacional por metro quadrado."
             />
@@ -228,9 +227,8 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
 
           <PageSection
             tone="surface"
-            density="editorial"
+            density="compact"
             title="Resultado operacional"
-            description="Comparativo mensal de receitas, despesas e saldo para leitura rapida de tendencia."
           >
             {dreData.length === 0 ? (
               <EmptyState
@@ -277,9 +275,8 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
 
           <PageSection
             tone="surface"
-            density="editorial"
-            title="Composicao de despesas"
-            description="Distribuicao por categoria para apoiar revisao de contratos, manutencao e custos recorrentes."
+            density="compact"
+            title="Composição de despesas"
           >
             {categoryData.length === 0 ? (
               <EmptyState

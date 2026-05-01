@@ -282,12 +282,11 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
   })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        density="editorial"
-        eyebrow="Governanca de acesso"
-        title="Credenciais do imovel"
-        description="Senhas, codigos e integracoes ficam mascarados por padrao e exigem revelacao explicita."
+        density="compact"
+        eyebrow="Governança de acesso"
+        title="Credenciais do imóvel"
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" />
@@ -296,13 +295,12 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
         }
       />
 
-      <PageSection
-        title="Compartilhamento controlado"
-        description="Credenciais marcadas como incluir em OS podem ser expostas ao prestador quando voce compartilha uma ordem via link."
-        tone="strong"
-        density="editorial"
-        actions={<Badge variant="outline">Revelacao auditavel</Badge>}
-      />
+      <div className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-4 py-3">
+        <p className="text-xs leading-5 text-text-secondary">
+          Credenciais marcadas como <strong className="text-text-primary">incluir em OS</strong> podem ser expostas ao prestador via link compartilhado.
+        </p>
+        <Badge variant="outline" className="shrink-0">Revelação auditável</Badge>
+      </div>
 
       {grouped.length > 0 ? (
         grouped.map(({ value, label, items: catItems }) => (

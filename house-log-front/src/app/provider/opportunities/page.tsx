@@ -8,7 +8,6 @@ import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { providerApi, type ProviderNetworkOpportunity } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
@@ -41,36 +40,27 @@ export default function ProviderOpportunitiesPage() {
   const opportunities = data?.data ?? [];
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        eyebrow="Provider network"
-        title="Rede homologada"
-        description="Solicitações elegíveis para sua atuação técnica dentro da operação privada HouseLog."
+        eyebrow="Rede homologada"
+        title="Oportunidades"
       />
 
-      <PageSection
-        title="Elegibilidade técnica"
-        description="Filtre por sistema para priorizar os chamados mais aderentes ao seu perfil homologado."
-        contentClassName="flex flex-wrap gap-2"
-      >
+      <div className="flex flex-wrap gap-2">
         {SYSTEM_FILTERS.map((system) => (
-          <Button
+          <button
             key={system || 'all'}
             type="button"
-            size="sm"
-            variant={systemFilter === system ? 'default' : 'outline'}
+            className="hl-chip"
+            data-active={systemFilter === system ? 'true' : undefined}
             onClick={() => setSystemFilter(system)}
           >
-            {system ? SYSTEM_TYPE_LABELS[system] : 'Todos os sistemas'}
-          </Button>
+            {system ? SYSTEM_TYPE_LABELS[system] : 'Todos'}
+          </button>
         ))}
-      </PageSection>
+      </div>
 
-      <PageSection
-        title="Operações elegíveis"
-        description="Solicitações abertas para análise e proposta dentro da rede homologada."
-        tone="strong"
-      >
+      <PageSection tone="strong">
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((item) => (

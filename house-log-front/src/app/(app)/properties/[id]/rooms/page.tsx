@@ -46,7 +46,7 @@ function RoomCard({
     <Card>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-accent-subtle">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-bg-accent-subtle">
             <Icon className="h-5 w-5 text-text-accent" />
           </div>
           <div className="flex-1 min-w-0">
@@ -154,7 +154,7 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
   }
 
   return (
-    <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-medium text-text-primary">Cômodos</h2>
@@ -175,7 +175,7 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
           </Button>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {floors.map((floor) => (
             <div key={floor}>
               <h3 className="mb-3 hl-section-title">
@@ -236,7 +236,7 @@ export default function RoomsPage({ params }: { params: Promise<{ id: string }> 
             </div>
 
             {apiError && (
-              <div className="rounded-lg border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
+              <div className="rounded-[var(--radius-md)] border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
                 {apiError}
               </div>
             )}

@@ -332,7 +332,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
 
       {/* ── EDITORIAL HERO ──────────────────────────────────────────────── */}
-      <div className="relative mb-6 overflow-hidden rounded-[var(--radius-2xl)] bg-[var(--surface-base)]">
+      <div className="relative overflow-hidden rounded-[var(--radius-2xl)] bg-[var(--surface-base)]">
 
         {/* Cover photo or gradient backdrop */}
         {property.cover_url ? (
