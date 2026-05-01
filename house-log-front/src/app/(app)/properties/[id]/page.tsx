@@ -35,7 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
-import { apiFetcher, propertiesApi, type ServiceOrder } from '@/lib/api';
+import { apiFetcher, maintenanceApi, propertiesApi, type ServiceOrder } from '@/lib/api';
 import { cn, formatCurrency, formatDate, PROPERTY_TYPE_LABELS, SYSTEM_TYPE_LABELS, scoreBg, scoreColor } from '@/lib/utils';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -280,6 +280,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
   const { data: propData, isLoading: propLoading } = useSWR(['property', id], () => propertiesApi.get(id));
   const { data: dash, isLoading: dashLoading } = useSWR(['dashboard', id], () => propertiesApi.dashboard(id));
+  const { data: maintenanceData } = useSWR(['maintenance', id], () => maintenanceApi.list(id));
 
   if (propLoading) {
     return (
@@ -321,6 +322,28 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   const healthLabel = healthScore >= 80 ? 'Excelente' : healthScore >= 60 ? 'Bom' : healthScore >= 30 ? 'Atenção' : 'Crítico';
   const totalEvents = (d?.services.total ?? 0);
   const memoriaEmDias = daysSince(property.created_at);
+  const openOrders = (d?.services.requested ?? 0) + (d?.services.in_progress ?? 0);
+  const urgentOrders = d?.services.urgent_open ?? 0;
+  const overdueMaintenance = (maintenanceData?.schedules ?? []).filter((schedule) => schedule.is_overdue);
+  const expiringWarranties = d?.warranties_expiring ?? [];
+  const currentMonthExpenses = d?.expenses.this_month ?? 0;
+  const attentionItems = [
+    ...(urgentOrders > 0
+      ? [{ tone: 'danger' as const, icon: ShieldAlert, title: `${urgentOrders} OS urgente${urgentOrders > 1 ? 's' : ''}`, description: 'Priorize a triagem e a execucao.' }]
+      : []),
+    ...(openOrders > 0
+      ? [{ tone: 'accent' as const, icon: Wrench, title: `${openOrders} OS aberta${openOrders > 1 ? 's' : ''}`, description: 'Acompanhe solicitacoes e execucoes.' }]
+      : []),
+    ...(overdueMaintenance.length > 0
+      ? [{ tone: 'warning' as const, icon: RefreshCw, title: `${overdueMaintenance.length} manutencao atrasada${overdueMaintenance.length > 1 ? 's' : ''}`, description: 'Revise o plano preventivo.' }]
+      : []),
+    ...(expiringWarranties.length > 0
+      ? [{ tone: 'warning' as const, icon: ShieldCheck, title: `${expiringWarranties.length} garantia${expiringWarranties.length > 1 ? 's' : ''} vencendo`, description: 'Verifique itens dentro de 30 dias.' }]
+      : []),
+    ...(currentMonthExpenses > 0
+      ? [{ tone: 'success' as const, icon: BarChart3, title: formatCurrency(currentMonthExpenses), description: 'Despesa registrada neste mes.' }]
+      : []),
+  ];
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview',  label: 'Visão geral' },
@@ -362,7 +385,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 {PROPERTY_TYPE_LABELS[property.type]}
               </Badge>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 sm:flex">
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/properties/${id}/edit`}>
                   <Pencil className="h-3.5 w-3.5" />
@@ -506,6 +529,63 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 />
               </div>
             ) : null}
+          </PageSection>
+
+          <PageSection
+            title="Atencao agora"
+            description="Sinais operacionais que merecem revisao antes de navegar pelo prontuario."
+            tone="strong"
+            density="editorial"
+          >
+            {attentionItems.length > 0 ? (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {attentionItems.map((item) => {
+                  const Icon = item.icon;
+                  const href =
+                    item.icon === BarChart3
+                      ? `/properties/${id}/financial`
+                      : item.icon === RefreshCw
+                        ? `/properties/${id}/maintenance`
+                        : item.icon === ShieldCheck
+                          ? `/properties/${id}/inventory`
+                          : `/properties/${id}/services`;
+
+                  return (
+                    <Link
+                      key={`${item.title}-${item.description}`}
+                      href={href}
+                      className={cn(
+                        'flex min-h-20 items-start gap-3 rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+                        item.tone === 'danger' && 'bg-bg-danger',
+                        item.tone === 'warning' && 'bg-bg-warning',
+                        item.tone === 'success' && 'bg-bg-success',
+                        item.tone === 'accent' && 'bg-bg-accent-subtle'
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          'mt-0.5 h-4 w-4 shrink-0',
+                          item.tone === 'danger' && 'text-text-danger',
+                          item.tone === 'warning' && 'text-text-warning',
+                          item.tone === 'success' && 'text-text-success',
+                          item.tone === 'accent' && 'text-text-accent'
+                        )}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-text-primary">{item.title}</span>
+                        <span className="mt-1 block text-xs leading-5 text-text-secondary">{item.description}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex min-h-20 items-center gap-3 rounded-[var(--radius-xl)] bg-bg-success px-4 py-3">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-text-success" aria-hidden="true" />
+                <p className="text-sm font-medium text-text-primary">Tudo certo neste imovel no momento.</p>
+              </div>
+            )}
           </PageSection>
 
           {/* Warranties expiring */}

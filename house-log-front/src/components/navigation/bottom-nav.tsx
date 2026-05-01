@@ -3,11 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { getPropertyContext } from '@/components/properties/property-route-context';
+import { PropertyMobileContextControls } from './property-mobile-context-controls';
 import { getNavItems, isNavItemActive } from './nav-config';
 
 export function BottomNav() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const propertyContext = getPropertyContext(pathname);
+
+  if (propertyContext) {
+    return <PropertyMobileContextControls propertyId={propertyContext.propertyId} />;
+  }
+
   const items = getNavItems(user?.role);
 
   return (
