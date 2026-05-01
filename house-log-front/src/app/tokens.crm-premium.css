@@ -15,7 +15,6 @@
  */
 
 @layer base {
-  :root,
   [data-theme="crm-premium"] {
     /* Primitive palette */
     --premium-bg: #F6F4EF;
@@ -137,8 +136,10 @@
     --chip-bg: #F1EEE7;
     --chip-text: var(--premium-primary);
     --chip-border: #E5E1DA;
-    --chip-active-bg: #E8D3BB;
-    --chip-active-text: #5F3E22;
+    --chip-bg-active: #E8D3BB;
+    --chip-text-active: #5F3E22;
+    --chip-radius: 9999px;
+    --chip-padding: 4px 12px;
 
     /* Badges */
     --badge-bg: #F1EEE7;
@@ -165,6 +166,7 @@
 
     --skeleton-bg: #E9E4DC;
     --skeleton-highlight: #F8F6F1;
+    --skeleton-base: #E9E4DC;
 
     /* Shadows */
     --shadow-xs: 0 1px 2px rgba(35, 49, 66, 0.05);
@@ -174,6 +176,28 @@
     --shadow-focus: 0 0 0 3px rgba(184, 138, 90, 0.24);
     --shadow-focus-danger: 0 0 0 3px rgba(180, 35, 24, 0.18);
     --shadow-focus-accent: 0 0 0 3px rgba(184, 138, 90, 0.28);
+
+    /* Compatibility aliases used by current components */
+    --surface-base: var(--bg-surface);
+    --surface-raised: var(--bg-surface-raised);
+    --surface-strong: var(--bg-subtle);
+    --surface-outline: var(--border-default);
+    --provider-accent: var(--bg-accent);
+    --provider-surface: var(--surface-base);
+    --provider-surface-strong: var(--surface-strong);
+    --provider-divider: var(--surface-outline);
+    --surface-container-low: var(--surface-strong);
+    --input-shadow-focus: var(--shadow-focus);
+    --input-bg-disabled: var(--input-disabled-bg);
+    --card-radius: 8px;
+    --card-padding: 16px;
+    --card-shadow: var(--shadow-xs);
+    --avatar-owner-bg: #E6EAEF;
+    --avatar-owner-text: var(--premium-primary);
+    --avatar-manager-bg: #F3E7D8;
+    --avatar-manager-text: #8A613A;
+    --avatar-provider-bg: #EAF5EF;
+    --avatar-provider-text: var(--premium-success);
   }
 
   [data-theme="crm-premium-dark"],
@@ -274,8 +298,10 @@
     --chip-bg: #202A35;
     --chip-text: #F4F1EA;
     --chip-border: #2F3945;
-    --chip-active-bg: #4A3828;
-    --chip-active-text: #D6AE82;
+    --chip-bg-active: #4A3828;
+    --chip-text-active: #D6AE82;
+    --chip-radius: 9999px;
+    --chip-padding: 4px 12px;
 
     --badge-bg: #202A35;
     --badge-text: #F4F1EA;
@@ -300,6 +326,7 @@
 
     --skeleton-bg: #202A35;
     --skeleton-highlight: #2B3643;
+    --skeleton-base: #202A35;
 
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
@@ -308,5 +335,27 @@
     --shadow-focus: 0 0 0 3px rgba(184, 138, 90, 0.30);
     --shadow-focus-danger: 0 0 0 3px rgba(180, 35, 24, 0.24);
     --shadow-focus-accent: 0 0 0 3px rgba(184, 138, 90, 0.34);
+
+    /* Compatibility aliases used by current components */
+    --surface-base: var(--bg-surface);
+    --surface-raised: var(--bg-surface-raised);
+    --surface-strong: var(--bg-subtle);
+    --surface-outline: var(--border-default);
+    --provider-accent: var(--bg-accent);
+    --provider-surface: var(--surface-base);
+    --provider-surface-strong: var(--surface-strong);
+    --provider-divider: var(--surface-outline);
+    --surface-container-low: var(--surface-strong);
+    --input-shadow-focus: var(--shadow-focus);
+    --input-bg-disabled: var(--input-disabled-bg);
+    --card-radius: 8px;
+    --card-padding: 16px;
+    --card-shadow: var(--shadow-xs);
+    --avatar-owner-bg: rgba(230, 234, 239, 0.16);
+    --avatar-owner-text: #D8DEE8;
+    --avatar-manager-bg: rgba(184, 138, 90, 0.18);
+    --avatar-manager-text: #D6AE82;
+    --avatar-provider-bg: rgba(47, 125, 87, 0.20);
+    --avatar-provider-text: #8EC3A5;
   }
 }

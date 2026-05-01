@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { User, Lock, Bell, Shield } from 'lucide-react';
+import { User, Lock, Bell, Shield, Palette } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VisualThemeToggle } from '@/components/theme/visual-theme-toggle';
 import { toast } from 'sonner';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -126,6 +127,7 @@ export default function SettingsPage() {
           <TabsTrigger value="profile"><User className="h-3.5 w-3.5" />Perfil</TabsTrigger>
           <TabsTrigger value="security"><Lock className="h-3.5 w-3.5" />Segurança</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="h-3.5 w-3.5" />Notificações</TabsTrigger>
+          <TabsTrigger value="appearance"><Palette className="h-3.5 w-3.5" />Aparência</TabsTrigger>
         </TabsList>
 
         {/* Profile tab */}
@@ -243,6 +245,10 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="appearance">
+          <VisualThemeToggle />
         </TabsContent>
       </Tabs>
     </div>

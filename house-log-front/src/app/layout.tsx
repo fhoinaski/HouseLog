@@ -6,6 +6,8 @@ import { ThemeProvider } from '@/components/ui/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { PwaRegister } from '@/components/pwa-register';
 import './globals.css';
+import './tokens.crm-premium.css';
+import { ThemePreviewProvider } from '@/components/theme/theme-preview-provider';
 
 const inter = Inter({ variable: '--font-inter', subsets: ['latin'] });
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
@@ -50,9 +52,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false} disableTransitionOnChange>
           <AuthProvider>
             <SWRProvider>
-              {children}
-              <Toaster />
-              <PwaRegister />
+              <ThemePreviewProvider>
+                {children}
+                <Toaster />
+                <PwaRegister />
+              </ThemePreviewProvider>
             </SWRProvider>
           </AuthProvider>
         </ThemeProvider>
