@@ -21,6 +21,7 @@ import {
   Share2,
   ShieldCheck,
   User,
+  UserPlus,
   Video,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
@@ -34,7 +35,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
+import { invitesApi, normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -163,6 +165,7 @@ export default function ServiceDetailPage({
 }) {
   const { id: propertyId, serviceId } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   const { mutate: globalMutate } = useSWRConfig();
   const photoRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
@@ -179,6 +182,7 @@ export default function ServiceDetailPage({
   const [shareProviderName, setShareProviderName] = useState('');
   const [shareProviderEmail, setShareProviderEmail] = useState('');
   const [checklist, setChecklist] = useState<{ item: string; done: boolean }[]>([]);
+  const [addingTeamMember, setAddingTeamMember] = useState(false);
 
   const { data, mutate } = useSWR(['service', propertyId, serviceId], () =>
     servicesApi.get(propertyId, serviceId)
@@ -187,6 +191,11 @@ export default function ServiceDetailPage({
   const { data: propData } = useSWR(['property', propertyId], () => propertiesApi.get(propertyId));
   const property = propData?.property;
   const order = data?.order;
+  const canManageTeamSuggestion = user?.role === 'owner' || user?.role === 'admin';
+  const { data: teamData, mutate: mutateTeam } = useSWR(
+    order?.assigned_to && canManageTeamSuggestion ? ['team', propertyId] : null,
+    () => invitesApi.list(propertyId)
+  );
 
   useEffect(() => {
     if (!order) {
@@ -282,6 +291,24 @@ export default function ServiceDetailPage({
     toast.success('Link copiado');
   }
 
+  async function addAssignedProviderToTeam() {
+    if (!order?.assigned_to) return;
+    setAddingTeamMember(true);
+    try {
+      const result = await invitesApi.addCollaborator(propertyId, {
+        user_id: order.assigned_to,
+        role: 'provider',
+        can_open_os: true,
+      });
+      await mutateTeam();
+      toast.success(result.already_exists ? 'Prestador ja estava na equipe' : 'Prestador adicionado a equipe');
+    } catch (e) {
+      toast.error('Erro ao adicionar prestador', { description: (e as Error).message });
+    } finally {
+      setAddingTeamMember(false);
+    }
+  }
+
   if (!order) {
     return (
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
@@ -304,6 +331,11 @@ export default function ServiceDetailPage({
   const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
   const completedChecklistItems = checklist.filter((item) => item.done).length;
   const checklistProgress = checklist.length ? (completedChecklistItems / checklist.length) * 100 : 0;
+  const shouldSuggestTeamMember =
+    (order.status === 'completed' || order.status === 'verified') &&
+    canManageTeamSuggestion &&
+    Boolean(order.assigned_to) &&
+    !teamData?.collaborators.some((collaborator) => collaborator.user_id === order.assigned_to && collaborator.role === 'provider');
 
   async function toggleChecklistItem(index: number) {
     const updated = checklist.map((item, itemIndex) =>
@@ -419,6 +451,38 @@ export default function ServiceDetailPage({
           />
         )}
       </PageSection>
+
+      {shouldSuggestTeamMember && (
+        <PageSection
+          title="Equipe do imovel"
+          description="Este prestador concluiu um servico neste imovel e pode ser vinculado para proximos chamados."
+          tone="surface"
+          density="compact"
+          actions={<UserPlus className="h-4 w-4 text-text-accent" />}
+        >
+          <div className="flex flex-col gap-3 rounded-[var(--radius-lg)] bg-bg-subtle p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-text-primary">
+                Adicionar este prestador a equipe deste imovel?
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                {order.assigned_to_name ?? 'Prestador atribuido'} ainda depende de endpoint dedicado para vinculo fixo ou temporario.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" loading={addingTeamMember} onClick={addAssignedProviderToTeam}>
+                Adicionar como fixo
+              </Button>
+              <Button variant="outline" disabled title="TODO: criar contrato para escopo temporario de property_team_member.">
+                Adicionar como temporario
+              </Button>
+              <Button variant="ghost" disabled>
+                Nao agora
+              </Button>
+            </div>
+          </div>
+        </PageSection>
+      )}
 
       {checklist.length > 0 && (
         <PageSection

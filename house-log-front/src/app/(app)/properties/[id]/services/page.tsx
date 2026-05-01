@@ -2,8 +2,8 @@
 
 import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import useSWR, { useSWRConfig } from 'swr';
-import { AlertTriangle, CheckCircle2, Clock, Loader2, MessageCircle, Plus, ReceiptText, Wrench } from 'lucide-react';
+import { useSWRConfig } from 'swr';
+import { AlertTriangle, CheckCircle2, Clock, Loader2, Plus, ShieldCheck, Wrench } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
@@ -13,10 +13,18 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
 import { usePagination } from '@/hooks/usePagination';
-import { bidsApi, type ServiceBid, type ServiceOrder } from '@/lib/api';
-import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
+import { type ServiceOrder } from '@/lib/api';
+import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatDate } from '@/lib/utils';
 
-const STATUS_FILTERS = ['', 'requested', 'approved', 'in_progress', 'completed', 'verified'] as const;
+const SERVICE_TABS = [
+  { key: 'open', label: 'Abertos' },
+  { key: 'in_progress', label: 'Em execucao' },
+  { key: 'completed', label: 'Concluidos' },
+  { key: 'warranty', label: 'Garantia' },
+  { key: 'all', label: 'Todos' },
+] as const;
+
+type ServiceTabKey = (typeof SERVICE_TABS)[number]['key'];
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -32,31 +40,8 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
   verified: 'verified',
 };
 
-type BidSummary = {
-  total: number;
-  pending: number;
-  accepted: number;
-  bestAmount: number | null;
-};
-
-function summarizeBids(bids: ServiceBid[]): BidSummary {
-  const amounts = bids.map((bid) => Number(bid.amount)).filter((amount) => Number.isFinite(amount));
-
-  return {
-    total: bids.length,
-    pending: bids.filter((bid) => bid.status === 'pending').length,
-    accepted: bids.filter((bid) => bid.status === 'accepted').length,
-    bestAmount: amounts.length > 0 ? Math.min(...amounts) : null,
-  };
-}
-
-function getOperationalStage(order: ServiceOrder, bidSummary?: BidSummary) {
-  if (order.status === 'requested') {
-    if ((bidSummary?.total ?? 0) > 0) return 'Proposta em analise';
-    if (!order.assigned_to) return 'Orcamento solicitado';
-    return 'Solicitada';
-  }
-
+function getOperationalStage(order: ServiceOrder) {
+  if (order.status === 'requested') return 'Aberta';
   if (order.status === 'approved') return order.assigned_to ? 'Aprovada para execucao' : 'Aprovada';
   if (order.status === 'in_progress') return 'Em execucao';
   if (order.status === 'completed') return 'Aguardando verificacao';
@@ -64,60 +49,49 @@ function getOperationalStage(order: ServiceOrder, bidSummary?: BidSummary) {
   return SERVICE_STATUS_LABELS[order.status] ?? order.status;
 }
 
-function getBidSummaryLabel(order: ServiceOrder, bidSummary?: BidSummary) {
-  const hasBids = (bidSummary?.total ?? 0) > 0;
+function getServiceValue(order: ServiceOrder) {
+  if (order.assigned_to_name) return order.assigned_to_name;
+  if (order.scheduled_at) return `Agendado: ${formatDate(order.scheduled_at)}`;
+  return 'Sem prestador definido';
+}
 
-  if (hasBids) {
-    if (bidSummary?.bestAmount !== null && bidSummary?.bestAmount !== undefined) {
-      return `Menor: ${formatCurrency(bidSummary.bestAmount)}`;
-    }
-    return `${bidSummary?.pending ?? 0} pendente(s)`;
-  }
-
-  return order.assigned_to ? 'Execucao direta' : 'Aguardando proposta';
+function matchesTab(order: ServiceOrder, tab: ServiceTabKey) {
+  if (tab === 'all') return true;
+  if (tab === 'open') return order.status === 'requested' || order.status === 'approved';
+  if (tab === 'in_progress') return order.status === 'in_progress';
+  if (tab === 'completed') return order.status === 'completed' || order.status === 'verified';
+  if (tab === 'warranty') return Boolean(order.warranty_until);
+  return true;
 }
 
 export default function ServicesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const [statusFilter, setStatusFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<ServiceTabKey>('open');
   const [createOpen, setCreateOpen] = useState(false);
   const { mutate: globalMutate } = useSWRConfig();
 
   const { data: orders, isLoadingMore, hasMore, loadMore, mutate } = usePagination<ServiceOrder>(
-    `/properties/${id}/services`,
-    statusFilter ? { status: statusFilter } : undefined
+    `/properties/${id}/services`
   );
 
-  const orderIds = useMemo(() => orders.map((order) => order.id), [orders]);
-
-  const { data: bidSummaryMap } = useSWR(
-    orderIds.length > 0 ? ['service-bid-summary', id, ...orderIds] : null,
-    async () => {
-      const entries = await Promise.all(
-        orderIds.map(async (orderId) => {
-          const response = await bidsApi.list(id, orderId);
-          return [orderId, summarizeBids(response.bids)] as const;
-        })
-      );
-      return new Map<string, BidSummary>(entries);
-    },
-    { revalidateOnFocus: false, dedupingInterval: 30_000 }
+  const visibleOrders = useMemo(
+    () => orders.filter((order) => matchesTab(order, activeTab)),
+    [activeTab, orders]
   );
 
   const operationalCounts = useMemo(() => {
     return orders.reduce(
       (acc, order) => {
-        const bids = bidSummaryMap?.get(order.id);
-        if (order.status === 'requested' && !order.assigned_to) acc.quote += 1;
-        if ((bids?.total ?? 0) > 0) acc.bids += 1;
+        if (order.status === 'requested' || order.status === 'approved') acc.open += 1;
         if (order.status === 'in_progress') acc.active += 1;
-        if (order.status === 'completed') acc.review += 1;
+        if (order.status === 'completed' || order.status === 'verified') acc.done += 1;
+        if (order.warranty_until) acc.warranty += 1;
         return acc;
       },
-      { quote: 0, bids: 0, active: 0, review: 0 }
+      { open: 0, active: 0, done: 0, warranty: 0 }
     );
-  }, [bidSummaryMap, orders]);
+  }, [orders]);
 
   function openDetail(order: ServiceOrder) {
     router.push(`/properties/${id}/services/${order.id}`);
@@ -128,7 +102,8 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
       <PageHeader
         density="compact"
         eyebrow="Centro operacional"
-        title="Ordens de serviço"
+        title="Servicos"
+        description="Ordens aprovadas, em execucao ou concluidas neste imovel."
         actions={
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -139,19 +114,11 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetricCard
-          icon={ReceiptText}
-          label="Orcamento solicitado"
-          value={operationalCounts.quote}
-          helper="aguardando proposta"
+          icon={Clock}
+          label="Abertos"
+          value={operationalCounts.open}
+          helper="a iniciar"
           tone="warning"
-          density="compact"
-        />
-        <MetricCard
-          icon={MessageCircle}
-          label="Com proposta"
-          value={operationalCounts.bids}
-          helper="para analise"
-          tone="accent"
           density="compact"
         />
         <MetricCard
@@ -164,37 +131,42 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         />
         <MetricCard
           icon={CheckCircle2}
-          label="Para verificar"
-          value={operationalCounts.review}
-          helper="conclusao pendente"
+          label="Concluidos"
+          value={operationalCounts.done}
+          helper="finalizados"
           tone="success"
+          density="compact"
+        />
+        <MetricCard
+          icon={ShieldCheck}
+          label="Garantia"
+          value={operationalCounts.warranty}
+          helper="com cobertura"
+          tone="accent"
           density="compact"
         />
       </div>
 
       <div className="flex flex-wrap gap-2 tap-highlight-none">
-        {STATUS_FILTERS.map((status) => (
+        {SERVICE_TABS.map((tab) => (
           <button
-            key={status || 'all'}
+            key={tab.key}
             type="button"
             className="hl-chip"
-            data-active={statusFilter === status ? 'true' : undefined}
-            onClick={() => setStatusFilter(status)}
+            data-active={activeTab === tab.key ? 'true' : undefined}
+            onClick={() => setActiveTab(tab.key)}
           >
-            {status ? SERVICE_STATUS_LABELS[status] : 'Todas'}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      <PageSection
-        tone="strong"
-        density="default"
-      >
-        {orders.length === 0 ? (
+      <PageSection tone="strong" density="default">
+        {visibleOrders.length === 0 ? (
           <EmptyState
             icon={<Wrench className="h-6 w-6" />}
-            title="Nenhuma OS encontrada"
-            description="Quando houver solicitacao, orcamento, execucao ou verificacao, o trilho aparece aqui."
+            title="Nenhum servico encontrado"
+            description="Ordens aprovadas, em execucao ou concluidas deste imovel aparecem aqui."
             actions={
               <Button variant="outline" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" />
@@ -207,9 +179,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         ) : (
           <>
             <div className="grid gap-3 tap-highlight-none lg:grid-cols-2">
-              {orders.map((order) => {
-                const bidSummary = bidSummaryMap?.get(order.id);
-                const hasBids = (bidSummary?.total ?? 0) > 0;
+              {visibleOrders.map((order) => {
                 const urgent = order.priority === 'urgent';
 
                 return (
@@ -230,20 +200,15 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
                       }
                       title={order.title}
                       meta={`${SYSTEM_TYPE_LABELS[order.system_type]} - ${order.room_name ?? 'Sem comodo'}`}
-                      value={getBidSummaryLabel(order, bidSummary)}
+                      value={getServiceValue(order)}
                       status={
                         <div className="flex max-w-[10rem] flex-wrap justify-end gap-1.5">
                           <Badge variant={STATUS_VARIANT[order.status]} className="text-xs">
-                            {getOperationalStage(order, bidSummary)}
+                            {getOperationalStage(order)}
                           </Badge>
                           <Badge variant={PRIORITY_VARIANT[order.priority]} className="text-xs">
                             {SERVICE_PRIORITY_LABELS[order.priority]}
                           </Badge>
-                          {hasBids && (
-                            <Badge variant={bidSummary?.accepted ? 'approved' : 'requested'} className="text-xs">
-                              {bidSummary?.total} proposta(s)
-                            </Badge>
-                          )}
                         </div>
                       }
                       footer={

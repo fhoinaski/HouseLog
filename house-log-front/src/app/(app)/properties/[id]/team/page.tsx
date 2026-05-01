@@ -1,13 +1,14 @@
 'use client';
 
 import { use, useState } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   UserPlus, Trash2, Mail, Clock, ShieldCheck, Wrench, Eye,
-  ToggleLeft, ToggleRight, Users, ScanLine,
+  ToggleLeft, ToggleRight, Users, ScanLine, History, Search,
 } from 'lucide-react';
 import { invitesApi, type PropertyCollaborator, type PropertyInvite, type InviteCardSuggestion } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { toast } from 'sonner';
 import { cn, formatDate, SYSTEM_TYPE_LABELS } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
@@ -203,6 +205,10 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
 
   const collaborators = data?.collaborators ?? [];
   const invites = data?.invites ?? [];
+  const temporaryProviders = data?.temporary_providers ?? [];
+  const providerHistory = data?.provider_history ?? [];
+  const providerCollaborators = collaborators.filter((c) => c.role === 'provider');
+  const pendingProviderInvites = invites.filter((invite) => invite.role === 'provider');
 
   const isManagerCollaborator = collaborators.some((c) => c.user_id === user?.id && c.role === 'manager');
   const canManageTeam = user?.role === 'owner' || user?.role === 'admin' || isManagerCollaborator;
@@ -223,6 +229,11 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
     if (current.has(value)) current.delete(value);
     else current.add(value);
     setValue('specialties', Array.from(current).join(', '));
+  }
+
+  function openProviderInvite() {
+    setValue('role', 'provider');
+    setInviteOpen(true);
   }
 
   async function onInvite(form: InviteForm) {
@@ -336,21 +347,42 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-medium text-text-primary">Equipe</h2>
+          <h2 className="text-xl font-medium text-text-primary">Equipe do imovel</h2>
           <p className="text-sm text-text-secondary">
             {collaborators.length} membro{collaborators.length !== 1 ? 's' : ''} ·{' '}
             {invites.length} convite{invites.length !== 1 ? 's' : ''} pendente{invites.length !== 1 ? 's' : ''}
           </p>
         </div>
         {canManageTeam && (
-          <Button onClick={() => setInviteOpen(true)}>
+          <Button onClick={openProviderInvite}>
             <UserPlus className="h-4 w-4" />
-            Convidar
+            Convidar prestador
           </Button>
         )}
       </div>
+
+      {canManageTeam && (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Button variant="outline" onClick={openProviderInvite}>
+            <UserPlus className="h-4 w-4" />
+            Adicionar prestador
+          </Button>
+          <Button variant="outline" onClick={openProviderInvite}>
+            <Mail className="h-4 w-4" />
+            Convidar prestador
+          </Button>
+          <Button variant="outline" disabled title="TODO: conectar busca de prestadores cadastrados ao marketplace.">
+            <Search className="h-4 w-4" />
+            Buscar cadastrado
+          </Button>
+          <Button variant="outline" onClick={openProviderInvite}>
+            <ScanLine className="h-4 w-4" />
+            Adicionar externo
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -377,6 +409,140 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
         <p><span className="font-medium text-text-accent">Gestor</span> — visualiza tudo + abre OS (se habilitado pelo proprietário)</p>
         <p><span className="font-medium text-text-warning">Prestador</span> — recebe OS atribuídas + pode abrir OS (se habilitado)</p>
         <p><span className="font-medium text-text-secondary">Visualizador</span> — apenas leitura, não pode abrir OS</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 text-text-primary">
+            <Wrench className="h-4 w-4 text-text-warning" />
+            Prestadores fixos
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-6 pb-2">
+          {providerCollaborators.length > 0 ? (
+            providerCollaborators.map((c) => (
+              <CollaboratorRow
+                key={c.id}
+                collab={c}
+                canManageTeam={canManageTeam}
+                onToggleOS={handleToggleOS}
+                onRemove={setRemovingCollab}
+              />
+            ))
+          ) : (
+            <EmptyState
+              icon={<Wrench className="h-6 w-6" />}
+              title="Nenhum prestador fixo neste imovel"
+              description="Convide prestadores para formar a equipe operacional recorrente do imovel."
+              actions={
+                canManageTeam ? (
+                  <Button variant="outline" onClick={openProviderInvite}>
+                    <UserPlus className="h-4 w-4" />
+                    Convidar prestador
+                  </Button>
+                ) : null
+              }
+              tone="subtle"
+              density="compact"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-text-primary">
+              <Clock className="h-4 w-4 text-text-accent" />
+              Prestadores temporarios
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {temporaryProviders.length > 0 ? (
+              <div className="space-y-3">
+                {temporaryProviders.map((provider) => (
+                  <div key={provider.id} className="rounded-[var(--radius-lg)] border-half border-border-subtle bg-bg-subtle px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-text-primary">
+                          {provider.provider_name ?? provider.provider_email ?? provider.provider_phone ?? 'Prestador temporario'}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-text-secondary">{provider.service_title}</p>
+                        <p className="mt-1 text-xs text-text-tertiary">Expira {formatDate(provider.expires_at)}</p>
+                      </div>
+                      <Badge variant={provider.provider_done_at ? 'success' : provider.provider_started_at ? 'in_progress' : 'requested'} className="shrink-0">
+                        {provider.provider_done_at ? 'Concluido' : provider.provider_started_at ? 'Em execucao' : 'Temporario'}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/properties/${id}/services/${provider.service_id}`}>Ver servico</Link>
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled title="TODO: converter link temporario em colaborador fixo quando houver usuario associado.">
+                        Adicionar como fixo
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<Clock className="h-6 w-6" />}
+                title="Nenhum prestador temporario ativo"
+                description="Links temporarios de auditoria ou execucao associados a servicos deste imovel aparecem aqui."
+                tone="subtle"
+                density="compact"
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-text-primary">
+              <History className="h-4 w-4 text-text-secondary" />
+              Historico de prestadores
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {providerHistory.length > 0 ? (
+              <div className="space-y-3">
+                {providerHistory.map((entry) => (
+                  <div key={entry.service_id} className="rounded-[var(--radius-lg)] border-half border-border-subtle bg-bg-subtle px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-text-primary">{entry.provider_name}</p>
+                        <p className="mt-1 truncate text-xs text-text-secondary">{entry.service_title}</p>
+                        <p className="mt-1 text-xs text-text-tertiary">
+                          {entry.completed_at ? `Concluido em ${formatDate(entry.completed_at)}` : `Criado em ${formatDate(entry.created_at)}`}
+                        </p>
+                      </div>
+                      <Badge variant={entry.status === 'verified' ? 'verified' : 'completed'} className="shrink-0">
+                        {entry.status === 'verified' ? 'Verificado' : 'Concluido'}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <Link href={`/properties/${id}/services/${entry.service_id}`}>Ver historico</Link>
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled title="TODO: criar fluxo de chamar novamente reaproveitando escopo anterior.">
+                        Chamar novamente
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<History className="h-6 w-6" />}
+                title="Nenhum historico de prestadores"
+                description="Servicos concluidos ou verificados com prestador atribuido aparecem aqui."
+                tone="subtle"
+                density="compact"
+              />
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {collaborators.length > 0 ? (
@@ -411,16 +577,16 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
         </div>
       )}
 
-      {invites.length > 0 && (
+      {pendingProviderInvites.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-text-primary">
               <Mail className="h-4 w-4 text-text-warning" />
-              Convites pendentes
+              Convites pendentes para prestadores
             </CardTitle>
           </CardHeader>
           <CardContent className="px-6 pb-2">
-            {invites.map((inv) => (
+            {pendingProviderInvites.map((inv) => (
               <InviteRow key={inv.id} invite={inv} isOwner={canManageTeam} onCancel={handleCancelInvite} />
             ))}
           </CardContent>
@@ -468,7 +634,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             </div>
             <div className="space-y-1.5">
               <Label>Papel *</Label>
-              <Select defaultValue="manager" onValueChange={(v) => setValue('role', v as InviteForm['role'])}>
+              <Select value={selectedRole} onValueChange={(v) => setValue('role', v as InviteForm['role'])}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="manager">Gestor — gerencia o imóvel</SelectItem>

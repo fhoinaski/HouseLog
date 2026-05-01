@@ -1,5 +1,5 @@
 const PROPERTY_CONTEXT_RE =
-  /^\/properties\/([^/]+)(?:$|\/(rooms|inventory(?:\/.*)?|services(?:\/(?!new$)[^/]+)?|documents|maintenance|financial|timeline|report|credentials|access|team)(?:\/.*)?)$/;
+  /^\/properties\/([^/]+)(?:$|\/(rooms|inventory(?:\/.*)?|services(?:\/(?!new$)[^/]+)?|service-requests(?:\/.*)?|documents|maintenance|financial|timeline|report|credentials|access|team)(?:\/.*)?)$/;
 
 export function getPropertyContext(pathname: string): { propertyId: string } | null {
   const match = pathname.match(PROPERTY_CONTEXT_RE);
@@ -9,7 +9,7 @@ export function getPropertyContext(pathname: string): { propertyId: string } | n
 }
 
 export function shouldShowPropertyContextHeader(pathname: string): boolean {
-  return /^\/properties\/[^/]+\/(rooms|inventory|services|documents|maintenance|financial|timeline|report|credentials|access)$/.test(
+  return /^\/properties\/[^/]+\/(rooms|inventory|services|service-requests|documents|maintenance|financial|timeline|report|credentials|access)$/.test(
     pathname
   );
 }

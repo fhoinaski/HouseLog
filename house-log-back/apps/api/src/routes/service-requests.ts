@@ -1,19 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { canCreateServiceRequest } from '../lib/authorization';
-import { authMiddleware, requireRole } from '../middleware/auth';
+import { canAccessProperty, canCreateServiceOrder, canCreateServiceRequest } from '../lib/authorization';
+import { authMiddleware } from '../middleware/auth';
 import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
-import { serviceRequests } from '../db/schema';
+import { bids, properties, serviceOrders, serviceRequests, users } from '../db/schema';
 import { buildR2Key, getPublicUrl } from '../lib/r2';
 import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
+import { serviceOrderCreateSchema } from '../../../../../packages/contracts/src/schemas/service-order';
 
 const serviceRequestsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-serviceRequestsRoute.use('*', authMiddleware, requireRole('owner'));
+serviceRequestsRoute.use('*', authMiddleware);
 
 const mediaKindSchema = z.enum(['photo', 'video', 'audio']);
 
@@ -40,6 +41,281 @@ const MIME_BY_KIND: Record<MediaKind, Set<string>> = {
   video: new Set(['video/mp4', 'video/webm', 'video/quicktime']),
   audio: new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4']),
 };
+
+serviceRequestsRoute.get('/', async (c) => {
+  const propertyId = c.req.param('propertyId');
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  if (!propertyId) {
+    return err(c, 'Imovel nao informado', 'INVALID_PROPERTY', 422);
+  }
+
+  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) {
+    return err(c, 'Sem acesso aos orcamentos deste imovel', 'FORBIDDEN', 403);
+  }
+
+  const db = getDb(c.env.DB);
+  const limit = Math.min(Number(c.req.query('limit') ?? 50), 100);
+  const cursor = c.req.query('cursor');
+
+  const filters = [
+    eq(serviceRequests.propertyId, propertyId),
+    isNull(properties.deletedAt),
+  ];
+
+  if (cursor) {
+    filters.push(sql`${serviceRequests.createdAt} < ${cursor}`);
+  }
+
+  const rows = await db
+    .select({
+      id: serviceRequests.id,
+      property_id: serviceRequests.propertyId,
+      requested_by: serviceRequests.requestedBy,
+      title: serviceRequests.title,
+      description: serviceRequests.description,
+      media_urls: serviceRequests.mediaUrls,
+      status: serviceRequests.status,
+      created_at: serviceRequests.createdAt,
+      updated_at: serviceRequests.updatedAt,
+      proposals_count: sql<number>`count(${bids.id})`,
+      pending_proposals_count: sql<number>`sum(case when ${bids.status} = 'PENDING' then 1 else 0 end)`,
+      accepted_proposals_count: sql<number>`sum(case when ${bids.status} = 'ACCEPTED' then 1 else 0 end)`,
+      best_amount: sql<number | null>`min(${bids.amount})`,
+    })
+    .from(serviceRequests)
+    .innerJoin(properties, eq(properties.id, serviceRequests.propertyId))
+    .leftJoin(bids, eq(bids.serviceRequestId, serviceRequests.id))
+    .where(and(...filters))
+    .groupBy(serviceRequests.id)
+    .orderBy(desc(serviceRequests.createdAt))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const data = (hasMore ? rows.slice(0, limit) : rows).map((row) => ({
+    ...row,
+    proposals_count: Number(row.proposals_count ?? 0),
+    pending_proposals_count: Number(row.pending_proposals_count ?? 0),
+    accepted_proposals_count: Number(row.accepted_proposals_count ?? 0),
+    best_amount: row.best_amount === null ? null : Number(row.best_amount),
+  }));
+  const last = data.at(-1);
+
+  return ok(c, {
+    data,
+    next_cursor: hasMore && last ? last.created_at : null,
+    has_more: hasMore,
+  });
+});
+
+const convertToServiceSchema = serviceOrderCreateSchema
+  .omit({ assigned_to: true })
+  .extend({
+    description: z.string().max(3000).optional(),
+  });
+
+serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
+  const propertyId = c.req.param('propertyId');
+  const serviceRequestId = c.req.param('serviceRequestId');
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  if (!propertyId || !serviceRequestId) {
+    return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
+  }
+
+  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) {
+    return err(c, 'Sem acesso a este orcamento', 'FORBIDDEN', 403);
+  }
+
+  const db = getDb(c.env.DB);
+
+  const [requestRow] = await db
+    .select({
+      id: serviceRequests.id,
+      property_id: serviceRequests.propertyId,
+      requested_by: serviceRequests.requestedBy,
+      title: serviceRequests.title,
+      description: serviceRequests.description,
+      media_urls: serviceRequests.mediaUrls,
+      status: serviceRequests.status,
+      created_at: serviceRequests.createdAt,
+      updated_at: serviceRequests.updatedAt,
+    })
+    .from(serviceRequests)
+    .innerJoin(properties, eq(properties.id, serviceRequests.propertyId))
+    .where(
+      and(
+        eq(serviceRequests.id, serviceRequestId),
+        eq(serviceRequests.propertyId, propertyId),
+        isNull(properties.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!requestRow) {
+    return err(c, 'Solicitacao de orcamento nao encontrada', 'SERVICE_REQUEST_NOT_FOUND', 404);
+  }
+
+  const proposalRows = await db
+    .select({
+      id: bids.id,
+      service_request_id: bids.serviceRequestId,
+      provider_id: bids.providerId,
+      provider_name: users.name,
+      provider_email: users.email,
+      provider_phone: users.phone,
+      amount: bids.amount,
+      scope: bids.scope,
+      status: bids.status,
+      created_at: bids.createdAt,
+      updated_at: bids.updatedAt,
+    })
+    .from(bids)
+    .innerJoin(users, eq(users.id, bids.providerId))
+    .where(eq(bids.serviceRequestId, serviceRequestId))
+    .orderBy(sql`CASE ${bids.status} WHEN 'ACCEPTED' THEN 0 WHEN 'PENDING' THEN 1 ELSE 2 END`, bids.amount);
+
+  return ok(c, {
+    service_request: requestRow,
+    bids: proposalRows,
+  });
+});
+
+serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => {
+  const propertyId = c.req.param('propertyId');
+  const serviceRequestId = c.req.param('serviceRequestId');
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  if (!propertyId || !serviceRequestId) {
+    return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
+  }
+
+  const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) {
+    return err(c, 'Sem permissao para criar servico neste imovel', 'FORBIDDEN', 403);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return err(c, 'Body invalido', 'INVALID_BODY');
+
+  const parsed = convertToServiceSchema.safeParse(body);
+  if (!parsed.success) {
+    return err(c, 'Dados invalidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+  }
+
+  const db = getDb(c.env.DB);
+
+  const [requestRow] = await db
+    .select({
+      id: serviceRequests.id,
+      propertyId: serviceRequests.propertyId,
+      title: serviceRequests.title,
+      description: serviceRequests.description,
+      status: serviceRequests.status,
+    })
+    .from(serviceRequests)
+    .innerJoin(properties, eq(properties.id, serviceRequests.propertyId))
+    .where(
+      and(
+        eq(serviceRequests.id, serviceRequestId),
+        eq(serviceRequests.propertyId, propertyId),
+        isNull(properties.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!requestRow) {
+    return err(c, 'Solicitacao de orcamento nao encontrada', 'SERVICE_REQUEST_NOT_FOUND', 404);
+  }
+
+  const [acceptedBid] = await db
+    .select({
+      id: bids.id,
+      providerId: bids.providerId,
+      amount: bids.amount,
+      scope: bids.scope,
+      status: bids.status,
+    })
+    .from(bids)
+    .where(and(eq(bids.serviceRequestId, serviceRequestId), eq(bids.status, 'ACCEPTED')))
+    .limit(1);
+
+  if (!acceptedBid) {
+    return err(c, 'Aceite uma proposta antes de converter em servico', 'ACCEPTED_BID_REQUIRED', 409);
+  }
+
+  const input = parsed.data;
+  const serviceId = nanoid();
+  const descriptionParts = [
+    input.description?.trim() || requestRow.description,
+    acceptedBid.scope ? `Escopo aprovado:\n${acceptedBid.scope}` : null,
+  ].filter((part): part is string => Boolean(part));
+
+  try {
+    await db.insert(serviceOrders).values({
+      id: serviceId,
+      propertyId,
+      roomId: input.room_id ?? null,
+      systemType: input.system_type,
+      requestedBy: userId,
+      assignedTo: acceptedBid.providerId,
+      title: input.title || requestRow.title,
+      description: descriptionParts.length > 0 ? descriptionParts.join('\n\n') : null,
+      priority: input.priority,
+      status: 'approved',
+      cost: acceptedBid.amount,
+      warrantyUntil: input.warranty_until ?? null,
+      scheduledAt: input.scheduled_at ?? null,
+      checklist: input.checklist ?? [],
+    });
+
+    await db
+      .update(serviceRequests)
+      .set({ status: 'CLOSED', updatedAt: new Date().toISOString() })
+      .where(eq(serviceRequests.id, serviceRequestId));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('FOREIGN KEY')) {
+      return err(c, 'Comodo ou prestador nao encontrado', 'REFERENCE_NOT_FOUND', 422);
+    }
+    throw e;
+  }
+
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      room_id: serviceOrders.roomId,
+      system_type: serviceOrders.systemType,
+      requested_by: serviceOrders.requestedBy,
+      assigned_to: serviceOrders.assignedTo,
+      title: serviceOrders.title,
+      description: serviceOrders.description,
+      priority: serviceOrders.priority,
+      status: serviceOrders.status,
+      cost: serviceOrders.cost,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+      checklist: serviceOrders.checklist,
+      warranty_until: serviceOrders.warrantyUntil,
+      scheduled_at: serviceOrders.scheduledAt,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+      deleted_at: serviceOrders.deletedAt,
+    })
+    .from(serviceOrders)
+    .where(eq(serviceOrders.id, serviceId))
+    .limit(1);
+
+  return ok(c, { order }, 201);
+});
 
 function assertAllowedMimeType(kind: MediaKind, mimeType: string): boolean {
   const allowed = MIME_BY_KIND[kind];

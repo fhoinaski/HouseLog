@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   ArrowLeftRight,
   Building2,
@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
+import { PropertySwitcher } from '@/components/properties/property-switcher';
 import { cn } from '@/lib/utils';
 
 type PropertyMobileContextControlsProps = {
@@ -28,20 +28,21 @@ type PropertyMobileContextControlsProps = {
 };
 
 const mainItems = [
-  { label: 'Resumo', segment: '', icon: Home },
-  { label: 'OS', segment: 'services', icon: Wrench },
-  { label: 'Ambientes', segment: 'rooms', icon: Building2 },
-  { label: 'Docs', segment: 'documents', icon: FileText },
+  { label: 'Inicio', segment: '', icon: Home },
+  { label: 'Servicos', segment: 'services', icon: Wrench },
+  { label: 'Orcamentos', segment: 'service-requests', icon: ClipboardList },
+  { label: 'Equipe', segment: 'team', icon: Users },
 ];
 
 const moreItems = [
+  { label: 'Ambientes', segment: 'rooms', icon: Building2 },
   { label: 'Inventario', segment: 'inventory', icon: ClipboardList },
-  { label: 'Timeline', segment: 'timeline', icon: ArrowLeftRight },
+  { label: 'Documentos', segment: 'documents', icon: FileText },
   { label: 'Manutencao', segment: 'maintenance', icon: RefreshCw },
+  { label: 'Timeline', segment: 'timeline', icon: ArrowLeftRight },
   { label: 'Financeiro', segment: 'financial', icon: ReceiptText },
   { label: 'Relatorio', segment: 'report', icon: ScrollText },
   { label: 'Credenciais', segment: 'credentials', icon: KeyRound },
-  { label: 'Equipe', segment: 'team', icon: Users },
   { label: 'Editar imovel', segment: 'edit', icon: Pencil },
 ];
 
@@ -53,14 +54,13 @@ function isActive(pathname: string, propertyId: string, segment: string) {
   const href = hrefFor(propertyId, segment);
   if (!segment) return pathname === href;
   if (segment === 'services') return pathname === href || pathname.startsWith(`${href}/`);
+  if (segment === 'service-requests') return pathname === href || pathname.startsWith(`${href}/`);
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function PropertyMobileContextControls({ propertyId }: PropertyMobileContextControlsProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
 
   const moreActive = useMemo(
     () => moreItems.some((item) => isActive(pathname, propertyId, item.segment)),
@@ -71,26 +71,9 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
     <>
       <div
         className="block shrink-0 md:hidden"
-        style={{ height: 'calc(var(--nav-height-bottom) + 24px + env(safe-area-inset-bottom))' }}
+        style={{ height: 'calc(var(--nav-height-bottom) + 12px + env(safe-area-inset-bottom))' }}
         aria-hidden="true"
       />
-
-      {!createOpen && (
-        <div
-          className="fixed left-0 right-0 z-sticky flex justify-end px-4 md:hidden"
-          style={{ bottom: 'calc(var(--nav-height-bottom) + 26px + env(safe-area-inset-bottom))' }}
-        >
-          <button
-            type="button"
-            aria-label="Criar nova ordem de servico"
-            onClick={() => setCreateOpen(true)}
-            className="tap-highlight-none inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-xl)] bg-interactive-primary-bg px-4 text-sm font-medium text-interactive-primary-text shadow-[0_14px_34px_-18px_rgba(0,0,0,0.8)] transition-colors hover:bg-interactive-primary-hover focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
-          >
-            <Wrench className="h-4 w-4" aria-hidden="true" />
-            Nova OS
-          </button>
-        </div>
-      )}
 
       <nav aria-label="Navegacao do imovel" className="fixed bottom-0 left-0 right-0 z-sticky px-4 pb-3 md:hidden">
         <div
@@ -157,6 +140,11 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
             <DialogTitle>Modulos do imovel</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2 pt-1">
+            <PropertySwitcher
+              propertyId={propertyId}
+              triggerLabel="Trocar imovel"
+              triggerClassName="col-span-2 justify-start bg-bg-subtle text-text-primary hover:bg-bg-muted"
+            />
             {moreItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(pathname, propertyId, item.segment);
@@ -187,12 +175,6 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
         </DialogContent>
       </Dialog>
 
-      <ServiceOrderCreateModal
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        propertyId={propertyId}
-        onCreated={(orderId) => router.push(`/properties/${propertyId}/services/${orderId}`)}
-      />
     </>
   );
 }

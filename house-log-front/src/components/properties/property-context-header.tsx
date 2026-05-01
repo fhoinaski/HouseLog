@@ -6,7 +6,9 @@ import useSWR from 'swr';
 import { ArrowLeft, Activity, MapPin, Wrench } from 'lucide-react';
 import { propertiesApi } from '@/lib/api';
 import { cn, scoreColor } from '@/lib/utils';
+import { PropertyContextSearch } from './property-context-search';
 import { shouldShowPropertyContextHeader } from './property-route-context';
+import { PropertySwitcher } from './property-switcher';
 
 type PropertyContextHeaderProps = {
   propertyId: string;
@@ -51,11 +53,17 @@ export function PropertyContextHeader({ propertyId }: PropertyContextHeaderProps
           <div className="hidden shrink-0 items-center gap-2 sm:flex">
             <MetricPill icon={Activity} label="Saude" value={`${score}`} valueClassName={scoreColor(score)} />
             <MetricPill icon={Wrench} label="OS abertas" value={`${openOrders}`} />
+            <PropertyContextSearch propertyId={propertyId} />
+            <PropertySwitcher propertyId={propertyId} compact />
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-1 sm:hidden">
-            <span className={cn('text-sm font-medium tabular-nums', scoreColor(score))}>{score}</span>
-            <span className="text-[10px] text-text-tertiary">{openOrders} OS</span>
+          <div className="flex shrink-0 items-center gap-1 sm:hidden">
+            <div className="flex flex-col items-end gap-1">
+              <span className={cn('text-sm font-medium tabular-nums', scoreColor(score))}>{score}</span>
+              <span className="text-[10px] text-text-tertiary">{openOrders} OS</span>
+            </div>
+            <PropertyContextSearch propertyId={propertyId} />
+            <PropertySwitcher propertyId={propertyId} compact />
           </div>
         </div>
       </div>

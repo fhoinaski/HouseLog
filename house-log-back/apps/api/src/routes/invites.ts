@@ -5,7 +5,7 @@ import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
-import { properties, propertyCollaborators, propertyInvites, users } from '../db/schema';
+import { properties, propertyCollaborators, propertyInvites, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const invites = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -16,6 +16,12 @@ const createSchema = z.object({
   role: z.enum(['viewer', 'provider', 'manager']).default('viewer'),
   specialties: z.array(z.string().min(2)).max(20).optional(),
   whatsapp: z.string().min(8).max(30).optional(),
+});
+
+const addCollaboratorSchema = z.object({
+  user_id: z.string().min(1),
+  role: z.enum(['provider', 'manager', 'viewer']).default('provider'),
+  can_open_os: z.boolean().optional(),
 });
 
 const ROLE_LABELS: Record<string, string> = {
@@ -224,6 +230,107 @@ invites.post('/properties/:propertyId/invites', authMiddleware, async (c) => {
   }, 201);
 });
 
+invites.post('/properties/:propertyId/collaborators', authMiddleware, async (c) => {
+  const db = getDb(c.env.DB);
+  const { propertyId } = c.req.param();
+  const userId = c.get('userId');
+
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
+  if (!canManage) return err(c, 'Imovel nao encontrado ou sem permissao', 'FORBIDDEN', 403);
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) return err(c, 'Body invalido', 'INVALID_BODY');
+
+  const parsed = addCollaboratorSchema.safeParse(body);
+  if (!parsed.success) return err(c, 'Dados invalidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+
+  const [property] = await db
+    .select({ id: properties.id, tenantId: properties.tenantId })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+    .limit(1);
+
+  if (!property) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const [targetUser] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      whatsapp: users.whatsapp,
+      avatarUrl: users.avatarUrl,
+    })
+    .from(users)
+    .where(and(eq(users.id, parsed.data.user_id), isNull(users.deletedAt)))
+    .limit(1);
+
+  if (!targetUser) return err(c, 'Usuario nao encontrado', 'USER_NOT_FOUND', 404);
+
+  const [existing] = await db
+    .select({
+      id: propertyCollaborators.id,
+      user_id: propertyCollaborators.userId,
+      role: propertyCollaborators.role,
+      can_open_os: propertyCollaborators.canOpenOs,
+      specialties: propertyCollaborators.specialties,
+      whatsapp: propertyCollaborators.whatsapp,
+      created_at: propertyCollaborators.createdAt,
+    })
+    .from(propertyCollaborators)
+    .where(and(eq(propertyCollaborators.propertyId, propertyId), eq(propertyCollaborators.userId, targetUser.id)))
+    .limit(1);
+
+  if (existing) {
+    return ok(c, {
+      collaborator: {
+        ...existing,
+        name: targetUser.name,
+        email: targetUser.email,
+        phone: targetUser.phone,
+        avatar_url: targetUser.avatarUrl,
+      },
+      already_exists: true,
+    });
+  }
+
+  const collaboratorId = nanoid();
+  const canOpenOs = parsed.data.can_open_os ?? parsed.data.role !== 'viewer';
+
+  await db.insert(propertyCollaborators).values({
+    id: collaboratorId,
+    tenantId: property.tenantId,
+    propertyId,
+    userId: targetUser.id,
+    role: parsed.data.role,
+    invitedBy: userId,
+    canOpenOs: canOpenOs ? 1 : 0,
+    specialties: [],
+    whatsapp: normalizeWhatsapp(targetUser.whatsapp),
+  });
+
+  const [collaborator] = await db
+    .select({
+      id: propertyCollaborators.id,
+      user_id: propertyCollaborators.userId,
+      role: propertyCollaborators.role,
+      can_open_os: propertyCollaborators.canOpenOs,
+      specialties: propertyCollaborators.specialties,
+      whatsapp: propertyCollaborators.whatsapp,
+      created_at: propertyCollaborators.createdAt,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+      avatar_url: users.avatarUrl,
+    })
+    .from(propertyCollaborators)
+    .innerJoin(users, eq(users.id, propertyCollaborators.userId))
+    .where(eq(propertyCollaborators.id, collaboratorId))
+    .limit(1);
+
+  return ok(c, { collaborator, already_exists: false }, 201);
+});
+
 // ── OCR helper: extract provider data from business card image ──────────────
 
 invites.post('/properties/:propertyId/invites/extract-card', authMiddleware, async (c) => {
@@ -352,7 +459,63 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
     .where(eq(propertyCollaborators.propertyId, propertyId))
     .orderBy(propertyCollaborators.role, users.name);
 
-  return ok(c, { invites: results, collaborators });
+  const temporaryProviders = await db
+    .select({
+      id: serviceShareLinks.id,
+      service_id: serviceShareLinks.serviceId,
+      service_title: serviceOrders.title,
+      provider_name: serviceShareLinks.providerName,
+      provider_email: serviceShareLinks.providerEmail,
+      provider_phone: serviceShareLinks.providerPhone,
+      provider_accepted_at: serviceShareLinks.providerAcceptedAt,
+      provider_started_at: serviceShareLinks.providerStartedAt,
+      provider_done_at: serviceShareLinks.providerDoneAt,
+      expires_at: serviceShareLinks.expiresAt,
+      created_at: serviceShareLinks.createdAt,
+    })
+    .from(serviceShareLinks)
+    .innerJoin(serviceOrders, eq(serviceOrders.id, serviceShareLinks.serviceId))
+    .where(
+      and(
+        eq(serviceOrders.propertyId, propertyId),
+        isNull(serviceShareLinks.deletedAt),
+        isNull(serviceOrders.deletedAt),
+        or(
+          sql`${serviceShareLinks.providerName} IS NOT NULL`,
+          sql`${serviceShareLinks.providerEmail} IS NOT NULL`,
+          sql`${serviceShareLinks.providerPhone} IS NOT NULL`
+        )
+      )
+    )
+    .orderBy(desc(serviceShareLinks.createdAt))
+    .limit(20);
+
+  const providerHistory = await db
+    .select({
+      service_id: serviceOrders.id,
+      service_title: serviceOrders.title,
+      provider_id: serviceOrders.assignedTo,
+      provider_name: users.name,
+      provider_email: users.email,
+      provider_phone: users.phone,
+      status: serviceOrders.status,
+      completed_at: serviceOrders.completedAt,
+      created_at: serviceOrders.createdAt,
+    })
+    .from(serviceOrders)
+    .innerJoin(users, eq(users.id, serviceOrders.assignedTo))
+    .where(
+      and(
+        eq(serviceOrders.propertyId, propertyId),
+        isNull(serviceOrders.deletedAt),
+        sql`${serviceOrders.assignedTo} IS NOT NULL`,
+        sql`${serviceOrders.status} IN ('completed', 'verified')`
+      )
+    )
+    .orderBy(desc(serviceOrders.completedAt), desc(serviceOrders.createdAt))
+    .limit(20);
+
+  return ok(c, { invites: results, collaborators, temporary_providers: temporaryProviders, provider_history: providerHistory });
 });
 
 // ── DELETE /properties/:propertyId/invites/:inviteId ──────────────────────────
@@ -452,7 +615,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     .limit(1) as Array<{
     id: string;
     property_id: string;
-    role: string;
+    role: 'viewer' | 'provider' | 'manager';
     email: string;
     specialties: string[] | null;
     whatsapp: string | null;
