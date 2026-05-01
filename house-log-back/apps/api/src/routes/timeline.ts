@@ -48,7 +48,7 @@ timeline.get('/', async (c) => {
     .limit(limit);
 
   const docs = await db
-    .select({ id: documents.id, title: documents.title, created_at: documents.createdAt, kind: sql<string>`COALESCE(${documents.kind}, 'doc')` })
+    .select({ id: documents.id, title: documents.title, created_at: documents.createdAt, kind: documents.type })
     .from(documents)
     .where(and(eq(documents.propertyId, propertyId), isNull(documents.deletedAt), lt(documents.createdAt, before)))
     .orderBy(desc(documents.createdAt))

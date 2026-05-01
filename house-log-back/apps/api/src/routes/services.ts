@@ -53,7 +53,7 @@ const SERVICE_ORDER_AUDIT_FIELD_NAMES: Record<string, string> = {
 
 services.get('/', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -65,7 +65,15 @@ services.get('/', async (c) => {
   const status = c.req.query('status');
   const priority = c.req.query('priority');
 
-  let query = db
+  const filters = [
+    eq(serviceOrders.propertyId, propertyId),
+    isNull(serviceOrders.deletedAt),
+  ];
+  if (status) filters.push(eq(serviceOrders.status, status as typeof serviceOrders.$inferSelect.status));
+  if (priority) filters.push(eq(serviceOrders.priority, priority as typeof serviceOrders.$inferSelect.priority));
+  if (cursor) filters.push(sql`${serviceOrders.createdAt} < ${cursor}`);
+
+  const results = await db
     .select({
       id: serviceOrders.id,
       property_id: serviceOrders.propertyId,
@@ -96,13 +104,7 @@ services.get('/', async (c) => {
     .innerJoin(sql`${users} u1`, sql`u1.id = ${serviceOrders.requestedBy}`)
     .leftJoin(sql`${users} u2`, sql`u2.id = ${serviceOrders.assignedTo}`)
     .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
-    .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)));
-
-  if (status) query = query.where(eq(serviceOrders.status, status as never));
-  if (priority) query = query.where(eq(serviceOrders.priority, priority as never));
-  if (cursor) query = query.where(sql`${serviceOrders.createdAt} < ${cursor}`);
-
-  const results = await query
+    .where(and(...filters))
     .orderBy(sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`, desc(serviceOrders.createdAt))
     .limit(limit + 1) as Array<ServiceOrder & { requested_by_name: string; assigned_to_name: string | null; room_name: string | null }>;
 
@@ -113,7 +115,7 @@ services.get('/', async (c) => {
 
 services.post('/', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -184,6 +186,8 @@ services.post('/', async (c) => {
     .where(eq(serviceOrders.id, id))
     .limit(1) as Array<ServiceOrder>;
 
+  if (!order) return err(c, 'OS não encontrada após criação', 'NOT_FOUND', 404);
+
   // Notify assigned provider (non-blocking)
   void (async () => {
     try {
@@ -243,8 +247,8 @@ services.post('/', async (c) => {
 
 services.get('/:id', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -294,8 +298,8 @@ services.get('/:id', async (c) => {
 
 services.put('/:id', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -385,6 +389,8 @@ services.put('/:id', async (c) => {
     .where(eq(serviceOrders.id, id))
     .limit(1) as Array<ServiceOrder>;
 
+  if (!updated) return err(c, 'OS não encontrada após atualização', 'NOT_FOUND', 404);
+
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
     entityId: id,
@@ -407,8 +413,8 @@ services.put('/:id', async (c) => {
 
 services.patch('/:id/status', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -570,8 +576,8 @@ services.patch('/:id/status', async (c) => {
 
 services.post('/:id/photos', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -638,8 +644,8 @@ services.post('/:id/photos', async (c) => {
 
 services.post('/:id/video', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -692,8 +698,8 @@ services.post('/:id/video', async (c) => {
 
 services.post('/:id/audio', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -747,8 +753,8 @@ services.post('/:id/audio', async (c) => {
 
 services.delete('/:id', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -809,7 +815,8 @@ services.delete('/:id', async (c) => {
 
 services.patch('/:id/checklist', async (c) => {
   const db = getDb(c.env.DB);
-  const { propertyId, id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 

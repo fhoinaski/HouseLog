@@ -29,7 +29,7 @@ export function ServiceOrderCard({
   ...props
 }: ServiceOrderCardProps) {
   return (
-    <div className={cn(serviceOrderCardVariants({ density, interactive, className }))} {...props}>
+    <div className={cn('service-order-card', serviceOrderCardVariants({ density, interactive, className }))} {...props}>
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {leadingIcon && (

@@ -113,7 +113,7 @@
     /* Navigation */
     --nav-bg: rgba(255, 255, 255, 0.94);
     --nav-text-active: var(--premium-primary);
-    --nav-text-inactive: var(--premium-muted);
+    --nav-text-inactive: #5F6670;
     --nav-border: var(--premium-border);
 
     /* Cards and panels */
@@ -187,17 +187,112 @@
     --provider-surface-strong: var(--surface-strong);
     --provider-divider: var(--surface-outline);
     --surface-container-low: var(--surface-strong);
+    --field-bg-hover: #F7F5F0;
     --input-shadow-focus: var(--shadow-focus);
     --input-bg-disabled: var(--input-disabled-bg);
     --card-radius: 8px;
     --card-padding: 16px;
     --card-shadow: var(--shadow-xs);
+    --shadow-card: var(--shadow-xs);
     --avatar-owner-bg: #E6EAEF;
     --avatar-owner-text: var(--premium-primary);
     --avatar-manager-bg: #F3E7D8;
     --avatar-manager-text: #8A613A;
     --avatar-provider-bg: #EAF5EF;
     --avatar-provider-text: var(--premium-success);
+    --surface-glass: rgba(255, 255, 255, 0.92);
+    --button-tonal-bg: #F1EEE7;
+    --button-tonal-hover: #E8D3BB;
+    --button-tonal-text: var(--premium-primary);
+  }
+
+  [data-theme="crm-premium"] .property-card {
+    background: var(--card-bg);
+    border-color: var(--card-border);
+    box-shadow: var(--shadow-sm);
+  }
+
+  [data-theme="crm-premium"] .property-card-action {
+    background: var(--bg-subtle);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+  }
+
+  [data-theme="crm-premium"] .property-card-action:hover {
+    background: var(--bg-accent-subtle);
+    border-color: var(--border-accent);
+  }
+
+  [data-theme="crm-premium"] .property-card-action svg {
+    color: var(--text-accent);
+  }
+
+  [data-theme="crm-premium"] .top-nav-header {
+    border-bottom: 1px solid var(--nav-border);
+    box-shadow: var(--shadow-sm);
+  }
+
+  [data-theme="crm-premium"] .top-nav-brand,
+  [data-theme="crm-premium"] .top-nav-profile {
+    color: var(--nav-text-active);
+  }
+
+  [data-theme="crm-premium"] .top-nav-brand:hover,
+  [data-theme="crm-premium"] .top-nav-profile:hover {
+    background: var(--bg-subtle);
+  }
+
+  [data-theme="crm-premium"] .top-nav-brand-icon,
+  [data-theme="crm-premium"] .top-nav-list {
+    background: var(--bg-subtle);
+  }
+
+  [data-theme="crm-premium"] .top-nav-brand-text {
+    color: var(--nav-text-active);
+  }
+
+  [data-theme="crm-premium"] .top-nav-item[data-active="true"] {
+    background: var(--bg-surface);
+    color: var(--nav-text-active);
+    box-shadow: var(--shadow-xs);
+  }
+
+  [data-theme="crm-premium"] .top-nav-item[data-active="false"] {
+    color: var(--nav-text-inactive);
+  }
+
+  [data-theme="crm-premium"] .top-nav-item[data-active="false"]:hover {
+    background: var(--bg-surface);
+    color: var(--nav-text-active);
+  }
+
+  [data-theme="crm-premium"] .metric-card,
+  [data-theme="crm-premium"] .action-tile,
+  [data-theme="crm-premium"] .service-order-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-xs);
+  }
+
+  [data-theme="crm-premium"] .action-tile:hover,
+  [data-theme="crm-premium"] .service-order-card:hover {
+    background: var(--bg-subtle);
+    border-color: var(--border-default);
+  }
+
+  [data-theme="crm-premium"] .metric-card-icon,
+  [data-theme="crm-premium"] .action-tile-icon {
+    background: var(--bg-subtle);
+    color: var(--text-accent);
+  }
+
+  [data-theme="crm-premium"] .service-order-card [class*="bg-bg-accent-subtle"] {
+    background: var(--bg-subtle);
+    color: var(--text-accent);
+  }
+
+  [data-theme="crm-premium"] .hl-badge {
+    border: 1px solid var(--badge-border);
   }
 
   [data-theme="crm-premium-dark"],

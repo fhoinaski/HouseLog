@@ -25,9 +25,9 @@ export function ActionTile({
   ...props
 }: ActionTileProps) {
   return (
-    <Link href={href} className={cn(actionTileVariants({ tone, density, className }))} {...props}>
+    <Link href={href} className={cn('action-tile', actionTileVariants({ tone, density, className }))} {...props}>
       {Icon && (
-        <div className={cn(actionTileIconVariants({ tone }), iconClassName)}>
+        <div className={cn('action-tile-icon', actionTileIconVariants({ tone }), iconClassName)}>
           <Icon className="h-5 w-5" />
         </div>
       )}

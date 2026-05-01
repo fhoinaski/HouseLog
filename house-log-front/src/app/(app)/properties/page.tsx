@@ -67,7 +67,7 @@ function PropertyVisual({ property }: { property: Property }) {
         }}
         aria-label={property.name}
       >
-        <div className="absolute bottom-3 left-3 rounded-full bg-[rgba(6,14,32,0.72)] px-3 py-1 text-xs font-medium text-text-primary backdrop-blur-[var(--surface-blur)]">
+        <div className="absolute bottom-3 left-3 rounded-full bg-[rgba(6,14,32,0.72)] px-3 py-1 text-xs font-medium text-white backdrop-blur-[var(--surface-blur)]">
           {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
         </div>
       </div>
@@ -78,7 +78,7 @@ function PropertyVisual({ property }: { property: Property }) {
     <div className="relative flex min-h-32 items-center justify-center overflow-hidden rounded-[var(--radius-lg)] bg-[linear-gradient(135deg,rgba(184,195,255,0.18),rgba(78,222,163,0.08))] shadow-[var(--shadow-sm)] sm:min-h-36 xl:min-h-44">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_15%,rgba(255,255,255,0.14),transparent_13rem)]" />
       <span className="relative text-4xl font-medium text-text-accent">{getInitials(property.name)}</span>
-      <div className="absolute bottom-3 left-3 rounded-full bg-[rgba(6,14,32,0.60)] px-3 py-1 text-xs font-medium text-text-primary backdrop-blur-[var(--surface-blur)]">
+      <div className="absolute bottom-3 left-3 rounded-full bg-[rgba(6,14,32,0.60)] px-3 py-1 text-xs font-medium text-white backdrop-blur-[var(--surface-blur)]">
         {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
       </div>
     </div>
@@ -114,7 +114,7 @@ function PropertyCard({ property }: { property: Property }) {
   ];
 
   return (
-    <Card variant="glass" density="compact" className="overflow-hidden shadow-[var(--shadow-md)]">
+    <Card variant="glass" density="compact" className="property-card overflow-hidden shadow-[var(--shadow-md)]">
       <CardContent className="grid gap-3.5 p-3.5 sm:gap-4 sm:p-4 xl:grid-cols-[168px_minmax(0,1fr)]">
         <PropertyVisual property={property} />
 
@@ -139,7 +139,7 @@ function PropertyCard({ property }: { property: Property }) {
                 key={href}
                 href={href}
                 className={cn(
-                  'group flex min-h-11 items-center rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
+                  'property-card-action group flex min-h-11 items-center rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
                   className
                 )}
               >

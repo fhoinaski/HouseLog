@@ -598,6 +598,7 @@ properties.post('/:id/apply-template', async (c) => {
   if (!parsed.success) return err(c, 'Template inválido', 'VALIDATION_ERROR', 422);
 
   const template = TEMPLATES[parsed.data.type];
+  if (!template) return err(c, 'Template inválido', 'VALIDATION_ERROR', 422);
 
   function calcNextDue(freq: string): string {
     const days: Record<string, number> = { weekly: 7, monthly: 30, quarterly: 90, semiannual: 180, annual: 365 };

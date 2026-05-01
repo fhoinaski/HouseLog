@@ -28,10 +28,10 @@ export function MetricCard({
   ...props
 }: MetricCardProps) {
   return (
-    <div className={cn(metricCardVariants({ tone, density, className }))} {...props}>
+    <div className={cn('metric-card', metricCardVariants({ tone, density, className }))} {...props}>
       <div className="flex min-w-0 items-center gap-3">
         {Icon && (
-          <div className={cn(metricIconVariants({ tone }), iconClassName)}>
+          <div className={cn('metric-card-icon', metricIconVariants({ tone }), iconClassName)}>
             <Icon className="h-4 w-4" />
           </div>
         )}

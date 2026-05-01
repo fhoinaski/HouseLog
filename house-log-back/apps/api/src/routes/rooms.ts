@@ -25,7 +25,7 @@ const schema = z.object({
 
 rooms.get('/', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -55,7 +55,7 @@ rooms.get('/', async (c) => {
 
 rooms.post('/', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -115,8 +115,8 @@ rooms.post('/', async (c) => {
 
 rooms.get('/:id', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -154,8 +154,8 @@ rooms.get('/:id', async (c) => {
 
 rooms.put('/:id', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -236,8 +236,8 @@ rooms.put('/:id', async (c) => {
 
 rooms.delete('/:id', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
-  const { id } = c.req.param();
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 

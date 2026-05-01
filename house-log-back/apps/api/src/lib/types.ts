@@ -97,7 +97,7 @@ export type Room = {
   property_id: string;
   name: string;
   type: string;
-  floor: number;
+  floor: number | null;
   area_m2: number | null;
   notes: string | null;
   created_at: string;
@@ -140,11 +140,11 @@ export type ServiceOrder = {
   priority: 'urgent' | 'normal' | 'preventive';
   status: 'requested' | 'approved' | 'in_progress' | 'completed' | 'verified';
   cost: number | null;
-  before_photos: string;
-  after_photos: string;
+  before_photos: string[] | null;
+  after_photos: string[] | null;
   video_url: string | null;
   audio_url: string | null;
-  checklist: string;
+  checklist: Array<{ item: string; done: boolean }> | null;
   warranty_until: string | null;
   scheduled_at: string | null;
   completed_at: string | null;

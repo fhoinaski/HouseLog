@@ -125,7 +125,7 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
 // ── GET /properties/:id/report/health-score ───────────────────────────────────
 
 reports.get('/health-score', async (c) => {
-  const propertyId = c.req.param('propertyId');
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
@@ -144,7 +144,7 @@ reports.get('/health-score', async (c) => {
 
 reports.get('/valuation-pdf', async (c) => {
   const db = getDb(c.env.DB);
-  const propertyId = c.req.param('propertyId');
+  const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
 
