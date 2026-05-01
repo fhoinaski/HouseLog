@@ -111,6 +111,12 @@ Enquanto a entidade dedicada nao existir, a UI pode reaproveitar:
 
 Deve exibir plantas, fotos de referencia e pontos tecnicos. Deve ser tratado como modulo sensivel, pois revela infraestrutura do imovel.
 
+Relação implementada:
+
+- `technical_systems` organiza os sistemas técnicos do imóvel.
+- `technical_points` localiza pontos críticos ou operacionais dentro do imóvel.
+- O mapa técnico usa `technical_points` como primeira camada real, permitindo vincular cada ponto a um sistema técnico e/ou ambiente quando houver contexto cadastrado.
+
 ### Sistemas
 
 Deve organizar eletrica, hidraulica, automacao, impermeabilizacao, climatizacao, seguranca e demais sistemas.

@@ -137,6 +137,50 @@ export const technicalSystems = sqliteTable('technical_systems', {
   typeIdx: index('idx_technical_systems_type').on(table.propertyId, table.type),
 }));
 
+export const technicalPoints = sqliteTable('technical_points', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
+  propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  technicalSystemId: text('technical_system_id').references(() => technicalSystems.id),
+  roomId: text('room_id').references(() => rooms.id),
+  name: text('name').notNull(),
+  type: text('type', {
+    enum: [
+      'valve',
+      'pipe',
+      'drain',
+      'inspection_box',
+      'electrical_panel',
+      'conduit',
+      'outlet',
+      'switch',
+      'gas_line',
+      'hvac_line',
+      'network_point',
+      'sensor',
+      'waterproofing_area',
+      'structural_element',
+      'other',
+    ],
+  }).notNull(),
+  description: text('description'),
+  positionX: real('position_x'),
+  positionY: real('position_y'),
+  floor: integer('floor').notNull().default(0),
+  referenceImageUrl: text('reference_image_url'),
+  riskLevel: text('risk_level', { enum: ['low', 'medium', 'high'] }).notNull().default('low'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at'),
+  deletedAt: text('deleted_at'),
+}, (table) => ({
+  tenantIdx: index('idx_technical_points_tenant').on(table.tenantId),
+  propertyIdx: index('idx_technical_points_property').on(table.propertyId),
+  systemIdx: index('idx_technical_points_system').on(table.technicalSystemId),
+  roomIdx: index('idx_technical_points_room').on(table.roomId),
+  typeIdx: index('idx_technical_points_type').on(table.propertyId, table.type),
+  riskIdx: index('idx_technical_points_risk').on(table.propertyId, table.riskLevel),
+}));
+
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
   tenantId: text('tenant_id').references(() => tenants.id),

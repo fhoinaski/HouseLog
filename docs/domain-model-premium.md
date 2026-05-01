@@ -44,6 +44,9 @@ Fase 1 do modelo premium, antes do mapa tecnico e das garantias avancadas.
 
 ## `technical_points`
 
+Status de implementação:
+Segunda entidade premium implementada. A tabela `technical_points`, contratos Zod, rotas backend e a página `/properties/:id/map` passam a existir como base real do mapa técnico. Pontos podem se vincular opcionalmente a `technical_systems` e `rooms`, sempre dentro do mesmo `tenantId` e `propertyId`.
+
 Objetivo:
 Registrar pontos tecnicos localizados no imovel, como registros, shafts, caixas de passagem, quadros, disjuntores, drenos, ralos, pontos de inspeção, sensores, valvulas e passagens de tubulacao.
 

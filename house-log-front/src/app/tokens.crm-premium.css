@@ -1,0 +1,312 @@
+/*
+ * ============================================================
+ * HOUSELOG - CRM PREMIUM TOKEN PROPOSAL
+ * Design system: The Architectural Lens
+ * ============================================================
+ *
+ * Arquivo propositalmente isolado.
+ * Nao importar globalmente antes da revisao visual.
+ *
+ * Objetivo:
+ * - propor uma variacao clara, documental e premium;
+ * - manter nomes semanticos compativeis com os tokens atuais;
+ * - preservar uma opcao dark tecnica sem torna-la padrao.
+ * ============================================================
+ */
+
+@layer base {
+  :root,
+  [data-theme="crm-premium"] {
+    /* Primitive palette */
+    --premium-bg: #F6F4EF;
+    --premium-surface: #FFFFFF;
+    --premium-surface-subtle: #F1EEE7;
+    --premium-surface-muted: #E9E4DC;
+    --premium-text: #1E252B;
+    --premium-muted: #6B7280;
+    --premium-border: #E5E1DA;
+    --premium-primary: #233142;
+    --premium-primary-hover: #182331;
+    --premium-accent: #B88A5A;
+    --premium-accent-hover: #9D7044;
+    --premium-success: #2F7D57;
+    --premium-warning: #B7791F;
+    --premium-danger: #B42318;
+    --premium-info: #2F5F98;
+
+    /* Backgrounds */
+    --bg-page: var(--premium-bg);
+    --bg-surface: var(--premium-surface);
+    --bg-surface-raised: var(--premium-surface);
+    --bg-surface-overlay: rgba(255, 255, 255, 0.96);
+    --bg-subtle: var(--premium-surface-subtle);
+    --bg-muted: var(--premium-surface-muted);
+
+    --bg-accent: var(--premium-accent);
+    --bg-accent-subtle: #F3E7D8;
+    --bg-accent-muted: #E8D3BB;
+
+    --bg-brand: var(--premium-primary);
+    --bg-brand-hover: var(--premium-primary-hover);
+    --bg-brand-subtle: #E6EAEF;
+
+    --bg-danger: #FDECEC;
+    --bg-danger-emphasis: #F8D8D5;
+    --bg-warning: #FFF5DF;
+    --bg-warning-emphasis: #F8E3B8;
+    --bg-success: #EAF5EF;
+    --bg-success-emphasis: #D4EBDD;
+    --bg-info: #EAF1F8;
+    --bg-info-emphasis: #D7E5F2;
+
+    /* Text */
+    --text-primary: var(--premium-text);
+    --text-secondary: #4B5563;
+    --text-tertiary: var(--premium-muted);
+    --text-disabled: #9CA3AF;
+    --text-inverse: #F9FAFB;
+    --text-on-accent: #FFFFFF;
+
+    --text-accent: #8A613A;
+    --text-accent-subtle: var(--premium-accent);
+    --text-brand: var(--premium-primary);
+
+    --text-danger: var(--premium-danger);
+    --text-warning: #925F17;
+    --text-success: var(--premium-success);
+    --text-info: var(--premium-info);
+
+    /* Borders */
+    --border-default: var(--premium-border);
+    --border-subtle: #EEEAE3;
+    --border-strong: #CFC7BC;
+    --border-focus: var(--premium-accent);
+    --border-accent: var(--premium-accent);
+    --border-danger: #E6A19A;
+    --border-warning: #E2B75E;
+    --border-success: #8EC3A5;
+    --border-info: #8FAED0;
+
+    /* Interactive */
+    --interactive-primary-bg: var(--premium-primary);
+    --interactive-primary-hover: var(--premium-primary-hover);
+    --interactive-primary-active: #101923;
+    --interactive-primary-text: #FFFFFF;
+
+    --interactive-accent-bg: var(--premium-accent);
+    --interactive-accent-hover: var(--premium-accent-hover);
+    --interactive-accent-active: #845C35;
+    --interactive-accent-text: #FFFFFF;
+
+    --interactive-secondary-bg: #FFFFFF;
+    --interactive-secondary-hover: #F7F5F0;
+    --interactive-secondary-active: #EFEAE2;
+    --interactive-secondary-border: var(--premium-border);
+    --interactive-secondary-text: var(--premium-primary);
+
+    --interactive-ghost-hover: #F1EEE7;
+    --interactive-ghost-active: #E9E4DC;
+
+    --interactive-danger-bg: var(--premium-danger);
+    --interactive-danger-hover: #991B1B;
+    --interactive-danger-text: #FFFFFF;
+
+    /* Navigation */
+    --nav-bg: rgba(255, 255, 255, 0.94);
+    --nav-text-active: var(--premium-primary);
+    --nav-text-inactive: var(--premium-muted);
+    --nav-border: var(--premium-border);
+
+    /* Cards and panels */
+    --card-bg: var(--premium-surface);
+    --card-border: var(--premium-border);
+    --card-border-hover: #D6CEC3;
+    --card-urgent-bg: #FFF7ED;
+    --card-urgent-border: #E2B75E;
+
+    /* Inputs */
+    --input-bg: var(--premium-surface);
+    --input-border: var(--premium-border);
+    --input-border-hover: #CFC7BC;
+    --input-border-focus: var(--premium-accent);
+    --input-text: var(--premium-text);
+    --input-placeholder: var(--premium-muted);
+    --input-disabled-bg: #F1EEE7;
+
+    /* Chips */
+    --chip-bg: #F1EEE7;
+    --chip-text: var(--premium-primary);
+    --chip-border: #E5E1DA;
+    --chip-active-bg: #E8D3BB;
+    --chip-active-text: #5F3E22;
+
+    /* Badges */
+    --badge-bg: #F1EEE7;
+    --badge-text: var(--premium-primary);
+    --badge-border: #E5E1DA;
+    --badge-success-bg: #EAF5EF;
+    --badge-success-text: var(--premium-success);
+    --badge-warning-bg: #FFF5DF;
+    --badge-warning-text: #925F17;
+    --badge-danger-bg: #FDECEC;
+    --badge-danger-text: var(--premium-danger);
+    --badge-info-bg: #EAF1F8;
+    --badge-info-text: var(--premium-info);
+
+    /* Floating actions and feedback */
+    --fab-bg: var(--premium-primary);
+    --fab-hover: var(--premium-primary-hover);
+    --fab-text: #FFFFFF;
+    --fab-shadow: 0 16px 34px rgba(35, 49, 66, 0.18);
+
+    --toast-bg: #FFFFFF;
+    --toast-text: var(--premium-text);
+    --toast-border: var(--premium-border);
+
+    --skeleton-bg: #E9E4DC;
+    --skeleton-highlight: #F8F6F1;
+
+    /* Shadows */
+    --shadow-xs: 0 1px 2px rgba(35, 49, 66, 0.05);
+    --shadow-sm: 0 1px 3px rgba(35, 49, 66, 0.07), 0 1px 2px rgba(35, 49, 66, 0.04);
+    --shadow-md: 0 8px 20px rgba(35, 49, 66, 0.08);
+    --shadow-lg: 0 18px 40px rgba(35, 49, 66, 0.10);
+    --shadow-focus: 0 0 0 3px rgba(184, 138, 90, 0.24);
+    --shadow-focus-danger: 0 0 0 3px rgba(180, 35, 24, 0.18);
+    --shadow-focus-accent: 0 0 0 3px rgba(184, 138, 90, 0.28);
+  }
+
+  [data-theme="crm-premium-dark"],
+  .crm-premium-dark {
+    /* Optional technical dark mode */
+    --bg-page: #10151B;
+    --bg-surface: #171E26;
+    --bg-surface-raised: #1D2630;
+    --bg-surface-overlay: rgba(23, 30, 38, 0.96);
+    --bg-subtle: #202A35;
+    --bg-muted: #2B3643;
+
+    --bg-accent: #B88A5A;
+    --bg-accent-subtle: #34271D;
+    --bg-accent-muted: #4A3828;
+
+    --bg-brand: #233142;
+    --bg-brand-hover: #2D3D50;
+    --bg-brand-subtle: #1D2630;
+
+    --bg-danger: #331C1A;
+    --bg-danger-emphasis: #4A211E;
+    --bg-warning: #352815;
+    --bg-warning-emphasis: #4A3519;
+    --bg-success: #183225;
+    --bg-success-emphasis: #1F4631;
+    --bg-info: #182B42;
+    --bg-info-emphasis: #1F3B5C;
+
+    --text-primary: #F4F1EA;
+    --text-secondary: #C7CDD4;
+    --text-tertiary: #9CA3AF;
+    --text-disabled: #6B7280;
+    --text-inverse: #10151B;
+    --text-on-accent: #FFFFFF;
+
+    --text-accent: #D6AE82;
+    --text-accent-subtle: #B88A5A;
+    --text-brand: #F4F1EA;
+
+    --text-danger: #F2A39C;
+    --text-warning: #E2B75E;
+    --text-success: #8EC3A5;
+    --text-info: #9EBCE0;
+
+    --border-default: #2F3945;
+    --border-subtle: #26313C;
+    --border-strong: #4B5563;
+    --border-focus: #B88A5A;
+    --border-accent: #B88A5A;
+    --border-danger: #7A302B;
+    --border-warning: #7C5B21;
+    --border-success: #2F6A49;
+    --border-info: #315B88;
+
+    --interactive-primary-bg: #F4F1EA;
+    --interactive-primary-hover: #FFFFFF;
+    --interactive-primary-active: #E5E1DA;
+    --interactive-primary-text: #10151B;
+
+    --interactive-accent-bg: #B88A5A;
+    --interactive-accent-hover: #C69A6D;
+    --interactive-accent-active: #D6AE82;
+    --interactive-accent-text: #10151B;
+
+    --interactive-secondary-bg: transparent;
+    --interactive-secondary-hover: #202A35;
+    --interactive-secondary-active: #2B3643;
+    --interactive-secondary-border: #3A4654;
+    --interactive-secondary-text: #F4F1EA;
+
+    --interactive-ghost-hover: #202A35;
+    --interactive-ghost-active: #2B3643;
+
+    --interactive-danger-bg: #B42318;
+    --interactive-danger-hover: #D0443A;
+    --interactive-danger-text: #FFFFFF;
+
+    --nav-bg: rgba(23, 30, 38, 0.94);
+    --nav-text-active: #F4F1EA;
+    --nav-text-inactive: #9CA3AF;
+    --nav-border: #2F3945;
+
+    --card-bg: #171E26;
+    --card-border: #2F3945;
+    --card-border-hover: #3A4654;
+    --card-urgent-bg: #352815;
+    --card-urgent-border: #7C5B21;
+
+    --input-bg: #171E26;
+    --input-border: #2F3945;
+    --input-border-hover: #4B5563;
+    --input-border-focus: #B88A5A;
+    --input-text: #F4F1EA;
+    --input-placeholder: #9CA3AF;
+    --input-disabled-bg: #202A35;
+
+    --chip-bg: #202A35;
+    --chip-text: #F4F1EA;
+    --chip-border: #2F3945;
+    --chip-active-bg: #4A3828;
+    --chip-active-text: #D6AE82;
+
+    --badge-bg: #202A35;
+    --badge-text: #F4F1EA;
+    --badge-border: #2F3945;
+    --badge-success-bg: #183225;
+    --badge-success-text: #8EC3A5;
+    --badge-warning-bg: #352815;
+    --badge-warning-text: #E2B75E;
+    --badge-danger-bg: #331C1A;
+    --badge-danger-text: #F2A39C;
+    --badge-info-bg: #182B42;
+    --badge-info-text: #9EBCE0;
+
+    --fab-bg: #B88A5A;
+    --fab-hover: #C69A6D;
+    --fab-text: #10151B;
+    --fab-shadow: 0 18px 38px rgba(0, 0, 0, 0.32);
+
+    --toast-bg: #171E26;
+    --toast-text: #F4F1EA;
+    --toast-border: #2F3945;
+
+    --skeleton-bg: #202A35;
+    --skeleton-highlight: #2B3643;
+
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.22);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 12px 28px rgba(0, 0, 0, 0.34);
+    --shadow-lg: 0 22px 48px rgba(0, 0, 0, 0.40);
+    --shadow-focus: 0 0 0 3px rgba(184, 138, 90, 0.30);
+    --shadow-focus-danger: 0 0 0 3px rgba(180, 35, 24, 0.24);
+    --shadow-focus-accent: 0 0 0 3px rgba(184, 138, 90, 0.34);
+  }
+}

@@ -10,6 +10,14 @@ import type {
   ServiceOrder,
 } from '@/lib/api/_core';
 import type {
+  CreateTechnicalPointInput,
+  TechnicalPoint,
+  TechnicalPointFilterInput,
+  TechnicalPointRiskLevel,
+  TechnicalPointType,
+  UpdateTechnicalPointInput,
+} from '../../../packages/contracts/src/schemas/technical-point';
+import type {
   CreateTechnicalSystemInput,
   TechnicalSystem,
   TechnicalSystemStatus,
@@ -50,10 +58,16 @@ export type {
   User,
 } from '@/lib/api/_core';
 export type {
+  CreateTechnicalPointInput,
   CreateTechnicalSystemInput,
+  TechnicalPoint,
+  TechnicalPointFilterInput,
+  TechnicalPointRiskLevel,
+  TechnicalPointType,
   TechnicalSystem,
   TechnicalSystemStatus,
   TechnicalSystemType,
+  UpdateTechnicalPointInput,
   UpdateTechnicalSystemInput,
 };
 export { authApi } from '@/lib/api/auth';
@@ -202,6 +216,29 @@ export const technicalSystemsApi = {
 
   delete: (propertyId: string, systemId: string) =>
     request<{ success: boolean }>(`/properties/${propertyId}/technical-systems/${systemId}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Technical Points
+export const technicalPointsApi = {
+  list: (propertyId: string, filters?: TechnicalPointFilterInput) =>
+    request<{ points: TechnicalPoint[] }>(`/properties/${propertyId}/technical-points${qs(filters)}`),
+
+  create: (propertyId: string, data: CreateTechnicalPointInput) =>
+    request<{ point: TechnicalPoint }>(`/properties/${propertyId}/technical-points`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (propertyId: string, pointId: string, data: UpdateTechnicalPointInput) =>
+    request<{ point: TechnicalPoint }>(`/properties/${propertyId}/technical-points/${pointId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (propertyId: string, pointId: string) =>
+    request<{ success: boolean }>(`/properties/${propertyId}/technical-points/${pointId}`, {
       method: 'DELETE',
     }),
 };
