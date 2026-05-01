@@ -1,81 +1,175 @@
-# UX do contexto de imovel
+# UX do contexto do imovel
 
-Este documento registra a organizacao de produto para o modo imovel do HouseLog.
+Este documento define a direcao de UX para o HouseLog como prontuario tecnico digital. Ele e estrategico e tecnico: orienta proximos commits sem exigir renomeacao de tabelas, migrations ou novos endpoints neste momento.
 
-## Definicoes
+## Principio central
+
+O imovel e o centro do sistema.
+
+Ao entrar em `/properties/:id`, o usuario deve sair mentalmente da navegacao global e entrar no contexto daquele ativo. Todas as decisoes de interface devem reforcar que o HouseLog guarda a memoria tecnica do imovel: sistemas, pontos, ambientes, documentos, garantias, reformas, manutencoes, servicos, equipe e historico.
+
+## Menu contextual mobile sugerido
+
+Barra principal:
+
+- Inicio: resumo tecnico e operacional do imovel.
+- Mapa: planta, pontos tecnicos e localizacao de sistemas.
+- Sistemas: sistemas tecnicos do imovel.
+- Servicos: ordens aprovadas, em execucao ou concluidas.
+- Mais: sheet com modulos secundarios e administrativos.
+
+## Sheet Mais
+
+Itens sugeridos:
+
+- Orcamentos.
+- Documentos.
+- Ambientes.
+- Equipe.
+- Manutencao.
+- Reformas.
+- Inventario.
+- Timeline.
+- Financeiro.
+- Relatorio.
+- Garantias.
+- Trocar imovel.
+- Editar imovel.
+
+## Definicoes operacionais
 
 - `service_request` = pedido de orcamento.
-- `bid` = proposta do prestador.
+- `bid` = proposta.
 - `service_order` = servico aprovado/executado.
 - `service_message` = conversa.
 - `property_team_member` = prestador vinculado ao imovel.
 
-## Fluxo operacional
+## Separacao conceitual
 
-O fluxo esperado e:
+### Orcamentos
 
-1. O gestor cria um `service_request` quando precisa pedir orcamento.
-2. Prestadores respondem com `bid`.
-3. Uma proposta aprovada gera ou referencia uma `service_order`.
-4. A `service_order` concentra execucao, evidencias, status e `service_message`.
-5. Prestadores recorrentes devem ser tratados como `property_team_member` quando houver contrato dedicado.
+Orcamentos representam a fase de compra/avaliacao. O usuario ainda esta pedindo propostas, comparando escopo e decidindo quem executa.
 
-## Navegacao contextual
+Entidade base:
 
-Dentro de `/properties/:id` e subrotas do imovel, a navegacao inferior mobile deve substituir a navegacao global por:
+- `service_request`
+- `bid`
 
-- Inicio: `/properties/:id`
-- Servicos: `/properties/:id/services`
-- Orcamentos: `/properties/:id/service-requests`
-- Equipe: `/properties/:id/team`
-- Mais: sheet com troca de imovel e modulos secundarios.
+UX:
 
-O menu contextual nao aparece em `/properties`, `/properties/new`, `/dashboard`, `/provider/*` ou `/settings`.
+- Listar pedidos de orcamento.
+- Mostrar propostas recebidas.
+- Permitir aceitar uma proposta.
+- Converter uma proposta aceita em `service_order` quando os campos tecnicos obrigatorios forem definidos.
+
+### Servicos
+
+Servicos representam a execucao ou historico de uma ordem aprovada.
+
+Entidade base:
+
+- `service_order`
+- `service_message`
+
+UX:
+
+- Mostrar status operacional.
+- Registrar evidencias.
+- Conversar com prestador.
+- Controlar checklist, garantias, custo, conclusao e verificacao.
+- Alimentar timeline e historico tecnico.
+
+### Equipe
+
+Equipe representa prestadores vinculados ao imovel, recorrentes ou temporarios.
+
+Entidade alvo:
+
+- `property_team_member`
+
+Enquanto a entidade dedicada nao existir, a UI pode reaproveitar:
+
+- colaboradores do imovel;
+- convites;
+- links temporarios de OS;
+- OS concluidas/verificadas com prestador atribuido.
+
+## Fluxo premium esperado
+
+1. O imovel nasce com documentos, ambientes e sistemas tecnicos.
+2. Pontos tecnicos registram localizacoes criticas.
+3. Garantias e manuais ficam conectados aos sistemas.
+4. Reformas e manutencoes alimentam a memoria tecnica.
+5. `service_request` coleta propostas.
+6. `bid` aprovado vira `service_order`.
+7. `service_order` registra execucao, evidencias e conversa.
+8. Prestadores relevantes alimentam a equipe e o historico do imovel.
+
+## Modulos futuros no contexto do imovel
+
+### Mapa
+
+Deve exibir plantas, fotos de referencia e pontos tecnicos. Deve ser tratado como modulo sensivel, pois revela infraestrutura do imovel.
+
+### Sistemas
+
+Deve organizar eletrica, hidraulica, automacao, impermeabilizacao, climatizacao, seguranca e demais sistemas.
+
+### Reformas
+
+Deve agrupar intervencoes maiores, conectando documentos, fotos, garantias, custos, prestadores e sistemas afetados.
+
+### Garantias
+
+Deve controlar garantias de sistemas, materiais, servicos, equipamentos e reformas, com alertas e documentos vinculados.
+
+## Regra de navegacao
+
+O menu contextual deve aparecer somente dentro do contexto de um imovel:
+
+- `/properties/:id`
+- subrotas tecnicas e operacionais desse imovel
+
+Nao deve aparecer em:
+
+- `/properties`
+- `/properties/new`
+- `/dashboard`
+- `/provider/*`
+- `/settings`
 
 ## PropertySwitcher
 
-O `PropertySwitcher` mostra o imovel atual, abre uma busca client-side em cima de `propertiesApi.list` e troca o imovel preservando o modulo atual quando possivel.
+O seletor de imovel deve permitir trocar o ativo mantendo o modulo atual quando possivel:
 
-Exemplos:
-
-- `/properties/A/services` para imovel B vira `/properties/B/services`.
-- `/properties/A/documents` para imovel B vira `/properties/B/documents`.
-- `/properties/A` para imovel B vira `/properties/B`.
+- `/properties/A/services` para B vira `/properties/B/services`.
+- `/properties/A/documents` para B vira `/properties/B/documents`.
+- `/properties/A` para B vira `/properties/B`.
 
 ## Busca contextual
 
-A busca contextual usa o endpoint existente de search com `propertyId` quando disponivel no cliente (`searchApi.search(q, propertyId)`). Ela deve permanecer limitada ao contexto do imovel e nao criar endpoints paralelos.
+A busca dentro do imovel deve priorizar resultados vinculados ao `propertyId`.
 
-Categorias esperadas no produto:
+Categorias esperadas:
 
-- Servicos
-- Orcamentos
-- Documentos
-- Ambientes
-- Inventario
-- Manutencao
-- Prestadores
-- Timeline
+- Servicos.
+- Orcamentos.
+- Documentos.
+- Ambientes.
+- Inventario.
+- Manutencao.
+- Prestadores.
+- Timeline.
+- Sistemas.
+- Pontos tecnicos.
+- Reformas.
+- Garantias.
 
-Hoje o contrato tipado do frontend cobre servicos, documentos, inventario e manutencao. As demais categorias dependem de ampliacao explicita do contrato de search.
+## Diretriz de implementacao
 
-## Servicos versus orcamentos
+Nenhuma tela deve inventar endpoint ou payload. Quando o contrato nao existir:
 
-`/properties/:id/services` deve listar `service_order` como Servicos: ordens aprovadas, em execucao, concluidas ou em garantia.
-
-`/properties/:id/service-requests` deve listar `service_request` como Orcamentos: solicitacoes enviadas para prestadores e propostas recebidas. A tela inicial existe, mas a listagem real deve aguardar contrato GET com propostas agregadas para evitar payload inventado.
-
-## Equipe do imovel
-
-`/properties/:id/team` deve concentrar prestadores vinculados ao imovel:
-
-- prestadores fixos;
-- prestadores temporarios;
-- convites pendentes;
-- historico de prestadores que ja executaram servico.
-
-Enquanto nao houver endpoint especifico para `property_team_member`, a UI deve reaproveitar contratos reais de colaboradores/convites e marcar como TODO os blocos que dependem de contrato.
-
-## Sugestao pos-servico
-
-Na tela de detalhe de servico concluido/verificado, owner/admin pode ver a sugestao para adicionar o prestador atribuido a equipe do imovel. Os botoes permanecem desabilitados ate existir contrato real para vinculo fixo ou temporario.
+- criar estado vazio seguro;
+- documentar TODO tecnico;
+- manter acao desabilitada;
+- evoluir backend e frontend juntos em commit posterior.
