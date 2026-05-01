@@ -37,26 +37,29 @@ import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-function parseAllowedOrigins(env: Bindings): string[] {
+function buildCorsOriginHandler(env: Bindings): (origin: string) => string | null {
   const configured = env.CORS_ORIGINS ?? env.CORS_ORIGIN ?? '';
-  const origins = configured
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin && origin !== '*');
+  const parts = configured.split(',').map((o) => o.trim()).filter(Boolean);
 
-  if (env.ENVIRONMENT !== 'production') {
-    origins.push('http://localhost:3000', 'http://127.0.0.1:3000');
+  // Wildcard: reflect any origin (credentials-safe, for dev convenience)
+  if (parts.includes('*')) {
+    return (origin) => origin || null;
   }
 
-  return Array.from(new Set(origins));
+  const allowlist = new Set(parts);
+  if (env.ENVIRONMENT !== 'production') {
+    allowlist.add('http://localhost:3000');
+    allowlist.add('http://127.0.0.1:3000');
+  }
+
+  return (origin) => (origin && allowlist.has(origin) ? origin : null);
 }
 
 // ── Global middleware ────────────────────────────────────────────────────────
 
 app.use('*', async (c, next) => {
-  const allowedOrigins = parseAllowedOrigins(c.env);
   const corsMiddleware = cors({
-    origin: (origin) => (origin && allowedOrigins.includes(origin) ? origin : null),
+    origin: buildCorsOriginHandler(c.env),
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 86400,
