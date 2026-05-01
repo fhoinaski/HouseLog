@@ -7,6 +7,7 @@ export type Bindings = {
   AI: Ai;
   JWT_SECRET: string;
   CORS_ORIGIN: string;
+  CORS_ORIGINS?: string;
   ENVIRONMENT: string;
   R2_PUBLIC_URL: string;
   R2_ACCOUNT_ID?: string;
@@ -30,9 +31,12 @@ export type Variables = {
   userRole: Role;
   userEmail: string;
   requestId: string;
+  tenantId?: string;
+  tenantRole?: TenantRole;
 };
 
 export type Role = 'admin' | 'owner' | 'provider' | 'temp_provider';
+export type TenantRole = 'owner' | 'manager' | 'provider' | 'temp_provider';
 
 // DB row types
 export type User = {

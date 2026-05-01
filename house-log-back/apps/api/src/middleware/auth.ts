@@ -2,12 +2,12 @@ import { createMiddleware } from 'hono/factory';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { verifyJwt } from '../lib/jwt';
 import { getDb } from '../db/client';
-import { properties, propertyCollaborators } from '../db/schema';
+import { properties, propertyCollaborators, tenantMembers, tenants } from '../db/schema';
 import {
   canAccessProperty,
   canRevealCredentialSecret,
 } from '../lib/authorization';
-import type { Bindings, Variables, Role } from '../lib/types';
+import type { Bindings, Variables, Role, TenantRole } from '../lib/types';
 
 // Extracts JWT from Authorization header and sets userId/userRole in context
 export const authMiddleware = createMiddleware<{
@@ -37,6 +37,8 @@ export const authMiddleware = createMiddleware<{
   }
 });
 
+export const requireAuth = authMiddleware;
+
 // Role guard factory — use after authMiddleware
 export function requireRole(...roles: Role[]) {
   return createMiddleware<{ Bindings: Bindings; Variables: Variables }>(async (c, next) => {
@@ -58,6 +60,78 @@ export async function assertPropertyAccess(
   role: Role
 ): Promise<boolean> {
   return canAccessProperty(db, { propertyId, userId, role });
+}
+
+export const resolveTenant = createMiddleware<{
+  Bindings: Bindings;
+  Variables: Variables;
+}>(async (c, next) => {
+  const db = getDb(c.env.DB);
+  const userId = c.get('userId');
+  const requestedTenantId = c.req.header('X-Tenant-Id') ?? c.req.query('tenant_id');
+
+  const filters = [
+    eq(tenantMembers.userId, userId),
+    eq(tenantMembers.status, 'active'),
+    eq(tenants.status, 'active'),
+  ];
+
+  if (requestedTenantId) {
+    filters.push(eq(tenantMembers.tenantId, requestedTenantId));
+  }
+
+  const [membership] = await db
+    .select({
+      tenantId: tenantMembers.tenantId,
+      role: tenantMembers.role,
+    })
+    .from(tenantMembers)
+    .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+    .where(and(...filters))
+    .limit(1);
+
+  if (!membership) {
+    return c.json({ error: 'Tenant ativo não encontrado', code: 'TENANT_REQUIRED' }, 403);
+  }
+
+  c.set('tenantId', membership.tenantId);
+  c.set('tenantRole', membership.role);
+  await next();
+});
+
+export function requireTenantRole(...roles: TenantRole[]) {
+  return createMiddleware<{ Bindings: Bindings; Variables: Variables }>(async (c, next) => {
+    const tenantRole = c.get('tenantRole');
+    if (!tenantRole || !roles.includes(tenantRole)) {
+      return c.json({ error: 'Permissão insuficiente no tenant', code: 'FORBIDDEN' }, 403);
+    }
+    await next();
+  });
+}
+
+export async function assertTenantAccess(
+  db: D1Database,
+  tenantId: string,
+  userId: string,
+  allowedRoles?: TenantRole[]
+): Promise<boolean> {
+  const drizzle = getDb(db);
+  const [membership] = await drizzle
+    .select({ role: tenantMembers.role })
+    .from(tenantMembers)
+    .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+    .where(
+      and(
+        eq(tenantMembers.tenantId, tenantId),
+        eq(tenantMembers.userId, userId),
+        eq(tenantMembers.status, 'active'),
+        eq(tenants.status, 'active')
+      )
+    )
+    .limit(1);
+
+  if (!membership) return false;
+  return allowedRoles ? allowedRoles.includes(membership.role) : true;
 }
 
 // Sensitive property secrets require a direct owner/manager relationship.

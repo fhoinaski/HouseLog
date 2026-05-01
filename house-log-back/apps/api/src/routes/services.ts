@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
@@ -21,6 +20,7 @@ import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/em
 import { getDb } from '../db/client';
 import { properties, rooms, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
+import { serviceOrderCreateSchema } from '../../../../../packages/contracts/src/schemas/service-order';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -35,17 +35,7 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   verified:    [],
 };
 
-const createSchema = z.object({
-  title: z.string().min(1),
-  system_type: z.enum(['electrical', 'plumbing', 'structural', 'waterproofing', 'painting', 'flooring', 'roofing', 'general']),
-  description: z.string().optional(),
-  room_id: z.string().optional(),
-  priority: z.enum(['urgent', 'normal', 'preventive']).default('normal'),
-  assigned_to: z.string().optional(),
-  warranty_until: z.string().optional(),
-  scheduled_at: z.string().optional(),
-  checklist: z.array(z.object({ item: z.string(), done: z.boolean() })).optional(),
-});
+const createSchema = serviceOrderCreateSchema;
 
 const SERVICE_ORDER_AUDIT_FIELD_NAMES: Record<string, string> = {
   title: 'title',

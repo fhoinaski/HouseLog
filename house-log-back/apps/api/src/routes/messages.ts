@@ -6,7 +6,6 @@
 // Envio de push ao outro lado quando nova mensagem.
 
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth';
@@ -22,6 +21,7 @@ import { err, ok } from '../lib/response';
 import { getDb } from '../db/client';
 import { properties, serviceBids, serviceMessages, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, QueueMessage } from '../lib/types';
+import { serviceMessageCreateSchema } from '../../../../../packages/contracts/src/schemas/message';
 
 const messages = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 messages.use('*', authMiddleware);
@@ -141,11 +141,7 @@ messages.get('/:serviceOrderId/messages', async (c) => {
   return ok(c, { data: rows });
 });
 
-const createSchema = z.object({
-  body: z.string().min(1).max(4000),
-  internal: z.boolean().default(false),
-  attachments: z.array(z.string().url()).max(8).default([]),
-});
+const createSchema = serviceMessageCreateSchema;
 
 // POST /services/:serviceOrderId/messages
 messages.post('/:serviceOrderId/messages', async (c) => {

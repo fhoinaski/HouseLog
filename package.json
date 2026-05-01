@@ -6,11 +6,19 @@
     "build": "cd house-log-front && npm run build",
     "start": "cd house-log-front && npm run start",
     "lint": "cd house-log-front && npm run lint",
+    "type-check": "npm run type-check:front && npm run type-check:api",
+    "type-check:front": "cd house-log-front && npx tsc --noEmit",
+    "type-check:api": "npm --prefix house-log-back/apps/api run type-check",
+    "test": "npm run test:api",
+    "test:api": "npm --prefix house-log-back/apps/api run test",
+    "check": "npm run type-check && npm run test && npm run lint",
     "test:e2e": "cd house-log-front && npm run test:e2e",
     "dev:front": "cd house-log-front && npm run dev",
     "build:front": "cd house-log-front && npm run build",
     "dev:api": "npm --prefix house-log-back/apps/api run dev",
-    "build:api": "npm --prefix house-log-back/apps/api run build",
-    "type-check:api": "npm --prefix house-log-back/apps/api run type-check"
+    "build:api": "npm --prefix house-log-back/apps/api run build"
+  },
+  "devDependencies": {
+    "zod": "^3.25.76"
   }
 }

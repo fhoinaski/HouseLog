@@ -18,6 +18,7 @@ import {
   users,
 } from '../db/schema';
 import type { Bindings, Variables, Property } from '../lib/types';
+import { propertyCreateSchema, propertyUpdateSchema } from '../../../../../packages/contracts/src/schemas/property';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -26,21 +27,8 @@ properties.use('*', authMiddleware);
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
-const createSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(['house', 'apt', 'commercial', 'warehouse']),
-  address: z.string().min(1),
-  city: z.string().min(1),
-  area_m2: z.number().positive().optional(),
-  year_built: z.number().int().min(1800).max(2100).optional(),
-  structure: z.string().optional(),
-  floors: z.number().int().min(1).default(1),
-  owner_id: z.string().optional(), // admin can set this
-});
-
-const updateSchema = createSchema.partial().extend({
-  cover_url: z.string().url().optional().nullable(),
-});
+const createSchema = propertyCreateSchema;
+const updateSchema = propertyUpdateSchema;
 
 // ── GET /properties ─────────────────────────────────────────────────────────
 // All users (including admin) only see properties they own, manage, or are

@@ -13,7 +13,8 @@
     "db:migrate": "wrangler d1 migrations apply houselog-db",
     "db:migrate:dev": "wrangler d1 migrations apply houselog-db-dev --env dev",
     "db:migrate:local": "wrangler d1 migrations apply houselog-db-dev --local",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.0",
@@ -25,6 +26,7 @@
     "@cloudflare/workers-types": "^4.20250409.0",
     "drizzle-kit": "^0.31.4",
     "typescript": "^5",
+    "vitest": "^3.1.1",
     "wrangler": "^3.106.0"
   }
 }

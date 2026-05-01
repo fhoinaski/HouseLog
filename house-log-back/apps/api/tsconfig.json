@@ -5,12 +5,14 @@
     "module": "ES2022",
     "moduleResolution": "bundler",
     "strict": true,
+    "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
     "types": ["@cloudflare/workers-types"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "zod": ["./node_modules/zod/lib/index.d.ts"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "../../../../packages/contracts/src/**/*.ts"],
   "exclude": ["node_modules"]
 }

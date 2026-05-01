@@ -128,14 +128,18 @@ export async function request<T>(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: 'Erro desconhecido', code: 'UNKNOWN' }));
-    const error = new Error((body as { error: string }).error ?? 'Request failed') as Error & {
+    const apiError = (body as { error?: string | { message?: string; code?: string; details?: unknown }; code?: string; details?: unknown }).error;
+    const message = typeof apiError === 'object' ? apiError.message : apiError;
+    const code = typeof apiError === 'object' ? apiError.code : (body as { code?: string }).code;
+    const details = typeof apiError === 'object' ? apiError.details : (body as { details?: unknown }).details;
+    const error = new Error(message ?? 'Request failed') as Error & {
       code: string;
       status: number;
       details?: unknown;
     };
-    error.code = (body as { code: string }).code ?? 'UNKNOWN';
+    error.code = code ?? 'UNKNOWN';
     error.status = res.status;
-    error.details = (body as { details?: unknown }).details;
+    error.details = details;
     throw error;
   }
 

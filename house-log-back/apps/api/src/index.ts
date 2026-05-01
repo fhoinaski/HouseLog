@@ -35,11 +35,26 @@ import type { Bindings, Variables, QueueMessage } from './lib/types';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+function parseAllowedOrigins(env: Bindings): string[] {
+  const configured = env.CORS_ORIGINS ?? env.CORS_ORIGIN ?? '';
+  const origins = configured
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin && origin !== '*');
+
+  if (env.ENVIRONMENT !== 'production') {
+    origins.push('http://localhost:3000', 'http://127.0.0.1:3000');
+  }
+
+  return Array.from(new Set(origins));
+}
+
 // ── Global middleware ────────────────────────────────────────────────────────
 
 app.use('*', async (c, next) => {
+  const allowedOrigins = parseAllowedOrigins(c.env);
   const corsMiddleware = cors({
-    origin: c.env.CORS_ORIGIN ?? '*',
+    origin: (origin) => (origin && allowedOrigins.includes(origin) ? origin : null),
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 86400,
