@@ -81,8 +81,7 @@ auditLinks.post('/', authMiddleware, async (c) => {
   });
 
   // Build the public URL for sharing
-  const corsOrigin = c.env.CORS_ORIGIN ?? 'http://localhost:3000';
-  const publicUrl = `${corsOrigin}/audit/${token}`;
+  const publicUrl = `${c.env.APP_URL}/audit/${token}`;
 
   return ok(c, { token, url: publicUrl, expires_at: expiresAt, scope }, 201);
 });

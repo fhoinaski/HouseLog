@@ -6,8 +6,8 @@ export type Bindings = {
   QUEUE: Queue;
   AI: Ai;
   JWT_SECRET: string;
-  CORS_ORIGIN: string;
-  CORS_ORIGINS?: string;
+  CORS_ORIGINS: string;
+  CORS_ORIGIN?: string;
   ENVIRONMENT: string;
   R2_PUBLIC_URL: string;
   R2_ACCOUNT_ID?: string;
