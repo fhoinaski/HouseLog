@@ -8,13 +8,16 @@ import {
   Building2,
   ClipboardList,
   FileText,
+  FolderKanban,
   Home,
-  KeyRound,
+  Layers3,
+  Map,
   Menu,
   Pencil,
   ReceiptText,
   RefreshCw,
   ScrollText,
+  ShieldCheck,
   Users,
   Wrench,
   X,
@@ -29,20 +32,23 @@ type PropertyMobileContextControlsProps = {
 
 const mainItems = [
   { label: 'Inicio', segment: '', icon: Home },
+  { label: 'Mapa', segment: 'map', icon: Map },
+  { label: 'Sistemas', segment: 'systems', icon: Layers3 },
   { label: 'Servicos', segment: 'services', icon: Wrench },
-  { label: 'Orcamentos', segment: 'service-requests', icon: ClipboardList },
-  { label: 'Equipe', segment: 'team', icon: Users },
 ];
 
 const moreItems = [
-  { label: 'Ambientes', segment: 'rooms', icon: Building2 },
-  { label: 'Inventario', segment: 'inventory', icon: ClipboardList },
+  { label: 'Orcamentos', segment: 'service-requests', icon: ClipboardList },
   { label: 'Documentos', segment: 'documents', icon: FileText },
+  { label: 'Ambientes', segment: 'rooms', icon: Building2 },
+  { label: 'Equipe', segment: 'team', icon: Users },
   { label: 'Manutencao', segment: 'maintenance', icon: RefreshCw },
+  { label: 'Reformas', segment: 'renovations', icon: FolderKanban },
+  { label: 'Inventario', segment: 'inventory', icon: ClipboardList },
   { label: 'Timeline', segment: 'timeline', icon: ArrowLeftRight },
   { label: 'Financeiro', segment: 'financial', icon: ReceiptText },
   { label: 'Relatorio', segment: 'report', icon: ScrollText },
-  { label: 'Credenciais', segment: 'credentials', icon: KeyRound },
+  { label: 'Garantias', segment: 'warranties', icon: ShieldCheck },
   { label: 'Editar imovel', segment: 'edit', icon: Pencil },
 ];
 
@@ -140,12 +146,7 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
             <DialogTitle>Modulos do imovel</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2 pt-1">
-            <PropertySwitcher
-              propertyId={propertyId}
-              triggerLabel="Trocar imovel"
-              triggerClassName="col-span-2 justify-start bg-bg-subtle text-text-primary hover:bg-bg-muted"
-            />
-            {moreItems.map((item) => {
+            {moreItems.filter((item) => item.segment !== 'edit').map((item) => {
               const Icon = item.icon;
               const active = isActive(pathname, propertyId, item.segment);
               return (
@@ -155,6 +156,29 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
                   onClick={() => setMoreOpen(false)}
                   className={cn(
                     'flex min-h-12 items-center gap-3 rounded-[var(--radius-lg)] bg-bg-subtle px-3 text-sm text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+                    active && 'bg-bg-accent-subtle text-text-accent'
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+            <PropertySwitcher
+              propertyId={propertyId}
+              triggerLabel="Trocar imovel"
+              triggerClassName="col-span-2 justify-start bg-bg-subtle text-text-primary hover:bg-bg-muted"
+            />
+            {moreItems.filter((item) => item.segment === 'edit').map((item) => {
+              const Icon = item.icon;
+              const active = isActive(pathname, propertyId, item.segment);
+              return (
+                <Link
+                  key={item.segment}
+                  href={hrefFor(propertyId, item.segment)}
+                  onClick={() => setMoreOpen(false)}
+                  className={cn(
+                    'col-span-2 flex min-h-12 items-center gap-3 rounded-[var(--radius-lg)] bg-bg-subtle px-3 text-sm text-text-secondary transition-colors hover:bg-bg-muted hover:text-text-primary focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
                     active && 'bg-bg-accent-subtle text-text-accent'
                   )}
                 >

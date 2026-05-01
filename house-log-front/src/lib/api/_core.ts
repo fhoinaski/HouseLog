@@ -2,6 +2,12 @@ export const BASE =
   process.env.NEXT_PUBLIC_API_URL?.trim() ||
   'https://houselog-api-dev.sukinodoncai.workers.dev/api/v1';
 
+const TOKEN_KEY = 'hl_token';
+const REFRESH_KEY = 'hl_refresh';
+const USER_KEY = 'hl_user';
+const PUBLIC_BROWSER_PATH_PREFIXES = ['/login', '/register', '/invite', '/audit', '/share', '/splash'];
+const PUBLIC_API_PATH_PREFIXES = ['/auth/login', '/auth/register', '/auth/mfa', '/auth/refresh', '/invite', '/audit', '/share'];
+
 const R2_KEY_PATTERN = /^\/?.*(photos|videos|documents|avatars|inventory|invoices)\//;
 const MEDIA_FIELD_NAMES = new Set([
   'afterImageUrl',
@@ -108,16 +114,35 @@ export function qs(params?: Record<string, string | number | undefined>): string
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('hl_token');
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string) {
-  localStorage.setItem('hl_token', token);
+  localStorage.setItem(TOKEN_KEY, token);
 }
 
 export function clearToken() {
-  localStorage.removeItem('hl_token');
-  localStorage.removeItem('hl_user');
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+function isPublicPath(pathname: string, prefixes: string[]): boolean {
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function handleUnauthorized(path: string) {
+  clearToken();
+
+  if (typeof window === 'undefined') return;
+  if (isPublicPath(path, PUBLIC_API_PATH_PREFIXES)) return;
+
+  const currentPath = window.location.pathname || '/dashboard';
+  if (isPublicPath(currentPath, PUBLIC_BROWSER_PATH_PREFIXES)) return;
+
+  const next = `${currentPath}${window.location.search}`;
+  window.location.replace(`/login?next=${encodeURIComponent(next)}`);
 }
 
 export async function request<T>(
@@ -148,6 +173,7 @@ export async function request<T>(
     error.code = code ?? 'UNKNOWN';
     error.status = res.status;
     error.details = details;
+    if (res.status === 401) handleUnauthorized(path);
     throw error;
   }
 

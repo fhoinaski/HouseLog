@@ -24,9 +24,9 @@ JWT_SECRET=troque-por-uma-chave-secreta-de-pelo-menos-32-caracteres
 # CORS
 # -----------------------------------------------------------------------------
 
-# Origem permitida para requisições cross-origin.
-# Em desenvolvimento, aponta para o servidor Next.js local.
-CORS_ORIGIN=http://localhost:3000
+# Origens permitidas para requisições cross-origin.
+# Use lista explícita: "*" não é aceito com credentials.
+CORS_ORIGINS=https://house-log.vercel.app,http://localhost:3000,http://127.0.0.1:3000
 
 # -----------------------------------------------------------------------------
 # Ambiente

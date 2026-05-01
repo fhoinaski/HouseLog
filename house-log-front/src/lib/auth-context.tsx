@@ -77,7 +77,10 @@ function getRefresh(): string | null {
 
 function clearAll() {
   clearToken();
-  if (typeof window !== 'undefined') localStorage.removeItem(REFRESH_KEY);
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(USER_KEY);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -93,8 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const { access_token, refresh_token } = await authApi.refresh(refresh);
-      storePair(access_token, refresh_token);
+      const { access_token, refresh_token, user: refreshedUser } = await authApi.refresh(refresh);
+      storePair(access_token, refresh_token, refreshedUser);
+      setUser(refreshedUser);
       scheduleRefresh(access_token);
     } catch {
       clearAll();
@@ -116,23 +120,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    const cleanup = () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+
     const stored = localStorage.getItem(USER_KEY);
     const token = localStorage.getItem(TOKEN_KEY);
     const refresh = getRefresh();
     if (stored && token) {
       const expiry = getTokenExpiry(token);
       if (expiry && expiry < Date.now()) {
-        if (refresh) void doRefresh().then(() => setUser(JSON.parse(stored) as User));
-        else clearAll();
+        if (refresh) {
+          void doRefresh().finally(() => setLoading(false));
+          return cleanup;
+        }
+        clearAll();
       } else {
         setUser(JSON.parse(stored) as User);
         scheduleRefresh(token);
       }
     }
     setLoading(false);
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    };
+    return cleanup;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

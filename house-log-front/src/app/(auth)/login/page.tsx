@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,8 +29,15 @@ function redirectByRole(role: Role): string {
   return '/dashboard';
 }
 
+function safeInternalRedirect(value: string | null): string | null {
+  if (!value || !value.startsWith('/')) return null;
+  if (value.startsWith('//') || value.includes('://')) return null;
+  return value;
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
@@ -51,7 +58,8 @@ export default function LoginPage() {
 
       const userRaw = localStorage.getItem('hl_user');
       const role = userRaw ? (JSON.parse(userRaw) as { role?: Role }).role : 'owner';
-      router.push(redirectByRole(role ?? 'owner'));
+      const next = safeInternalRedirect(searchParams.get('next') ?? searchParams.get('redirect'));
+      router.push(next ?? redirectByRole(role ?? 'owner'));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Erro ao entrar';
       const normalized = message.toLowerCase();
