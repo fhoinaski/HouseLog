@@ -4,6 +4,9 @@ Este documento descreve entidades futuras para consolidar o HouseLog como prontu
 
 ## `technical_systems`
 
+Status de implementação:
+Primeira entidade premium implementada de forma incremental. A tabela `technical_systems`, contratos Zod compartilhados, rotas backend e a página `/properties/:id/systems` passam a existir como base real do prontuário técnico. As relações avançadas com pontos técnicos, garantias, documentos e fotos seguem como próximas fases.
+
 Objetivo:
 Representar sistemas tecnicos do imovel, como eletrica, hidraulica, ar-condicionado, automacao, impermeabilizacao, gas, energia solar, piscina, irrigacao, seguranca e rede.
 

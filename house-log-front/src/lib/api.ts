@@ -9,6 +9,13 @@ import type {
   ServiceBid,
   ServiceOrder,
 } from '@/lib/api/_core';
+import type {
+  CreateTechnicalSystemInput,
+  TechnicalSystem,
+  TechnicalSystemStatus,
+  TechnicalSystemType,
+  UpdateTechnicalSystemInput,
+} from '../../../packages/contracts/src/schemas/technical-system';
 
 export {
   BASE,
@@ -42,6 +49,13 @@ export type {
   ServiceShareLink,
   User,
 } from '@/lib/api/_core';
+export type {
+  CreateTechnicalSystemInput,
+  TechnicalSystem,
+  TechnicalSystemStatus,
+  TechnicalSystemType,
+  UpdateTechnicalSystemInput,
+};
 export { authApi } from '@/lib/api/auth';
 export { propertiesApi } from '@/lib/api/properties';
 export { documentsApi } from '@/lib/api/documents';
@@ -167,6 +181,29 @@ export const roomsApi = {
 
   delete: (propertyId: string, id: string) =>
     request<{ success: boolean }>(`/properties/${propertyId}/rooms/${id}`, { method: 'DELETE' }),
+};
+
+// Technical Systems
+export const technicalSystemsApi = {
+  list: (propertyId: string) =>
+    request<{ systems: TechnicalSystem[] }>(`/properties/${propertyId}/technical-systems`),
+
+  create: (propertyId: string, data: CreateTechnicalSystemInput) =>
+    request<{ system: TechnicalSystem }>(`/properties/${propertyId}/technical-systems`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (propertyId: string, systemId: string, data: UpdateTechnicalSystemInput) =>
+    request<{ system: TechnicalSystem }>(`/properties/${propertyId}/technical-systems/${systemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (propertyId: string, systemId: string) =>
+    request<{ success: boolean }>(`/properties/${propertyId}/technical-systems/${systemId}`, {
+      method: 'DELETE',
+    }),
 };
 
 // Inventory

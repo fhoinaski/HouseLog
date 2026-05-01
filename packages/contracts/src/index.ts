@@ -8,3 +8,4 @@ export * from './schemas/message';
 export * from './schemas/document';
 export * from './schemas/finance';
 export * from './schemas/provider';
+export * from './schemas/technical-system';

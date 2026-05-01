@@ -45,3 +45,6 @@ apps/api/.dev.vars
 next-env.d.ts
 .claude
 .node_modules
+.wrangler
+wrangler.log
+state

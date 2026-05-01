@@ -47,3 +47,4 @@ next-env.d.ts
 .node_modules
 .wrangler
 wrangler.log
+state

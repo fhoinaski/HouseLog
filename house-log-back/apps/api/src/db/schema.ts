@@ -93,6 +93,50 @@ export const properties = sqliteTable('properties', {
   ownerIdx: index('idx_properties_owner').on(table.ownerId),
 }));
 
+export const technicalSystems = sqliteTable('technical_systems', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
+  propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  type: text('type', {
+    enum: [
+      'electrical',
+      'plumbing',
+      'sewage',
+      'gas',
+      'hvac',
+      'solar',
+      'automation',
+      'network',
+      'pool',
+      'irrigation',
+      'security',
+      'fire',
+      'waterproofing',
+      'roofing',
+      'structural',
+      'finishes',
+      'custom',
+    ],
+  }).notNull(),
+  description: text('description'),
+  locationSummary: text('location_summary'),
+  responsibleProviderId: text('responsible_provider_id').references(() => users.id),
+  installationDate: text('installation_date'),
+  lastInspectionAt: text('last_inspection_at'),
+  status: text('status', {
+    enum: ['active', 'attention', 'critical', 'inactive', 'replaced'],
+  }).notNull().default('active'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at'),
+  deletedAt: text('deleted_at'),
+}, (table) => ({
+  tenantIdx: index('idx_technical_systems_tenant').on(table.tenantId),
+  propertyIdx: index('idx_technical_systems_property').on(table.propertyId),
+  propertyStatusIdx: index('idx_technical_systems_property_status').on(table.propertyId, table.status),
+  typeIdx: index('idx_technical_systems_type').on(table.propertyId, table.type),
+}));
+
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
   tenantId: text('tenant_id').references(() => tenants.id),
