@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
@@ -14,17 +15,19 @@ import {
   canViewServiceOrder,
 } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
-import { authMiddleware } from '../middleware/auth';
-import { validateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
+import { validatePrivateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
 import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/email';
 import { getDb } from '../db/client';
-import { properties, rooms, serviceOrders, users } from '../db/schema';
+import { properties, propertyCollaborators, rooms, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
+import { canAssignProviderToTenantService } from '../lib/service-tenant';
 import { serviceOrderCreateSchema } from '../../../../../packages/contracts/src/schemas/service-order';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 services.use('*', authMiddleware);
+services.use('*', resolveTenant);
 
 // Valid status transitions
 const STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -36,6 +39,85 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
 };
 
 const createSchema = serviceOrderCreateSchema;
+
+type ServicesContext = Context<{ Bindings: Bindings; Variables: Variables }>;
+type DbClient = ReturnType<typeof getDb>;
+
+type TenantPropertyContext =
+  | { ok: true; tenantId: string; property: { id: string; name: string } }
+  | { ok: false; response: Response };
+
+async function getTenantPropertyContext(
+  c: ServicesContext,
+  db: DbClient,
+  propertyId: string
+): Promise<TenantPropertyContext> {
+  const tenantId = c.get('tenantId');
+  if (!tenantId) {
+    return { ok: false, response: err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400) };
+  }
+
+  const [property] = await db
+    .select({ id: properties.id, name: properties.name })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+
+  if (!property) {
+    return { ok: false, response: err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404) };
+  }
+
+  return { ok: true, tenantId, property };
+}
+
+async function isRoomInTenantProperty(
+  db: DbClient,
+  tenantId: string,
+  propertyId: string,
+  roomId: string | null | undefined
+): Promise<boolean> {
+  if (!roomId) return true;
+
+  const [room] = await db
+    .select({ id: rooms.id })
+    .from(rooms)
+    .where(and(eq(rooms.id, roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, propertyId), isNull(rooms.deletedAt)))
+    .limit(1);
+
+  return Boolean(room);
+}
+
+async function isAssignedProviderInTenantProperty(
+  db: DbClient,
+  tenantId: string,
+  propertyId: string,
+  assignedTo: string | null | undefined
+): Promise<boolean> {
+  if (!assignedTo) return true;
+
+  const [collaborator] = await db
+    .select({
+      tenantId: propertyCollaborators.tenantId,
+      propertyId: propertyCollaborators.propertyId,
+    })
+    .from(propertyCollaborators)
+    .where(
+      and(
+        eq(propertyCollaborators.tenantId, tenantId),
+        eq(propertyCollaborators.propertyId, propertyId),
+        eq(propertyCollaborators.userId, assignedTo),
+        eq(propertyCollaborators.role, 'provider')
+      )
+    )
+    .limit(1);
+
+  return canAssignProviderToTenantService({
+    activeTenantId: tenantId,
+    propertyId,
+    providerCollaboratorTenantId: collaborator?.tenantId,
+    providerCollaboratorPropertyId: collaborator?.propertyId,
+  }).allowed;
+}
 
 const SERVICE_ORDER_AUDIT_FIELD_NAMES: Record<string, string> = {
   title: 'title',
@@ -57,6 +139,10 @@ services.get('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
   const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
@@ -66,6 +152,7 @@ services.get('/', async (c) => {
   const priority = c.req.query('priority');
 
   const filters = [
+    eq(serviceOrders.tenantId, tenantId),
     eq(serviceOrders.propertyId, propertyId),
     isNull(serviceOrders.deletedAt),
   ];
@@ -103,7 +190,7 @@ services.get('/', async (c) => {
     .from(serviceOrders)
     .innerJoin(sql`${users} u1`, sql`u1.id = ${serviceOrders.requestedBy}`)
     .leftJoin(sql`${users} u2`, sql`u2.id = ${serviceOrders.assignedTo}`)
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, propertyId)))
     .where(and(...filters))
     .orderBy(sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`, desc(serviceOrders.createdAt))
     .limit(limit + 1) as Array<ServiceOrder & { requested_by_name: string; assigned_to_name: string | null; room_name: string | null }>;
@@ -119,6 +206,10 @@ services.post('/', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId, property } = tenantContext;
+
   const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem permissão para abrir OS neste imóvel', 'FORBIDDEN', 403);
 
@@ -133,9 +224,18 @@ services.post('/', async (c) => {
   const d = parsed.data;
   const id = nanoid();
 
+  const roomAllowed = await isRoomInTenantProperty(db, tenantId, propertyId, d.room_id);
+  if (!roomAllowed) return err(c, 'Comodo nao encontrado neste imovel', 'REFERENCE_NOT_FOUND', 422);
+
+  const assignedProviderAllowed = await isAssignedProviderInTenantProperty(db, tenantId, propertyId, d.assigned_to);
+  if (!assignedProviderAllowed) {
+    return err(c, 'Prestador nao pertence ao tenant/imovel ativo', 'ASSIGNED_PROVIDER_FORBIDDEN', 403);
+  }
+
   try {
     await db.insert(serviceOrders).values({
       id,
+      tenantId,
       propertyId,
       roomId: d.room_id ?? null,
       systemType: d.system_type,
@@ -183,7 +283,7 @@ services.post('/', async (c) => {
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(eq(serviceOrders.id, id))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)))
     .limit(1) as Array<ServiceOrder>;
 
   if (!order) return err(c, 'OS não encontrada após criação', 'NOT_FOUND', 404);
@@ -199,12 +299,6 @@ services.post('/', async (c) => {
         .where(eq(users.id, d.assigned_to))
         .limit(1) as Array<{ name: string; email: string }>;
 
-      const [property] = await db
-        .select({ name: properties.name })
-        .from(properties)
-        .where(eq(properties.id, propertyId))
-        .limit(1) as Array<{ name: string }>;
-
       if (!provider?.email) return;
 
       const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
@@ -214,7 +308,7 @@ services.post('/', async (c) => {
         html: emailServiceAssigned({
           providerName: provider.name,
           orderTitle: d.title,
-          propertyName: property?.name ?? 'Imóvel',
+          propertyName: property.name,
           priorityLabel: d.priority,
           scheduledAt: d.scheduled_at,
           serviceUrl: `${appUrl}/provider/services/${id}`,
@@ -252,6 +346,10 @@ services.get('/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
   const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
@@ -285,8 +383,8 @@ services.get('/:id', async (c) => {
     .from(serviceOrders)
     .innerJoin(sql`${users} u1`, sql`u1.id = ${serviceOrders.requestedBy}`)
     .leftJoin(sql`${users} u2`, sql`u2.id = ${serviceOrders.assignedTo}`)
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, propertyId)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1);
 
   if (!order) return err(c, 'Ordem de serviço não encontrada', 'NOT_FOUND', 404);
@@ -302,6 +400,10 @@ services.put('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
 
   const hasAccess = await canUpdateServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -331,7 +433,7 @@ services.put('/:id', async (c) => {
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1) as Array<ServiceOrder>;
 
   if (!old) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -347,6 +449,14 @@ services.put('/:id', async (c) => {
   const d = parsed.data;
   const updateData: Partial<typeof serviceOrders.$inferInsert> = {};
 
+  const roomAllowed = await isRoomInTenantProperty(db, tenantId, propertyId, d.room_id);
+  if (!roomAllowed) return err(c, 'Comodo nao encontrado neste imovel', 'REFERENCE_NOT_FOUND', 422);
+
+  const assignedProviderAllowed = await isAssignedProviderInTenantProperty(db, tenantId, propertyId, d.assigned_to);
+  if (!assignedProviderAllowed) {
+    return err(c, 'Prestador nao pertence ao tenant/imovel ativo', 'ASSIGNED_PROVIDER_FORBIDDEN', 403);
+  }
+
   if (d.title !== undefined) updateData.title = d.title;
   if (d.description !== undefined) updateData.description = d.description ?? null;
   if (d.system_type !== undefined) updateData.systemType = d.system_type;
@@ -359,7 +469,10 @@ services.put('/:id', async (c) => {
 
   if (Object.keys(updateData).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await db.update(serviceOrders).set(updateData).where(eq(serviceOrders.id, id));
+  await db
+    .update(serviceOrders)
+    .set(updateData)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   const [updated] = await db
     .select({
@@ -386,7 +499,7 @@ services.put('/:id', async (c) => {
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(eq(serviceOrders.id, id))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)))
     .limit(1) as Array<ServiceOrder>;
 
   if (!updated) return err(c, 'OS não encontrada após atualização', 'NOT_FOUND', 404);
@@ -417,6 +530,10 @@ services.patch('/:id/status', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId, property } = tenantContext;
 
   const hasAccess = await canChangeServiceOrderStatus(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -449,7 +566,7 @@ services.patch('/:id/status', async (c) => {
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1) as Array<ServiceOrder>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -486,7 +603,7 @@ services.patch('/:id/status', async (c) => {
       status: body.status as typeof serviceOrders.$inferInsert.status,
       ...(body.status === 'completed' ? { completedAt: sql`datetime('now')` } : {}),
     })
-    .where(eq(serviceOrders.id, id));
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order', entityId: id, action: 'service_order_status_changed',
@@ -527,7 +644,7 @@ services.patch('/:id/status', async (c) => {
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(eq(serviceOrders.id, id))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)))
     .limit(1) as Array<ServiceOrder>;
 
   // Send email notification to requester (non-blocking)
@@ -539,12 +656,10 @@ services.patch('/:id/status', async (c) => {
           email: users.email,
           name: users.name,
           notification_prefs: users.notificationPrefs,
-          property_name: properties.name,
         })
         .from(users)
-        .innerJoin(properties, eq(properties.id, sql`${propertyId}`))
         .where(eq(users.id, order.requested_by))
-        .limit(1) as Array<{ email: string; name: string; notification_prefs: string; property_name: string }>;
+        .limit(1) as Array<{ email: string; name: string; notification_prefs: string }>;
 
       if (requester && c.env.RESEND_API_KEY) {
         const prefs = JSON.parse(requester.notification_prefs || '{}') as Record<string, boolean>;
@@ -557,7 +672,7 @@ services.patch('/:id/status', async (c) => {
               orderTitle: order.title,
               oldStatus: order.status,
               newStatus: body.status,
-              propertyName: requester.property_name,
+              propertyName: property.name,
               appUrl,
               serviceUrl: `${appUrl}/properties/${propertyId}/services/${id}`,
             }),
@@ -581,6 +696,10 @@ services.post('/:id/photos', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
   const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
@@ -591,7 +710,7 @@ services.post('/:id/photos', async (c) => {
       after_photos: serviceOrders.afterPhotos,
     })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1) as Array<{ id: string; before_photos: string[] | null; after_photos: string[] | null }>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -603,7 +722,7 @@ services.post('/:id/photos', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  const validation = validateUpload(file.type, file.size);
+  const validation = validatePrivateUpload(file.type, file.size, file.name);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId, category: 'photos', filename: file.name });
@@ -618,7 +737,7 @@ services.post('/:id/photos', async (c) => {
   await db
     .update(serviceOrders)
     .set(photoType === 'after' ? { afterPhotos: current } : { beforePhotos: current })
-    .where(eq(serviceOrders.id, id));
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
@@ -637,7 +756,7 @@ services.post('/:id/photos', async (c) => {
     },
   });
 
-  return ok(c, { url: key, type: photoType });
+  return ok(c, { url: `/api/v1/properties/${propertyId}/services/${id}/media/${encodeURIComponent(key)}`, type: photoType });
 });
 
 // ── POST /properties/:propertyId/services/:id/video ──────────────────────────
@@ -649,13 +768,17 @@ services.post('/:id/video', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
   const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
     .select({ id: serviceOrders.id })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1);
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -666,14 +789,19 @@ services.post('/:id/video', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  if (file.type !== 'video/mp4') return err(c, 'Apenas vídeos MP4 são aceitos', 'INVALID_FILE', 422);
-  if (file.size > 50 * 1024 * 1024) return err(c, 'Vídeo excede 50MB', 'INVALID_FILE', 422);
+  const videoValidation = validatePrivateUpload(file.type, file.size, file.name);
+  if (!videoValidation.ok || file.type !== 'video/mp4') {
+    return err(c, videoValidation.ok ? 'Apenas videos MP4 sao aceitos' : videoValidation.error, 'INVALID_FILE', 422);
+  }
 
   const key = buildR2Key({ propertyId, category: 'videos', filename: file.name });
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, 'video/mp4');
 
-  await db.update(serviceOrders).set({ videoUrl: key }).where(eq(serviceOrders.id, id));
+  await db
+    .update(serviceOrders)
+    .set({ videoUrl: key })
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
@@ -691,7 +819,7 @@ services.post('/:id/video', async (c) => {
     },
   });
 
-  return ok(c, { video_url: key });
+  return ok(c, { video_url: `/api/v1/properties/${propertyId}/services/${id}/media/${encodeURIComponent(key)}` });
 });
 
 // ── POST /properties/:propertyId/services/:id/audio ──────────────────────────
@@ -703,13 +831,17 @@ services.post('/:id/audio', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
   const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
     .select({ id: serviceOrders.id })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1);
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -722,13 +854,20 @@ services.post('/:id/audio', async (c) => {
 
   const allowed = new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/webm']);
   if (!allowed.has(file.type)) return err(c, 'Tipo de áudio não permitido', 'INVALID_FILE', 422);
-  if (file.size > 20 * 1024 * 1024) return err(c, 'Áudio excede 20MB', 'INVALID_FILE', 422);
+  if (file.size > 20 * 1024 * 1024) return err(c, 'Audio excede 20MB', 'INVALID_FILE', 422);
+  const audioExt = file.name.split('.').pop()?.toLowerCase();
+  if (!audioExt || !['mp3', 'wav', 'ogg', 'm4a', 'mp4', 'webm'].includes(audioExt)) {
+    return err(c, 'Extensao de audio nao permitida', 'INVALID_FILE', 422);
+  }
 
   const key = buildR2Key({ propertyId, category: 'documents', filename: file.name });
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
 
-  await db.update(serviceOrders).set({ audioUrl: key }).where(eq(serviceOrders.id, id));
+  await db
+    .update(serviceOrders)
+    .set({ audioUrl: key })
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
@@ -746,10 +885,59 @@ services.post('/:id/audio', async (c) => {
     },
   });
 
-  return ok(c, { audio_url: key });
+  return ok(c, { audio_url: `/api/v1/properties/${propertyId}/services/${id}/media/${encodeURIComponent(key)}` });
 });
 
 // ── DELETE /properties/:propertyId/services/:id ──────────────────────────────
+
+services.get('/:id/media/*', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
+  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const key = decodeURIComponent(c.req.path.split(`/services/${id}/media/`)[1] ?? '');
+  if (!key || key.includes('..')) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  const [order] = await db
+    .select({
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+    })
+    .from(serviceOrders)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .limit(1);
+
+  if (!order) return err(c, 'OS nao encontrada', 'NOT_FOUND', 404);
+
+  const allowedKeys = new Set([
+    ...(order.before_photos ?? []),
+    ...(order.after_photos ?? []),
+    order.video_url,
+    order.audio_url,
+  ].filter((value): value is string => Boolean(value)));
+
+  if (!allowedKeys.has(key)) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  const object = await c.env.STORAGE.get(key);
+  if (!object) return err(c, 'Arquivo nao encontrado', 'STORAGE_ERROR', 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=60');
+
+  return new Response(object.body, { headers });
+});
 
 services.delete('/:id', async (c) => {
   const db = getDb(c.env.DB);
@@ -757,6 +945,10 @@ services.delete('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
 
   const hasAccess = await canDeleteServiceOrder(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -786,12 +978,15 @@ services.delete('/:id', async (c) => {
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1) as Array<ServiceOrder>;
 
   if (!old) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
-  await db.update(serviceOrders).set({ deletedAt: sql`datetime('now')` }).where(eq(serviceOrders.id, id));
+  await db
+    .update(serviceOrders)
+    .set({ deletedAt: sql`datetime('now')` })
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'service_order',
@@ -820,6 +1015,10 @@ services.patch('/:id/checklist', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
 
+  const tenantContext = await getTenantPropertyContext(c, db, propertyId);
+  if (!tenantContext.ok) return tenantContext.response;
+  const { tenantId } = tenantContext;
+
   const hasAccess = await canUpdateServiceOrderChecklist(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
@@ -834,7 +1033,7 @@ services.patch('/:id/checklist', async (c) => {
       checklist: serviceOrders.checklist,
     })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
     .limit(1) as Array<{ id: string; checklist: { item: string; done: boolean }[] | null }>;
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -844,7 +1043,10 @@ services.patch('/:id/checklist', async (c) => {
     done: Boolean(item.done),
   }));
 
-  await db.update(serviceOrders).set({ checklist: sanitized }).where(eq(serviceOrders.id, id));
+  await db
+    .update(serviceOrders)
+    .set({ checklist: sanitized })
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   const previousChecklist = Array.isArray(order.checklist) ? order.checklist : [];
 

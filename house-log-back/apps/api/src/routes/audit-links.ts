@@ -4,10 +4,11 @@ import { and, eq, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
 import { canCreateAuditLink } from '../lib/authorization';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
+import { validatePrivateUpload } from '../lib/r2';
 
 type AuditScope = { canUploadPhotos: boolean; canUploadVideo: boolean; requiredFields: string[] };
 
@@ -16,12 +17,14 @@ const auditLinks = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // ── POST /properties/:propertyId/services/:serviceId/audit-link ──────────────
 // Protected — requires auth
 
-auditLinks.post('/', authMiddleware, async (c) => {
+auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const serviceId = c.req.param('serviceId')!;
   const userId = c.get('userId');
   const userRole = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   const canCreateLink = await canCreateAuditLink(c.env.DB, { propertyId, userId, role: userRole });
   if (!canCreateLink) return err(c, 'Permissão insuficiente', 'FORBIDDEN', 403);
@@ -30,7 +33,16 @@ auditLinks.post('/', authMiddleware, async (c) => {
   const [order] = await db
     .select({ id: serviceOrders.id })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, serviceId), eq(serviceOrders.propertyId, propertyId), sql`${serviceOrders.deletedAt} IS NULL`))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(
+      and(
+        eq(serviceOrders.id, serviceId),
+        eq(serviceOrders.tenantId, tenantId),
+        eq(serviceOrders.propertyId, propertyId),
+        eq(properties.tenantId, tenantId),
+        sql`${serviceOrders.deletedAt} IS NULL`
+      )
+    )
     .limit(1);
 
   if (!order) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
@@ -59,6 +71,7 @@ auditLinks.post('/', authMiddleware, async (c) => {
 
   await db.insert(auditLinksTable).values({
     id,
+    tenantId,
     serviceOrderId: serviceId,
     propertyId,
     createdBy: userId,
@@ -108,6 +121,9 @@ auditLinks.get('/public/:token', async (c) => {
       geo_lng: auditLinksTable.geoLng,
       status: auditLinksTable.status,
       created_at: auditLinksTable.createdAt,
+      link_tenant_id: auditLinksTable.tenantId,
+      order_tenant_id: serviceOrders.tenantId,
+      property_tenant_id: properties.tenantId,
       order_title: serviceOrders.title,
       order_description: serviceOrders.description,
       system_type: serviceOrders.systemType,
@@ -118,7 +134,16 @@ auditLinks.get('/public/:token', async (c) => {
     .from(auditLinksTable)
     .innerJoin(serviceOrders, eq(serviceOrders.id, auditLinksTable.serviceOrderId))
     .innerJoin(properties, eq(properties.id, auditLinksTable.propertyId))
-    .where(eq(auditLinksTable.token, token))
+    .where(
+      and(
+        eq(auditLinksTable.token, token),
+        eq(auditLinksTable.tenantId, serviceOrders.tenantId),
+        eq(auditLinksTable.tenantId, properties.tenantId),
+        eq(auditLinksTable.propertyId, serviceOrders.propertyId),
+        sql`${serviceOrders.deletedAt} IS NULL`,
+        sql`${properties.deletedAt} IS NULL`
+      )
+    )
     .limit(1);
 
   if (!link) return err(c, 'Link inválido', 'NOT_FOUND', 404);
@@ -173,14 +198,27 @@ auditLinks.post('/public/:token/submit', async (c) => {
       geo_lng: auditLinksTable.geoLng,
       status: auditLinksTable.status,
       created_at: auditLinksTable.createdAt,
+      tenant_id: auditLinksTable.tenantId,
       after_photos: serviceOrders.afterPhotos,
     })
     .from(auditLinksTable)
     .innerJoin(serviceOrders, eq(serviceOrders.id, auditLinksTable.serviceOrderId))
-    .where(and(eq(auditLinksTable.token, token), eq(auditLinksTable.status, 'active')))
+    .innerJoin(properties, eq(properties.id, auditLinksTable.propertyId))
+    .where(
+      and(
+        eq(auditLinksTable.token, token),
+        eq(auditLinksTable.status, 'active'),
+        eq(auditLinksTable.tenantId, serviceOrders.tenantId),
+        eq(auditLinksTable.tenantId, properties.tenantId),
+        eq(auditLinksTable.propertyId, serviceOrders.propertyId),
+        sql`${serviceOrders.deletedAt} IS NULL`,
+        sql`${properties.deletedAt} IS NULL`
+      )
+    )
     .limit(1);
 
-  if (!link) return err(c, 'Link inválido ou expirado', 'INVALID_LINK', 409);
+  if (!link?.tenant_id) return err(c, 'Link invalido ou expirado', 'INVALID_LINK', 409);
+  const linkTenantId = link.tenant_id;
   if (new Date(link.expires_at) < new Date()) {
     await db.update(auditLinksTable).set({ status: 'expired' }).where(eq(auditLinksTable.id, link.id));
     return err(c, 'Link expirado', 'LINK_EXPIRED', 409);
@@ -197,8 +235,8 @@ auditLinks.post('/public/:token/submit', async (c) => {
     for (const entry of files) {
       if (typeof entry === 'string') continue;
       const file = entry as File;
-      if (!file.type.startsWith('image/')) continue;
-      if (file.size > 50 * 1024 * 1024) continue;
+      const validation = validatePrivateUpload(file.type, file.size, file.name);
+      if (!validation.ok) continue;
 
       const key = `${link.property_id}/photos/audit_${Date.now()}_${nanoid(8)}.jpg`;
       const buf = await file.arrayBuffer();
@@ -211,14 +249,18 @@ auditLinks.post('/public/:token/submit', async (c) => {
       await db
         .update(serviceOrders)
         .set({ afterPhotos: [...existing, ...uploadedUrls] })
-        .where(eq(serviceOrders.id, link.service_order_id));
+        .where(and(eq(serviceOrders.id, link.service_order_id), eq(serviceOrders.tenantId, linkTenantId), eq(serviceOrders.propertyId, link.property_id)));
     }
   }
 
   const notes = formData.get('notes') as string | null;
   if (notes) {
     await db.run(
-      sql`UPDATE service_orders SET description = COALESCE(description, '') || '\n[Nota auditoria]: ' || ${notes} WHERE id = ${link.service_order_id}`
+      sql`UPDATE service_orders
+          SET description = COALESCE(description, '') || '\n[Nota auditoria]: ' || ${notes}
+          WHERE id = ${link.service_order_id}
+            AND tenant_id = ${linkTenantId}
+            AND property_id = ${link.property_id}`
     );
   }
 

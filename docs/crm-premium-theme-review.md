@@ -83,6 +83,8 @@ Principais pontos a corrigir antes de nova rodada:
 - `/properties/:id/map`: manter pontos tecnicos legiveis, com risco visivel sem transformar os cards em blocos coloridos.
 - `/properties/:id/services`: tratar ordens de servico como lista operacional, reduzindo aparencia de dashboard decorativo.
 - `/settings`: manter `Aparencia` e `Previa visual` legiveis, com aviso experimental discreto.
+- Navegacao mobile: revisar dock global e contextual para que o item ativo tenha contraste no CRM claro sem depender de `bg-white/*`.
+- Componentes compartilhados: metricas, acoes rapidas, cards de OS, estados vazios e dialogs devem usar superficie clara, borda sutil e sombra discreta no preview CRM premium.
 
 ## Evidencias visuais esperadas
 

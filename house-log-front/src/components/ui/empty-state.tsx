@@ -22,9 +22,9 @@ export function EmptyState({
   ...props
 }: EmptyStateProps) {
   return (
-    <div className={cn(emptyStateVariants({ tone, density, className }))} {...props}>
+    <div className={cn('empty-state', emptyStateVariants({ tone, density, className }))} {...props}>
       {icon && (
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--radius-lg)] bg-bg-accent-subtle text-text-accent">
+        <div className="empty-state-icon mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--radius-lg)] bg-bg-accent-subtle text-text-accent">
           {icon}
         </div>
       )}

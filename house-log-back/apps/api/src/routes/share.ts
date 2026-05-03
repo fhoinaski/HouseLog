@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { properties, propertyAccessCredentials, rooms, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
@@ -14,12 +14,14 @@ const share = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // Creates (or returns existing valid) share link for a service order.
 // Requires auth — only owners/managers can share.
 
-share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddleware, async (c) => {
+share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddleware, resolveTenant, async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId');
   const serviceId  = c.req.param('serviceId');
   const userId = c.get('userId');
   const role   = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -39,7 +41,17 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
   const [service] = await db
     .select({ id: serviceOrders.id })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.id, serviceId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .where(
+      and(
+        eq(serviceOrders.id, serviceId),
+        eq(serviceOrders.tenantId, tenantId),
+        eq(serviceOrders.propertyId, propertyId),
+        eq(properties.tenantId, tenantId),
+        isNull(serviceOrders.deletedAt),
+        isNull(properties.deletedAt)
+      )
+    )
     .limit(1);
   if (!service) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
@@ -50,6 +62,7 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
     .where(
       and(
         eq(serviceShareLinks.serviceId, serviceId),
+        eq(serviceShareLinks.tenantId, tenantId),
         gt(serviceShareLinks.expiresAt, sql`datetime('now')`),
         isNull(serviceShareLinks.deletedAt)
       )
@@ -71,12 +84,13 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
           shareCredentials: body.share_credentials ? 1 : 0,
           expiresAt,
         })
-        .where(eq(serviceShareLinks.token, token));
+        .where(and(eq(serviceShareLinks.token, token), eq(serviceShareLinks.tenantId, tenantId), eq(serviceShareLinks.serviceId, serviceId)));
     }
   } else {
     token = nanoid(32);
     await db.insert(serviceShareLinks).values({
       id: nanoid(),
+      tenantId,
       serviceId,
       token,
       createdBy: userId,
@@ -107,6 +121,7 @@ share.get('/public/share/service/:token', async (c) => {
   const [link] = await db
     .select({
       id: serviceShareLinks.id,
+      tenant_id: serviceShareLinks.tenantId,
       service_id: serviceShareLinks.serviceId,
       expires_at: serviceShareLinks.expiresAt,
       provider_name: serviceShareLinks.providerName,
@@ -142,6 +157,8 @@ share.get('/public/share/service/:token', async (c) => {
     .where(
       and(
         eq(serviceShareLinks.token, token),
+        eq(serviceShareLinks.tenantId, serviceOrders.tenantId),
+        eq(serviceShareLinks.tenantId, properties.tenantId),
         gt(serviceShareLinks.expiresAt, sql`datetime('now')`),
         isNull(serviceShareLinks.deletedAt),
         isNull(serviceOrders.deletedAt)
@@ -155,9 +172,9 @@ share.get('/public/share/service/:token', async (c) => {
   let sharedCredentials: unknown[] = [];
   if (link.share_credentials) {
     const [serviceProperty] = await db
-      .select({ propertyId: serviceOrders.propertyId })
+      .select({ propertyId: serviceOrders.propertyId, tenantId: serviceOrders.tenantId })
       .from(serviceOrders)
-      .where(eq(serviceOrders.id, String(link.service_id)))
+      .where(and(eq(serviceOrders.id, String(link.service_id)), eq(serviceOrders.tenantId, String(link.tenant_id)), isNull(serviceOrders.deletedAt)))
       .limit(1);
 
     if (serviceProperty) {
@@ -173,6 +190,7 @@ share.get('/public/share/service/:token', async (c) => {
         .where(
           and(
             eq(propertyAccessCredentials.propertyId, serviceProperty.propertyId),
+            eq(propertyAccessCredentials.tenantId, String(serviceProperty.tenantId)),
             eq(propertyAccessCredentials.shareWithOs, 1),
             isNull(propertyAccessCredentials.deletedAt)
           )
@@ -248,18 +266,25 @@ share.patch('/public/share/service/:token/status', async (c) => {
   const [link] = await db
     .select({
       id: serviceShareLinks.id,
+      tenant_id: serviceShareLinks.tenantId,
       service_id: serviceShareLinks.serviceId,
       provider_accepted_at: serviceShareLinks.providerAcceptedAt,
     })
     .from(serviceShareLinks)
+    .innerJoin(serviceOrders, eq(serviceOrders.id, serviceShareLinks.serviceId))
+    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
     .where(
       and(
         eq(serviceShareLinks.token, token),
+        eq(serviceShareLinks.tenantId, serviceOrders.tenantId),
+        eq(serviceShareLinks.tenantId, properties.tenantId),
         gt(serviceShareLinks.expiresAt, sql`datetime('now')`),
-        isNull(serviceShareLinks.deletedAt)
+        isNull(serviceShareLinks.deletedAt),
+        isNull(serviceOrders.deletedAt),
+        isNull(properties.deletedAt)
       )
     )
-    .limit(1) as Array<{ id: string; service_id: string; provider_accepted_at: string | null }>;
+    .limit(1) as Array<{ id: string; tenant_id: string; service_id: string; provider_accepted_at: string | null }>;
 
   if (!link) return err(c, 'Link inválido ou expirado', 'NOT_FOUND', 404);
 
@@ -287,25 +312,25 @@ share.patch('/public/share/service/:token/status', async (c) => {
     await db
       .update(serviceOrders)
       .set({ status: 'approved' })
-      .where(and(eq(serviceOrders.id, link.service_id), eq(serviceOrders.status, 'requested')));
+      .where(and(eq(serviceOrders.id, link.service_id), eq(serviceOrders.tenantId, link.tenant_id), eq(serviceOrders.status, 'requested')));
   } else if (action === 'start') {
     linkUpdate.providerStartedAt = now;
     if (notes) linkUpdate.notesFromProvider = notes;
     await db
       .update(serviceOrders)
       .set({ status: 'in_progress' })
-      .where(and(eq(serviceOrders.id, link.service_id), inArray(serviceOrders.status, ['requested', 'approved'])));
+      .where(and(eq(serviceOrders.id, link.service_id), eq(serviceOrders.tenantId, link.tenant_id), inArray(serviceOrders.status, ['requested', 'approved'])));
   } else if (action === 'done') {
     linkUpdate.providerDoneAt = now;
     if (notes) linkUpdate.notesFromProvider = notes;
     await db
       .update(serviceOrders)
       .set({ status: 'completed', completedAt: now })
-      .where(and(eq(serviceOrders.id, link.service_id), sql`${serviceOrders.status} != 'verified'`));
+      .where(and(eq(serviceOrders.id, link.service_id), eq(serviceOrders.tenantId, link.tenant_id), sql`${serviceOrders.status} != 'verified'`));
   }
 
   if (Object.keys(linkUpdate).length > 0) {
-    await db.update(serviceShareLinks).set(linkUpdate).where(eq(serviceShareLinks.id, link.id));
+    await db.update(serviceShareLinks).set(linkUpdate).where(and(eq(serviceShareLinks.id, link.id), eq(serviceShareLinks.tenantId, link.tenant_id)));
   }
 
   return ok(c, { action, updated_at: now });

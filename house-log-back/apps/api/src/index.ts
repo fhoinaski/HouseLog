@@ -34,6 +34,7 @@ import { getDb } from './db/client';
 import { auditLinks as auditLinksTable, mfaChallenges, refreshTokens } from './db/schema';
 import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
+import { canServeDirectMediaKey } from './lib/media-security';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -82,6 +83,11 @@ app.get('/api/v1/media/*', async (c) => {
 
   if (!key || key.includes('..')) {
     return c.json({ error: 'Arquivo nao encontrado', code: 'NOT_FOUND' }, 404);
+  }
+
+  const mediaDecision = canServeDirectMediaKey(key);
+  if (!mediaDecision.allowed) {
+    return c.json({ error: 'Arquivo nao encontrado', code: mediaDecision.code }, mediaDecision.status);
   }
 
   const object = await c.env.STORAGE.get(key);

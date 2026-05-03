@@ -16,6 +16,37 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
+const DANGEROUS_EXTENSIONS = new Set([
+  'bat',
+  'cmd',
+  'com',
+  'exe',
+  'html',
+  'hta',
+  'jar',
+  'js',
+  'msi',
+  'php',
+  'ps1',
+  'scr',
+  'sh',
+  'svg',
+  'vbs',
+]);
+
+const EXTENSIONS_BY_MIME = new Map<string, Set<string>>([
+  ['image/jpeg', new Set(['jpg', 'jpeg'])],
+  ['image/png', new Set(['png'])],
+  ['image/webp', new Set(['webp'])],
+  ['video/mp4', new Set(['mp4'])],
+  ['application/pdf', new Set(['pdf'])],
+]);
+
+function getFileExtension(filename?: string): string {
+  const cleanName = filename?.split(/[\\/]/).pop() ?? '';
+  const ext = cleanName.includes('.') ? cleanName.split('.').pop() : '';
+  return (ext ?? '').trim().toLowerCase();
+}
 
 export function validateUpload(
   mimeType: string,
@@ -30,12 +61,36 @@ export function validateUpload(
   return { ok: true };
 }
 
+export function validatePrivateUpload(
+  mimeType: string,
+  fileSize: number,
+  filename: string
+): { ok: true } | { ok: false; error: string } {
+  const base = validateUpload(mimeType, fileSize);
+  if (!base.ok) return base;
+
+  const extension = getFileExtension(filename);
+  if (!extension) {
+    return { ok: false, error: 'Arquivo sem extensao valida' };
+  }
+  if (DANGEROUS_EXTENSIONS.has(extension)) {
+    return { ok: false, error: 'Extensao de arquivo nao permitida' };
+  }
+
+  const expectedExtensions = EXTENSIONS_BY_MIME.get(mimeType);
+  if (expectedExtensions && !expectedExtensions.has(extension)) {
+    return { ok: false, error: 'Extensao nao corresponde ao tipo do arquivo' };
+  }
+
+  return { ok: true };
+}
+
 export function buildR2Key(opts: {
   propertyId: string;
   category: 'photos' | 'videos' | 'documents' | 'avatars' | 'inventory' | 'invoices';
   filename: string;
 }): string {
-  const ext = opts.filename.split('.').pop() ?? 'bin';
+  const ext = getFileExtension(opts.filename) || 'bin';
   const ts = Date.now();
   return `${opts.propertyId}/${opts.category}/${ts}.${ext}`;
 }

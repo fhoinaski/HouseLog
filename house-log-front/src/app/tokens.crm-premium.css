@@ -266,9 +266,34 @@
     color: var(--nav-text-active);
   }
 
+  [data-theme="crm-premium"] .nav-dock {
+    border: 1px solid var(--nav-border);
+    box-shadow: var(--shadow-md);
+  }
+
+  [data-theme="crm-premium"] .nav-dock-item[data-active="true"] {
+    background: var(--bg-surface);
+    color: var(--nav-text-active);
+    box-shadow: var(--shadow-xs);
+  }
+
+  [data-theme="crm-premium"] .nav-dock-item[data-active="false"]:hover {
+    background: var(--bg-subtle);
+    color: var(--nav-text-active);
+  }
+
   [data-theme="crm-premium"] .metric-card,
   [data-theme="crm-premium"] .action-tile,
   [data-theme="crm-premium"] .service-order-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-xs);
+  }
+
+  [data-theme="crm-premium"] .page-section[data-tone="surface"],
+  [data-theme="crm-premium"] .page-section[data-tone="strong"],
+  [data-theme="crm-premium"] .empty-state,
+  [data-theme="crm-premium"] .dialog-content {
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     box-shadow: var(--shadow-xs);
@@ -281,18 +306,20 @@
   }
 
   [data-theme="crm-premium"] .metric-card-icon,
-  [data-theme="crm-premium"] .action-tile-icon {
+  [data-theme="crm-premium"] .action-tile-icon,
+  [data-theme="crm-premium"] .empty-state-icon,
+  [data-theme="crm-premium"] .service-order-leading-icon {
     background: var(--bg-subtle);
     color: var(--text-accent);
   }
 
-  [data-theme="crm-premium"] .service-order-card [class*="bg-bg-accent-subtle"] {
+  [data-theme="crm-premium"] .page-section[data-tone="strong"] {
     background: var(--bg-subtle);
-    color: var(--text-accent);
   }
 
   [data-theme="crm-premium"] .hl-badge {
     border: 1px solid var(--badge-border);
+    box-shadow: none;
   }
 
   [data-theme="crm-premium-dark"],

@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import {
   canAccessProperty,
   canSendInternalServiceMessage,
@@ -25,8 +25,10 @@ import { serviceMessageCreateSchema } from '../../../../../packages/contracts/sr
 
 const messages = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 messages.use('*', authMiddleware);
+messages.use('*', resolveTenant);
 
 type Participants = {
+  tenantId: string;
   propertyId: string;
   ownerId: string;
   managerId: string | null;
@@ -36,10 +38,12 @@ type Participants = {
 
 async function loadParticipants(
   db: ReturnType<typeof getDb>,
+  tenantId: string,
   serviceOrderId: string
 ): Promise<Participants | null> {
   const [row] = await db
     .select({
+      tenant_id: serviceOrders.tenantId,
       property_id: serviceOrders.propertyId,
       assigned_to: serviceOrders.assignedTo,
       requested_by: serviceOrders.requestedBy,
@@ -48,10 +52,19 @@ async function loadParticipants(
     })
     .from(serviceOrders)
     .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
-    .where(and(eq(serviceOrders.id, serviceOrderId), isNull(serviceOrders.deletedAt)))
+    .where(
+      and(
+        eq(serviceOrders.id, serviceOrderId),
+        eq(serviceOrders.tenantId, tenantId),
+        eq(properties.tenantId, tenantId),
+        isNull(serviceOrders.deletedAt),
+        isNull(properties.deletedAt)
+      )
+    )
     .limit(1);
   if (!row) return null;
   return {
+    tenantId: row.tenant_id ?? tenantId,
     propertyId: row.property_id,
     ownerId: row.owner_id,
     managerId: row.manager_id,
@@ -79,6 +92,7 @@ function toMessageAuthorizationInput(
 
 async function hasActiveBidAccess(
   db: ReturnType<typeof getDb>,
+  tenantId: string,
   serviceOrderId: string,
   userId: string
 ): Promise<boolean> {
@@ -87,6 +101,7 @@ async function hasActiveBidAccess(
     .from(serviceBids)
     .where(
       and(
+        eq(serviceBids.tenantId, tenantId),
         eq(serviceBids.serviceId, serviceOrderId),
         eq(serviceBids.providerId, userId),
         sql`${serviceBids.status} IN ('pending', 'accepted')`
@@ -102,12 +117,14 @@ messages.get('/:serviceOrderId/messages', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const soId = c.req.param('serviceOrderId')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const p = await loadParticipants(db, soId);
+  const p = await loadParticipants(db, tenantId, soId);
   if (!p) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
   let authInput = toMessageAuthorizationInput(p, userId, role);
   if (!canViewServiceMessages(authInput)) {
-    const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
+    const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, tenantId, soId, userId) : false;
     authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid });
     if (!canViewServiceMessages(authInput)) {
       const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role });
@@ -131,6 +148,7 @@ messages.get('/:serviceOrderId/messages', async (c) => {
     .innerJoin(users, eq(users.id, serviceMessages.authorId))
     .where(
       and(
+        eq(serviceMessages.tenantId, tenantId),
         eq(serviceMessages.serviceOrderId, soId),
         isNull(serviceMessages.deletedAt),
         canSeeInternal ? sql`1=1` : eq(serviceMessages.internal, 0)
@@ -149,12 +167,14 @@ messages.post('/:serviceOrderId/messages', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const soId = c.req.param('serviceOrderId')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const p = await loadParticipants(db, soId);
+  const p = await loadParticipants(db, tenantId, soId);
   if (!p) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
   let authInput = toMessageAuthorizationInput(p, userId, role);
   if (!canSendServiceMessage(authInput)) {
-    const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, soId, userId) : false;
+    const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, tenantId, soId, userId) : false;
     authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid });
     if (!canSendServiceMessage(authInput)) {
       const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role });
@@ -175,6 +195,7 @@ messages.post('/:serviceOrderId/messages', async (c) => {
   const id = nanoid();
   await db.insert(serviceMessages).values({
     id,
+    tenantId,
     serviceOrderId: soId,
     authorId: userId,
     body: b.body,
@@ -193,7 +214,7 @@ messages.post('/:serviceOrderId/messages', async (c) => {
     const activeBidders = await db
       .select({ provider_id: serviceBids.providerId })
       .from(serviceBids)
-      .where(and(eq(serviceBids.serviceId, soId), sql`${serviceBids.status} IN ('pending', 'accepted')`));
+      .where(and(eq(serviceBids.tenantId, tenantId), eq(serviceBids.serviceId, soId), sql`${serviceBids.status} IN ('pending', 'accepted')`));
     for (const b of activeBidders) {
       activeBidderIds.add(b.provider_id);
       if (b.provider_id !== userId) candidates.push(b.provider_id);
@@ -231,11 +252,22 @@ messages.post('/:serviceOrderId/messages', async (c) => {
 messages.delete('/:serviceOrderId/messages/:id', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
+  const soId = c.req.param('serviceOrderId')!;
   const id = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const p = await loadParticipants(db, tenantId, soId);
+  if (!p) return err(c, 'OS nÃ£o encontrada', 'NOT_FOUND', 404);
+
   const res = await db.run(
     sql`UPDATE service_messages
         SET deleted_at = datetime('now')
-        WHERE id = ${id} AND author_id = ${userId} AND deleted_at IS NULL`
+        WHERE id = ${id}
+          AND tenant_id = ${tenantId}
+          AND service_order_id = ${soId}
+          AND author_id = ${userId}
+          AND deleted_at IS NULL`
   );
   if (!res.meta.changes) return err(c, 'Não encontrado', 'NOT_FOUND', 404);
   return ok(c, { id });

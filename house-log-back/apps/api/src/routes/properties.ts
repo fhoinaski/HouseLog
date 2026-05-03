@@ -4,8 +4,9 @@ import { nanoid } from 'nanoid';
 import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
-import { authMiddleware, requireRole, assertPropertyAccess } from '../middleware/auth';
-import { validateUpload, buildR2Key, uploadToR2, getPublicUrl } from '../lib/r2';
+import { authMiddleware, requireRole, assertPropertyAccess, resolveTenant, assertTenantAccess } from '../middleware/auth';
+import { canCreatePropertyInTenant } from '../lib/property-tenant';
+import { validatePrivateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
 import { getDb } from '../db/client';
 import {
   expenses,
@@ -22,8 +23,11 @@ import { propertyCreateSchema, propertyUpdateSchema } from '../../../../../packa
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// All routes require auth
+// All routes require auth and an active tenant. Legacy rows with tenant_id=NULL
+// are intentionally excluded here; migration 0014 backfills existing data and
+// new property writes must never create tenantless records.
 properties.use('*', authMiddleware);
+properties.use('*', resolveTenant);
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -37,18 +41,23 @@ const updateSchema = propertyUpdateSchema;
 properties.get('/', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
   const cursor = c.req.query('cursor');
   const search = c.req.query('search');
 
   const filters = [
+    eq(propertiesTable.tenantId, tenantId),
     isNull(propertiesTable.deletedAt),
     or(
       eq(propertiesTable.ownerId, userId),
       eq(propertiesTable.managerId, userId),
       sql`EXISTS (
         SELECT 1 FROM property_collaborators pc
-        WHERE pc.property_id = ${propertiesTable.id} AND pc.user_id = ${userId}
+        WHERE pc.property_id = ${propertiesTable.id}
+          AND pc.tenant_id = ${tenantId}
+          AND pc.user_id = ${userId}
       )`
     ),
   ];
@@ -97,6 +106,19 @@ properties.get('/', async (c) => {
 
 properties.post('/', requireRole('admin', 'owner'), async (c) => {
   const db = getDb(c.env.DB);
+  const tenantId = c.get('tenantId');
+  const createAccess = canCreatePropertyInTenant({
+    activeTenantId: tenantId,
+    userRole: c.get('userRole'),
+    tenantRole: c.get('tenantRole'),
+  });
+  if (!createAccess.allowed) {
+    const message = createAccess.code === 'TENANT_REQUIRED' ? 'Tenant ativo obrigatorio' : 'Sem permissao para criar imovel neste tenant';
+    return err(c, message, createAccess.code, createAccess.status);
+  }
+  const activeTenantId = tenantId;
+  if (!activeTenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
 
@@ -111,11 +133,16 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
 
   // Only admin can assign a different owner_id
   const ownerId = role === 'admin' && data.owner_id ? data.owner_id : userId;
+  if (ownerId !== userId) {
+    const ownerInTenant = await assertTenantAccess(c.env.DB, activeTenantId, ownerId, ['owner']);
+    if (!ownerInTenant) return err(c, 'Owner informado nao pertence ao tenant ativo', 'FORBIDDEN', 403);
+  }
 
   const id = nanoid();
 
   await db.insert(propertiesTable).values({
     id,
+    tenantId: activeTenantId,
     ownerId,
     name: data.name,
     type: data.type,
@@ -146,7 +173,7 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
       deleted_at: propertiesTable.deletedAt,
     })
     .from(propertiesTable)
-    .where(eq(propertiesTable.id, id))
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, activeTenantId)))
     .limit(1) as Array<Property>;
 
   await writeAuditLog(c.env.DB, {
@@ -168,6 +195,8 @@ properties.get('/:id', async (c) => {
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   const [property] = await db
     .select({
@@ -190,7 +219,7 @@ properties.get('/:id', async (c) => {
     })
     .from(propertiesTable)
     .innerJoin(users, eq(users.id, propertiesTable.ownerId))
-    .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
     .limit(1) as Array<Property & { owner_name: string }>;
 
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
@@ -208,6 +237,15 @@ properties.put('/:id', async (c) => {
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
@@ -239,7 +277,7 @@ properties.put('/:id', async (c) => {
       deleted_at: propertiesTable.deletedAt,
     })
     .from(propertiesTable)
-    .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
     .limit(1) as Array<Property>;
 
   if (!old) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
@@ -259,7 +297,7 @@ properties.put('/:id', async (c) => {
 
   if (Object.keys(updateData).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await db.update(propertiesTable).set(updateData).where(eq(propertiesTable.id, id));
+  await db.update(propertiesTable).set(updateData).where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId)));
 
   const [updated] = await db
     .select({
@@ -280,7 +318,7 @@ properties.put('/:id', async (c) => {
       deleted_at: propertiesTable.deletedAt,
     })
     .from(propertiesTable)
-    .where(eq(propertiesTable.id, id))
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId)))
     .limit(1) as Array<Property>;
 
   await writeAuditLog(c.env.DB, {
@@ -303,6 +341,15 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
@@ -326,12 +373,15 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
       deleted_at: propertiesTable.deletedAt,
     })
     .from(propertiesTable)
-    .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
     .limit(1) as Array<Property>;
 
   if (!old) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
-  await db.update(propertiesTable).set({ deletedAt: sql`datetime('now')` }).where(eq(propertiesTable.id, id));
+  await db
+    .update(propertiesTable)
+    .set({ deletedAt: sql`datetime('now')` })
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property',
@@ -352,6 +402,15 @@ properties.post('/:id/cover', async (c) => {
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
@@ -362,16 +421,16 @@ properties.post('/:id/cover', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  const validation = validateUpload(file.type, file.size);
+  const validation = validatePrivateUpload(file.type, file.size, file.name);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId: id, category: 'photos', filename: `cover.${file.name.split('.').pop()}` });
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
 
-  const coverUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
+  const coverUrl = `/api/v1/properties/${id}/media/${encodeURIComponent(key)}`;
 
-  await db.update(propertiesTable).set({ coverUrl }).where(eq(propertiesTable.id, id));
+  await db.update(propertiesTable).set({ coverUrl }).where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property', entityId: id, action: 'cover_upload',
@@ -384,11 +443,55 @@ properties.post('/:id/cover', async (c) => {
 
 // ── GET /properties/:id/dashboard ────────────────────────────────────────────
 
+properties.get('/:id/media/*', async (c) => {
+  const db = getDb(c.env.DB);
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso a este imovel', 'FORBIDDEN', 403);
+
+  const key = decodeURIComponent(c.req.path.split(`/properties/${id}/media/`)[1] ?? '');
+  if (!key || key.includes('..')) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  const [property] = await db
+    .select({ coverUrl: propertiesTable.coverUrl })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+
+  if (!property || property.coverUrl !== `/api/v1/properties/${id}/media/${encodeURIComponent(key)}`) {
+    return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  }
+
+  const object = await c.env.STORAGE.get(key);
+  if (!object) return err(c, 'Arquivo nao encontrado', 'STORAGE_ERROR', 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=60');
+
+  return new Response(object.body, { headers });
+});
+
 properties.get('/:id/dashboard', async (c) => {
   const db = getDb(c.env.DB);
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
@@ -400,7 +503,7 @@ properties.get('/:id/dashboard', async (c) => {
         this_month: sql<number>`SUM(CASE WHEN ${expenses.referenceMonth} = strftime('%Y-%m', 'now') THEN ${expenses.amount} ELSE 0 END)`,
       })
       .from(expenses)
-      .where(and(eq(expenses.propertyId, id), isNull(expenses.deletedAt)))
+      .where(and(eq(expenses.tenantId, tenantId), eq(expenses.propertyId, id), isNull(expenses.deletedAt)))
       .then((r) => r[0] ?? { total: 0, this_month: 0 }),
     db
       .select({
@@ -411,7 +514,7 @@ properties.get('/:id/dashboard', async (c) => {
         urgent_open: sql<number>`SUM(CASE WHEN ${serviceOrders.priority} = 'urgent' AND ${serviceOrders.status} NOT IN ('completed','verified') THEN 1 ELSE 0 END)`,
       })
       .from(serviceOrders)
-      .where(and(eq(serviceOrders.propertyId, id), isNull(serviceOrders.deletedAt)))
+      .where(and(eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, id), isNull(serviceOrders.deletedAt)))
       .then((r) => r[0] ?? { total: 0, requested: 0, in_progress: 0, done: 0, urgent_open: 0 }),
     db
       .select({
@@ -419,12 +522,12 @@ properties.get('/:id/dashboard', async (c) => {
         low_stock: sql<number>`SUM(CASE WHEN ${inventoryItems.quantity} <= ${inventoryItems.reserveQty} THEN 1 ELSE 0 END)`,
       })
       .from(inventoryItems)
-      .where(and(eq(inventoryItems.propertyId, id), isNull(inventoryItems.deletedAt)))
+      .where(and(eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.propertyId, id), isNull(inventoryItems.deletedAt)))
       .then((r) => r[0] ?? { total: 0, low_stock: 0 }),
     db
       .select({ health_score: propertiesTable.healthScore })
       .from(propertiesTable)
-      .where(and(eq(propertiesTable.id, id), isNull(propertiesTable.deletedAt)))
+      .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
       .limit(1)
       .then((r) => r[0]),
   ]);
@@ -440,6 +543,7 @@ properties.get('/:id/dashboard', async (c) => {
     .where(
       and(
         eq(expenses.propertyId, id),
+        eq(expenses.tenantId, tenantId),
         isNull(expenses.deletedAt),
         eq(expenses.type, 'expense'),
         gte(expenses.referenceMonth, sql`strftime('%Y-%m', 'now', '-5 months')`)
@@ -460,6 +564,7 @@ properties.get('/:id/dashboard', async (c) => {
     .where(
       and(
         eq(inventoryItems.propertyId, id),
+        eq(inventoryItems.tenantId, tenantId),
         isNull(inventoryItems.deletedAt),
         isNotNull(inventoryItems.warrantyUntil),
         lte(sql`julianday(${inventoryItems.warrantyUntil}) - julianday('now')`, 30),
@@ -487,6 +592,15 @@ properties.get('/:id/providers', async (c) => {
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -506,7 +620,13 @@ properties.get('/:id/providers', async (c) => {
     })
     .from(propertyCollaborators)
     .innerJoin(users, eq(users.id, propertyCollaborators.userId))
-    .where(and(eq(propertyCollaborators.propertyId, id), eq(propertyCollaborators.role, 'provider')))
+    .where(
+      and(
+        eq(propertyCollaborators.tenantId, tenantId),
+        eq(propertyCollaborators.propertyId, id),
+        eq(propertyCollaborators.role, 'provider')
+      )
+    )
     .orderBy(asc(users.name)) as Array<{
     collab_id: string; user_id: string; role: string; can_open_os: number;
     specialties: string | null; whatsapp: string | null;
@@ -587,6 +707,15 @@ properties.post('/:id/apply-template', async (c) => {
   const { id } = c.req.param();
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
@@ -611,12 +740,13 @@ properties.post('/:id/apply-template', async (c) => {
     ...template.rooms.map((r) =>
       db
         .insert(rooms)
-        .values({ id: nanoid(), propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
+        .values({ id: nanoid(), tenantId, propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
         .onConflictDoNothing()
     ),
     ...template.maintenance.map((m) =>
       db.insert(maintenanceSchedules).values({
         id: nanoid(),
+        tenantId,
         propertyId: id,
         systemType: m.system_type,
         title: m.title,

@@ -5,22 +5,23 @@ import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { canDeleteDocument, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
-import { validateUpload, buildR2Key, uploadToR2, getPublicUrl, extractR2KeyFromPublicUrl } from '../lib/r2';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
+import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
-import { documents as documentsTable, users } from '../db/schema';
+import { documents as documentsTable, properties, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 type Document = {
   id: string; property_id: string; service_id: string | null;
-  type: string; title: string; file_url: string; file_size: number;
-  ocr_data: string | null; vendor_cnpj: string | null; amount: number | null;
+  type: string; title: string; file_url: string; file_size: number | null;
+  ocr_data: Record<string, unknown> | null; vendor_cnpj: string | null; amount: number | null;
   issue_date: string | null; expiry_date: string | null;
   uploaded_by: string; created_at: string; deleted_at: string | null;
 };
 
 const documents = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 documents.use('*', authMiddleware);
+documents.use('*', resolveTenant);
 
 const metaSchema = z.object({
   type: z.enum(['invoice', 'manual', 'project', 'contract', 'deed', 'permit', 'insurance', 'other']),
@@ -32,6 +33,45 @@ const metaSchema = z.object({
   expiry_date: z.string().optional(),
 });
 
+function buildDocumentDownloadUrl(propertyId: string, documentId: string): string {
+  return `/api/v1/properties/${propertyId}/documents/${documentId}/download`;
+}
+
+function mapDocumentForResponse<T extends Document>(doc: T): T {
+  return { ...doc, file_url: buildDocumentDownloadUrl(doc.property_id, doc.id) };
+}
+
+async function ensureTenantProperty(db: ReturnType<typeof getDb>, tenantId: string, propertyId: string): Promise<boolean> {
+  const [property] = await db
+    .select({ id: properties.id })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+  return Boolean(property);
+}
+
+async function ensureTenantServiceOrder(
+  db: ReturnType<typeof getDb>,
+  tenantId: string,
+  propertyId: string,
+  serviceOrderId?: string | null
+): Promise<boolean> {
+  if (!serviceOrderId) return true;
+  const [order] = await db
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(
+      and(
+        eq(serviceOrders.id, serviceOrderId),
+        eq(serviceOrders.tenantId, tenantId),
+        eq(serviceOrders.propertyId, propertyId),
+        isNull(serviceOrders.deletedAt)
+      )
+    )
+    .limit(1);
+  return Boolean(order);
+}
+
 // ── GET /properties/:propertyId/documents ────────────────────────────────────
 
 documents.get('/', async (c) => {
@@ -39,6 +79,9 @@ documents.get('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -47,7 +90,7 @@ documents.get('/', async (c) => {
   const cursor = c.req.query('cursor');
   const type = c.req.query('type');
 
-  const filters = [eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)];
+  const filters = [eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)];
   if (type && type !== 'undefined') filters.push(eq(documentsTable.type, type as typeof documentsTable.$inferSelect.type));
   if (cursor) filters.push(lt(documentsTable.createdAt, cursor));
 
@@ -76,7 +119,7 @@ documents.get('/', async (c) => {
     .orderBy(desc(documentsTable.createdAt))
     .limit(limit + 1) as Array<Document & { uploader_name: string }>;
 
-  return ok(c, paginate(results, limit, 'created_at'));
+  return ok(c, paginate(results.map(mapDocumentForResponse), limit, 'created_at'));
 });
 
 // ── POST /properties/:propertyId/documents — multipart upload ────────────────
@@ -86,6 +129,9 @@ documents.post('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await canUploadDocument(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -96,7 +142,7 @@ documents.post('/', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo obrigatório', 'MISSING_FILE');
 
-  const validation = validateUpload(file.type, file.size);
+  const validation = validatePrivateUpload(file.type, file.size, file.name);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const rawMeta = formData.get('meta') as string | null;
@@ -107,19 +153,22 @@ documents.post('/', async (c) => {
   }
 
   const meta = parsed.data;
+  const serviceOrderAllowed = await ensureTenantServiceOrder(db, tenantId, propertyId, meta.service_id);
+  if (!serviceOrderAllowed) return err(c, 'OS nao encontrada neste imovel', 'SERVICE_ORDER_NOT_FOUND', 404);
+
   const key = buildR2Key({ propertyId, category: 'documents', filename: file.name });
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
-  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
   const id = nanoid();
   await db.insert(documentsTable).values({
     id,
+    tenantId,
     propertyId,
     serviceId: meta.service_id ?? null,
     type: meta.type,
     title: meta.title,
-    fileUrl,
+    fileUrl: key,
     fileSize: file.size,
     vendorCnpj: meta.vendor_cnpj ?? null,
     amount: meta.amount ?? null,
@@ -147,7 +196,7 @@ documents.post('/', async (c) => {
       deleted_at: documentsTable.deletedAt,
     })
     .from(documentsTable)
-    .where(eq(documentsTable.id, id))
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId)))
     .limit(1) as Document[];
 
   if (!doc) return err(c, 'Documento nao encontrado apos upload', 'DOCUMENT_UPLOAD_READ_FAILED', 500);
@@ -166,7 +215,7 @@ documents.post('/', async (c) => {
     },
   });
 
-  return ok(c, { document: doc }, 201);
+  return ok(c, { document: mapDocumentForResponse(doc) }, 201);
 });
 
 // ── GET /properties/:propertyId/documents/:id ────────────────────────────────
@@ -177,6 +226,9 @@ documents.get('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -202,14 +254,59 @@ documents.get('/:id', async (c) => {
     })
     .from(documentsTable)
     .innerJoin(users, eq(users.id, documentsTable.uploadedBy))
-    .where(and(eq(documentsTable.id, id), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
     .limit(1);
 
   if (!doc) return err(c, 'Documento não encontrado', 'NOT_FOUND', 404);
-  return ok(c, { document: doc });
+  if (!(await ensureTenantServiceOrder(db, tenantId, propertyId, doc.service_id))) {
+    return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+  }
+  return ok(c, { document: mapDocumentForResponse(doc) });
 });
 
 // ── DELETE /properties/:propertyId/documents/:id ─────────────────────────────
+
+documents.get('/:id/download', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const id = c.req.param('id')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [doc] = await db
+    .select({
+      id: documentsTable.id,
+      file_url: documentsTable.fileUrl,
+      title: documentsTable.title,
+      service_id: documentsTable.serviceId,
+    })
+    .from(documentsTable)
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+  if (!(await ensureTenantServiceOrder(db, tenantId, propertyId, doc.service_id))) {
+    return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+  }
+
+  const key = extractR2KeyFromPublicUrl(doc.file_url, c.env.R2_PUBLIC_URL);
+  const object = await c.env.STORAGE.get(key);
+  if (!object) return err(c, 'Arquivo nao encontrado', 'STORAGE_ERROR', 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=60');
+  headers.set('content-disposition', `inline; filename="${doc.title.replace(/"/g, '')}"`);
+
+  return new Response(object.body, { headers });
+});
 
 documents.delete('/:id', async (c) => {
   const db = getDb(c.env.DB);
@@ -217,6 +314,9 @@ documents.delete('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await canDeleteDocument(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -240,15 +340,18 @@ documents.delete('/:id', async (c) => {
       deleted_at: documentsTable.deletedAt,
     })
     .from(documentsTable)
-    .where(and(eq(documentsTable.id, id), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
     .limit(1) as Document[];
 
   if (!doc) return err(c, 'Documento não encontrado', 'NOT_FOUND', 404);
+  if (!(await ensureTenantServiceOrder(db, tenantId, propertyId, doc.service_id))) {
+    return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+  }
 
   await db
     .update(documentsTable)
     .set({ deletedAt: new Date().toISOString() })
-    .where(eq(documentsTable.id, id));
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'document', entityId: id, action: 'document_deleted',
@@ -274,6 +377,9 @@ documents.post('/:id/ocr', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await canRequestDocumentOCR(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -297,10 +403,13 @@ documents.post('/:id/ocr', async (c) => {
       deleted_at: documentsTable.deletedAt,
     })
     .from(documentsTable)
-    .where(and(eq(documentsTable.id, id), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId), isNull(documentsTable.deletedAt)))
     .limit(1) as Document[];
 
   if (!doc) return err(c, 'Documento não encontrado', 'NOT_FOUND', 404);
+  if (!(await ensureTenantServiceOrder(db, tenantId, propertyId, doc.service_id))) {
+    return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+  }
   if (doc.type !== 'invoice') return err(c, 'OCR disponível apenas para notas fiscais', 'INVALID_TYPE', 422);
 
   // Fetch the file from R2 to send to Workers AI
@@ -343,7 +452,7 @@ documents.post('/:id/ocr', async (c) => {
   await db
     .update(documentsTable)
     .set(patch)
-    .where(eq(documentsTable.id, id));
+    .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
     entityType: 'document', entityId: id, action: 'document_ocr_requested',

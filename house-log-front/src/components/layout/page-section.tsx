@@ -25,7 +25,11 @@ export function PageSection({
   const hasHeader = title || description || actions;
 
   return (
-    <section className={cn(pageSectionVariants({ tone, density, className }))} {...props}>
+    <section
+      className={cn('page-section', pageSectionVariants({ tone, density, className }))}
+      data-tone={tone ?? 'plain'}
+      {...props}
+    >
       {hasHeader && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">

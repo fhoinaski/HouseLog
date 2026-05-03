@@ -8,7 +8,7 @@ import {
   canViewAssignedProviderService,
   canViewProviderOpportunity,
 } from '../lib/authorization';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { documents, properties, rooms, serviceBids, serviceOrders, users } from '../db/schema';
 import { normalizeProviderCategories } from '../lib/provider-categories';
@@ -16,12 +16,15 @@ import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 
 const provider = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 provider.use('*', authMiddleware);
+provider.use('*', resolveTenant);
 
 // GET /provider/services
 provider.get('/services', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
@@ -30,7 +33,7 @@ provider.get('/services', async (c) => {
   const cursor = c.req.query('cursor');
   const status = c.req.query('status');
 
-  const filters = [eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)];
+  const filters = [eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)];
   if (status) filters.push(eq(serviceOrders.status, status as typeof serviceOrders.$inferSelect.status));
   if (cursor) filters.push(lt(serviceOrders.createdAt, cursor));
 
@@ -64,8 +67,8 @@ provider.get('/services', async (c) => {
     })
     .from(serviceOrders)
     .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
     .where(and(...filters))
     .orderBy(
       sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`,
@@ -91,6 +94,8 @@ provider.get('/opportunities', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
@@ -108,6 +113,7 @@ provider.get('/opportunities', async (c) => {
   const categories = normalizeProviderCategories(me?.provider_categories ?? []);
 
   const filters = [
+    eq(serviceOrders.tenantId, tenantId),
     eq(serviceOrders.status, 'requested'),
     isNull(serviceOrders.assignedTo),
     isNull(serviceOrders.deletedAt),
@@ -153,8 +159,8 @@ provider.get('/opportunities', async (c) => {
     })
     .from(serviceOrders)
     .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
     .where(and(...filters))
     .orderBy(
       sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`,
@@ -189,7 +195,7 @@ provider.get('/opportunities', async (c) => {
         created_at: serviceBids.createdAt,
       })
       .from(serviceBids)
-      .where(and(sql`${serviceBids.serviceId} IN ${serviceIds}`, eq(serviceBids.providerId, userId)))
+      .where(and(eq(serviceBids.tenantId, tenantId), sql`${serviceBids.serviceId} IN ${serviceIds}`, eq(serviceBids.providerId, userId)))
       .orderBy(desc(serviceBids.createdAt))
     : [];
 
@@ -219,6 +225,8 @@ provider.get('/opportunities/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const id = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
@@ -253,9 +261,9 @@ provider.get('/opportunities/:id', async (c) => {
     })
     .from(serviceOrders)
     .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.status, 'requested'), isNull(serviceOrders.assignedTo), isNull(serviceOrders.deletedAt)))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.status, 'requested'), isNull(serviceOrders.assignedTo), isNull(serviceOrders.deletedAt)))
     .limit(1);
 
   if (!order) return err(c, 'Oportunidade não encontrada', 'NOT_FOUND', 404);
@@ -282,7 +290,7 @@ provider.get('/opportunities/:id', async (c) => {
       updated_at: serviceBids.updatedAt,
     })
     .from(serviceBids)
-    .where(and(eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
+    .where(and(eq(serviceBids.tenantId, tenantId), eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
     .orderBy(desc(serviceBids.createdAt));
 
   return ok(c, { order, my_bids: myBids });
@@ -294,13 +302,15 @@ provider.get('/services/:id', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const id = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
   const whereClause = role === 'admin'
-    ? and(eq(serviceOrders.id, id), isNull(serviceOrders.deletedAt))
-    : and(eq(serviceOrders.id, id), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
+    ? and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), isNull(serviceOrders.deletedAt))
+    : and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
 
   const [order] = await db
     .select({
@@ -332,8 +342,8 @@ provider.get('/services/:id', async (c) => {
     })
     .from(serviceOrders)
     .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
     .where(whereClause)
     .limit(1);
 
@@ -352,7 +362,7 @@ provider.get('/services/:id', async (c) => {
   const myBids = await db
     .select()
     .from(serviceBids)
-    .where(and(eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
+    .where(and(eq(serviceBids.tenantId, tenantId), eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
     .orderBy(desc(serviceBids.createdAt));
 
   return ok(c, { order, my_bids: myBids });
@@ -363,6 +373,8 @@ provider.get('/stats', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
@@ -370,7 +382,7 @@ provider.get('/stats', async (c) => {
   const statusCounts = await db
     .select({ status: serviceOrders.status, count: sql<number>`COUNT(*)` })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)))
+    .where(and(eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)))
     .groupBy(serviceOrders.status) as Array<{ status: string; count: number }>;
 
   const stats = statusCounts.reduce((acc, r) => ({ ...acc, [r.status]: r.count }), {} as Record<string, number>);
@@ -391,8 +403,8 @@ provider.get('/stats', async (c) => {
     })
     .from(serviceBids)
     .innerJoin(serviceOrders, eq(serviceOrders.id, serviceBids.serviceId))
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
-    .where(eq(serviceBids.providerId, userId))
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .where(and(eq(serviceBids.tenantId, tenantId), eq(serviceBids.providerId, userId), eq(serviceOrders.tenantId, tenantId), isNull(serviceOrders.deletedAt)))
     .orderBy(desc(serviceBids.createdAt))
     .limit(5);
 
@@ -405,17 +417,20 @@ provider.post('/services/:id/invoice', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const id = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
   const whereClause = role === 'admin'
-    ? and(eq(serviceOrders.id, id), isNull(serviceOrders.deletedAt))
-    : and(eq(serviceOrders.id, id), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
+    ? and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), isNull(serviceOrders.deletedAt))
+    : and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
 
   const [order] = await db
     .select({ id: serviceOrders.id, property_id: serviceOrders.propertyId, assigned_to: serviceOrders.assignedTo, deleted_at: serviceOrders.deletedAt })
     .from(serviceOrders)
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
     .where(whereClause)
     .limit(1) as Array<{ id: string; property_id: string; assigned_to: string | null; deleted_at: string | null }>;
 
@@ -440,22 +455,25 @@ provider.post('/services/:id/invoice', async (c) => {
   if (!allowed.includes(file.type)) return err(c, 'Tipo de arquivo não permitido', 'INVALID_FILE', 422);
   if (file.size > 10 * 1024 * 1024) return err(c, 'Arquivo excede 10MB', 'INVALID_FILE', 422);
 
-  const { buildR2Key, uploadToR2, getPublicUrl } = await import('../lib/r2');
+  const { buildR2Key, uploadToR2, validatePrivateUpload } = await import('../lib/r2');
+  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
+
   const key = buildR2Key({ propertyId: order.property_id, category: 'invoices', filename: file.name });
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
-  const fileUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
 
   // Create a document record linked to this service
   const { nanoid } = await import('nanoid');
   const docId = nanoid();
   await db.insert(documents).values({
     id: docId,
+    tenantId,
     propertyId: order.property_id,
     serviceId: id,
     type: 'invoice',
     title: `Nota Fiscal - ${id.slice(0, 8).toUpperCase()}`,
-    fileUrl,
+    fileUrl: key,
     fileSize: file.size,
     uploadedBy: userId,
   });
@@ -480,7 +498,7 @@ provider.post('/services/:id/invoice', async (c) => {
     },
   });
 
-  return ok(c, { invoice_url: fileUrl, document_id: docId });
+  return ok(c, { invoice_url: `/api/v1/properties/${order.property_id}/documents/${docId}/download`, document_id: docId });
 });
 
 export default provider;

@@ -91,7 +91,7 @@ export const resolveTenant = createMiddleware<{
     .limit(1);
 
   if (!membership) {
-    return c.json({ error: 'Tenant ativo não encontrado', code: 'TENANT_REQUIRED' }, 403);
+    return c.json({ error: 'Tenant ativo não encontrado', code: 'TENANT_REQUIRED' }, 400);
   }
 
   c.set('tenantId', membership.tenantId);

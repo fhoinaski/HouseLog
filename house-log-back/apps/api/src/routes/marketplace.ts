@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { err, ok } from '../lib/response';
 import { getDb } from '../db/client';
 import { properties, propertyCollaborators, providerAvailability, providerEndorsements, providerRatings, serviceOrders, users } from '../db/schema';
@@ -11,6 +11,7 @@ import type { Bindings, Variables } from '../lib/types';
 const marketplace = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 marketplace.use('*', authMiddleware);
+marketplace.use('*', resolveTenant);
 
 // ── POST /marketplace/ratings ────────────────────────────────────────────────
 // Submete avaliação do prestador após OS concluída.
@@ -27,6 +28,8 @@ const ratingSchema = z.object({
 marketplace.post('/ratings', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   const parsed = ratingSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   const b = parsed.data;
@@ -44,7 +47,15 @@ marketplace.post('/ratings', async (c) => {
     })
     .from(serviceOrders)
     .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
-    .where(and(eq(serviceOrders.id, b.service_order_id), isNull(serviceOrders.deletedAt)))
+    .where(
+      and(
+        eq(serviceOrders.id, b.service_order_id),
+        eq(serviceOrders.tenantId, tenantId),
+        eq(properties.tenantId, tenantId),
+        isNull(serviceOrders.deletedAt),
+        isNull(properties.deletedAt)
+      )
+    )
     .limit(1) as Array<{
       id: string;
       property_id: string;
@@ -67,6 +78,7 @@ marketplace.post('/ratings', async (c) => {
   try {
     await db.insert(providerRatings).values({
       id,
+      tenantId,
       providerId: os.assigned_to,
       propertyId: os.property_id,
       serviceOrderId: os.id,
@@ -89,6 +101,8 @@ marketplace.post('/ratings', async (c) => {
 marketplace.get('/providers/:providerId/ratings', async (c) => {
   const db = getDb(c.env.DB);
   const providerId = c.req.param('providerId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   const [stats] = await db
     .select({
       total: sql<number>`COUNT(*)`,
@@ -99,7 +113,7 @@ marketplace.get('/providers/:providerId/ratings', async (c) => {
       avg_price: sql<number | null>`AVG(${providerRatings.price})`,
     })
     .from(providerRatings)
-    .where(eq(providerRatings.providerId, providerId)) as Array<{
+    .where(and(eq(providerRatings.tenantId, tenantId), eq(providerRatings.providerId, providerId))) as Array<{
       total: number;
       avg_stars: number | null;
       avg_quality: number | null;
@@ -115,7 +129,7 @@ marketplace.get('/providers/:providerId/ratings', async (c) => {
       created_at: providerRatings.createdAt,
     })
     .from(providerRatings)
-    .where(eq(providerRatings.providerId, providerId))
+    .where(and(eq(providerRatings.tenantId, tenantId), eq(providerRatings.providerId, providerId)))
     .orderBy(desc(providerRatings.createdAt))
     .limit(20);
 
@@ -127,6 +141,8 @@ marketplace.get('/providers/:providerId/ratings', async (c) => {
 marketplace.get('/providers/:providerId/profile', async (c) => {
   const db = getDb(c.env.DB);
   const providerId = c.req.param('providerId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   const [provider] = await db
     .select({
@@ -160,7 +176,7 @@ marketplace.get('/providers/:providerId/profile', async (c) => {
       avg_price: sql<number | null>`AVG(${providerRatings.price})`,
     })
     .from(providerRatings)
-    .where(eq(providerRatings.providerId, providerId));
+    .where(and(eq(providerRatings.tenantId, tenantId), eq(providerRatings.providerId, providerId)));
 
   const [endorsements] = await db
     .select({ total: sql<number>`COUNT(*)` })
@@ -178,7 +194,7 @@ marketplace.get('/providers/:providerId/profile', async (c) => {
       created_at: providerRatings.createdAt,
     })
     .from(providerRatings)
-    .where(eq(providerRatings.providerId, providerId))
+    .where(and(eq(providerRatings.tenantId, tenantId), eq(providerRatings.providerId, providerId)))
     .orderBy(desc(providerRatings.createdAt))
     .limit(20);
 
@@ -315,12 +331,30 @@ const availSchema = z.object({
 marketplace.post('/availability', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   const parsed = availSchema.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
   const b = parsed.data;
   if (new Date(b.ends_at) <= new Date(b.starts_at)) {
     return err(c, 'ends_at deve ser após starts_at', 'VALIDATION_ERROR', 422);
   }
+  if (b.service_order_id) {
+    const [order] = await db
+      .select({ id: serviceOrders.id })
+      .from(serviceOrders)
+      .where(
+        and(
+          eq(serviceOrders.id, b.service_order_id),
+          eq(serviceOrders.tenantId, tenantId),
+          eq(serviceOrders.assignedTo, userId),
+          isNull(serviceOrders.deletedAt)
+        )
+      )
+      .limit(1);
+    if (!order) return err(c, 'OS nao encontrada ou sem acesso', 'NOT_FOUND', 404);
+  }
+
   const id = nanoid();
   await db.insert(providerAvailability).values({
     id,
