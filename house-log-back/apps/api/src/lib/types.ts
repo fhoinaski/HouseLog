@@ -24,6 +24,9 @@ export type Bindings = {
   VAPID_SUBJECT?: string;
   // Refresh tokens (opcional — default 30 dias)
   REFRESH_TOKEN_TTL_DAYS?: string;
+  // Credentials encryption — set to a 32+ byte random string in production.
+  // Falls back to JWT_SECRET with a domain suffix when absent (less secure).
+  CREDENTIALS_ENCRYPTION_KEY?: string;
 };
 
 export type Variables = {

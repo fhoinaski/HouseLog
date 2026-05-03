@@ -183,7 +183,6 @@ share.get('/public/share/service/:token', async (c) => {
           category: propertyAccessCredentials.category,
           label: propertyAccessCredentials.label,
           username: propertyAccessCredentials.username,
-          secret: propertyAccessCredentials.secret,
           notes: propertyAccessCredentials.notes,
         })
         .from(propertyAccessCredentials)

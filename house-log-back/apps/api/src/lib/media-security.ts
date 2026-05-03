@@ -60,3 +60,10 @@ export function canUseTenantDocument(input: {
   }
   return { allowed: true, classification: 'public' };
 }
+
+// Returns true only when the R2 key belongs to an explicitly public category.
+// Private categories must use an authenticated endpoint or a short-lived
+// signed URL — never a direct public R2 URL.
+export function canUsePublicUrl(key: string): boolean {
+  return classifyR2Key(key) === 'public';
+}

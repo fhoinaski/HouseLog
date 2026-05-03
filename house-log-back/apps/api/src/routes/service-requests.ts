@@ -4,17 +4,18 @@ import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { canAccessProperty, canCreateServiceOrder, canCreateServiceRequest } from '../lib/authorization';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
 import { bids, properties, serviceOrders, serviceRequests, users } from '../db/schema';
-import { buildR2Key, getPublicUrl } from '../lib/r2';
+import { buildR2Key, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
 import { serviceOrderCreateSchema } from '../../../../../packages/contracts/src/schemas/service-order';
 
 const serviceRequestsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 serviceRequestsRoute.use('*', authMiddleware);
+serviceRequestsRoute.use('*', resolveTenant);
 
 const mediaKindSchema = z.enum(['photo', 'video', 'audio']);
 
@@ -42,10 +43,22 @@ const MIME_BY_KIND: Record<MediaKind, Set<string>> = {
   audio: new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4']),
 };
 
+// Authenticated endpoint URL for a specific media item inside a service request.
+function mediaEndpoint(propertyId: string, requestId: string, index: number): string {
+  return `/api/v1/properties/${propertyId}/service-requests/${requestId}/media/${index}`;
+}
+
+// Transforms a stored media_urls array (R2 keys or legacy public URLs) into
+// authenticated endpoint URLs so clients never receive raw R2 keys/public URLs.
+function toMediaEndpoints(propertyId: string, requestId: string, stored: string[] | null): string[] {
+  return (stored ?? []).map((_, i) => mediaEndpoint(propertyId, requestId, i));
+}
+
 serviceRequestsRoute.get('/', async (c) => {
   const propertyId = c.req.param('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   if (!propertyId) {
     return err(c, 'Imovel nao informado', 'INVALID_PROPERTY', 422);
@@ -62,6 +75,7 @@ serviceRequestsRoute.get('/', async (c) => {
 
   const filters = [
     eq(serviceRequests.propertyId, propertyId),
+    eq(serviceRequests.tenantId, tenantId),
     isNull(properties.deletedAt),
   ];
 
@@ -100,6 +114,8 @@ serviceRequestsRoute.get('/', async (c) => {
     pending_proposals_count: Number(row.pending_proposals_count ?? 0),
     accepted_proposals_count: Number(row.accepted_proposals_count ?? 0),
     best_amount: row.best_amount === null ? null : Number(row.best_amount),
+    // Replace stored keys/URLs with authenticated endpoint URLs.
+    media_urls: toMediaEndpoints(propertyId, row.id, row.media_urls as string[] | null),
   }));
   const last = data.at(-1);
 
@@ -121,6 +137,7 @@ serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
   const serviceRequestId = c.req.param('serviceRequestId');
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   if (!propertyId || !serviceRequestId) {
     return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
@@ -151,6 +168,7 @@ serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
       and(
         eq(serviceRequests.id, serviceRequestId),
         eq(serviceRequests.propertyId, propertyId),
+        eq(serviceRequests.tenantId, tenantId),
         isNull(properties.deletedAt)
       )
     )
@@ -180,7 +198,10 @@ serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
     .orderBy(sql`CASE ${bids.status} WHEN 'ACCEPTED' THEN 0 WHEN 'PENDING' THEN 1 ELSE 2 END`, bids.amount);
 
   return ok(c, {
-    service_request: requestRow,
+    service_request: {
+      ...requestRow,
+      media_urls: toMediaEndpoints(propertyId, requestRow.id, requestRow.media_urls as string[] | null),
+    },
     bids: proposalRows,
   });
 });
@@ -190,6 +211,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
   const serviceRequestId = c.req.param('serviceRequestId');
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   if (!propertyId || !serviceRequestId) {
     return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
@@ -224,6 +246,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
       and(
         eq(serviceRequests.id, serviceRequestId),
         eq(serviceRequests.propertyId, propertyId),
+        eq(serviceRequests.tenantId, tenantId),
         isNull(properties.deletedAt)
       )
     )
@@ -328,10 +351,68 @@ function mapKindToCategory(kind: MediaKind): 'photos' | 'videos' | 'documents' {
   return 'documents';
 }
 
+// ── GET /:serviceRequestId/media/:mediaIndex ──────────────────────────────────
+// Authenticated serving of service-request media. Validates tenant + property
+// ownership before streaming the R2 object.
+
+serviceRequestsRoute.get('/:serviceRequestId/media/:mediaIndex', async (c) => {
+  const propertyId = c.req.param('propertyId');
+  const serviceRequestId = c.req.param('serviceRequestId');
+  const tenantId = c.get('tenantId') as string;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+
+  const rawIndex = c.req.param('mediaIndex');
+  const mediaIndex = Number(rawIndex);
+
+  if (!propertyId || !serviceRequestId || isNaN(mediaIndex) || mediaIndex < 0) {
+    return err(c, 'Parametros invalidos', 'INVALID_PARAMS', 422);
+  }
+
+  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role });
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const db = getDb(c.env.DB);
+
+  const [request] = await db
+    .select({ mediaUrls: serviceRequests.mediaUrls })
+    .from(serviceRequests)
+    .where(
+      and(
+        eq(serviceRequests.id, serviceRequestId),
+        eq(serviceRequests.propertyId, propertyId),
+        eq(serviceRequests.tenantId, tenantId)
+      )
+    )
+    .limit(1);
+
+  if (!request) return err(c, 'Solicitacao nao encontrada', 'NOT_FOUND', 404);
+
+  const urls = (request.mediaUrls as string[] | null) ?? [];
+  if (mediaIndex >= urls.length) return err(c, 'Midia nao encontrada', 'NOT_FOUND', 404);
+
+  const stored = urls[mediaIndex];
+  if (!stored) return err(c, 'Midia nao encontrada', 'NOT_FOUND', 404);
+  const key = extractR2KeyFromPublicUrl(stored, c.env.R2_PUBLIC_URL);
+
+  const object = await c.env.STORAGE.get(key);
+  if (!object) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=60');
+
+  return new Response(object.body, { headers });
+});
+
+// ── POST / ────────────────────────────────────────────────────────────────────
+
 serviceRequestsRoute.post('/', async (c) => {
   const propertyId = c.req.param('propertyId');
   const ownerId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   if (!propertyId) {
     return err(c, 'Imovel nao informado', 'INVALID_PROPERTY', 422);
@@ -369,7 +450,8 @@ serviceRequestsRoute.post('/', async (c) => {
     }
   }
 
-  const uploadTargets = await Promise.all(
+  // Build keys and presigned PUT URLs for each media item.
+  const mediaItems = await Promise.all(
     parsed.data.media.map(async (file, index) => {
       const key = buildR2Key({
         propertyId,
@@ -386,23 +468,19 @@ serviceRequestsRoute.post('/', async (c) => {
         expiresInSeconds: 900,
       });
 
-      return {
-        key,
-        kind: file.kind,
-        mimeType: file.mimeType,
-        uploadUrl,
-        fileUrl: getPublicUrl(key, c.env.R2_PUBLIC_URL ?? ''),
-      };
+      return { key, kind: file.kind, mimeType: file.mimeType, uploadUrl };
     })
   );
 
   await db.insert(serviceRequests).values({
     id: requestId,
+    tenantId,
     propertyId,
     requestedBy: ownerId,
     title: parsed.data.title,
     description: parsed.data.description ?? null,
-    mediaUrls: uploadTargets.map((target) => target.fileUrl),
+    // Store R2 keys (not public URLs) — served via authenticated endpoint.
+    mediaUrls: mediaItems.map((m) => m.key),
     status: 'OPEN',
   });
 
@@ -422,8 +500,21 @@ serviceRequestsRoute.post('/', async (c) => {
   return ok(
     c,
     {
-      service_request: created,
-      upload_targets: uploadTargets,
+      service_request: {
+        ...created,
+        // Return endpoint URLs, never raw R2 keys, in the response.
+        mediaUrls: mediaItems.map((_, i) => mediaEndpoint(propertyId, requestId, i)),
+      },
+      // upload_targets: client uses uploadUrl to PUT the file directly to R2.
+      // mediaUrl / fileUrl (alias for backward compat) are the authenticated
+      // endpoints to fetch the file after upload — never a raw R2 public URL.
+      upload_targets: mediaItems.map((m, i) => ({
+        kind: m.kind,
+        mimeType: m.mimeType,
+        uploadUrl: m.uploadUrl,
+        mediaUrl: mediaEndpoint(propertyId, requestId, i),
+        fileUrl: mediaEndpoint(propertyId, requestId, i),
+      })),
     },
     201
   );

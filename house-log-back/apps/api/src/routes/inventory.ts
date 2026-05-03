@@ -4,8 +4,13 @@ import { nanoid } from 'nanoid';
 import { and, asc, desc, eq, isNotNull, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
-import { uploadToR2, getPublicUrl } from '../lib/r2';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
+import {
+  uploadToR2,
+  buildR2Key,
+  extractR2KeyFromPublicUrl,
+  validatePrivateUpload,
+} from '../lib/r2';
 import { getDb } from '../db/client';
 import { inventoryItems, rooms } from '../db/schema';
 import type { Bindings, Variables, InventoryItem } from '../lib/types';
@@ -13,6 +18,7 @@ import type { Bindings, Variables, InventoryItem } from '../lib/types';
 const inventory = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 inventory.use('*', authMiddleware);
+inventory.use('*', resolveTenant);
 
 const createSchema = z.object({
   category: z.enum(['paint', 'tile', 'waterproof', 'plumbing', 'electrical', 'hardware', 'adhesive', 'sealant', 'other']),
@@ -32,6 +38,16 @@ const createSchema = z.object({
   notes: z.string().optional(),
 });
 
+// Authenticated endpoint URL for an inventory item's photo.
+// Callers should use this instead of a direct R2 public URL.
+function photoEndpoint(propertyId: string, itemId: string): string {
+  return `/api/v1/properties/${propertyId}/inventory/${itemId}/photo`;
+}
+
+function withPhotoEndpoint<T extends InventoryItem>(item: T, propertyId: string): T {
+  return { ...item, photo_url: item.photo_url != null ? photoEndpoint(propertyId, item.id) : null };
+}
+
 // ── GET /properties/:propertyId/inventory ────────────────────────────────────
 
 inventory.get('/', async (c) => {
@@ -39,6 +55,7 @@ inventory.get('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -48,7 +65,11 @@ inventory.get('/', async (c) => {
   const category = c.req.query('category');
   const roomId = c.req.query('room_id');
 
-  const filters = [eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)];
+  const filters = [
+    eq(inventoryItems.propertyId, propertyId),
+    eq(inventoryItems.tenantId, tenantId),
+    isNull(inventoryItems.deletedAt),
+  ];
   if (category && category !== 'undefined') {
     filters.push(eq(inventoryItems.category, category as typeof inventoryItems.$inferSelect.category));
   }
@@ -87,7 +108,8 @@ inventory.get('/', async (c) => {
     .orderBy(desc(inventoryItems.createdAt))
     .limit(limit + 1) as Array<InventoryItem & { room_name: string | null }>;
 
-  return ok(c, paginate(results, limit, 'created_at'));
+  const mapped = results.map((item) => withPhotoEndpoint(item, propertyId));
+  return ok(c, paginate(mapped, limit, 'created_at'));
 });
 
 // ── GET /properties/:propertyId/inventory/colors ─────────────────────────────
@@ -97,6 +119,7 @@ inventory.get('/colors', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -116,6 +139,7 @@ inventory.get('/colors', async (c) => {
     .where(
       and(
         eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
         eq(inventoryItems.category, 'paint'),
         isNotNull(inventoryItems.colorCode),
         isNull(inventoryItems.deletedAt)
@@ -133,6 +157,7 @@ inventory.post('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -150,6 +175,7 @@ inventory.post('/', async (c) => {
 
   await db.insert(inventoryItems).values({
     id,
+    tenantId,
     propertyId,
     roomId: d.room_id ?? null,
     category: d.category,
@@ -197,12 +223,56 @@ inventory.post('/', async (c) => {
     .where(eq(inventoryItems.id, id))
     .limit(1) as InventoryItem[];
 
+  if (!item) return err(c, 'Erro ao criar item', 'CREATE_ERROR', 500);
+
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item', entityId: id, action: 'create',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: item,
   });
 
-  return ok(c, { item }, 201);
+  return ok(c, { item: withPhotoEndpoint(item, propertyId) }, 201);
+});
+
+// ── GET /properties/:propertyId/inventory/:itemId/photo ───────────────────────
+// Must be defined before /:id to avoid shadowing.
+
+inventory.get('/:itemId/photo', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const itemId = c.req.param('itemId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  if (!hasAccess) return c.json({ error: 'Sem acesso', code: 'FORBIDDEN' }, 403);
+
+  const [item] = await db
+    .select({ photoUrl: inventoryItems.photoUrl })
+    .from(inventoryItems)
+    .where(
+      and(
+        eq(inventoryItems.id, itemId),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!item) return c.json({ error: 'Item não encontrado', code: 'NOT_FOUND' }, 404);
+  if (!item.photoUrl) return c.json({ error: 'Foto não encontrada', code: 'NOT_FOUND' }, 404);
+
+  const key = extractR2KeyFromPublicUrl(item.photoUrl, c.env.R2_PUBLIC_URL);
+  const object = await c.env.STORAGE.get(key);
+  if (!object) return c.json({ error: 'Arquivo não encontrado', code: 'NOT_FOUND' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=60');
+
+  return new Response(object.body, { headers });
 });
 
 // ── GET /properties/:propertyId/inventory/:id ────────────────────────────────
@@ -213,6 +283,7 @@ inventory.get('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -245,12 +316,19 @@ inventory.get('/:id', async (c) => {
     })
     .from(inventoryItems)
     .leftJoin(rooms, eq(rooms.id, inventoryItems.roomId))
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .where(
+      and(
+        eq(inventoryItems.id, id),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
     .limit(1) as Array<InventoryItem & { room_name: string | null }>;
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
 
-  return ok(c, { item });
+  return ok(c, { item: withPhotoEndpoint(item, propertyId) });
 });
 
 // ── PUT /properties/:propertyId/inventory/:id ────────────────────────────────
@@ -261,6 +339,7 @@ inventory.put('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -291,7 +370,14 @@ inventory.put('/:id', async (c) => {
       deleted_at: inventoryItems.deletedAt,
     })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .where(
+      and(
+        eq(inventoryItems.id, id),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
     .limit(1) as InventoryItem[];
 
   if (!old) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
@@ -355,13 +441,15 @@ inventory.put('/:id', async (c) => {
     .where(eq(inventoryItems.id, id))
     .limit(1) as InventoryItem[];
 
+  if (!updated) return err(c, 'Erro ao atualizar item', 'UPDATE_ERROR', 500);
+
   await writeAuditLog(c.env.DB, {
     entityType: 'inventory_item', entityId: id, action: 'update',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     oldData: old, newData: updated,
   });
 
-  return ok(c, { item: updated });
+  return ok(c, { item: withPhotoEndpoint(updated, propertyId) });
 });
 
 // ── DELETE /properties/:propertyId/inventory/:id ─────────────────────────────
@@ -372,6 +460,7 @@ inventory.delete('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -402,7 +491,14 @@ inventory.delete('/:id', async (c) => {
       deleted_at: inventoryItems.deletedAt,
     })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .where(
+      and(
+        eq(inventoryItems.id, id),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
     .limit(1) as InventoryItem[];
 
   if (!old) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
@@ -420,7 +516,7 @@ inventory.delete('/:id', async (c) => {
   return ok(c, { success: true });
 });
 
-// ── POST /properties/:propertyId/inventory/:itemId/photo ─────────────────────
+// ── POST /properties/:propertyId/inventory/:itemId/photo ──────────────────────
 
 const PHOTO_ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -431,6 +527,7 @@ inventory.post('/:itemId/photo', async (c) => {
   const itemId = c.req.param('itemId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -438,7 +535,14 @@ inventory.post('/:itemId/photo', async (c) => {
   const [item] = await db
     .select({ id: inventoryItems.id })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .where(
+      and(
+        eq(inventoryItems.id, itemId),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
@@ -449,6 +553,7 @@ inventory.post('/:itemId/photo', async (c) => {
   const photo = formData.get('photo') as File | null;
   if (!photo) return err(c, 'Campo "photo" ausente', 'MISSING_FILE', 422);
 
+  // Restrict to images only — original behaviour (jpeg/png/webp).
   if (!PHOTO_ALLOWED.has(photo.type)) {
     return err(c, 'Formato inválido. Use jpg, png ou webp', 'INVALID_FILE_TYPE', 422);
   }
@@ -456,17 +561,19 @@ inventory.post('/:itemId/photo', async (c) => {
     return err(c, 'Arquivo excede o limite de 5MB', 'FILE_TOO_LARGE', 422);
   }
 
-  const ext = photo.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const key = `properties/${propertyId}/inventory/${itemId}/${Date.now()}.${ext}`;
+  // Additional extension + dangerous-extension check from the private-upload policy.
+  const validation = validatePrivateUpload(photo.type, photo.size, photo.name);
+  if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
+
+  const key = buildR2Key({ propertyId, category: 'inventory', filename: photo.name });
 
   const buffer = await photo.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, photo.type);
 
-  const photoUrl = getPublicUrl(key, c.env.R2_PUBLIC_URL ?? '');
-
+  // Store the R2 key (not a public URL) — served via authenticated endpoint.
   await db
     .update(inventoryItems)
-    .set({ photoUrl })
+    .set({ photoUrl: key })
     .where(eq(inventoryItems.id, itemId));
 
   await writeAuditLog(c.env.DB, {
@@ -475,10 +582,10 @@ inventory.post('/:itemId/photo', async (c) => {
     action: 'PHOTO_UPLOAD',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
-    newData: { photo_url: photoUrl },
+    newData: { photo_endpoint: photoEndpoint(propertyId, itemId) },
   });
 
-  return ok(c, { photo_url: photoUrl });
+  return ok(c, { photo_url: photoEndpoint(propertyId, itemId) });
 });
 
 // ── POST /properties/:propertyId/inventory/:itemId/qr ────────────────────────
@@ -489,6 +596,7 @@ inventory.post('/:itemId/qr', async (c) => {
   const itemId = c.req.param('itemId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -496,7 +604,14 @@ inventory.post('/:itemId/qr', async (c) => {
   const [item] = await db
     .select({ id: inventoryItems.id })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+    .where(
+      and(
+        eq(inventoryItems.id, itemId),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);

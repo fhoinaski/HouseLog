@@ -5,7 +5,7 @@ const WINDOW_SECONDS = 60;
 const MAX_REQUESTS_GENERAL = 100;   // per IP per minute for all API endpoints
 const MAX_REQUESTS_AUTH = 10;       // per IP per minute for auth endpoints
 
-async function applyRateLimit(
+export async function applyRateLimit(
   kv: KVNamespace,
   key: string,
   max: number,

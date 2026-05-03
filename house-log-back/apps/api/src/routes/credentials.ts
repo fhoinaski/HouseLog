@@ -13,17 +13,23 @@ import {
   canRevealCredentialSecret,
   canUpdateCredential,
 } from '../lib/authorization';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
+import { applyRateLimit } from '../middleware/rateLimit';
+import { encryptSecret, decryptSecret, getCredentialKey, isEncrypted } from '../lib/credential-crypto';
 import { getDb } from '../db/client';
 import { propertyAccessCredentials } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const credentials = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 credentials.use('*', authMiddleware);
+credentials.use('*', resolveTenant);
 
 type CredentialsContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 const CATEGORIES = ['wifi', 'alarm', 'smart_lock', 'gate', 'app', 'other'] as const;
+
+const REVEAL_MAX = 10;
+const REVEAL_WINDOW = 3600; // 1 hour
 
 const createSchema = z.object({
   category:          z.enum(CATEGORIES).default('other'),
@@ -106,7 +112,23 @@ async function revealCredentialSecret(c: CredentialsContext) {
   const propertyId = c.req.param('propertyId')!;
   const credId = c.req.param('credId')!;
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
+
+  // Rate-limit reveals per user to prevent bulk extraction
+  const rlKey = `rl:reveal:${userId}`;
+  const allowed = await applyRateLimit(c.env.KV, rlKey, REVEAL_MAX, REVEAL_WINDOW);
+  if (!allowed) {
+    await writeAuditLog(c.env.DB, {
+      entityType: 'property_access_credential',
+      entityId: credId,
+      action: 'secret_reveal_denied',
+      actorId: userId,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      newData: { reason: 'RATE_LIMITED', property_id: propertyId },
+    });
+    return err(c, 'Limite de revelações atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
+  }
 
   const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -118,12 +140,23 @@ async function revealCredentialSecret(c: CredentialsContext) {
       and(
         eq(propertyAccessCredentials.id, credId),
         eq(propertyAccessCredentials.propertyId, propertyId),
+        eq(propertyAccessCredentials.tenantId, tenantId),
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
     .limit(1) as RevealedCredentialRecord[];
 
-  if (!cred) return err(c, 'Credencial nÃ£o encontrada', 'NOT_FOUND', 404);
+  if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+
+  // Decrypt if stored as encrypted; pass through legacy plaintext transparently
+  let plainSecret = cred.secret;
+  if (isEncrypted(cred.secret)) {
+    try {
+      plainSecret = await decryptSecret(cred.secret, getCredentialKey(c.env));
+    } catch {
+      return err(c, 'Erro ao decifrar credencial', 'DECRYPT_ERROR', 500);
+    }
+  }
 
   await writeAuditLog(c.env.DB, {
     entityType: 'property_access_credential',
@@ -135,13 +168,14 @@ async function revealCredentialSecret(c: CredentialsContext) {
       property_id: propertyId,
       category: cred.category,
       label: cred.label,
+      user_agent: c.req.header('User-Agent') ?? null,
     },
   });
 
   return ok(c, {
     credential: {
       ...toCredentialResponse(cred),
-      secret: cred.secret,
+      secret: plainSecret,
       secret_revealed: true,
     },
   });
@@ -153,6 +187,7 @@ credentials.get('/', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
   const hasAccess = await canListCredentials(c.env.DB, { propertyId, userId, role });
@@ -164,14 +199,13 @@ credentials.get('/', async (c) => {
     .where(
       and(
         eq(propertyAccessCredentials.propertyId, propertyId),
+        eq(propertyAccessCredentials.tenantId, tenantId),
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
     .orderBy(asc(propertyAccessCredentials.category), asc(propertyAccessCredentials.label)) as CredentialRecord[];
 
-  const items = results.map(toCredentialResponse);
-
-  return ok(c, { credentials: items });
+  return ok(c, { credentials: results.map(toCredentialResponse) });
 });
 
 // ── POST /properties/:propertyId/credentials ─────────────────────────────────
@@ -180,6 +214,7 @@ credentials.post('/', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
   const hasAccess = await canCreateCredential(c.env.DB, { propertyId, userId, role });
@@ -194,14 +229,17 @@ credentials.post('/', async (c) => {
   const { category, label, username, secret, notes, integration_type, integration_config, share_with_os } = parsed.data;
   const id = nanoid();
 
+  const encryptedSecret = await encryptSecret(secret, getCredentialKey(c.env));
+
   await db.insert(propertyAccessCredentials).values({
     id,
+    tenantId,
     propertyId,
     createdBy: userId,
     category,
     label,
     username: username ?? null,
-    secret,
+    secret: encryptedSecret,
     notes: notes ?? null,
     integrationType: integration_type ?? null,
     integrationConfig: integration_config ?? null,
@@ -233,66 +271,26 @@ credentials.post('/', async (c) => {
 // New consumers must use POST /properties/:propertyId/credentials/:credId/secret/reveal.
 
 credentials.get('/:credId/secret', async (c) => {
-  const db = getDb(c.env.DB);
+  c.header('Deprecation', 'true');
   const propertyId = c.req.param('propertyId')!;
   const credId = c.req.param('credId')!;
-  c.header('Deprecation', 'true');
   c.header('Warning', '299 - "Deprecated credential reveal endpoint; use POST /secret/reveal"');
   c.header('Link', `</properties/${propertyId}/credentials/${credId}/secret/reveal>; rel="successor-version"`);
-  const userId = c.get('userId');
-  const role = c.get('userRole');
-
-  const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
-
-  const [cred] = await db
-    .select(credentialRevealSelect)
-    .from(propertyAccessCredentials)
-    .where(
-      and(
-        eq(propertyAccessCredentials.id, credId),
-        eq(propertyAccessCredentials.propertyId, propertyId),
-        isNull(propertyAccessCredentials.deletedAt)
-      )
-    )
-    .limit(1) as RevealedCredentialRecord[];
-
-  if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
-
-  await writeAuditLog(c.env.DB, {
-    entityType: 'property_access_credential',
-    entityId: cred.id,
-    action: 'secret_reveal',
-    actorId: userId,
-    actorIp: c.req.header('CF-Connecting-IP'),
-    newData: {
-      property_id: propertyId,
-      category: cred.category,
-      label: cred.label,
-    },
-  });
-
-  return ok(c, {
-    credential: {
-      ...toCredentialResponse(cred),
-      secret: cred.secret,
-      secret_revealed: true,
-    },
-  });
+  return revealCredentialSecret(c);
 });
 
-// ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────
-
-// POST /properties/:propertyId/credentials/:credId/secret/reveal
-// Preferred explicit action for sensitive, audited credential reveal.
+// ── POST /properties/:propertyId/credentials/:credId/secret/reveal ───────────
 
 credentials.post('/:credId/secret/reveal', revealCredentialSecret);
+
+// ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────
 
 credentials.put('/:credId', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const credId = c.req.param('credId')!;
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
   const hasAccess = await canUpdateCredential(c.env.DB, { propertyId, userId, role });
@@ -311,6 +309,7 @@ credentials.put('/:credId', async (c) => {
       and(
         eq(propertyAccessCredentials.id, credId),
         eq(propertyAccessCredentials.propertyId, propertyId),
+        eq(propertyAccessCredentials.tenantId, tenantId),
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
@@ -326,7 +325,7 @@ credentials.put('/:credId', async (c) => {
   if (category !== undefined) patch.category = category;
   if (label !== undefined) patch.label = label;
   if (username !== undefined) patch.username = username ?? null;
-  if (secret !== undefined) patch.secret = secret;
+  if (secret !== undefined) patch.secret = await encryptSecret(secret, getCredentialKey(c.env));
   if (notes !== undefined) patch.notes = notes ?? null;
   if (integration_type !== undefined) patch.integrationType = integration_type ?? null;
   if (integration_config !== undefined) patch.integrationConfig = integration_config ?? null;
@@ -369,6 +368,7 @@ credentials.delete('/:credId', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const credId = c.req.param('credId')!;
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
   const hasAccess = await canDeleteCredential(c.env.DB, { propertyId, userId, role });
@@ -381,6 +381,7 @@ credentials.delete('/:credId', async (c) => {
       and(
         eq(propertyAccessCredentials.id, credId),
         eq(propertyAccessCredentials.propertyId, propertyId),
+        eq(propertyAccessCredentials.tenantId, tenantId),
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
@@ -393,6 +394,7 @@ credentials.delete('/:credId', async (c) => {
       and(
         eq(propertyAccessCredentials.id, credId),
         eq(propertyAccessCredentials.propertyId, propertyId),
+        eq(propertyAccessCredentials.tenantId, tenantId),
         isNull(propertyAccessCredentials.deletedAt)
       )
     );
@@ -420,6 +422,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const credId = c.req.param('credId')!;
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
   const hasAccess = await canGenerateTemporaryCredentialAccess(c.env.DB, { propertyId, userId, role });
@@ -428,24 +431,25 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const body = await c.req.json().catch(() => ({})) as { expires_hours?: number; provider_name?: string };
   const expiresHours = body.expires_hours ?? 24;
 
+  // Load metadata only — secret is not used until real Intelbras API call is implemented
   const [cred] = await db
-    .select(credentialRevealSelect)
+    .select(credentialSelect)
     .from(propertyAccessCredentials)
     .where(
       and(
         eq(propertyAccessCredentials.id, credId),
         eq(propertyAccessCredentials.propertyId, propertyId),
+        eq(propertyAccessCredentials.tenantId, tenantId),
         isNull(propertyAccessCredentials.deletedAt)
       )
     )
-    .limit(1) as RevealedCredentialRecord[];
+    .limit(1) as CredentialRecord[];
 
   if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
   if (cred.integration_type !== 'intelbras') {
     return err(c, 'Esta credencial não tem integração Intelbras configurada', 'INVALID_INTEGRATION', 400);
   }
 
-  // Generate a 6-digit temporary PIN (real implementation would call Intelbras API)
   const tempPin = String(Math.floor(100000 + Math.random() * 900000));
   const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000).toISOString();
 
