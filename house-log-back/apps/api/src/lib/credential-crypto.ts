@@ -72,13 +72,31 @@ export async function decryptSecret(ciphertext: string, rawKey: string): Promise
   return new TextDecoder().decode(dec);
 }
 
-// Returns the AES key material.
-// Prefers a dedicated env var; falls back to JWT_SECRET with a domain suffix
-// (documented as less secure — set CREDENTIALS_ENCRYPTION_KEY in production).
+// Returns the AES key material to use for credential encryption.
+// Rules:
+//  - CREDENTIALS_ENCRYPTION_KEY is required in production (min 32 chars).
+//  - In development/staging, falls back to JWT_SECRET + domain suffix (insecure).
+//  - An empty or absent CREDENTIALS_ENCRYPTION_KEY in production is a hard error.
 export function getCredentialKey(env: {
   CREDENTIALS_ENCRYPTION_KEY?: string;
   JWT_SECRET: string;
+  ENVIRONMENT?: string;
 }): string {
-  if (env.CREDENTIALS_ENCRYPTION_KEY) return env.CREDENTIALS_ENCRYPTION_KEY;
-  return env.JWT_SECRET + '::houselog-cred-v1';
+  const key = env.CREDENTIALS_ENCRYPTION_KEY;
+
+  if (!key) {
+    if (env.ENVIRONMENT === 'production') {
+      throw new Error(
+        'CREDENTIALS_ENCRYPTION_KEY must be set in production (wrangler secret put CREDENTIALS_ENCRYPTION_KEY)'
+      );
+    }
+    // Dev/staging fallback — insecure; do not use in production.
+    return env.JWT_SECRET + '::houselog-cred-v1';
+  }
+
+  if (key.length < 32) {
+    throw new Error('CREDENTIALS_ENCRYPTION_KEY must be at least 32 characters');
+  }
+
+  return key;
 }

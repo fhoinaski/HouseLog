@@ -125,13 +125,23 @@ async function revealCredentialSecret(c: CredentialsContext) {
       action: 'secret_reveal_denied',
       actorId: userId,
       actorIp: c.req.header('CF-Connecting-IP'),
-      newData: { reason: 'RATE_LIMITED', property_id: propertyId },
+      newData: { reason: 'RATE_LIMITED', property_id: propertyId, tenant_id: tenantId },
     });
     return err(c, 'Limite de revelações atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
   }
 
   const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  if (!hasAccess) {
+    await writeAuditLog(c.env.DB, {
+      entityType: 'property_access_credential',
+      entityId: credId,
+      action: 'secret_reveal_denied',
+      actorId: userId,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      newData: { reason: 'FORBIDDEN', property_id: propertyId, tenant_id: tenantId },
+    });
+    return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  }
 
   const [cred] = await db
     .select(credentialRevealSelect)
@@ -148,11 +158,15 @@ async function revealCredentialSecret(c: CredentialsContext) {
 
   if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
 
-  // Decrypt if stored as encrypted; pass through legacy plaintext transparently
+  // getCredentialKey throws (→ 500 via global error handler) if misconfigured;
+  // keep it outside the try/catch so config errors are not masked as DECRYPT_ERROR.
+  const credKey = getCredentialKey(c.env);
+
+  // Decrypt if stored as encrypted; pass through legacy plaintext transparently.
   let plainSecret = cred.secret;
   if (isEncrypted(cred.secret)) {
     try {
-      plainSecret = await decryptSecret(cred.secret, getCredentialKey(c.env));
+      plainSecret = await decryptSecret(cred.secret, credKey);
     } catch {
       return err(c, 'Erro ao decifrar credencial', 'DECRYPT_ERROR', 500);
     }
@@ -166,6 +180,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
     actorIp: c.req.header('CF-Connecting-IP'),
     newData: {
       property_id: propertyId,
+      tenant_id: tenantId,
       category: cred.category,
       label: cred.label,
       user_agent: c.req.header('User-Agent') ?? null,

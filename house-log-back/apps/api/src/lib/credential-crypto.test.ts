@@ -61,13 +61,21 @@ describe('credential-crypto', () => {
 });
 
 describe('getCredentialKey', () => {
+  const LONG_KEY = 'a'.repeat(32); // exactly 32 chars — minimum accepted length
+
   it('prefers CREDENTIALS_ENCRYPTION_KEY over JWT_SECRET', () => {
     expect(
-      getCredentialKey({ CREDENTIALS_ENCRYPTION_KEY: 'dedicated-key', JWT_SECRET: 'jwt-secret' })
-    ).toBe('dedicated-key');
+      getCredentialKey({ CREDENTIALS_ENCRYPTION_KEY: LONG_KEY, JWT_SECRET: 'jwt-secret' })
+    ).toBe(LONG_KEY);
   });
 
-  it('falls back to JWT_SECRET with domain suffix when no dedicated key', () => {
+  it('falls back to JWT_SECRET with domain suffix in development', () => {
+    expect(
+      getCredentialKey({ JWT_SECRET: 'jwt-secret', ENVIRONMENT: 'development' })
+    ).toBe('jwt-secret::houselog-cred-v1');
+  });
+
+  it('falls back to JWT_SECRET when no ENVIRONMENT is set (local default)', () => {
     expect(
       getCredentialKey({ JWT_SECRET: 'jwt-secret' })
     ).toBe('jwt-secret::houselog-cred-v1');
@@ -76,5 +84,32 @@ describe('getCredentialKey', () => {
   it('fallback key differs from raw JWT_SECRET', () => {
     const fallback = getCredentialKey({ JWT_SECRET: 'myjwt' });
     expect(fallback).not.toBe('myjwt');
+  });
+
+  it('throws in production when CREDENTIALS_ENCRYPTION_KEY is absent', () => {
+    expect(() =>
+      getCredentialKey({ JWT_SECRET: 'jwt-secret', ENVIRONMENT: 'production' })
+    ).toThrow('CREDENTIALS_ENCRYPTION_KEY must be set in production');
+  });
+
+  it('throws in production when CREDENTIALS_ENCRYPTION_KEY is empty string', () => {
+    expect(() =>
+      getCredentialKey({ CREDENTIALS_ENCRYPTION_KEY: '', JWT_SECRET: 'jwt-secret', ENVIRONMENT: 'production' })
+    ).toThrow('CREDENTIALS_ENCRYPTION_KEY must be set in production');
+  });
+
+  it('throws when dedicated key is shorter than 32 characters', () => {
+    expect(() =>
+      getCredentialKey({ CREDENTIALS_ENCRYPTION_KEY: 'short-key', JWT_SECRET: 'jwt' })
+    ).toThrow('CREDENTIALS_ENCRYPTION_KEY must be at least 32 characters');
+  });
+
+  it('accepts dedicated key of exactly 32 characters', () => {
+    expect(getCredentialKey({ CREDENTIALS_ENCRYPTION_KEY: LONG_KEY, JWT_SECRET: 'jwt' })).toBe(LONG_KEY);
+  });
+
+  it('accepts dedicated key longer than 32 characters', () => {
+    const longKey = 'x'.repeat(64);
+    expect(getCredentialKey({ CREDENTIALS_ENCRYPTION_KEY: longKey, JWT_SECRET: 'jwt' })).toBe(longKey);
   });
 });
