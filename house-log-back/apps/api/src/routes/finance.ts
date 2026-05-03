@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { err, ok } from '../lib/response';
 import { buildBrCode, validatePixKey } from '../lib/pix';
 import { parseNfeXml } from '../lib/nfe';
@@ -13,6 +13,7 @@ import type { Bindings, Variables } from '../lib/types';
 const finance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 finance.use('*', authMiddleware);
+finance.use('*', resolveTenant);
 
 // ── GET /properties/:propertyId/finance/dre?from=YYYY-MM&to=YYYY-MM ──────────
 // DRE simplificado: receita bruta, custos (services/OS concluídas), despesas, saldo.
@@ -21,6 +22,8 @@ finance.get('/dre', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -38,6 +41,7 @@ finance.get('/dre', async (c) => {
     .where(
       and(
         eq(expenses.propertyId, propertyId),
+        eq(expenses.tenantId, tenantId),
         isNull(expenses.deletedAt),
         sql`${expenses.referenceMonth} BETWEEN ${from} AND ${to}`
       )
@@ -50,6 +54,7 @@ finance.get('/dre', async (c) => {
     .where(
       and(
         eq(serviceOrders.propertyId, propertyId),
+        eq(serviceOrders.tenantId, tenantId),
         isNull(serviceOrders.deletedAt),
         sql`${serviceOrders.status} IN ('completed','verified')`,
         sql`substr(COALESCE(${serviceOrders.completedAt}, ${serviceOrders.createdAt}),1,7) BETWEEN ${from} AND ${to}`
@@ -86,6 +91,8 @@ finance.get('/cashflow', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -102,6 +109,7 @@ finance.get('/cashflow', async (c) => {
     .where(
       and(
         eq(expenses.propertyId, propertyId),
+        eq(expenses.tenantId, tenantId),
         isNull(expenses.deletedAt),
         sql`${expenses.referenceMonth} >= strftime('%Y-%m', datetime('now', ${`-${months} months`}))`
       )
@@ -137,6 +145,8 @@ finance.post('/pix', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -163,6 +173,7 @@ finance.post('/pix', async (c) => {
 
   await db.insert(pixCharges).values({
     id,
+    tenantId,
     serviceOrderId: b.service_order_id ?? null,
     propertyId,
     createdBy: userId,
@@ -186,6 +197,8 @@ finance.get('/pix', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -202,7 +215,12 @@ finance.get('/pix', async (c) => {
       created_at: pixCharges.createdAt,
     })
     .from(pixCharges)
-    .where(eq(pixCharges.propertyId, propertyId))
+    .where(
+      and(
+        eq(pixCharges.propertyId, propertyId),
+        eq(pixCharges.tenantId, tenantId)
+      )
+    )
     .orderBy(sql`${pixCharges.createdAt} DESC`)
     .limit(100);
   return ok(c, { data: rows });
@@ -214,6 +232,8 @@ finance.post('/pix/:id/mark-paid', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -221,7 +241,10 @@ finance.post('/pix/:id/mark-paid', async (c) => {
   const res = await db.run(
     sql`UPDATE pix_charges
         SET status = 'paid', paid_at = datetime('now')
-        WHERE id = ${id} AND property_id = ${propertyId} AND status = 'pending'`
+        WHERE id = ${id}
+          AND property_id = ${propertyId}
+          AND tenant_id = ${tenantId}
+          AND status = 'pending'`
   );
   if (!res.meta.changes) return err(c, 'Cobrança não encontrada ou já paga', 'NOT_FOUND', 404);
   return ok(c, { id, status: 'paid' });
@@ -233,6 +256,8 @@ finance.post('/nfe', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -247,6 +272,7 @@ finance.post('/nfe', async (c) => {
   const nfe = parseNfeXml(body.xml);
   if (!nfe.chaveAcesso) return err(c, 'Chave de acesso não encontrada', 'VALIDATION_ERROR', 422);
 
+  // chaveAcesso is globally unique — duplicate check is cross-tenant safe (same NFe key cannot exist twice)
   const [existing] = await db
     .select({ id: nfeImports.id, expense_id: nfeImports.expenseId })
     .from(nfeImports)
@@ -262,6 +288,7 @@ finance.post('/nfe', async (c) => {
     const refMonth = nfe.dataEmissao.slice(0, 7);
     await db.insert(expenses).values({
       id: expenseId,
+      tenantId,
       propertyId,
       category: 'other',
       amount: nfe.valorTotal,
@@ -274,6 +301,7 @@ finance.post('/nfe', async (c) => {
   const id = nanoid();
   await db.insert(nfeImports).values({
     id,
+    tenantId,
     propertyId,
     documentId: null,
     expenseId,

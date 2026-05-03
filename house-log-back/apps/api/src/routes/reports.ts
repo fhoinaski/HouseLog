@@ -1,13 +1,14 @@
 import { Hono } from 'hono';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { documents, expenses, inventoryItems, properties, serviceOrders, users, maintenanceSchedules } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const reports = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 reports.use('*', authMiddleware);
+reports.use('*', resolveTenant);
 
 // ── Health score computation ──────────────────────────────────────────────────
 // Score = weighted sum of 5 factors (0–100):
@@ -147,6 +148,7 @@ reports.get('/valuation-pdf', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -194,6 +196,7 @@ reports.get('/valuation-pdf', async (c) => {
       .where(
         and(
           eq(expenses.propertyId, propertyId),
+          eq(expenses.tenantId, tenantId),
           isNull(expenses.deletedAt),
           sql`${expenses.referenceMonth} >= strftime('%Y-%m','now','-12 months')`
         )
@@ -202,7 +205,7 @@ reports.get('/valuation-pdf', async (c) => {
     db
       .select({ total: sql<number>`SUM(${serviceOrders.cost})` })
       .from(serviceOrders)
-      .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt), sql`${serviceOrders.cost} IS NOT NULL`))
+      .where(and(eq(serviceOrders.propertyId, propertyId), eq(serviceOrders.tenantId, tenantId), isNull(serviceOrders.deletedAt), sql`${serviceOrders.cost} IS NOT NULL`))
       .then((r) => r[0] as { total: number } | undefined),
     db
       .select({ count: sql<number>`COUNT(*)` })
