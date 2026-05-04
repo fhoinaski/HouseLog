@@ -1,14 +1,7 @@
-export {
-  BASE,
-  getToken,
-  setToken,
-  clearToken,
-  normalizeMediaUrl,
-  normalizeApiMediaUrls,
-  qs,
-  request,
-  apiFetcher,
-} from './core/index';
+export { BASE } from './config';
+export { getToken, setToken, clearToken } from './storage';
+export { normalizeMediaUrl, normalizeApiMediaUrls } from './media';
+export { qs, request, apiFetcher } from './http';
 export type {
   User,
   AuthPairResponse,
@@ -32,4 +25,4 @@ export type {
   RevealedAccessCredential,
   ServiceShareLink,
   PublicServiceView,
-} from './core/index';
+} from './types';
