@@ -371,6 +371,8 @@ export const maintenanceSchedules = sqliteTable('maintenance_schedules', {
 
 export const auditLog = sqliteTable('audit_log', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').references(() => tenants.id),
+  propertyId: text('property_id').references(() => properties.id),
   entityType: text('entity_type').notNull(),
   entityId: text('entity_id').notNull(),
   action: text('action').notNull(),
@@ -380,6 +382,8 @@ export const auditLog = sqliteTable('audit_log', {
   newData: text('new_data', { mode: 'json' }).$type<Record<string, unknown> | null>(),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (table) => ({
+  tenantIdx: index('idx_audit_log_tenant').on(table.tenantId),
+  propertyIdx: index('idx_audit_log_property').on(table.propertyId),
   entityIdx: index('idx_audit_log_entity').on(table.entityType, table.entityId),
   actorIdx: index('idx_audit_log_actor').on(table.actorId),
   createdIdx: index('idx_audit_log_created').on(table.createdAt),

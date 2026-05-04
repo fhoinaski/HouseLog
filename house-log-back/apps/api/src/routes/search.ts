@@ -9,7 +9,8 @@ import {
   canSearchServiceOrders,
   listAccessiblePropertyIds,
 } from '../lib/authorization';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
+import { canUseTenantSearchProperty, isSearchResultPayloadSafe } from '../lib/search-timeline-tenant';
 import { getDb } from '../db/client';
 import {
   documents,
@@ -22,6 +23,7 @@ import type { Bindings, Variables } from '../lib/types';
 
 const search = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 search.use('*', authMiddleware);
+search.use('*', resolveTenant);
 
 export type SearchResult = {
   type: 'service' | 'document' | 'inventory' | 'maintenance';
@@ -61,11 +63,27 @@ search.get('/', async (c) => {
   const propertyId = c.req.query('propertyId');
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
 
   if (q.length < 2) return ok(c, { results: [] as SearchResult[] });
 
   const pattern = `%${q}%`;
   const results: SearchResult[] = [];
+
+  if (!tenantId) return ok(c, { results });
+
+  if (propertyId) {
+    const [tenantProperty] = await db
+      .select({ tenant_id: properties.tenantId })
+      .from(properties)
+      .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+      .limit(1);
+    const tenantDecision = canUseTenantSearchProperty({
+      activeTenantId: tenantId,
+      propertyTenantId: tenantProperty?.tenant_id,
+    });
+    if (!tenantDecision.allowed) return ok(c, { results });
+  }
 
   const accessiblePropertyIds = propertyId
     ? (await canSearchProperty(c.env.DB, { propertyId, userId, role }) ? [propertyId] : [])
@@ -75,6 +93,7 @@ search.get('/', async (c) => {
 
   const accessFilters = [
     isNull(properties.deletedAt),
+    eq(properties.tenantId, tenantId),
     inArray(properties.id, accessiblePropertyIds),
   ];
   if (propertyId) {
@@ -95,10 +114,11 @@ search.get('/', async (c) => {
       property_name: properties.name,
     })
     .from(serviceOrders)
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, serviceOrders.tenantId)))
     .where(
       and(
         accessWhere,
+        eq(serviceOrders.tenantId, tenantId),
         isNull(serviceOrders.deletedAt),
         or(
           allowedSearchLike('service', 'title', sqlLike(serviceOrders.title, pattern)),
@@ -130,10 +150,11 @@ search.get('/', async (c) => {
       property_name: properties.name,
     })
     .from(documents)
-    .innerJoin(properties, eq(properties.id, documents.propertyId))
+    .innerJoin(properties, and(eq(properties.id, documents.propertyId), eq(properties.tenantId, documents.tenantId)))
     .where(
       and(
         accessWhere,
+        eq(documents.tenantId, tenantId),
         isNull(documents.deletedAt),
         allowedSearchLike('document', 'title', sqlLike(documents.title, pattern))
       )
@@ -163,10 +184,11 @@ search.get('/', async (c) => {
       property_name: properties.name,
     })
     .from(inventoryItems)
-    .innerJoin(properties, eq(properties.id, inventoryItems.propertyId))
+    .innerJoin(properties, and(eq(properties.id, inventoryItems.propertyId), eq(properties.tenantId, inventoryItems.tenantId)))
     .where(
       and(
         accessWhere,
+        eq(inventoryItems.tenantId, tenantId),
         isNull(inventoryItems.deletedAt),
         or(
           allowedSearchLike('inventory', 'name', sqlLike(inventoryItems.name, pattern)),
@@ -199,10 +221,11 @@ search.get('/', async (c) => {
       property_name: properties.name,
     })
     .from(maintenanceSchedules)
-    .innerJoin(properties, eq(properties.id, maintenanceSchedules.propertyId))
+    .innerJoin(properties, and(eq(properties.id, maintenanceSchedules.propertyId), eq(properties.tenantId, maintenanceSchedules.tenantId)))
     .where(
       and(
         accessWhere,
+        eq(maintenanceSchedules.tenantId, tenantId),
         isNull(maintenanceSchedules.deletedAt),
         or(
           allowedSearchLike('maintenance', 'title', sqlLike(maintenanceSchedules.title, pattern)),
@@ -221,7 +244,7 @@ search.get('/', async (c) => {
     });
   }
 
-  return ok(c, { results });
+  return ok(c, { results: results.filter((result) => isSearchResultPayloadSafe(result)) });
 });
 
 export default search;

@@ -4,14 +4,15 @@
 
 import { Hono } from 'hono';
 import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { err, ok } from '../lib/response';
 import { getDb } from '../db/client';
-import { documents, expenses, nfeImports, pixCharges, providerRatings, serviceOrders } from '../db/schema';
+import { documents, expenses, nfeImports, pixCharges, properties, providerRatings, serviceOrders } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 const timeline = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 timeline.use('*', authMiddleware);
+timeline.use('*', resolveTenant);
 
 type Event = {
   kind: string;
@@ -27,6 +28,16 @@ timeline.get('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: properties.id })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
   if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
@@ -36,42 +47,42 @@ timeline.get('/', async (c) => {
   const os = await db
     .select({ id: serviceOrders.id, title: serviceOrders.title, status: serviceOrders.status, priority: serviceOrders.priority, created_at: serviceOrders.createdAt })
     .from(serviceOrders)
-    .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt), lt(serviceOrders.createdAt, before)))
+    .where(and(eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt), lt(serviceOrders.createdAt, before)))
     .orderBy(desc(serviceOrders.createdAt))
     .limit(limit);
 
   const exp = await db
     .select({ id: expenses.id, category: expenses.category, amount: expenses.amount, created_at: expenses.createdAt, type: sql<string>`COALESCE(${expenses.type}, 'expense')` })
     .from(expenses)
-    .where(and(eq(expenses.propertyId, propertyId), isNull(expenses.deletedAt), lt(expenses.createdAt, before)))
+    .where(and(eq(expenses.tenantId, tenantId), eq(expenses.propertyId, propertyId), isNull(expenses.deletedAt), lt(expenses.createdAt, before)))
     .orderBy(desc(expenses.createdAt))
     .limit(limit);
 
   const docs = await db
     .select({ id: documents.id, title: documents.title, created_at: documents.createdAt, kind: documents.type })
     .from(documents)
-    .where(and(eq(documents.propertyId, propertyId), isNull(documents.deletedAt), lt(documents.createdAt, before)))
+    .where(and(eq(documents.tenantId, tenantId), eq(documents.propertyId, propertyId), isNull(documents.deletedAt), lt(documents.createdAt, before)))
     .orderBy(desc(documents.createdAt))
     .limit(limit);
 
   const ratings = await db
     .select({ id: providerRatings.id, stars: providerRatings.stars, provider_id: providerRatings.providerId, created_at: providerRatings.createdAt })
     .from(providerRatings)
-    .where(and(eq(providerRatings.propertyId, propertyId), lt(providerRatings.createdAt, before)))
+    .where(and(eq(providerRatings.tenantId, tenantId), eq(providerRatings.propertyId, propertyId), lt(providerRatings.createdAt, before)))
     .orderBy(desc(providerRatings.createdAt))
     .limit(limit);
 
   const pix = await db
     .select({ id: pixCharges.id, amount_cents: pixCharges.amountCents, status: pixCharges.status, created_at: pixCharges.createdAt })
     .from(pixCharges)
-    .where(and(eq(pixCharges.propertyId, propertyId), lt(pixCharges.createdAt, before)))
+    .where(and(eq(pixCharges.tenantId, tenantId), eq(pixCharges.propertyId, propertyId), lt(pixCharges.createdAt, before)))
     .orderBy(desc(pixCharges.createdAt))
     .limit(limit);
 
   const nfes = await db
     .select({ id: nfeImports.id, nome_emitente: nfeImports.nomeEmitente, valor_total: nfeImports.valorTotal, created_at: nfeImports.createdAt })
     .from(nfeImports)
-    .where(and(eq(nfeImports.propertyId, propertyId), lt(nfeImports.createdAt, before)))
+    .where(and(eq(nfeImports.tenantId, tenantId), eq(nfeImports.propertyId, propertyId), lt(nfeImports.createdAt, before)))
     .orderBy(desc(nfeImports.createdAt))
     .limit(limit);
 

@@ -224,6 +224,8 @@ expenses.post('/', async (c) => {
   }
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'expense', entityId: firstId, action: 'create',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: expense,
   });
@@ -289,6 +291,8 @@ expenses.put('/:id', async (c) => {
     .limit(1) as Expense[];
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'expense', entityId: id, action: 'update',
     actorId: userId, oldData: old, newData: updated,
   });
@@ -350,6 +354,8 @@ expenses.delete('/:id', async (c) => {
   }
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'expense', entityId: id, action: 'delete',
     actorId: userId, oldData: old,
   });

@@ -15,3 +15,8 @@ Pendencias conhecidas:
 - Migrar todas as rotas sensiveis para `resolveTenant`.
 - Revisar logs com `console.error` em rotas de notificacao.
 - Revisar exposicao publica de midia servida por `/api/v1/media/*`.
+
+Notas CORS:
+
+- `CORS_ORIGINS=*` deve ser ignorado/bloqueado, nunca refletido em production.
+- `CORS_ORIGINS` vazio em production deve falhar fechado.

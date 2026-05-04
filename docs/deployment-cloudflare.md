@@ -29,5 +29,13 @@ Variaveis importantes:
 
 Regra de CORS:
 
-- Em production, configurar apenas dominios oficiais.
-- Em dev, localhost e 127.0.0.1 sao adicionados automaticamente.
+- Em production, configurar apenas dominios oficiais em `CORS_ORIGINS`.
+- `CORS_ORIGINS=*` nao e aceito porque a API responde com `credentials: true`.
+- Origins desconhecidas ficam sem `Access-Control-Allow-Origin`.
+- Em production, `CORS_ORIGINS` vazio falha fechado e bloqueia qualquer origin.
+- Em dev, `http://localhost:3000` e `http://127.0.0.1:3000` sao adicionados automaticamente.
+- Previews/staging devem entrar explicitamente na allowlist, por exemplo:
+
+```bash
+CORS_ORIGINS=https://house-log.vercel.app,https://preview-houselog.vercel.app
+```

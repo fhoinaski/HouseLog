@@ -164,6 +164,8 @@ bids.post('/', async (c) => {
   });
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_bid',
     entityId: id,
     action: 'provider_proposal_submitted',

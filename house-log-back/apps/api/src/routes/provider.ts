@@ -479,6 +479,8 @@ provider.post('/services/:id/invoice', async (c) => {
   });
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: order.property_id,
     entityType: 'document',
     entityId: docId,
     action: 'document_uploaded',

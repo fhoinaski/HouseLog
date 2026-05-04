@@ -120,6 +120,8 @@ async function revealCredentialSecret(c: CredentialsContext) {
   const allowed = await applyRateLimit(c.env.KV, rlKey, REVEAL_MAX, REVEAL_WINDOW);
   if (!allowed) {
     await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
       entityType: 'property_access_credential',
       entityId: credId,
       action: 'secret_reveal_denied',
@@ -133,6 +135,8 @@ async function revealCredentialSecret(c: CredentialsContext) {
   const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) {
     await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
       entityType: 'property_access_credential',
       entityId: credId,
       action: 'secret_reveal_denied',
@@ -173,6 +177,8 @@ async function revealCredentialSecret(c: CredentialsContext) {
   }
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'property_access_credential',
     entityId: cred.id,
     action: 'secret_reveal',
@@ -270,6 +276,8 @@ credentials.post('/', async (c) => {
   if (!row) return err(c, 'Erro ao carregar credencial', 'SERVER_ERROR', 500);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'property_access_credential',
     entityId: row.id,
     action: 'credential_created',
@@ -360,6 +368,8 @@ credentials.put('/:credId', async (c) => {
   if (!row) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'property_access_credential',
     entityId: row.id,
     action: 'credential_updated',
@@ -416,6 +426,8 @@ credentials.delete('/:credId', async (c) => {
 
   if (existing) {
     await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
       entityType: 'property_access_credential',
       entityId: existing.id,
       action: 'credential_deleted',
@@ -473,6 +485,8 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   // await callIntelbrasApi(config, tempPin, expiresAt);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'property_access_credential',
     entityId: cred.id,
     action: 'temporary_credential_access_generated',

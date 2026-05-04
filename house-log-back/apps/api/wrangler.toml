@@ -11,6 +11,8 @@ compatibility_flags = ["nodejs_compat"]
 # --- CONFIGURAÇÃO GLOBAL / PRODUÇÃO ---
 [vars]
 ENVIRONMENT = "production"
+# CORS em production deve ser uma allowlist explicita. Nunca use "*"
+# porque a API envia credentials no middleware CORS.
 CORS_ORIGINS = "https://house-log.vercel.app"
 R2_PUBLIC_URL = "https://assets.houselog.app"
 R2_ACCOUNT_ID = ""
@@ -56,6 +58,8 @@ name = "houselog-api-dev"
 
 [env.dev.vars]
 ENVIRONMENT = "development"
+# Dev permite localhost automaticamente, mas manter origins reais aqui ajuda
+# a testar previews e evita wildcard inseguro.
 CORS_ORIGINS = "https://house-log.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
 R2_PUBLIC_URL = "https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev"
 R2_ACCOUNT_ID = ""

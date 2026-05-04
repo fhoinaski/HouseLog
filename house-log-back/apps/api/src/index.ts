@@ -35,26 +35,9 @@ import { auditLinks as auditLinksTable, mfaChallenges, refreshTokens } from './d
 import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Bindings, Variables, QueueMessage } from './lib/types';
 import { canServeDirectMediaKey } from './lib/media-security';
+import { buildCorsOriginHandler } from './lib/cors';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-
-function buildCorsOriginHandler(env: Bindings): (origin: string) => string | null {
-  const configured = env.CORS_ORIGINS ?? env.CORS_ORIGIN ?? '';
-  const parts = configured.split(',').map((o) => o.trim()).filter(Boolean);
-
-  // Wildcard: reflect any origin (credentials-safe, for dev convenience)
-  if (parts.includes('*')) {
-    return (origin) => origin || null;
-  }
-
-  const allowlist = new Set(parts);
-  if (env.ENVIRONMENT !== 'production') {
-    allowlist.add('http://localhost:3000');
-    allowlist.add('http://127.0.0.1:3000');
-  }
-
-  return (origin) => (origin && allowlist.has(origin) ? origin : null);
-}
 
 // ── Global middleware ────────────────────────────────────────────────────────
 

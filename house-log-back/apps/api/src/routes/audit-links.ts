@@ -82,6 +82,8 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
   });
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'audit_link', entityId: id, action: 'audit_link_created',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     newData: {
@@ -271,6 +273,8 @@ auditLinks.post('/public/:token/submit', async (c) => {
     .where(eq(auditLinksTable.id, link.id));
 
   await writeAuditLog(c.env.DB, {
+    tenantId: link.tenant_id,
+    propertyId: link.property_id,
     entityType: 'audit_link', entityId: link.id, action: 'submit',
     actorId: null, actorIp: ip,
     newData: { uploaded_photos: uploadedUrls.length, notes: !!notes },

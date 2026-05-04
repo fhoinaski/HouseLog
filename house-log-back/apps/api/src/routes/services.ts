@@ -321,6 +321,8 @@ services.post('/', async (c) => {
   })();
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order', entityId: id, action: 'service_order_created',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     newData: {
@@ -505,6 +507,8 @@ services.put('/:id', async (c) => {
   if (!updated) return err(c, 'OS não encontrada após atualização', 'NOT_FOUND', 404);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order',
     entityId: id,
     action: 'service_order_updated',
@@ -606,6 +610,8 @@ services.patch('/:id/status', async (c) => {
     .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order', entityId: id, action: 'service_order_status_changed',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     oldData: { previous_status: order.status },
@@ -740,6 +746,8 @@ services.post('/:id/photos', async (c) => {
     .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order',
     entityId: id,
     action: 'service_order_evidence_uploaded',
@@ -804,6 +812,8 @@ services.post('/:id/video', async (c) => {
     .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order',
     entityId: id,
     action: 'service_order_evidence_uploaded',
@@ -870,6 +880,8 @@ services.post('/:id/audio', async (c) => {
     .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order',
     entityId: id,
     action: 'service_order_evidence_uploaded',
@@ -989,6 +1001,8 @@ services.delete('/:id', async (c) => {
     .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order',
     entityId: id,
     action: 'service_order_deleted',
@@ -1051,6 +1065,8 @@ services.patch('/:id/checklist', async (c) => {
   const previousChecklist = Array.isArray(order.checklist) ? order.checklist : [];
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'service_order',
     entityId: id,
     action: 'service_order_checklist_updated',

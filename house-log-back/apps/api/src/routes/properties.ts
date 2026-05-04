@@ -177,6 +177,8 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
     .limit(1) as Array<Property>;
 
   await writeAuditLog(c.env.DB, {
+    tenantId: activeTenantId,
+    propertyId: id,
     entityType: 'property',
     entityId: id,
     action: 'create',
@@ -322,6 +324,8 @@ properties.put('/:id', async (c) => {
     .limit(1) as Array<Property>;
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: id,
     entityType: 'property',
     entityId: id,
     action: 'update',
@@ -384,6 +388,8 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
     .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: id,
     entityType: 'property',
     entityId: id,
     action: 'delete',
@@ -433,6 +439,8 @@ properties.post('/:id/cover', async (c) => {
   await db.update(propertiesTable).set({ coverUrl }).where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: id,
     entityType: 'property', entityId: id, action: 'cover_upload',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     newData: { cover_url: coverUrl },
@@ -496,7 +504,7 @@ properties.get('/:id/dashboard', async (c) => {
   const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
-  const [exp, svc, inv, prop] = await Promise.all([
+  const [exp, svc, inv, maint, prop] = await Promise.all([
     db
       .select({
         total: sql<number>`SUM(${expenses.amount})`,
@@ -524,6 +532,15 @@ properties.get('/:id/dashboard', async (c) => {
       .from(inventoryItems)
       .where(and(eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.propertyId, id), isNull(inventoryItems.deletedAt)))
       .then((r) => r[0] ?? { total: 0, low_stock: 0 }),
+    db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        overdue: sql<number>`SUM(CASE WHEN ${maintenanceSchedules.nextDue} < date('now') THEN 1 ELSE 0 END)`,
+        due_soon: sql<number>`SUM(CASE WHEN ${maintenanceSchedules.nextDue} >= date('now') AND ${maintenanceSchedules.nextDue} <= date('now', '+30 days') THEN 1 ELSE 0 END)`,
+      })
+      .from(maintenanceSchedules)
+      .where(and(eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, id), isNull(maintenanceSchedules.deletedAt)))
+      .then((r) => r[0] ?? { total: 0, overdue: 0, due_soon: 0 }),
     db
       .select({ health_score: propertiesTable.healthScore })
       .from(propertiesTable)
@@ -579,6 +596,7 @@ properties.get('/:id/dashboard', async (c) => {
     expenses: exp,
     services: svc,
     inventory: inv,
+    maintenance: maint,
     monthly_expenses: monthlyExpenses,
     warranties_expiring: warrantiesExpiring,
   });

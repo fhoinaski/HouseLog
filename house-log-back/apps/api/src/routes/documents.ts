@@ -202,6 +202,8 @@ documents.post('/', async (c) => {
   if (!doc) return err(c, 'Documento nao encontrado apos upload', 'DOCUMENT_UPLOAD_READ_FAILED', 500);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'document', entityId: id, action: 'document_uploaded',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     newData: {
@@ -354,6 +356,8 @@ documents.delete('/:id', async (c) => {
     .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'document', entityId: id, action: 'document_deleted',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
@@ -455,6 +459,8 @@ documents.post('/:id/ocr', async (c) => {
     .where(and(eq(documentsTable.id, id), eq(documentsTable.tenantId, tenantId), eq(documentsTable.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'document', entityId: id, action: 'document_ocr_requested',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),

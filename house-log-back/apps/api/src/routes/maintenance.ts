@@ -2,17 +2,18 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { canMarkMaintenanceDone } from '../lib/authorization';
 import { ok, err } from '../lib/response';
-import { authMiddleware, assertPropertyAccess } from '../middleware/auth';
+import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
+import { canCreateMaintenanceScheduleInTenant, canUseTenantMaintenanceSchedule } from '../lib/maintenance-tenant';
 import { getDb } from '../db/client';
 import { maintenanceSchedules, properties, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 
 type MaintenanceSchedule = {
-  id: string; property_id: string; system_type: string; title: string;
+  id: string; tenant_id: string | null; property_id: string; system_type: string; title: string;
   description: string | null; responsible: string | null;
   frequency: 'weekly' | 'monthly' | 'quarterly' | 'semiannual' | 'annual';
   last_done: string | null; next_due: string | null;
@@ -20,8 +21,11 @@ type MaintenanceSchedule = {
   created_at: string; deleted_at: string | null;
 };
 
+type MaintenanceScheduleResponse = Omit<MaintenanceSchedule, 'tenant_id'>;
+
 const maintenance = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 maintenance.use('*', authMiddleware);
+maintenance.use('*', resolveTenant);
 
 type MaintenanceContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
@@ -47,12 +51,33 @@ function calcNextDue(frequency: string, lastDone?: string): string {
   return base.toISOString().slice(0, 10);
 }
 
+function toMaintenanceScheduleResponse(schedule: MaintenanceSchedule): MaintenanceScheduleResponse {
+  const { tenant_id: _tenantId, ...response } = schedule;
+  return response;
+}
+
+async function getTenantProperty(db: D1Database, propertyId: string, tenantId: string) {
+  const drizzle = getDb(db);
+  const [property] = await drizzle
+    .select({ id: properties.id, tenant_id: properties.tenantId })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+
+  return property ?? null;
+}
+
 async function markMaintenanceDone(c: MaintenanceContext) {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -60,6 +85,7 @@ async function markMaintenanceDone(c: MaintenanceContext) {
   const [schedule] = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -74,10 +100,26 @@ async function markMaintenanceDone(c: MaintenanceContext) {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .where(
+      and(
+        eq(maintenanceSchedules.id, id),
+        eq(maintenanceSchedules.tenantId, tenantId),
+        eq(maintenanceSchedules.propertyId, propertyId),
+        isNull(maintenanceSchedules.deletedAt)
+      )
+    )
     .limit(1) as MaintenanceSchedule[];
 
   if (!schedule) return err(c, 'Agendamento nÃ£o encontrado', 'NOT_FOUND', 404);
+
+  const tenantDecision = canUseTenantMaintenanceSchedule({
+    activeTenantId: tenantId,
+    propertyTenantId: tenantProperty.tenant_id,
+    scheduleTenantId: schedule.tenant_id,
+    schedulePropertyId: schedule.property_id,
+    requestedPropertyId: propertyId,
+  });
+  if (!tenantDecision.allowed) return err(c, 'Agendamento nao encontrado', tenantDecision.code, tenantDecision.status);
 
   const today = new Date().toISOString().slice(0, 10);
   const nextDue = calcNextDue(schedule.frequency, today);
@@ -85,13 +127,14 @@ async function markMaintenanceDone(c: MaintenanceContext) {
   await db
     .update(maintenanceSchedules)
     .set({ lastDone: today, nextDue })
-    .where(eq(maintenanceSchedules.id, id));
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId)));
 
   // If auto_create_os is enabled, create a service order
   if (schedule.auto_create_os) {
     const osId = nanoid();
     await db.insert(serviceOrders).values({
       id: osId,
+      tenantId,
       propertyId,
       systemType: schedule.system_type as typeof serviceOrders.$inferInsert.systemType,
       requestedBy: userId,
@@ -105,6 +148,8 @@ async function markMaintenanceDone(c: MaintenanceContext) {
     });
 
     await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
       entityType: 'service_order',
       entityId: osId,
       action: 'auto_create',
@@ -114,6 +159,8 @@ async function markMaintenanceDone(c: MaintenanceContext) {
   }
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'maintenance_schedule',
     entityId: id,
     action: 'maintenance_mark_done',
@@ -142,6 +189,15 @@ maintenance.get('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
+  const tenantDecision = canCreateMaintenanceScheduleInTenant({
+    activeTenantId: tenantId,
+    propertyTenantId: tenantProperty?.tenant_id,
+  });
+  if (!tenantDecision.allowed) return err(c, 'Imovel nao encontrado', tenantDecision.code, tenantDecision.status);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -149,6 +205,7 @@ maintenance.get('/', async (c) => {
   const results = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -163,18 +220,21 @@ maintenance.get('/', async (c) => {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(and(eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .where(and(eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
     .orderBy(asc(maintenanceSchedules.nextDue)) as MaintenanceSchedule[];
 
   // Flag overdue items
   const today = new Date().toISOString().slice(0, 10);
-  const enriched = results.map((s) => ({
-    ...s,
-    is_overdue: s.next_due != null && s.next_due < today,
-    days_until_due: s.next_due
-      ? Math.ceil((new Date(s.next_due).getTime() - Date.now()) / 86400000)
-      : null,
-  }));
+  const enriched = results.map((s) => {
+    const schedule = toMaintenanceScheduleResponse(s);
+    return {
+      ...schedule,
+      is_overdue: schedule.next_due != null && schedule.next_due < today,
+      days_until_due: schedule.next_due
+        ? Math.ceil((new Date(schedule.next_due).getTime() - Date.now()) / 86400000)
+        : null,
+    };
+  });
 
   return ok(c, { schedules: enriched });
 });
@@ -186,6 +246,15 @@ maintenance.post('/', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
+  const tenantDecision = canCreateMaintenanceScheduleInTenant({
+    activeTenantId: tenantId,
+    propertyTenantId: tenantProperty?.tenant_id,
+  });
+  if (!tenantDecision.allowed) return err(c, 'Imovel nao encontrado', tenantDecision.code, tenantDecision.status);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -204,6 +273,7 @@ maintenance.post('/', async (c) => {
 
   await db.insert(maintenanceSchedules).values({
     id,
+    tenantId,
     propertyId,
     systemType: system_type,
     title,
@@ -219,6 +289,7 @@ maintenance.post('/', async (c) => {
   const [schedule] = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -233,15 +304,17 @@ maintenance.post('/', async (c) => {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(eq(maintenanceSchedules.id, id))
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId)))
     .limit(1) as MaintenanceSchedule[];
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'maintenance_schedule', entityId: id, action: 'create',
     actorId: userId, newData: schedule,
   });
 
-  return ok(c, { schedule }, 201);
+  return ok(c, { schedule: schedule ? toMaintenanceScheduleResponse(schedule) : null }, 201);
 });
 
 // ── PUT /properties/:propertyId/maintenance/:id ───────────────────────────────
@@ -252,6 +325,11 @@ maintenance.put('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -259,6 +337,7 @@ maintenance.put('/:id', async (c) => {
   const [old] = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -273,7 +352,14 @@ maintenance.put('/:id', async (c) => {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .where(
+      and(
+        eq(maintenanceSchedules.id, id),
+        eq(maintenanceSchedules.tenantId, tenantId),
+        eq(maintenanceSchedules.propertyId, propertyId),
+        isNull(maintenanceSchedules.deletedAt)
+      )
+    )
     .limit(1) as MaintenanceSchedule[];
 
   if (!old) return err(c, 'Agendamento não encontrado', 'NOT_FOUND', 404);
@@ -303,11 +389,15 @@ maintenance.put('/:id', async (c) => {
 
   if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await db.update(maintenanceSchedules).set(patch).where(eq(maintenanceSchedules.id, id));
+  await db
+    .update(maintenanceSchedules)
+    .set(patch)
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId)));
 
   const [updated] = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -322,15 +412,17 @@ maintenance.put('/:id', async (c) => {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(eq(maintenanceSchedules.id, id))
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId)))
     .limit(1) as MaintenanceSchedule[];
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'maintenance_schedule', entityId: id, action: 'update',
     actorId: userId, oldData: old, newData: updated,
   });
 
-  return ok(c, { schedule: updated });
+  return ok(c, { schedule: updated ? toMaintenanceScheduleResponse(updated) : null });
 });
 
 // ── POST /properties/:propertyId/maintenance/:id/done ────────────────────────
@@ -344,6 +436,11 @@ maintenance.post('/:id/done', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -351,6 +448,7 @@ maintenance.post('/:id/done', async (c) => {
   const [schedule] = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -365,7 +463,14 @@ maintenance.post('/:id/done', async (c) => {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .where(
+      and(
+        eq(maintenanceSchedules.id, id),
+        eq(maintenanceSchedules.tenantId, tenantId),
+        eq(maintenanceSchedules.propertyId, propertyId),
+        isNull(maintenanceSchedules.deletedAt)
+      )
+    )
     .limit(1) as MaintenanceSchedule[];
 
   if (!schedule) return err(c, 'Agendamento não encontrado', 'NOT_FOUND', 404);
@@ -376,13 +481,14 @@ maintenance.post('/:id/done', async (c) => {
   await db
     .update(maintenanceSchedules)
     .set({ lastDone: today, nextDue })
-    .where(eq(maintenanceSchedules.id, id));
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId)));
 
   // If auto_create_os is enabled, create a service order
   if (schedule.auto_create_os) {
     const osId = nanoid();
     await db.insert(serviceOrders).values({
       id: osId,
+      tenantId,
       propertyId,
       systemType: schedule.system_type as typeof serviceOrders.$inferInsert.systemType,
       requestedBy: userId,
@@ -396,12 +502,16 @@ maintenance.post('/:id/done', async (c) => {
     });
 
     await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
       entityType: 'service_order', entityId: osId, action: 'auto_create',
       actorId: userId, newData: { maintenance_schedule_id: id, property_id: propertyId },
     });
   }
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'maintenance_schedule', entityId: id, action: 'maintenance_mark_done',
     actorId: userId,
     oldData: {
@@ -429,6 +539,11 @@ maintenance.delete('/:id', async (c) => {
   const id = c.req.param('id')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -436,6 +551,7 @@ maintenance.delete('/:id', async (c) => {
   const [old] = await db
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -450,7 +566,14 @@ maintenance.delete('/:id', async (c) => {
       deleted_at: maintenanceSchedules.deletedAt,
     })
     .from(maintenanceSchedules)
-    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+    .where(
+      and(
+        eq(maintenanceSchedules.id, id),
+        eq(maintenanceSchedules.tenantId, tenantId),
+        eq(maintenanceSchedules.propertyId, propertyId),
+        isNull(maintenanceSchedules.deletedAt)
+      )
+    )
     .limit(1);
 
   if (!old) return err(c, 'Agendamento não encontrado', 'NOT_FOUND', 404);
@@ -458,9 +581,11 @@ maintenance.delete('/:id', async (c) => {
   await db
     .update(maintenanceSchedules)
     .set({ deletedAt: new Date().toISOString() })
-    .where(eq(maintenanceSchedules.id, id));
+    .where(and(eq(maintenanceSchedules.id, id), eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'maintenance_schedule', entityId: id, action: 'delete',
     actorId: userId, oldData: old,
   });
@@ -483,6 +608,7 @@ export default maintenance;
 
 type OverdueSchedule = {
   id: string;
+  tenant_id: string;
   property_id: string;
   system_type: string;
   title: string;
@@ -496,6 +622,7 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
   const schedules = await drizzle
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       property_id: maintenanceSchedules.propertyId,
       system_type: maintenanceSchedules.systemType,
       title: maintenanceSchedules.title,
@@ -504,7 +631,16 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
       next_due: maintenanceSchedules.nextDue,
     })
     .from(maintenanceSchedules)
-    .where(and(eq(maintenanceSchedules.autoCreateOs, 1), lte(maintenanceSchedules.nextDue, sql`datetime('now')`), isNull(maintenanceSchedules.deletedAt))) as OverdueSchedule[];
+    .innerJoin(properties, and(eq(properties.id, maintenanceSchedules.propertyId), eq(properties.tenantId, maintenanceSchedules.tenantId)))
+    .where(
+      and(
+        eq(maintenanceSchedules.autoCreateOs, 1),
+        isNotNull(maintenanceSchedules.tenantId),
+        lte(maintenanceSchedules.nextDue, sql`datetime('now')`),
+        isNull(maintenanceSchedules.deletedAt),
+        isNull(properties.deletedAt)
+      )
+    ) as OverdueSchedule[];
 
   let created = 0;
   let skipped = 0;
@@ -516,7 +652,14 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
     const [existing] = await drizzle
       .select({ id: serviceOrders.id })
       .from(serviceOrders)
-      .where(and(eq(serviceOrders.propertyId, schedule.property_id), eq(serviceOrders.title, autoTitle), eq(serviceOrders.scheduledAt, schedule.next_due)))
+      .where(
+        and(
+          eq(serviceOrders.tenantId, schedule.tenant_id),
+          eq(serviceOrders.propertyId, schedule.property_id),
+          eq(serviceOrders.title, autoTitle),
+          eq(serviceOrders.scheduledAt, schedule.next_due)
+        )
+      )
       .limit(1);
 
     if (existing) {
@@ -530,7 +673,7 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
       const [owner] = await drizzle
         .select({ owner_id: properties.ownerId })
         .from(properties)
-        .where(eq(properties.id, schedule.property_id))
+        .where(and(eq(properties.id, schedule.property_id), eq(properties.tenantId, schedule.tenant_id), isNull(properties.deletedAt)))
         .limit(1) as Array<{ owner_id: string }>;
       requestedBy = owner?.owner_id ?? null;
     }
@@ -544,6 +687,7 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
 
     await drizzle.insert(serviceOrders).values({
       id: osId,
+      tenantId: schedule.tenant_id,
       propertyId: schedule.property_id,
       systemType: schedule.system_type as typeof serviceOrders.$inferInsert.systemType,
       requestedBy,
@@ -572,6 +716,7 @@ export async function sendMaintenanceDueEmails(
   const results = await drizzle
     .select({
       id: maintenanceSchedules.id,
+      tenant_id: maintenanceSchedules.tenantId,
       title: maintenanceSchedules.title,
       next_due: maintenanceSchedules.nextDue,
       property_id: maintenanceSchedules.propertyId,
@@ -583,17 +728,19 @@ export async function sendMaintenanceDueEmails(
       notification_prefs: users.notificationPrefs,
     })
     .from(maintenanceSchedules)
-    .innerJoin(properties, eq(properties.id, maintenanceSchedules.propertyId))
+    .innerJoin(properties, and(eq(properties.id, maintenanceSchedules.propertyId), eq(properties.tenantId, maintenanceSchedules.tenantId)))
     .innerJoin(users, eq(users.id, properties.ownerId))
     .where(
       and(
+        isNotNull(maintenanceSchedules.tenantId),
         isNull(maintenanceSchedules.deletedAt),
+        isNull(properties.deletedAt),
         lte(sql`julianday(${maintenanceSchedules.nextDue}) - julianday('now')`, 3),
         sql`julianday(${maintenanceSchedules.nextDue}) - julianday('now') > -7`
       )
     )
     .orderBy(maintenanceSchedules.propertyId, maintenanceSchedules.nextDue) as Array<{
-    id: string; title: string; next_due: string; days_until_due: number;
+    id: string; tenant_id: string; title: string; next_due: string; days_until_due: number;
     property_id: string; property_name: string;
     user_id: string; email: string; user_name: string; notification_prefs: string;
   }>;

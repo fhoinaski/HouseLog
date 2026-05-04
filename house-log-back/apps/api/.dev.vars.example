@@ -26,6 +26,7 @@ JWT_SECRET=troque-por-uma-chave-secreta-de-pelo-menos-32-caracteres
 
 # Origens permitidas para requisições cross-origin.
 # Use lista explícita: "*" não é aceito com credentials.
+# "*" e ignorado porque a API envia credentials. Em production, lista vazia falha fechada.
 CORS_ORIGINS=https://house-log.vercel.app,http://localhost:3000,http://127.0.0.1:3000
 
 # -----------------------------------------------------------------------------

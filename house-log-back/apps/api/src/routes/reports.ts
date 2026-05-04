@@ -18,7 +18,7 @@ reports.use('*', resolveTenant);
 //   4. Property age penalty     (15pts) — older buildings score lower
 //   5. Document completeness    (15pts) — has insurance + deed
 
-async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
+async function computeHealthScore(db: D1Database, propertyId: string, tenantId: string): Promise<{
   score: number;
   breakdown: Record<string, number>;
 }> {
@@ -32,7 +32,7 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
         overdue: sql<number>`SUM(CASE WHEN ${maintenanceSchedules.nextDue} < ${today} THEN 1 ELSE 0 END)`,
       })
       .from(maintenanceSchedules)
-      .where(and(eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
+      .where(and(eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
       .then((r) => r[0] as { total: number; overdue: number } | undefined),
     drizzle
       .select({
@@ -42,14 +42,14 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
         preventive: sql<number>`SUM(CASE WHEN ${serviceOrders.priority} = 'preventive' THEN 1 ELSE 0 END)`,
       })
       .from(serviceOrders)
-      .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+      .where(and(eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
       .then((r) => r[0] as {
         total: number; open: number; urgent: number; preventive: number;
       } | undefined),
     drizzle
       .select({ year_built: properties.yearBuilt })
       .from(properties)
-      .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+      .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
       .limit(1)
       .then((r) => r[0] as { year_built: number | null } | undefined),
     drizzle
@@ -58,7 +58,7 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
         has_deed: sql<number>`MAX(CASE WHEN ${documents.type} = 'deed' THEN 1 ELSE 0 END)`,
       })
       .from(documents)
-      .where(and(eq(documents.propertyId, propertyId), isNull(documents.deletedAt)))
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.propertyId, propertyId), isNull(documents.deletedAt)))
       .then((r) => r[0] as { has_insurance: number; has_deed: number } | undefined),
   ]);
 
@@ -109,7 +109,7 @@ async function computeHealthScore(db: D1Database, propertyId: string): Promise<{
   await drizzle
     .update(properties)
     .set({ healthScore: score })
-    .where(eq(properties.id, propertyId));
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId)));
 
   return {
     score,
@@ -129,11 +129,20 @@ reports.get('/health-score', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
+  const db = getDb(c.env.DB);
+  const [tenantProperty] = await db
+    .select({ id: properties.id })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
-  const { score, breakdown } = await computeHealthScore(c.env.DB, propertyId);
+  const { score, breakdown } = await computeHealthScore(c.env.DB, propertyId, tenantId);
 
   const label = score >= 80 ? 'Excelente' : score >= 60 ? 'Bom' : score >= 30 ? 'Atenção' : 'Crítico';
 
@@ -149,6 +158,13 @@ reports.get('/valuation-pdf', async (c) => {
   const userId = c.get('userId');
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
+
+  const [tenantProperty] = await db
+    .select({ id: properties.id })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
@@ -176,19 +192,19 @@ reports.get('/valuation-pdf', async (c) => {
       })
       .from(properties)
       .innerJoin(users, eq(users.id, properties.ownerId))
-      .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+      .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
       .limit(1)
       .then((r) => r[0]),
-    computeHealthScore(c.env.DB, propertyId),
+    computeHealthScore(c.env.DB, propertyId, tenantId),
   ]);
 
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
-  const [servicesSummary, expensesTotal, servicesTotal, inventoryCount, recentServices] = await Promise.all([
+  const [servicesSummary, expensesTotal, servicesTotal, inventoryCount, maintenanceCount, recentServices] = await Promise.all([
     db
       .select({ status: serviceOrders.status, count: sql<number>`COUNT(*)` })
       .from(serviceOrders)
-      .where(and(eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
+      .where(and(eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
       .groupBy(serviceOrders.status),
     db
       .select({ total: sql<number>`SUM(${expenses.amount})` })
@@ -210,7 +226,12 @@ reports.get('/valuation-pdf', async (c) => {
     db
       .select({ count: sql<number>`COUNT(*)` })
       .from(inventoryItems)
-      .where(and(eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+      .where(and(eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
+      .then((r) => r[0] as { count: number } | undefined),
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(maintenanceSchedules)
+      .where(and(eq(maintenanceSchedules.tenantId, tenantId), eq(maintenanceSchedules.propertyId, propertyId), isNull(maintenanceSchedules.deletedAt)))
       .then((r) => r[0] as { count: number } | undefined),
     db
       .select({
@@ -224,6 +245,7 @@ reports.get('/valuation-pdf', async (c) => {
       .where(
         and(
           eq(serviceOrders.propertyId, propertyId),
+          eq(serviceOrders.tenantId, tenantId),
           inArray(serviceOrders.status, ['completed', 'verified']),
           isNull(serviceOrders.deletedAt)
         )
@@ -241,7 +263,7 @@ reports.get('/valuation-pdf', async (c) => {
     services_summary: servicesSummary,
     expenses_total: expensesTotal?.total ?? 0,
     services_total: servicesTotal?.total ?? 0,
-    maintenance_total: 0,
+    maintenance_total: maintenanceCount?.count ?? 0,
     inventory_items: inventoryCount?.count ?? 0,
     recent_services: recentServices,
   });
