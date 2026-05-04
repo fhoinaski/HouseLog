@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, desc, eq, isNotNull, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
@@ -11,8 +10,14 @@ import {
   extractR2KeyFromPublicUrl,
   validatePrivateUpload,
 } from '../lib/r2';
+import {
+  canAssignRoomToInventory,
+  inventoryPhotoEndpoint,
+  withInventoryPhotoEndpoint,
+} from '../lib/inventory-tenant';
 import { getDb } from '../db/client';
 import { inventoryItems, rooms } from '../db/schema';
+import { inventoryCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables, InventoryItem } from '../lib/types';
 
 const inventory = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -20,33 +25,36 @@ const inventory = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 inventory.use('*', authMiddleware);
 inventory.use('*', resolveTenant);
 
-const createSchema = z.object({
-  category: z.enum(['paint', 'tile', 'waterproof', 'plumbing', 'electrical', 'hardware', 'adhesive', 'sealant', 'other']),
-  name: z.string().min(1),
-  room_id: z.string().optional(),
-  brand: z.string().optional(),
-  model: z.string().optional(),
-  color_code: z.string().optional(),
-  lot_number: z.string().optional(),
-  supplier: z.string().optional(),
-  quantity: z.number().min(0).default(0),
-  unit: z.string().default('un'),
-  reserve_qty: z.number().min(0).default(0),
-  storage_loc: z.string().optional(),
-  price_paid: z.number().positive().optional(),
-  purchase_date: z.string().optional(),
-  notes: z.string().optional(),
-});
+const createSchema = inventoryCreateSchema;
 
-// Authenticated endpoint URL for an inventory item's photo.
-// Callers should use this instead of a direct R2 public URL.
-function photoEndpoint(propertyId: string, itemId: string): string {
-  return `/api/v1/properties/${propertyId}/inventory/${itemId}/photo`;
-}
+// Re-export so handlers stay readable. Actual logic lives in inventory-tenant.ts.
+const photoEndpoint = inventoryPhotoEndpoint;
+const withPhotoEndpoint = withInventoryPhotoEndpoint as <T extends InventoryItem>(item: T, propertyId: string) => T;
 
-function withPhotoEndpoint<T extends InventoryItem>(item: T, propertyId: string): T {
-  return { ...item, photo_url: item.photo_url != null ? photoEndpoint(propertyId, item.id) : null };
-}
+const inventorySelect = {
+  id: inventoryItems.id,
+  property_id: inventoryItems.propertyId,
+  room_id: inventoryItems.roomId,
+  category: inventoryItems.category,
+  name: inventoryItems.name,
+  brand: inventoryItems.brand,
+  model: inventoryItems.model,
+  color_code: inventoryItems.colorCode,
+  lot_number: inventoryItems.lotNumber,
+  supplier: inventoryItems.supplier,
+  quantity: inventoryItems.quantity,
+  unit: inventoryItems.unit,
+  reserve_qty: inventoryItems.reserveQty,
+  storage_loc: inventoryItems.storageLoc,
+  photo_url: inventoryItems.photoUrl,
+  qr_code: inventoryItems.qrCode,
+  price_paid: inventoryItems.pricePaid,
+  purchase_date: inventoryItems.purchaseDate,
+  warranty_until: inventoryItems.warrantyUntil,
+  notes: inventoryItems.notes,
+  created_at: inventoryItems.createdAt,
+  deleted_at: inventoryItems.deletedAt,
+};
 
 // ── GET /properties/:propertyId/inventory ────────────────────────────────────
 
@@ -77,31 +85,7 @@ inventory.get('/', async (c) => {
   if (cursor) filters.push(lt(inventoryItems.createdAt, cursor));
 
   const results = await db
-    .select({
-      id: inventoryItems.id,
-      property_id: inventoryItems.propertyId,
-      room_id: inventoryItems.roomId,
-      category: inventoryItems.category,
-      name: inventoryItems.name,
-      brand: inventoryItems.brand,
-      model: inventoryItems.model,
-      color_code: inventoryItems.colorCode,
-      lot_number: inventoryItems.lotNumber,
-      supplier: inventoryItems.supplier,
-      quantity: inventoryItems.quantity,
-      unit: inventoryItems.unit,
-      reserve_qty: inventoryItems.reserveQty,
-      storage_loc: inventoryItems.storageLoc,
-      photo_url: inventoryItems.photoUrl,
-      qr_code: inventoryItems.qrCode,
-      price_paid: inventoryItems.pricePaid,
-      purchase_date: inventoryItems.purchaseDate,
-      warranty_until: inventoryItems.warrantyUntil,
-      notes: inventoryItems.notes,
-      created_at: inventoryItems.createdAt,
-      deleted_at: inventoryItems.deletedAt,
-      room_name: rooms.name,
-    })
+    .select({ ...inventorySelect, room_name: rooms.name })
     .from(inventoryItems)
     .leftJoin(rooms, eq(rooms.id, inventoryItems.roomId))
     .where(and(...filters))
@@ -171,6 +155,23 @@ inventory.post('/', async (c) => {
   }
 
   const d = parsed.data;
+
+  if (d.room_id) {
+    const [room] = await db
+      .select({ tenantId: rooms.tenantId, propertyId: rooms.propertyId })
+      .from(rooms)
+      .where(and(eq(rooms.id, d.room_id), isNull(rooms.deletedAt)))
+      .limit(1);
+    if (!room) return err(c, 'Ambiente não encontrado', 'NOT_FOUND', 404);
+    const decision = canAssignRoomToInventory({
+      activeTenantId: tenantId,
+      roomTenantId: room.tenantId,
+      roomPropertyId: room.propertyId,
+      requestedPropertyId: propertyId,
+    });
+    if (!decision.allowed) return err(c, 'Ambiente não pertence a este imóvel', decision.code, decision.status);
+  }
+
   const id = nanoid();
 
   await db.insert(inventoryItems).values({
@@ -195,30 +196,7 @@ inventory.post('/', async (c) => {
   });
 
   const [item] = await db
-    .select({
-      id: inventoryItems.id,
-      property_id: inventoryItems.propertyId,
-      room_id: inventoryItems.roomId,
-      category: inventoryItems.category,
-      name: inventoryItems.name,
-      brand: inventoryItems.brand,
-      model: inventoryItems.model,
-      color_code: inventoryItems.colorCode,
-      lot_number: inventoryItems.lotNumber,
-      supplier: inventoryItems.supplier,
-      quantity: inventoryItems.quantity,
-      unit: inventoryItems.unit,
-      reserve_qty: inventoryItems.reserveQty,
-      storage_loc: inventoryItems.storageLoc,
-      photo_url: inventoryItems.photoUrl,
-      qr_code: inventoryItems.qrCode,
-      price_paid: inventoryItems.pricePaid,
-      purchase_date: inventoryItems.purchaseDate,
-      warranty_until: inventoryItems.warrantyUntil,
-      notes: inventoryItems.notes,
-      created_at: inventoryItems.createdAt,
-      deleted_at: inventoryItems.deletedAt,
-    })
+    .select(inventorySelect)
     .from(inventoryItems)
     .where(eq(inventoryItems.id, id))
     .limit(1) as InventoryItem[];
@@ -226,6 +204,8 @@ inventory.post('/', async (c) => {
   if (!item) return err(c, 'Erro ao criar item', 'CREATE_ERROR', 500);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'inventory_item', entityId: id, action: 'create',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), newData: item,
   });
@@ -289,31 +269,7 @@ inventory.get('/:id', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [item] = await db
-    .select({
-      id: inventoryItems.id,
-      property_id: inventoryItems.propertyId,
-      room_id: inventoryItems.roomId,
-      category: inventoryItems.category,
-      name: inventoryItems.name,
-      brand: inventoryItems.brand,
-      model: inventoryItems.model,
-      color_code: inventoryItems.colorCode,
-      lot_number: inventoryItems.lotNumber,
-      supplier: inventoryItems.supplier,
-      quantity: inventoryItems.quantity,
-      unit: inventoryItems.unit,
-      reserve_qty: inventoryItems.reserveQty,
-      storage_loc: inventoryItems.storageLoc,
-      photo_url: inventoryItems.photoUrl,
-      qr_code: inventoryItems.qrCode,
-      price_paid: inventoryItems.pricePaid,
-      purchase_date: inventoryItems.purchaseDate,
-      warranty_until: inventoryItems.warrantyUntil,
-      notes: inventoryItems.notes,
-      created_at: inventoryItems.createdAt,
-      deleted_at: inventoryItems.deletedAt,
-      room_name: rooms.name,
-    })
+    .select({ ...inventorySelect, room_name: rooms.name })
     .from(inventoryItems)
     .leftJoin(rooms, eq(rooms.id, inventoryItems.roomId))
     .where(
@@ -345,30 +301,7 @@ inventory.put('/:id', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
-    .select({
-      id: inventoryItems.id,
-      property_id: inventoryItems.propertyId,
-      room_id: inventoryItems.roomId,
-      category: inventoryItems.category,
-      name: inventoryItems.name,
-      brand: inventoryItems.brand,
-      model: inventoryItems.model,
-      color_code: inventoryItems.colorCode,
-      lot_number: inventoryItems.lotNumber,
-      supplier: inventoryItems.supplier,
-      quantity: inventoryItems.quantity,
-      unit: inventoryItems.unit,
-      reserve_qty: inventoryItems.reserveQty,
-      storage_loc: inventoryItems.storageLoc,
-      photo_url: inventoryItems.photoUrl,
-      qr_code: inventoryItems.qrCode,
-      price_paid: inventoryItems.pricePaid,
-      purchase_date: inventoryItems.purchaseDate,
-      warranty_until: inventoryItems.warrantyUntil,
-      notes: inventoryItems.notes,
-      created_at: inventoryItems.createdAt,
-      deleted_at: inventoryItems.deletedAt,
-    })
+    .select(inventorySelect)
     .from(inventoryItems)
     .where(
       and(
@@ -391,6 +324,23 @@ inventory.put('/:id', async (c) => {
   }
 
   const d = parsed.data;
+
+  if (d.room_id !== undefined && d.room_id !== null) {
+    const [room] = await db
+      .select({ tenantId: rooms.tenantId, propertyId: rooms.propertyId })
+      .from(rooms)
+      .where(and(eq(rooms.id, d.room_id), isNull(rooms.deletedAt)))
+      .limit(1);
+    if (!room) return err(c, 'Ambiente não encontrado', 'NOT_FOUND', 404);
+    const decision = canAssignRoomToInventory({
+      activeTenantId: tenantId,
+      roomTenantId: room.tenantId,
+      roomPropertyId: room.propertyId,
+      requestedPropertyId: propertyId,
+    });
+    if (!decision.allowed) return err(c, 'Ambiente não pertence a este imóvel', decision.code, decision.status);
+  }
+
   const patch: Partial<typeof inventoryItems.$inferInsert> = {};
   if (d.room_id !== undefined) patch.roomId = d.room_id;
   if (d.category !== undefined) patch.category = d.category;
@@ -410,33 +360,13 @@ inventory.put('/:id', async (c) => {
 
   if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
 
-  await db.update(inventoryItems).set(patch).where(eq(inventoryItems.id, id));
+  await db
+    .update(inventoryItems)
+    .set(patch)
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId)));
 
   const [updated] = await db
-    .select({
-      id: inventoryItems.id,
-      property_id: inventoryItems.propertyId,
-      room_id: inventoryItems.roomId,
-      category: inventoryItems.category,
-      name: inventoryItems.name,
-      brand: inventoryItems.brand,
-      model: inventoryItems.model,
-      color_code: inventoryItems.colorCode,
-      lot_number: inventoryItems.lotNumber,
-      supplier: inventoryItems.supplier,
-      quantity: inventoryItems.quantity,
-      unit: inventoryItems.unit,
-      reserve_qty: inventoryItems.reserveQty,
-      storage_loc: inventoryItems.storageLoc,
-      photo_url: inventoryItems.photoUrl,
-      qr_code: inventoryItems.qrCode,
-      price_paid: inventoryItems.pricePaid,
-      purchase_date: inventoryItems.purchaseDate,
-      warranty_until: inventoryItems.warrantyUntil,
-      notes: inventoryItems.notes,
-      created_at: inventoryItems.createdAt,
-      deleted_at: inventoryItems.deletedAt,
-    })
+    .select(inventorySelect)
     .from(inventoryItems)
     .where(eq(inventoryItems.id, id))
     .limit(1) as InventoryItem[];
@@ -444,6 +374,8 @@ inventory.put('/:id', async (c) => {
   if (!updated) return err(c, 'Erro ao atualizar item', 'UPDATE_ERROR', 500);
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'inventory_item', entityId: id, action: 'update',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
     oldData: old, newData: updated,
@@ -466,30 +398,7 @@ inventory.delete('/:id', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
-    .select({
-      id: inventoryItems.id,
-      property_id: inventoryItems.propertyId,
-      room_id: inventoryItems.roomId,
-      category: inventoryItems.category,
-      name: inventoryItems.name,
-      brand: inventoryItems.brand,
-      model: inventoryItems.model,
-      color_code: inventoryItems.colorCode,
-      lot_number: inventoryItems.lotNumber,
-      supplier: inventoryItems.supplier,
-      quantity: inventoryItems.quantity,
-      unit: inventoryItems.unit,
-      reserve_qty: inventoryItems.reserveQty,
-      storage_loc: inventoryItems.storageLoc,
-      photo_url: inventoryItems.photoUrl,
-      qr_code: inventoryItems.qrCode,
-      price_paid: inventoryItems.pricePaid,
-      purchase_date: inventoryItems.purchaseDate,
-      warranty_until: inventoryItems.warrantyUntil,
-      notes: inventoryItems.notes,
-      created_at: inventoryItems.createdAt,
-      deleted_at: inventoryItems.deletedAt,
-    })
+    .select(inventorySelect)
     .from(inventoryItems)
     .where(
       and(
@@ -506,9 +415,11 @@ inventory.delete('/:id', async (c) => {
   await db
     .update(inventoryItems)
     .set({ deletedAt: new Date().toISOString() })
-    .where(eq(inventoryItems.id, id));
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'inventory_item', entityId: id, action: 'delete',
     actorId: userId, actorIp: c.req.header('CF-Connecting-IP'), oldData: old,
   });
@@ -574,9 +485,11 @@ inventory.post('/:itemId/photo', async (c) => {
   await db
     .update(inventoryItems)
     .set({ photoUrl: key })
-    .where(eq(inventoryItems.id, itemId));
+    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'inventory_item',
     entityId: itemId,
     action: 'PHOTO_UPLOAD',
@@ -621,9 +534,11 @@ inventory.post('/:itemId/qr', async (c) => {
   await db
     .update(inventoryItems)
     .set({ qrCode: qrValue })
-    .where(eq(inventoryItems.id, itemId));
+    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
 
   await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
     entityType: 'inventory_item',
     entityId: itemId,
     action: 'QR_GENERATED',

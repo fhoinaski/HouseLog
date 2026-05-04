@@ -19,7 +19,7 @@ import {
   users,
 } from '../db/schema';
 import type { Bindings, Variables, Property } from '../lib/types';
-import { propertyCreateSchema, propertyUpdateSchema } from '../../../../../packages/contracts/src/schemas/property';
+import { propertyCreateSchema, propertyUpdateSchema } from '@houselog/contracts';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

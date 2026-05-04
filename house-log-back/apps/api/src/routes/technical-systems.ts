@@ -18,7 +18,7 @@ import {
   updateTechnicalSystemSchema,
   type TechnicalSystemStatus,
   type TechnicalSystemType,
-} from '../../../../../packages/contracts/src/schemas/technical-system';
+} from '@houselog/contracts';
 
 type PropertyAccessContext = {
   propertyId: string;

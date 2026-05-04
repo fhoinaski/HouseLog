@@ -27,6 +27,7 @@ import messagesRoute from './routes/messages';
 import timeline from './routes/timeline';
 import technicalSystems from './routes/technical-systems';
 import technicalPoints from './routes/technical-points';
+import auditLogRoute from './routes/audit-log';
 import { requestLogger, reportError, log } from './lib/logger';
 import { generateThumbnails } from './lib/image';
 import { pushToUser } from './lib/webpush';
@@ -142,6 +143,9 @@ api.route('/audit', auditLinks);
 
 // Full-text search (services, documents/OCR, inventory, maintenance)
 api.route('/search', search);
+
+// Audit log (tenant-scoped, owner/manager only)
+api.route('/audit-log', auditLogRoute);
 
 // Access credentials (wifi, alarm, smart lock, etc.)
 api.route('/properties/:propertyId/credentials', credentials);

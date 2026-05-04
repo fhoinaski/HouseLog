@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
@@ -10,6 +9,7 @@ import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middlewa
 import { canCreateMaintenanceScheduleInTenant, canUseTenantMaintenanceSchedule } from '../lib/maintenance-tenant';
 import { getDb } from '../db/client';
 import { maintenanceSchedules, properties, serviceOrders, users } from '../db/schema';
+import { maintenanceCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables } from '../lib/types';
 
 type MaintenanceSchedule = {
@@ -33,16 +33,7 @@ const FREQUENCY_DAYS: Record<string, number> = {
   weekly: 7, monthly: 30, quarterly: 90, semiannual: 180, annual: 365,
 };
 
-const schema = z.object({
-  system_type: z.string().min(1),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  frequency: z.enum(['weekly', 'monthly', 'quarterly', 'semiannual', 'annual']),
-  responsible: z.string().optional(),
-  last_done: z.string().optional(),
-  auto_create_os: z.boolean().default(false),
-  notes: z.string().optional(),
-});
+const schema = maintenanceCreateSchema;
 
 function calcNextDue(frequency: string, lastDone?: string): string {
   const base = lastDone ? new Date(lastDone) : new Date();

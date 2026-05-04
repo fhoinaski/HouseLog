@@ -25,7 +25,7 @@ APP_URL = "https://house-log.vercel.app"
 [[d1_databases]]
 binding = "DB"
 database_name = "houselog-db"
-database_id = "COLE_AQUI_O_ID_DA_PRODUCAO_QUANDO_CRIAR"
+database_id = "62bd81c4-77da-4867-a996-22fff5e0d258"
 migrations_dir = "src/db/migrations"
 
 [[r2_buckets]]

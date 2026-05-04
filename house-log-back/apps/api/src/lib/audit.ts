@@ -96,6 +96,25 @@ export async function writeAuditLog(
   });
 }
 
+export type AuditLogQueryDecision =
+  | { allowed: true }
+  | { allowed: false; status: 403; code: 'FORBIDDEN' };
+
+export function canQueryAuditLog(input: {
+  tenantRole?: string | null;
+}): AuditLogQueryDecision {
+  if (input.tenantRole === 'owner' || input.tenantRole === 'manager') {
+    return { allowed: true };
+  }
+  return { allowed: false, status: 403, code: 'FORBIDDEN' };
+}
+
+// Must start with YYYY-MM-DD. SQLite stores datetimes as text; other formats
+// break lexicographic comparisons silently.
+export function isValidAuditDateParam(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}/.test(s);
+}
+
 export function canReadTenantAuditLog(input: {
   activeTenantId?: string | null;
   auditTenantId?: string | null;

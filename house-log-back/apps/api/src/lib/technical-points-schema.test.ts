@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTechnicalPointSchema } from '../../../../../packages/contracts/src/schemas/technical-point';
+import { createTechnicalPointSchema } from '@houselog/contracts';
 
 const validPoint = {
   name: 'Registro geral',

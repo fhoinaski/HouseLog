@@ -21,7 +21,7 @@ import {
   updateTechnicalPointSchema,
   type TechnicalPointRiskLevel,
   type TechnicalPointType,
-} from '../../../../../packages/contracts/src/schemas/technical-point';
+} from '@houselog/contracts';
 
 type PropertyAccessContext = {
   propertyId: string;

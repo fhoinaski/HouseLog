@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
@@ -7,6 +6,7 @@ import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { expenses as expensesTable } from '../db/schema';
+import { expenseCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables, Expense } from '../lib/types';
 
 const expenses = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -14,14 +14,7 @@ const expenses = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 expenses.use('*', authMiddleware);
 expenses.use('*', resolveTenant);
 
-const createSchema = z.object({
-  type: z.enum(['expense', 'revenue']).default('expense'),
-  category: z.enum(['water', 'electricity', 'gas', 'condo', 'iptu', 'insurance', 'cleaning', 'garden', 'security', 'other']),
-  amount: z.number().positive(),
-  reference_month: z.string().regex(/^\d{4}-\d{2}$/, 'Formato YYYY-MM'),
-  notes: z.string().optional(),
-  is_recurring: z.boolean().default(false),
-});
+const createSchema = expenseCreateSchema;
 
 const expenseSelect = {
   id: expensesTable.id,

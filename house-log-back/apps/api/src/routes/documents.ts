@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
@@ -9,6 +8,7 @@ import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middlewa
 import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
 import { documents as documentsTable, properties, serviceOrders, users } from '../db/schema';
+import { documentCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables } from '../lib/types';
 
 type Document = {
@@ -23,15 +23,7 @@ const documents = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 documents.use('*', authMiddleware);
 documents.use('*', resolveTenant);
 
-const metaSchema = z.object({
-  type: z.enum(['invoice', 'manual', 'project', 'contract', 'deed', 'permit', 'insurance', 'other']),
-  title: z.string().min(1),
-  service_id: z.string().optional(),
-  vendor_cnpj: z.string().optional(),
-  amount: z.coerce.number().positive().optional(),
-  issue_date: z.string().optional(),
-  expiry_date: z.string().optional(),
-});
+const metaSchema = documentCreateSchema;
 
 function buildDocumentDownloadUrl(propertyId: string, documentId: string): string {
   return `/api/v1/properties/${propertyId}/documents/${documentId}/download`;

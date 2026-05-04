@@ -10,7 +10,7 @@ import { getDb } from '../db/client';
 import { bids, properties, serviceOrders, serviceRequests, users } from '../db/schema';
 import { buildR2Key, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
-import { serviceOrderCreateSchema } from '../../../../../packages/contracts/src/schemas/service-order';
+import { serviceOrderCreateSchema } from '@houselog/contracts';
 
 const serviceRequestsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

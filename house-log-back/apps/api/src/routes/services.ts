@@ -22,7 +22,7 @@ import { getDb } from '../db/client';
 import { properties, propertyCollaborators, rooms, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 import { canAssignProviderToTenantService } from '../lib/service-tenant';
-import { serviceOrderCreateSchema } from '../../../../../packages/contracts/src/schemas/service-order';
+import { serviceOrderCreateSchema } from '@houselog/contracts';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 

@@ -21,7 +21,7 @@ import { err, ok } from '../lib/response';
 import { getDb } from '../db/client';
 import { properties, serviceBids, serviceMessages, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, QueueMessage } from '../lib/types';
-import { serviceMessageCreateSchema } from '../../../../../packages/contracts/src/schemas/message';
+import { serviceMessageCreateSchema } from '@houselog/contracts';
 
 const messages = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 messages.use('*', authMiddleware);

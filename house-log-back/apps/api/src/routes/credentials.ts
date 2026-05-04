@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
@@ -18,6 +17,7 @@ import { applyRateLimit } from '../middleware/rateLimit';
 import { encryptSecret, decryptSecret, getCredentialKey, isEncrypted } from '../lib/credential-crypto';
 import { getDb } from '../db/client';
 import { propertyAccessCredentials } from '../db/schema';
+import { credentialCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables } from '../lib/types';
 
 const credentials = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -26,21 +26,10 @@ credentials.use('*', resolveTenant);
 
 type CredentialsContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
-const CATEGORIES = ['wifi', 'alarm', 'smart_lock', 'gate', 'app', 'other'] as const;
-
 const REVEAL_MAX = 10;
 const REVEAL_WINDOW = 3600; // 1 hour
 
-const createSchema = z.object({
-  category:          z.enum(CATEGORIES).default('other'),
-  label:             z.string().min(1),
-  username:          z.string().optional(),
-  secret:            z.string().min(1),
-  notes:             z.string().optional(),
-  integration_type:  z.enum(['intelbras']).optional().nullable(),
-  integration_config: z.record(z.unknown()).optional().nullable(),
-  share_with_os:     z.boolean().default(false),
-});
+const createSchema = credentialCreateSchema;
 
 type CredentialRecord = {
   id: string;

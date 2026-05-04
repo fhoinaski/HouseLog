@@ -4,15 +4,17 @@
     "lib": ["ES2022"],
     "module": "ES2022",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
     "strict": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
     "types": ["@cloudflare/workers-types"],
     "paths": {
       "@/*": ["./src/*"],
-      "zod": ["./node_modules/zod/lib/index.d.ts"]
+      "zod": ["./node_modules/zod/lib/index.d.ts"],
+      "@houselog/contracts": ["../../../packages/contracts/src/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "../../../../packages/contracts/src/**/*.ts"],
+  "include": ["src/**/*.ts", "../../../packages/contracts/src/**/*.ts"],
   "exclude": ["node_modules"]
 }
