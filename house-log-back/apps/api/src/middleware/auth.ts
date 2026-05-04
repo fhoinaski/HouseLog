@@ -7,6 +7,7 @@ import {
   canAccessProperty,
   canRevealCredentialSecret,
 } from '../lib/authorization';
+import { canAccessTenantProperty, type TenantPropertyAccessLevel } from '../lib/tenant-authorization';
 import type { Bindings, Variables, Role, TenantRole } from '../lib/types';
 
 // Extracts JWT from Authorization header and sets userId/userRole in context
@@ -57,9 +58,70 @@ export async function assertPropertyAccess(
   db: D1Database,
   propertyId: string,
   userId: string,
-  role: Role
+  role: Role,
+  tenantId?: string | null,
+  tenantRole?: TenantRole | null,
+  accessLevel: TenantPropertyAccessLevel = 'view'
 ): Promise<boolean> {
+  if (tenantId && tenantRole) {
+    const decision = await canAccessTenantProperty(db, {
+      tenantId,
+      tenantRole,
+      propertyId,
+      userId,
+      userRole: role,
+      accessLevel,
+    });
+    return decision.allowed;
+  }
   return canAccessProperty(db, { propertyId, userId, role });
+}
+
+export async function assertTenantPropertyAccess(
+  db: D1Database,
+  input: {
+    tenantId?: string | null;
+    tenantRole?: TenantRole | null;
+    propertyId: string;
+    userId: string;
+    userRole: Role;
+    accessLevel?: TenantPropertyAccessLevel;
+  }
+): Promise<boolean> {
+  const decision = await canAccessTenantProperty(db, input);
+  return decision.allowed;
+}
+
+export function requireTenantPropertyAccess(
+  propertyParam: string = 'propertyId',
+  accessLevel: TenantPropertyAccessLevel = 'view'
+) {
+  return createMiddleware<{ Bindings: Bindings; Variables: Variables }>(async (c, next) => {
+    const propertyId = c.req.param(propertyParam);
+    if (!propertyId) {
+      return c.json({ error: 'Imovel nao informado', code: 'INVALID_PROPERTY' }, 400);
+    }
+
+    const decision = await canAccessTenantProperty(c.env.DB, {
+      tenantId: c.get('tenantId'),
+      tenantRole: c.get('tenantRole'),
+      propertyId,
+      userId: c.get('userId'),
+      userRole: c.get('userRole'),
+      accessLevel,
+    });
+
+    if (!decision.allowed) {
+      const message = decision.code === 'NOT_FOUND'
+        ? 'Imovel nao encontrado'
+        : decision.code === 'TENANT_REQUIRED'
+          ? 'Tenant ativo obrigatorio'
+          : 'Sem acesso a este imovel';
+      return c.json({ error: message, code: decision.code }, decision.status);
+    }
+
+    await next();
+  });
 }
 
 export const resolveTenant = createMiddleware<{
@@ -141,8 +203,21 @@ export async function assertPropertySecretAccess(
   db: D1Database,
   propertyId: string,
   userId: string,
-  role: Role
+  role: Role,
+  tenantId?: string | null,
+  tenantRole?: TenantRole | null
 ): Promise<boolean> {
+  if (tenantId && tenantRole) {
+    const decision = await canAccessTenantProperty(db, {
+      tenantId,
+      tenantRole,
+      propertyId,
+      userId,
+      userRole: role,
+      accessLevel: 'secret',
+    });
+    return decision.allowed;
+  }
   return canRevealCredentialSecret(db, { propertyId, userId, role });
 }
 

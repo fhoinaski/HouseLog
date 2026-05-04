@@ -72,7 +72,7 @@ bids.get('/', async (c) => {
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const order = await loadTenantServiceOrder(db, tenantId, propertyId, serviceId);
@@ -253,7 +253,7 @@ bids.patch('/:bidId/status', async (c) => {
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const order = await loadTenantServiceOrder(db, tenantId, propertyId, serviceId);

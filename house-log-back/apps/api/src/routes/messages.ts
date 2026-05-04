@@ -127,7 +127,7 @@ messages.get('/:serviceOrderId/messages', async (c) => {
     const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, tenantId, soId, userId) : false;
     authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid });
     if (!canViewServiceMessages(authInput)) {
-      const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role });
+      const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
       authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid, hasPropertyAccess });
       if (!canViewServiceMessages(authInput)) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
     }
@@ -177,7 +177,7 @@ messages.post('/:serviceOrderId/messages', async (c) => {
     const hasActiveProviderBid = role === 'provider' ? await hasActiveBidAccess(db, tenantId, soId, userId) : false;
     authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid });
     if (!canSendServiceMessage(authInput)) {
-      const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role });
+      const hasPropertyAccess = await canAccessProperty(c.env.DB, { propertyId: p.propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
       authInput = toMessageAuthorizationInput(p, userId, role, { hasActiveProviderBid, hasPropertyAccess });
       if (!canSendServiceMessage(authInput)) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
     }

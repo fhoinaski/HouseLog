@@ -226,7 +226,7 @@ properties.get('/:id', async (c) => {
 
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   return ok(c, { property });
@@ -249,7 +249,7 @@ properties.put('/:id', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -355,7 +355,7 @@ properties.delete('/:id', requireRole('admin', 'owner'), async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -418,7 +418,7 @@ properties.post('/:id/cover', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   const formData = await c.req.formData().catch(() => null);
@@ -459,7 +459,7 @@ properties.get('/:id/media/*', async (c) => {
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imovel', 'FORBIDDEN', 403);
 
   const key = decodeURIComponent(c.req.path.split(`/properties/${id}/media/`)[1] ?? '');
@@ -501,7 +501,7 @@ properties.get('/:id/dashboard', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   const [exp, svc, inv, maint, prop] = await Promise.all([
@@ -620,7 +620,7 @@ properties.get('/:id/providers', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const results = await db
@@ -735,7 +735,7 @@ properties.post('/:id/apply-template', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);

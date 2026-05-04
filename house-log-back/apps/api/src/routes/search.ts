@@ -86,8 +86,8 @@ search.get('/', async (c) => {
   }
 
   const accessiblePropertyIds = propertyId
-    ? (await canSearchProperty(c.env.DB, { propertyId, userId, role }) ? [propertyId] : [])
-    : await listAccessiblePropertyIds(c.env.DB, { userId, role });
+    ? (await canSearchProperty(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') }) ? [propertyId] : [])
+    : await listAccessiblePropertyIds(c.env.DB, { userId, role, tenantId, tenantRole: c.get('tenantRole') });
 
   if (accessiblePropertyIds.length === 0) return ok(c, { results });
 
@@ -103,7 +103,7 @@ search.get('/', async (c) => {
 
   // Service orders — title and system_type. Description is free-form operational text.
   const canSearchServices = propertyId
-    ? await canSearchServiceOrders(c.env.DB, { propertyId, userId, role })
+    ? await canSearchServiceOrders(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') })
     : true;
   const svcs = canSearchServices ? await db
     .select({
@@ -139,7 +139,7 @@ search.get('/', async (c) => {
 
   // Documents — title only. OCR search needs document-specific sensitivity policy.
   const canSearchDocs = propertyId
-    ? await canSearchDocuments(c.env.DB, { propertyId, userId, role })
+    ? await canSearchDocuments(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') })
     : true;
   const docs = canSearchDocs ? await db
     .select({
@@ -172,7 +172,7 @@ search.get('/', async (c) => {
 
   // Inventory items — name, brand, category
   const canSearchItems = propertyId
-    ? await canSearchInventory(c.env.DB, { propertyId, userId, role })
+    ? await canSearchInventory(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') })
     : true;
   const items = canSearchItems ? await db
     .select({
@@ -210,7 +210,7 @@ search.get('/', async (c) => {
 
   // Maintenance schedules — title, system_type
   const canSearchMaint = propertyId
-    ? await canSearchMaintenance(c.env.DB, { propertyId, userId, role })
+    ? await canSearchMaintenance(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') })
     : true;
   const maint = canSearchMaint ? await db
     .select({

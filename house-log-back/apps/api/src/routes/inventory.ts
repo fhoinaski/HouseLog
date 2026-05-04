@@ -57,7 +57,7 @@ inventory.get('/', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
@@ -121,7 +121,7 @@ inventory.get('/colors', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const results = await db
@@ -159,7 +159,7 @@ inventory.post('/', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -244,7 +244,7 @@ inventory.get('/:itemId/photo', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return c.json({ error: 'Sem acesso', code: 'FORBIDDEN' }, 403);
 
   const [item] = await db
@@ -285,7 +285,7 @@ inventory.get('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [item] = await db
@@ -341,7 +341,7 @@ inventory.put('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -462,7 +462,7 @@ inventory.delete('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -529,7 +529,7 @@ inventory.post('/:itemId/photo', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [item] = await db
@@ -598,7 +598,7 @@ inventory.post('/:itemId/qr', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [item] = await db

@@ -132,7 +132,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
     return err(c, 'Limite de revelações atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
   }
 
-  const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) {
     await writeAuditLog(c.env.DB, {
       tenantId,
@@ -211,7 +211,7 @@ credentials.get('/', async (c) => {
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
-  const hasAccess = await canListCredentials(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canListCredentials(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const results = await db
@@ -238,7 +238,7 @@ credentials.post('/', async (c) => {
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
-  const hasAccess = await canCreateCredential(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canCreateCredential(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -316,7 +316,7 @@ credentials.put('/:credId', async (c) => {
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
-  const hasAccess = await canUpdateCredential(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUpdateCredential(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -396,7 +396,7 @@ credentials.delete('/:credId', async (c) => {
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
-  const hasAccess = await canDeleteCredential(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canDeleteCredential(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [existing] = await db
@@ -452,7 +452,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
 
-  const hasAccess = await canGenerateTemporaryCredentialAccess(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canGenerateTemporaryCredentialAccess(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => ({})) as { expires_hours?: number; provider_name?: string };

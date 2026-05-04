@@ -38,7 +38,7 @@ timeline.get('/', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
   const limit = Math.min(200, Math.max(10, Number(c.req.query('limit') ?? 50)));

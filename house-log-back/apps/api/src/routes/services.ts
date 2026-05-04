@@ -143,7 +143,7 @@ services.get('/', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
@@ -210,7 +210,7 @@ services.post('/', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId, property } = tenantContext;
 
-  const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem permissão para abrir OS neste imóvel', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -352,7 +352,7 @@ services.get('/:id', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -407,7 +407,7 @@ services.put('/:id', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canUpdateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUpdateServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -539,7 +539,7 @@ services.patch('/:id/status', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId, property } = tenantContext;
 
-  const hasAccess = await canChangeServiceOrderStatus(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canChangeServiceOrderStatus(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json<{ status: string }>().catch(() => null);
@@ -589,7 +589,7 @@ services.patch('/:id/status', async (c) => {
 
   // Rule: completing requires at least 1 after photo
   if (body.status === 'completed') {
-    const canCloseWithEvidence = await canCloseServiceOrderWithEvidence(c.env.DB, { propertyId, userId, role });
+    const canCloseWithEvidence = await canCloseServiceOrderWithEvidence(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
     if (!canCloseWithEvidence) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
     const afterPhotos = Array.isArray(order.after_photos)
@@ -706,7 +706,7 @@ services.post('/:id/photos', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -780,7 +780,7 @@ services.post('/:id/video', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -845,7 +845,7 @@ services.post('/:id/audio', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadServiceEvidence(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [order] = await db
@@ -912,7 +912,7 @@ services.get('/:id/media/*', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canViewServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const key = decodeURIComponent(c.req.path.split(`/services/${id}/media/`)[1] ?? '');
@@ -962,7 +962,7 @@ services.delete('/:id', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canDeleteServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canDeleteServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -1033,7 +1033,7 @@ services.patch('/:id/checklist', async (c) => {
   if (!tenantContext.ok) return tenantContext.response;
   const { tenantId } = tenantContext;
 
-  const hasAccess = await canUpdateServiceOrderChecklist(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUpdateServiceOrderChecklist(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json<{ checklist: { item: string; done: boolean }[] }>().catch(() => null);

@@ -1,7 +1,12 @@
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { getDb } from '../db/client';
 import { properties, propertyCollaborators } from '../db/schema';
-import type { Role } from './types';
+import {
+  canAccessTenantProperty,
+  listAccessibleTenantPropertyIds,
+  type TenantPropertyAccessLevel,
+} from './tenant-authorization';
+import type { Role, TenantRole } from './types';
 
 export type AuthorizationSubject = {
   userId: string;
@@ -10,6 +15,9 @@ export type AuthorizationSubject = {
 
 export type PropertyAuthorizationInput = AuthorizationSubject & {
   propertyId: string;
+  tenantId?: string | null;
+  tenantRole?: TenantRole | null;
+  accessLevel?: TenantPropertyAccessLevel;
 };
 
 export type ProviderProposalAuthorizationInput = AuthorizationSubject & {
@@ -51,6 +59,18 @@ export async function canAccessProperty(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
+  if (input.tenantId && input.tenantRole) {
+    const decision = await canAccessTenantProperty(db, {
+      tenantId: input.tenantId,
+      tenantRole: input.tenantRole,
+      propertyId: input.propertyId,
+      userId: input.userId,
+      userRole: input.role,
+      accessLevel: input.accessLevel ?? 'view',
+    });
+    return decision.allowed;
+  }
+
   if (!isPropertyDashboardRole(input.role)) return false;
 
   const drizzle = getDb(db);
@@ -89,6 +109,18 @@ export async function canRevealCredentialSecret(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
+  if (input.tenantId && input.tenantRole) {
+    const decision = await canAccessTenantProperty(db, {
+      tenantId: input.tenantId,
+      tenantRole: input.tenantRole,
+      propertyId: input.propertyId,
+      userId: input.userId,
+      userRole: input.role,
+      accessLevel: 'secret',
+    });
+    return decision.allowed;
+  }
+
   if (!isPropertyDashboardRole(input.role)) return false;
 
   const drizzle = getDb(db);
@@ -181,6 +213,18 @@ export async function canCreateServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
+  if (input.tenantId && input.tenantRole) {
+    const decision = await canAccessTenantProperty(db, {
+      tenantId: input.tenantId,
+      tenantRole: input.tenantRole,
+      propertyId: input.propertyId,
+      userId: input.userId,
+      userRole: input.role,
+      accessLevel: 'open_service_order',
+    });
+    return decision.allowed;
+  }
+
   if (!isPropertyDashboardRole(input.role)) return false;
 
   const drizzle = getDb(db);
@@ -225,6 +269,18 @@ export async function canCreateServiceRequest(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
+  if (input.tenantId && input.tenantRole) {
+    const decision = await canAccessTenantProperty(db, {
+      tenantId: input.tenantId,
+      tenantRole: input.tenantRole,
+      propertyId: input.propertyId,
+      userId: input.userId,
+      userRole: input.role,
+      accessLevel: 'open_service_order',
+    });
+    return decision.allowed;
+  }
+
   if (input.role !== 'owner') return false;
 
   const drizzle = getDb(db);
@@ -419,8 +475,17 @@ export function canSendInternalServiceMessage(input: ServiceMessageAuthorization
 
 export async function listAccessiblePropertyIds(
   db: D1Database,
-  subject: AuthorizationSubject
+  subject: AuthorizationSubject & { tenantId?: string | null; tenantRole?: TenantRole | null }
 ): Promise<string[]> {
+  if (subject.tenantId && subject.tenantRole) {
+    return listAccessibleTenantPropertyIds(db, {
+      tenantId: subject.tenantId,
+      tenantRole: subject.tenantRole,
+      userId: subject.userId,
+      userRole: subject.role,
+    });
+  }
+
   if (!isPropertyDashboardRole(subject.role)) return [];
 
   const drizzle = getDb(db);

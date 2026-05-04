@@ -23,7 +23,7 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => ({})) as {

@@ -48,7 +48,7 @@ expenses.get('/', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
@@ -86,7 +86,7 @@ expenses.get('/summary', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const from = c.req.query('from') ?? new Date(Date.now() - 6 * 30 * 86400000).toISOString().slice(0, 7);
@@ -160,7 +160,7 @@ expenses.post('/', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -243,7 +243,7 @@ expenses.put('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -310,7 +310,7 @@ expenses.delete('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db

@@ -83,7 +83,7 @@ documents.get('/', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
@@ -133,7 +133,7 @@ documents.post('/', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await canUploadDocument(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canUploadDocument(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const formData = await c.req.formData().catch(() => null);
@@ -232,7 +232,7 @@ documents.get('/:id', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [doc] = await db
@@ -278,7 +278,7 @@ documents.get('/:id/download', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [doc] = await db
@@ -320,7 +320,7 @@ documents.delete('/:id', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await canDeleteDocument(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canDeleteDocument(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [doc] = await db
@@ -385,7 +385,7 @@ documents.post('/:id/ocr', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await canRequestDocumentOCR(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canRequestDocumentOCR(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [doc] = await db

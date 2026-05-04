@@ -139,7 +139,7 @@ reports.get('/health-score', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const { score, breakdown } = await computeHealthScore(c.env.DB, propertyId, tenantId);
@@ -166,7 +166,7 @@ reports.get('/valuation-pdf', async (c) => {
     .limit(1);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [property, { score, breakdown }] = await Promise.all([

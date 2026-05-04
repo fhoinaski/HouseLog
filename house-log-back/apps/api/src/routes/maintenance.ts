@@ -79,7 +79,7 @@ async function markMaintenanceDone(c: MaintenanceContext) {
   const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [schedule] = await db
@@ -199,7 +199,7 @@ maintenance.get('/', async (c) => {
   });
   if (!tenantDecision.allowed) return err(c, 'Imovel nao encontrado', tenantDecision.code, tenantDecision.status);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const results = await db
@@ -256,7 +256,7 @@ maintenance.post('/', async (c) => {
   });
   if (!tenantDecision.allowed) return err(c, 'Imovel nao encontrado', tenantDecision.code, tenantDecision.status);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
@@ -331,7 +331,7 @@ maintenance.put('/:id', async (c) => {
   const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
@@ -442,7 +442,7 @@ maintenance.post('/:id/done', async (c) => {
   const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canMarkMaintenanceDone(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [schedule] = await db
@@ -545,7 +545,7 @@ maintenance.delete('/:id', async (c) => {
   const tenantProperty = await getTenantProperty(c.env.DB, propertyId, tenantId);
   if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role);
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db

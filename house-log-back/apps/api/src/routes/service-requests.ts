@@ -64,7 +64,7 @@ serviceRequestsRoute.get('/', async (c) => {
     return err(c, 'Imovel nao informado', 'INVALID_PROPERTY', 422);
   }
 
-  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) {
     return err(c, 'Sem acesso aos orcamentos deste imovel', 'FORBIDDEN', 403);
   }
@@ -143,7 +143,7 @@ serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
     return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
   }
 
-  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) {
     return err(c, 'Sem acesso a este orcamento', 'FORBIDDEN', 403);
   }
@@ -217,7 +217,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
     return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
   }
 
-  const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canCreateServiceOrder(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) {
     return err(c, 'Sem permissao para criar servico neste imovel', 'FORBIDDEN', 403);
   }
@@ -369,7 +369,7 @@ serviceRequestsRoute.get('/:serviceRequestId/media/:mediaIndex', async (c) => {
     return err(c, 'Parametros invalidos', 'INVALID_PARAMS', 422);
   }
 
-  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role });
+  const hasAccess = await canAccessProperty(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const db = getDb(c.env.DB);
@@ -428,7 +428,13 @@ serviceRequestsRoute.post('/', async (c) => {
 
   const db = getDb(c.env.DB);
 
-  const canCreateRequest = await canCreateServiceRequest(c.env.DB, { propertyId, userId: ownerId, role });
+  const canCreateRequest = await canCreateServiceRequest(c.env.DB, {
+    propertyId,
+    userId: ownerId,
+    role,
+    tenantId,
+    tenantRole: c.get('tenantRole'),
+  });
   if (!canCreateRequest) {
     return err(c, 'Sem permissao para este imovel', 'FORBIDDEN', 403);
   }

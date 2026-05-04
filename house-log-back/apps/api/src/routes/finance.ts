@@ -24,7 +24,7 @@ finance.get('/dre', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
 
@@ -93,7 +93,7 @@ finance.get('/cashflow', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
 
@@ -147,7 +147,7 @@ finance.post('/pix', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
 
@@ -199,7 +199,7 @@ finance.get('/pix', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
   const rows = await db
@@ -234,7 +234,7 @@ finance.post('/pix/:id/mark-paid', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
   const id = c.req.param('id')!;
@@ -258,7 +258,7 @@ finance.post('/nfe', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role))) {
+  if (!(await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole')))) {
     return err(c, 'Sem acesso', 'FORBIDDEN', 403);
   }
 
