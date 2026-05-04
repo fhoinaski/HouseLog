@@ -9,9 +9,13 @@ import {
   FileCheck2,
   FolderKanban,
   PackageCheck,
+  Pencil,
+  Plus,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
@@ -26,8 +30,10 @@ import {
   type HandoverPackage,
   type Renovation,
   type Warranty,
+  type WarrantyCreateInput,
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { WarrantyFormDialog } from './warranty-form-dialog';
 
 const WARRANTY_TYPE_LABELS: Record<string, string> = {
   service: 'Servico',
@@ -153,9 +159,64 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
   const { data, error, isLoading, mutate } = useSWR(['warranties', propertyId], () =>
     warrantiesApi.list(propertyId)
   );
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const warranties = data?.warranties ?? [];
   const activeCount = warranties.filter((warranty) => warranty.status === 'active').length;
   const expiredCount = warranties.filter((warranty) => warranty.status === 'expired').length;
+
+  function openCreate() {
+    setEditingWarranty(null);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(warranty: Warranty) {
+    setEditingWarranty(warranty);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  async function submitWarranty(input: WarrantyCreateInput) {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      if (editingWarranty) {
+        await warrantiesApi.update(propertyId, editingWarranty.id, input);
+        toast.success('Garantia atualizada.');
+      } else {
+        await warrantiesApi.create(propertyId, input);
+        toast.success('Garantia criada.');
+      }
+      await mutate();
+      setFormOpen(false);
+      setEditingWarranty(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar a garantia.';
+      setFormError(message);
+      toast.error('Erro ao salvar garantia', { description: message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deleteWarranty(warranty: Warranty) {
+    if (!window.confirm(`Excluir "${warranty.title}" do prontuario de garantias?`)) return;
+    setDeletingId(warranty.id);
+    try {
+      await warrantiesApi.delete(propertyId, warranty.id);
+      await mutate();
+      toast.success('Garantia excluida.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir a garantia.';
+      toast.error('Erro ao excluir garantia', { description: message });
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
@@ -163,6 +224,12 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
         eyebrow="Prontuario tecnico"
         title="Garantias"
         description="Garantias de servicos, equipamentos, materiais e acabamentos vinculadas ao historico tecnico do imovel."
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Nova garantia
+          </Button>
+        }
       />
 
       <PageSection title="Leitura de garantias" description="Controle inicial read-only para prazos, fornecedores e cobertura." tone="strong" density="compact">
@@ -186,20 +253,59 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
           icon={<ShieldCheck className="h-6 w-6" aria-hidden="true" />}
           title="Nenhuma garantia registrada ainda"
           description="Quando garantias tecnicas forem cadastradas, elas aparecerao aqui com prazos, fornecedor e cobertura resumida."
+          actions={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Criar primeira garantia
+            </Button>
+          }
           tone="subtle"
           density="spacious"
         />
       )}
       {!isLoading && !error && warranties.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2">
-          {warranties.map((warranty) => <WarrantyCard key={warranty.id} warranty={warranty} />)}
+          {warranties.map((warranty) => (
+            <WarrantyCard
+              key={warranty.id}
+              warranty={warranty}
+              deleting={deletingId === warranty.id}
+              onEdit={openEdit}
+              onDelete={deleteWarranty}
+            />
+          ))}
         </div>
       )}
+
+      <WarrantyFormDialog
+        open={formOpen}
+        warranty={editingWarranty}
+        submitting={submitting}
+        error={formError}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) {
+            setEditingWarranty(null);
+            setFormError(null);
+          }
+        }}
+        onSubmit={submitWarranty}
+      />
     </div>
   );
 }
 
-function WarrantyCard({ warranty }: { warranty: Warranty }) {
+function WarrantyCard({
+  warranty,
+  deleting,
+  onEdit,
+  onDelete,
+}: {
+  warranty: Warranty;
+  deleting: boolean;
+  onEdit: (warranty: Warranty) => void;
+  onDelete: (warranty: Warranty) => void;
+}) {
   return (
     <article className="rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 shadow-[var(--shadow-card)]">
       <div className="flex items-start justify-between gap-3">
@@ -228,6 +334,23 @@ function WarrantyCard({ warranty }: { warranty: Warranty }) {
           </dd>
         </div>
       </dl>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => onEdit(warranty)}>
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+          Editar
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-text-danger hover:bg-bg-danger"
+          loading={deleting}
+          onClick={() => void onDelete(warranty)}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          Excluir
+        </Button>
+      </div>
     </article>
   );
 }
