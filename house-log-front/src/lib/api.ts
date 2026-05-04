@@ -86,6 +86,34 @@ export type {
   UpdateTechnicalSystemInput,
 } from '@/lib/api/technical-systems';
 
+// Premium history
+export { warrantiesApi } from '@/lib/api/warranties';
+export type {
+  Warranty,
+  WarrantyCreateInput,
+  WarrantyFilters,
+  WarrantyUpdateInput,
+} from '@/lib/api/warranties';
+export { renovationsApi } from '@/lib/api/renovations';
+export type {
+  Renovation,
+  RenovationCreateInput,
+  RenovationFilters,
+  RenovationUpdateInput,
+} from '@/lib/api/renovations';
+export { handoverChecklistApi, handoverPackagesApi } from '@/lib/api/handover';
+export type {
+  HandoverChecklistItem,
+  HandoverChecklistItemCreateInput,
+  HandoverChecklistItemFilters,
+  HandoverChecklistItemStatusInput,
+  HandoverChecklistItemUpdateInput,
+  HandoverPackage,
+  HandoverPackageCreateInput,
+  HandoverPackageFilters,
+  HandoverPackageUpdateInput,
+} from '@/lib/api/handover';
+
 // Inventory
 export { inventoryApi } from '@/lib/api/inventory';
 export type { InventoryItem, InventoryMutationInput, InventoryCategory, ColorEntry } from '@/lib/api/inventory';
