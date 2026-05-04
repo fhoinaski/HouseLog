@@ -13,3 +13,6 @@ export * from './schemas/credential';
 export * from './schemas/provider';
 export * from './schemas/technical-system';
 export * from './schemas/technical-point';
+export * from './schemas/warranty';
+export * from './schemas/renovation';
+export * from './schemas/handover';

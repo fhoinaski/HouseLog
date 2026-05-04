@@ -28,6 +28,10 @@ import timeline from './routes/timeline';
 import technicalSystems from './routes/technical-systems';
 import technicalPoints from './routes/technical-points';
 import auditLogRoute from './routes/audit-log';
+import warranties from './routes/warranties';
+import renovations from './routes/renovations';
+import handoverPackages from './routes/handover-packages';
+import handoverChecklistItems from './routes/handover-checklist-items';
 import { requestLogger, reportError, log } from './lib/logger';
 import { generateThumbnails } from './lib/image';
 import { pushToUser } from './lib/webpush';
@@ -122,6 +126,10 @@ api.route('/properties/:propertyId/finance',     finance);
 api.route('/properties/:propertyId/timeline',    timeline);
 api.route('/properties/:propertyId/technical-systems', technicalSystems);
 api.route('/properties/:propertyId/technical-points', technicalPoints);
+api.route('/properties/:propertyId/warranties', warranties);
+api.route('/properties/:propertyId/renovations', renovations);
+api.route('/properties/:propertyId/handover-packages/:packageId/items', handoverChecklistItems);
+api.route('/properties/:propertyId/handover-packages', handoverPackages);
 
 // Reports: /api/v1/properties/:propertyId/report/...
 api.route('/properties/:propertyId/report', reports);
