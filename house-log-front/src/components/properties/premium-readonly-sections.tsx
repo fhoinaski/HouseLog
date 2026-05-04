@@ -1,0 +1,523 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import useSWR from 'swr';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardCheck,
+  FileCheck2,
+  FolderKanban,
+  PackageCheck,
+  ShieldAlert,
+  ShieldCheck,
+} from 'lucide-react';
+import { PageHeader } from '@/components/layout/page-header';
+import { PageSection } from '@/components/layout/page-section';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import {
+  handoverChecklistApi,
+  handoverPackagesApi,
+  renovationsApi,
+  warrantiesApi,
+  type HandoverChecklistItem,
+  type HandoverPackage,
+  type Renovation,
+  type Warranty,
+} from '@/lib/api';
+import { cn, formatCurrency, formatDate } from '@/lib/utils';
+
+const WARRANTY_TYPE_LABELS: Record<string, string> = {
+  service: 'Servico',
+  equipment: 'Equipamento',
+  material: 'Material',
+  structural: 'Estrutural',
+  appliance: 'Eletro',
+  finish: 'Acabamento',
+  other: 'Outro',
+};
+
+const WARRANTY_STATUS_LABELS: Record<string, string> = {
+  active: 'Ativa',
+  expired: 'Vencida',
+  claimed: 'Acionada',
+  void: 'Invalidada',
+};
+
+const RENOVATION_CATEGORY_LABELS: Record<string, string> = {
+  structural: 'Estrutural',
+  electrical: 'Eletrica',
+  plumbing: 'Hidraulica',
+  finishing: 'Acabamento',
+  layout: 'Layout',
+  roofing: 'Cobertura',
+  waterproofing: 'Impermeabilizacao',
+  painting: 'Pintura',
+  flooring: 'Piso',
+  other: 'Outro',
+};
+
+const RENOVATION_STATUS_LABELS: Record<string, string> = {
+  planned: 'Planejada',
+  in_progress: 'Em andamento',
+  completed: 'Concluida',
+  cancelled: 'Cancelada',
+};
+
+const HANDOVER_TYPE_LABELS: Record<string, string> = {
+  handover: 'Entrega tecnica',
+  move_in: 'Entrada',
+  move_out: 'Saida',
+  inspection: 'Vistoria',
+};
+
+const HANDOVER_STATUS_LABELS: Record<string, string> = {
+  draft: 'Rascunho',
+  in_review: 'Em revisao',
+  approved: 'Aprovado',
+  completed: 'Concluido',
+  archived: 'Arquivado',
+};
+
+const CHECKLIST_CATEGORY_LABELS: Record<string, string> = {
+  keys: 'Chaves',
+  documents: 'Documentos',
+  utilities: 'Utilidades',
+  inventory: 'Inventario',
+  cleaning: 'Limpeza',
+  maintenance: 'Manutencao',
+  safety: 'Seguranca',
+  general: 'Geral',
+};
+
+const CHECKLIST_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendente',
+  done: 'Concluido',
+  issue: 'Pendencia',
+  not_applicable: 'Nao aplicavel',
+};
+
+const STATUS_TONE: Record<string, string> = {
+  active: 'bg-bg-success text-text-success',
+  expired: 'bg-bg-subtle text-text-secondary',
+  claimed: 'bg-bg-warning text-text-warning',
+  void: 'bg-bg-danger text-text-danger',
+  planned: 'bg-bg-subtle text-text-secondary',
+  in_progress: 'bg-bg-accent-subtle text-text-accent',
+  completed: 'bg-bg-success text-text-success',
+  cancelled: 'bg-bg-danger text-text-danger',
+  draft: 'bg-bg-subtle text-text-secondary',
+  in_review: 'bg-bg-warning text-text-warning',
+  approved: 'bg-bg-accent-subtle text-text-accent',
+  archived: 'bg-bg-subtle text-text-tertiary',
+  pending: 'bg-bg-subtle text-text-secondary',
+  done: 'bg-bg-success text-text-success',
+  issue: 'bg-bg-danger text-text-danger',
+  not_applicable: 'bg-bg-subtle text-text-tertiary',
+};
+
+function StatusBadge({ status, label }: { status: string; label: string }) {
+  return <Badge className={cn('border-0 text-xs', STATUS_TONE[status] ?? 'bg-bg-subtle text-text-secondary')}>{label}</Badge>;
+}
+
+function LoadingGrid() {
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {[...Array(4)].map((_, index) => (
+        <div key={index} className="hl-skeleton h-40 rounded-[var(--radius-xl)]" />
+      ))}
+    </div>
+  );
+}
+
+function ErrorState({ title, description, onRetry }: { title: string; description?: string; onRetry: () => void }) {
+  return (
+    <EmptyState
+      icon={<ShieldAlert className="h-6 w-6" aria-hidden="true" />}
+      title={title}
+      description={description ?? 'Tente novamente em instantes.'}
+      actions={<Button variant="outline" onClick={onRetry}>Tentar novamente</Button>}
+      tone="strong"
+      density="spacious"
+    />
+  );
+}
+
+function SummaryText({ children }: { children: React.ReactNode }) {
+  return <p className="line-clamp-2 text-sm leading-6 text-text-secondary">{children}</p>;
+}
+
+export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string }) {
+  const { data, error, isLoading, mutate } = useSWR(['warranties', propertyId], () =>
+    warrantiesApi.list(propertyId)
+  );
+  const warranties = data?.warranties ?? [];
+  const activeCount = warranties.filter((warranty) => warranty.status === 'active').length;
+  const expiredCount = warranties.filter((warranty) => warranty.status === 'expired').length;
+
+  return (
+    <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+      <PageHeader
+        eyebrow="Prontuario tecnico"
+        title="Garantias"
+        description="Garantias de servicos, equipamentos, materiais e acabamentos vinculadas ao historico tecnico do imovel."
+      />
+
+      <PageSection title="Leitura de garantias" description="Controle inicial read-only para prazos, fornecedores e cobertura." tone="strong" density="compact">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <MetricBox label="Garantias" value={warranties.length} />
+          <MetricBox label="Ativas" value={activeCount} tone="success" />
+          <MetricBox label="Vencidas" value={expiredCount} tone={expiredCount > 0 ? 'warning' : 'default'} />
+        </div>
+      </PageSection>
+
+      {isLoading && <LoadingGrid />}
+      {!isLoading && error && (
+        <ErrorState
+          title="Nao foi possivel carregar as garantias"
+          description={error instanceof Error ? error.message : undefined}
+          onRetry={() => void mutate()}
+        />
+      )}
+      {!isLoading && !error && warranties.length === 0 && (
+        <EmptyState
+          icon={<ShieldCheck className="h-6 w-6" aria-hidden="true" />}
+          title="Nenhuma garantia registrada ainda"
+          description="Quando garantias tecnicas forem cadastradas, elas aparecerao aqui com prazos, fornecedor e cobertura resumida."
+          tone="subtle"
+          density="spacious"
+        />
+      )}
+      {!isLoading && !error && warranties.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {warranties.map((warranty) => <WarrantyCard key={warranty.id} warranty={warranty} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WarrantyCard({ warranty }: { warranty: Warranty }) {
+  return (
+    <article className="rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 shadow-[var(--shadow-card)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={warranty.status} label={WARRANTY_STATUS_LABELS[warranty.status] ?? warranty.status} />
+            <span className="text-xs font-medium text-text-tertiary">
+              {WARRANTY_TYPE_LABELS[warranty.warranty_type] ?? warranty.warranty_type}
+            </span>
+          </div>
+          <h2 className="mt-3 text-base font-medium leading-tight text-text-primary">{warranty.title}</h2>
+        </div>
+        <ShieldCheck className="h-5 w-5 shrink-0 text-text-success" aria-hidden="true" />
+      </div>
+
+      <dl className="mt-4 grid gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <InfoCell label="Inicio" value={formatDate(warranty.start_date)} />
+          <InfoCell label="Fim" value={formatDate(warranty.end_date)} />
+        </div>
+        <InfoCell label="Fornecedor" value={warranty.provider_name || 'Nao informado'} />
+        <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2">
+          <dt className="text-xs text-text-tertiary">Cobertura</dt>
+          <dd className="mt-1">
+            <SummaryText>{warranty.coverage || warranty.description || 'Cobertura nao informada.'}</SummaryText>
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
+export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string }) {
+  const { data, error, isLoading, mutate } = useSWR(['renovations', propertyId], () =>
+    renovationsApi.list(propertyId)
+  );
+  const renovations = data?.renovations ?? [];
+  const completedCount = renovations.filter((renovation) => renovation.status === 'completed').length;
+  const inProgressCount = renovations.filter((renovation) => renovation.status === 'in_progress').length;
+  const totalCost = renovations.reduce((sum, renovation) => sum + (renovation.cost ?? 0), 0);
+
+  return (
+    <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+      <PageHeader
+        eyebrow="Historico premium"
+        title="Reformas"
+        description="Registro read-only de reformas e intervencoes tecnicas que alteram a memoria tecnica do imovel."
+      />
+
+      <PageSection title="Leitura das intervencoes" description="Resumo operacional de status, custo e execucao." tone="strong" density="compact">
+        <div className="grid gap-2 sm:grid-cols-4">
+          <MetricBox label="Reformas" value={renovations.length} />
+          <MetricBox label="Em andamento" value={inProgressCount} tone={inProgressCount > 0 ? 'accent' : 'default'} />
+          <MetricBox label="Concluidas" value={completedCount} tone="success" />
+          <MetricBox label="Custo registrado" value={formatCurrency(totalCost)} />
+        </div>
+      </PageSection>
+
+      {isLoading && <LoadingGrid />}
+      {!isLoading && error && (
+        <ErrorState
+          title="Nao foi possivel carregar as reformas"
+          description={error instanceof Error ? error.message : undefined}
+          onRetry={() => void mutate()}
+        />
+      )}
+      {!isLoading && !error && renovations.length === 0 && (
+        <EmptyState
+          icon={<FolderKanban className="h-6 w-6" aria-hidden="true" />}
+          title="Nenhuma reforma registrada ainda"
+          description="Reformas, obras e intervencoes tecnicas aparecerao aqui com periodo, contratado, categoria e custo."
+          tone="subtle"
+          density="spacious"
+        />
+      )}
+      {!isLoading && !error && renovations.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {renovations.map((renovation) => <RenovationCard key={renovation.id} renovation={renovation} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RenovationCard({ renovation }: { renovation: Renovation }) {
+  return (
+    <article className="rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 shadow-[var(--shadow-card)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={renovation.status} label={RENOVATION_STATUS_LABELS[renovation.status] ?? renovation.status} />
+            <span className="text-xs font-medium text-text-tertiary">
+              {RENOVATION_CATEGORY_LABELS[renovation.category] ?? renovation.category}
+            </span>
+          </div>
+          <h2 className="mt-3 text-base font-medium leading-tight text-text-primary">{renovation.title}</h2>
+          {renovation.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-text-secondary">{renovation.description}</p>}
+        </div>
+        <FolderKanban className="h-5 w-5 shrink-0 text-text-accent" aria-hidden="true" />
+      </div>
+
+      <dl className="mt-4 grid gap-2 text-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <InfoCell label="Inicio" value={formatDate(renovation.started_at)} />
+          <InfoCell label="Conclusao" value={formatDate(renovation.completed_at)} />
+        </div>
+        <InfoCell label="Contratado" value={renovation.contractor_name || 'Nao informado'} />
+        <InfoCell label="Custo" value={renovation.cost != null ? formatCurrency(renovation.cost) : 'Nao informado'} />
+      </dl>
+    </article>
+  );
+}
+
+export function PropertyHandoverReadonly({ propertyId }: { propertyId: string }) {
+  const { data, error, isLoading, mutate } = useSWR(['handover-packages', propertyId], () =>
+    handoverPackagesApi.list(propertyId)
+  );
+  const packages = useMemo(() => data?.packages ?? [], [data?.packages]);
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const selectedPackage = packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
+
+  return (
+    <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+      <PageHeader
+        eyebrow="Dossie tecnico"
+        title="Handover"
+        description="Pacotes de entrega tecnica e checklist read-only para vistoria, pendencias e validacao do imovel."
+      />
+
+      {isLoading && <LoadingGrid />}
+      {!isLoading && error && (
+        <ErrorState
+          title="Nao foi possivel carregar os dossies"
+          description={error instanceof Error ? error.message : undefined}
+          onRetry={() => void mutate()}
+        />
+      )}
+      {!isLoading && !error && packages.length === 0 && (
+        <EmptyState
+          icon={<ClipboardCheck className="h-6 w-6" aria-hidden="true" />}
+          title="Nenhum pacote de entrega registrado ainda"
+          description="Quando houver dossies de entrega, vistoria, entrada ou saida, eles aparecerao aqui com progresso do checklist."
+          tone="subtle"
+          density="spacious"
+        />
+      )}
+      {!isLoading && !error && packages.length > 0 && (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <PageSection title="Pacotes" description="Selecione um dossie para ver o checklist." tone="surface" density="compact">
+            <div className="space-y-2">
+              {packages.map((pkg) => (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  onClick={() => setSelectedPackageId(pkg.id)}
+                  className={cn(
+                    'w-full rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 text-left transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+                    selectedPackage?.id === pkg.id && 'border-border-focus bg-bg-accent-subtle'
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge status={pkg.status} label={HANDOVER_STATUS_LABELS[pkg.status] ?? pkg.status} />
+                        <span className="text-xs font-medium text-text-tertiary">{HANDOVER_TYPE_LABELS[pkg.type] ?? pkg.type}</span>
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-text-primary">{pkg.title}</p>
+                      {pkg.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{pkg.description}</p>}
+                    </div>
+                    <span className="shrink-0 text-xs text-text-tertiary">v{pkg.version}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </PageSection>
+
+          {selectedPackage && <ChecklistPanel propertyId={propertyId} handoverPackage={selectedPackage} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; handoverPackage: HandoverPackage }) {
+  const { data, error, isLoading, mutate } = useSWR(['handover-checklist', propertyId, handoverPackage.id], () =>
+    handoverChecklistApi.list(propertyId, handoverPackage.id)
+  );
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
+  const progress = useMemo(() => calculateChecklistProgress(items), [items]);
+
+  return (
+    <PageSection
+      title={handoverPackage.title}
+      description="Progresso do checklist de entrega tecnica."
+      tone="strong"
+      density="compact"
+    >
+      {isLoading && (
+        <div className="space-y-3">
+          <div className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
+          {[...Array(4)].map((_, index) => (
+            <div key={index} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
+          ))}
+        </div>
+      )}
+      {!isLoading && error && (
+        <ErrorState
+          title="Nao foi possivel carregar o checklist"
+          description={error instanceof Error ? error.message : undefined}
+          onRetry={() => void mutate()}
+        />
+      )}
+      {!isLoading && !error && (
+        <div className="space-y-4">
+          <div className="grid gap-2 sm:grid-cols-4">
+            <MetricBox label="Itens" value={progress.total} />
+            <MetricBox label="Concluidos" value={progress.done} tone="success" />
+            <MetricBox label="Pendencias" value={progress.issue} tone={progress.issue > 0 ? 'danger' : 'default'} />
+            <MetricBox label="Progresso" value={`${progress.percent}%`} tone="accent" />
+          </div>
+
+          <div className="h-2 overflow-hidden rounded-full bg-bg-subtle">
+            <div className="h-full rounded-full bg-bg-accent-subtle" style={{ width: `${progress.percent}%` }} />
+          </div>
+
+          {items.length === 0 ? (
+            <EmptyState
+              icon={<FileCheck2 className="h-6 w-6" aria-hidden="true" />}
+              title="Checklist ainda sem itens"
+              description="Os itens de vistoria, evidencias e pendencias deste pacote aparecerao aqui quando forem cadastrados."
+              tone="subtle"
+              density="spacious"
+            />
+          ) : (
+            <div className="space-y-2">
+              {items.map((item) => <ChecklistItemRow key={item.id} item={item} />)}
+            </div>
+          )}
+        </div>
+      )}
+    </PageSection>
+  );
+}
+
+function ChecklistItemRow({ item }: { item: HandoverChecklistItem }) {
+  return (
+    <article className="rounded-[var(--radius-lg)] border border-border-subtle bg-bg-surface px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={item.status} label={CHECKLIST_STATUS_LABELS[item.status] ?? item.status} />
+            <span className="text-xs text-text-tertiary">{CHECKLIST_CATEGORY_LABELS[item.category] ?? item.category}</span>
+            {item.required && <span className="text-xs font-medium text-text-warning">Obrigatorio</span>}
+          </div>
+          <p className="mt-2 text-sm font-medium text-text-primary">{item.title}</p>
+          {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{item.description}</p>}
+          {item.notes && <p className="mt-2 text-xs leading-5 text-text-secondary">Notas: {item.notes}</p>}
+        </div>
+        {item.status === 'issue' ? (
+          <AlertTriangle className="h-4 w-4 shrink-0 text-text-danger" aria-hidden="true" />
+        ) : item.status === 'done' ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-text-success" aria-hidden="true" />
+        ) : (
+          <PackageCheck className="h-4 w-4 shrink-0 text-text-tertiary" aria-hidden="true" />
+        )}
+      </div>
+    </article>
+  );
+}
+
+function MetricBox({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: 'default' | 'success' | 'warning' | 'danger' | 'accent';
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-3',
+        tone === 'success' && 'bg-bg-success',
+        tone === 'warning' && 'bg-bg-warning',
+        tone === 'danger' && 'bg-bg-danger',
+        tone === 'accent' && 'bg-bg-accent-subtle'
+      )}
+    >
+      <p className="text-xs text-text-tertiary">{label}</p>
+      <p
+        className={cn(
+          'mt-1 text-2xl font-light tabular-nums text-text-primary',
+          tone === 'success' && 'text-text-success',
+          tone === 'warning' && 'text-text-warning',
+          tone === 'danger' && 'text-text-danger',
+          tone === 'accent' && 'text-text-accent'
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2">
+      <dt className="text-xs text-text-tertiary">{label}</dt>
+      <dd className="mt-0.5 text-text-secondary">{value}</dd>
+    </div>
+  );
+}
+
+function calculateChecklistProgress(items: HandoverChecklistItem[]) {
+  const total = items.length;
+  const done = items.filter((item) => item.status === 'done').length;
+  const issue = items.filter((item) => item.status === 'issue').length;
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+  return { total, done, issue, percent };
+}

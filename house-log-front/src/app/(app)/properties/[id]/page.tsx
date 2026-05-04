@@ -9,7 +9,9 @@ import {
   BarChart3,
   Building2,
   CheckCircle2,
+  ClipboardCheck,
   FileText,
+  FolderKanban,
   GitBranch,
   Home,
   MapPin,
@@ -639,6 +641,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                   { href: `/properties/${id}/documents`,   icon: FileText,  label: 'Documentos', tone: 'muted'    as const },
                   { href: `/properties/${id}/financial`,   icon: BarChart3, label: 'Financeiro', tone: 'success'  as const },
                   { href: `/properties/${id}/report`,      icon: Activity,  label: 'Relatório',  tone: 'accent'   as const },
+                  { href: `/properties/${id}/warranties`,  icon: ShieldCheck, label: 'Garantias', tone: 'success' as const },
+                  { href: `/properties/${id}/renovations`, icon: FolderKanban, label: 'Reformas', tone: 'accent' as const },
+                  { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover', tone: 'muted' as const },
                 ].map(({ href, icon, label, tone }) => (
                   <ActionTile
                     key={href}
