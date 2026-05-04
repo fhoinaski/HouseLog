@@ -23,5 +23,6 @@ export const documentCreateSchema = z.object({
 
 export const documentUpdateSchema = documentCreateSchema.partial();
 
+export type DocumentType = z.infer<typeof documentTypeSchema>;
 export type DocumentCreateInput = z.infer<typeof documentCreateSchema>;
 export type DocumentUpdateInput = z.infer<typeof documentUpdateSchema>;

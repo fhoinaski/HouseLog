@@ -22,5 +22,6 @@ export const roomCreateSchema = z.object({
 
 export const roomUpdateSchema = roomCreateSchema.partial();
 
+export type RoomType = z.infer<typeof roomTypeSchema>;
 export type RoomCreateInput = z.infer<typeof roomCreateSchema>;
 export type RoomUpdateInput = z.infer<typeof roomUpdateSchema>;

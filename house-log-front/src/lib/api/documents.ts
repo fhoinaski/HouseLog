@@ -1,11 +1,26 @@
 import { BASE, getToken, normalizeApiMediaUrls, qs, request } from './_core';
-import type { CursorPage, Document } from './_core';
+import type { CursorPage, Document, DocumentType } from './_core';
+
+export type { DocumentType };
+
+// Meta fields accepted by the upload endpoint.
+// Excludes server-generated fields (id, property_id, file_url, ocr_data, created_by, created_at).
+// type is string here because form values are untyped strings at the call site.
+export type DocumentUploadMeta = {
+  type: string;
+  title: string;
+  service_id?: string;
+  vendor_cnpj?: string;
+  amount?: number;
+  issue_date?: string;
+  expiry_date?: string;
+};
 
 export const documentsApi = {
   list: (propertyId: string, params?: { type?: string; cursor?: string }) =>
     request<CursorPage<Document>>(`/properties/${propertyId}/documents${qs(params)}`),
 
-  upload: (propertyId: string, file: File, meta: Partial<Document> & { type: string; title: string }) => {
+  upload: (propertyId: string, file: File, meta: DocumentUploadMeta) => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('meta', JSON.stringify(meta));
