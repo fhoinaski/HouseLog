@@ -326,6 +326,73 @@ export const documents = sqliteTable('documents', {
   propertyIdx: index('idx_documents_property').on(table.propertyId),
 }));
 
+export const documentIngestionJobs = sqliteTable('document_ingestion_jobs', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
+  propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  status: text('status', {
+    enum: ['queued', 'processing', 'needs_review', 'completed', 'failed', 'cancelled'],
+  }).notNull().default('queued'),
+  provider: text('provider', {
+    enum: ['cloudflare_ai', 'openai', 'anthropic', 'gemini', 'manual', 'none'],
+  }).notNull().default('none'),
+  modelName: text('model_name'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  startedAt: text('started_at'),
+  finishedAt: text('finished_at'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => ({
+  tenantIdx: index('idx_document_ingestion_jobs_tenant').on(table.tenantId),
+  propertyIdx: index('idx_document_ingestion_jobs_property').on(table.propertyId),
+  documentIdx: index('idx_document_ingestion_jobs_document').on(table.documentId),
+  statusIdx: index('idx_document_ingestion_jobs_status').on(table.status),
+}));
+
+export const documentExtractions = sqliteTable('document_extractions', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
+  propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  jobId: text('job_id').notNull().references(() => documentIngestionJobs.id, { onDelete: 'cascade' }),
+  rawText: text('raw_text'),
+  rawJson: text('raw_json', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+  normalizedJson: text('normalized_json', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+  confidenceScore: real('confidence_score'),
+  schemaVersion: text('schema_version').notNull().default('v1'),
+  modelName: text('model_name'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => ({
+  tenantIdx: index('idx_document_extractions_tenant').on(table.tenantId),
+  propertyIdx: index('idx_document_extractions_property').on(table.propertyId),
+  documentIdx: index('idx_document_extractions_document').on(table.documentId),
+  jobIdx: index('idx_document_extractions_job').on(table.jobId),
+}));
+
+export const documentExtractionReviews = sqliteTable('document_extraction_reviews', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
+  propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  extractionId: text('extraction_id').notNull().references(() => documentExtractions.id, { onDelete: 'cascade' }),
+  status: text('status', {
+    enum: ['pending', 'approved', 'rejected', 'partially_applied'],
+  }).notNull().default('pending'),
+  reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: text('reviewed_at'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => ({
+  tenantIdx: index('idx_document_extraction_reviews_tenant').on(table.tenantId),
+  propertyIdx: index('idx_document_extraction_reviews_property').on(table.propertyId),
+  documentIdx: index('idx_document_extraction_reviews_document').on(table.documentId),
+  extractionIdx: index('idx_document_extraction_reviews_extraction').on(table.extractionId),
+  statusIdx: index('idx_document_extraction_reviews_status').on(table.status),
+}));
+
 export const warranties = sqliteTable('warranties', {
   id: text('id').primaryKey(),
   tenantId: text('tenant_id').notNull().references(() => tenants.id),
@@ -831,6 +898,65 @@ export const nfeImports = sqliteTable('nfe_imports', {
 
 export const propertiesRelations = relations(properties, ({ many }) => ({
   serviceRequests: many(serviceRequests),
+}));
+
+export const documentIngestionJobsRelations = relations(documentIngestionJobs, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [documentIngestionJobs.tenantId],
+    references: [tenants.id],
+  }),
+  property: one(properties, {
+    fields: [documentIngestionJobs.propertyId],
+    references: [properties.id],
+  }),
+  document: one(documents, {
+    fields: [documentIngestionJobs.documentId],
+    references: [documents.id],
+  }),
+  extractions: many(documentExtractions),
+}));
+
+export const documentExtractionsRelations = relations(documentExtractions, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [documentExtractions.tenantId],
+    references: [tenants.id],
+  }),
+  property: one(properties, {
+    fields: [documentExtractions.propertyId],
+    references: [properties.id],
+  }),
+  document: one(documents, {
+    fields: [documentExtractions.documentId],
+    references: [documents.id],
+  }),
+  job: one(documentIngestionJobs, {
+    fields: [documentExtractions.jobId],
+    references: [documentIngestionJobs.id],
+  }),
+  reviews: many(documentExtractionReviews),
+}));
+
+export const documentExtractionReviewsRelations = relations(documentExtractionReviews, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [documentExtractionReviews.tenantId],
+    references: [tenants.id],
+  }),
+  property: one(properties, {
+    fields: [documentExtractionReviews.propertyId],
+    references: [properties.id],
+  }),
+  document: one(documents, {
+    fields: [documentExtractionReviews.documentId],
+    references: [documents.id],
+  }),
+  extraction: one(documentExtractions, {
+    fields: [documentExtractionReviews.extractionId],
+    references: [documentExtractions.id],
+  }),
+  reviewer: one(users, {
+    fields: [documentExtractionReviews.reviewedBy],
+    references: [users.id],
+  }),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({

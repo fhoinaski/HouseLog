@@ -6,6 +6,8 @@ export * from './schemas/service-order';
 export * from './schemas/bid';
 export * from './schemas/message';
 export * from './schemas/document';
+export * from './schemas/document-extraction';
+export * from './schemas/document-ingestion';
 export * from './schemas/finance';
 export * from './schemas/inventory';
 export * from './schemas/maintenance';

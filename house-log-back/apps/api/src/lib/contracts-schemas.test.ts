@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   roomCreateSchema, roomUpdateSchema,
   documentCreateSchema,
+  PropertyDocumentExtractionSchema,
+  SourceEvidenceSchema,
   expenseCategorySchema, expenseCreateSchema,
   inventoryCategorySchema, inventoryCreateSchema,
   maintenanceFrequencySchema, maintenanceCreateSchema,
@@ -15,6 +17,13 @@ import {
   handoverChecklistItemStatusSchema,
   handoverChecklistItemStatusUpdateSchema,
   handoverChecklistItemUpdateSchema,
+  CreateDocumentIngestionJobInputSchema,
+  ListDocumentIngestionJobsQuerySchema,
+  ReviewDocumentExtractionInputSchema,
+  DocumentIngestionJobStatusSchema,
+  DocumentIngestionProviderSchema,
+  DocumentExtractionDetailSchema,
+  DocumentExtractionReviewStatusSchema,
 } from '@houselog/contracts';
 
 // ── room ─────────────────────────────────────────────────────────────────────
@@ -209,6 +218,126 @@ describe('credentialCreateSchema', () => {
 
   it('rejeita integration_type inválido', () => {
     expect(credentialCreateSchema.safeParse({ label: 'X', secret: 'y', integration_type: 'ajax' }).success).toBe(false);
+  });
+});
+
+describe('PropertyDocumentExtractionSchema', () => {
+  const validExtraction = {
+    documentType: 'manual',
+    confidenceScore: 0.91,
+    schemaVersion: 'v1',
+    technicalSystems: [
+      {
+        type: 'electrical',
+        name: 'Quadro geral',
+        confidenceScore: 0.84,
+      },
+    ],
+    warranties: [
+      {
+        title: 'Garantia do pressurizador',
+        warrantyType: 'equipment',
+        confidenceScore: 0.77,
+      },
+    ],
+    inventoryItems: [
+      {
+        category: 'plumbing',
+        name: 'Registro de esfera',
+        confidenceScore: 0.72,
+      },
+    ],
+    maintenanceRecommendations: [
+      {
+        systemType: 'plumbing',
+        title: 'Revisar pressurizacao',
+        recommendedIntervalMonths: 12,
+        priority: 'medium',
+        confidenceScore: 0.7,
+      },
+    ],
+    detectedDates: [
+      {
+        label: 'Entrega tecnica',
+        value: '2025-03-10',
+        confidenceScore: 0.8,
+      },
+    ],
+    evidence: [
+      {
+        pageNumber: 4,
+        text: 'Revisar pressurizador anualmente.',
+        confidenceScore: 0.88,
+        fieldPath: 'maintenanceRecommendations.0.title',
+      },
+    ],
+  };
+
+  it('aceita extracao normalizada e aplica defaults em arrays', () => {
+    const result = PropertyDocumentExtractionSchema.safeParse({
+      documentType: 'inspection_report',
+      confidenceScore: 0.9,
+      schemaVersion: 'v1',
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.technicalSystems).toEqual([]);
+      expect(result.data.warranties).toEqual([]);
+      expect(result.data.inventoryItems).toEqual([]);
+      expect(result.data.maintenanceRecommendations).toEqual([]);
+      expect(result.data.detectedDates).toEqual([]);
+      expect(result.data.warnings).toEqual([]);
+      expect(result.data.evidence).toEqual([]);
+    }
+  });
+
+  it('reutiliza enums compativeis com sistemas, garantias e inventario', () => {
+    expect(PropertyDocumentExtractionSchema.safeParse(validExtraction).success).toBe(true);
+    expect(PropertyDocumentExtractionSchema.safeParse({
+      ...validExtraction,
+      technicalSystems: [{ type: 'unknown', name: 'X', confidenceScore: 0.5 }],
+    }).success).toBe(false);
+    expect(PropertyDocumentExtractionSchema.safeParse({
+      ...validExtraction,
+      warranties: [{ title: 'X', warrantyType: 'insurance', confidenceScore: 0.5 }],
+    }).success).toBe(false);
+    expect(PropertyDocumentExtractionSchema.safeParse({
+      ...validExtraction,
+      inventoryItems: [{ category: 'furniture', name: 'X', confidenceScore: 0.5 }],
+    }).success).toBe(false);
+  });
+
+  it('rejeita confidenceScore fora de 0 a 1', () => {
+    expect(SourceEvidenceSchema.safeParse({ text: 'Trecho', confidenceScore: 1.1 }).success).toBe(false);
+    expect(PropertyDocumentExtractionSchema.safeParse({
+      documentType: 'manual',
+      confidenceScore: -0.1,
+      schemaVersion: 'v1',
+    }).success).toBe(false);
+  });
+
+  it('rejeita campos server-only e chaves privadas por modo estrito', () => {
+    const blockedFields = [
+      'tenantId',
+      'propertyId',
+      'documentId',
+      'jobId',
+      'createdBy',
+      'createdAt',
+      'updatedAt',
+      'deletedAt',
+      'r2Key',
+    ];
+
+    for (const field of blockedFields) {
+      expect(PropertyDocumentExtractionSchema.safeParse({
+        documentType: 'manual',
+        confidenceScore: 0.9,
+        schemaVersion: 'v1',
+        [field]: 'server-only',
+      }).success).toBe(false);
+    }
   });
 });
 
@@ -470,5 +599,240 @@ describe('handoverChecklistItemCreateSchema', () => {
 
   it('handoverChecklistItemStatusUpdateSchema rejeita status invalido', () => {
     expect(handoverChecklistItemStatusUpdateSchema.safeParse({ status: 'approved' }).success).toBe(false);
+  });
+});
+
+// ── document ingestion jobs ───────────────────────────────────────────────────
+
+describe('CreateDocumentIngestionJobInputSchema', () => {
+  it('aceita input minimo vazio', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('aceita provider e modelName opcionais', () => {
+    const result = CreateDocumentIngestionJobInputSchema.safeParse({
+      provider: 'anthropic',
+      modelName: 'claude-3-5-haiku',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita tenantId por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ tenantId: 'ten_123' }).success).toBe(false);
+  });
+
+  it('rejeita propertyId por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ propertyId: 'prop_123' }).success).toBe(false);
+  });
+
+  it('rejeita documentId por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ documentId: 'doc_123' }).success).toBe(false);
+  });
+
+  it('rejeita status por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ status: 'queued' }).success).toBe(false);
+  });
+
+  it('rejeita attempts por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ attempts: 0 }).success).toBe(false);
+  });
+
+  it('rejeita createdAt por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ createdAt: '2025-01-01' }).success).toBe(false);
+  });
+
+  it('rejeita updatedAt por modo estrito', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ updatedAt: '2025-01-01' }).success).toBe(false);
+  });
+});
+
+describe('DocumentIngestionJobStatusSchema', () => {
+  it('aceita todos os status validos de job', () => {
+    const valid = ['queued', 'processing', 'needs_review', 'completed', 'failed', 'cancelled'];
+    for (const status of valid) {
+      expect(DocumentIngestionJobStatusSchema.safeParse(status).success).toBe(true);
+    }
+  });
+
+  it('rejeita status invalido de job', () => {
+    expect(DocumentIngestionJobStatusSchema.safeParse('pending').success).toBe(false);
+    expect(DocumentIngestionJobStatusSchema.safeParse('running').success).toBe(false);
+  });
+});
+
+describe('DocumentIngestionProviderSchema', () => {
+  it('aceita todos os providers validos', () => {
+    const valid = ['cloudflare_ai', 'openai', 'anthropic', 'gemini', 'manual', 'none'];
+    for (const provider of valid) {
+      expect(DocumentIngestionProviderSchema.safeParse(provider).success).toBe(true);
+    }
+  });
+
+  it('rejeita provider invalido', () => {
+    expect(DocumentIngestionProviderSchema.safeParse('cohere').success).toBe(false);
+    expect(DocumentIngestionProviderSchema.safeParse('').success).toBe(false);
+  });
+});
+
+describe('ListDocumentIngestionJobsQuerySchema', () => {
+  it('query vazia aplica default de limit 20', () => {
+    const result = ListDocumentIngestionJobsQuerySchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.limit).toBe(20);
+  });
+
+  it('aceita status e cursor opcionais', () => {
+    const result = ListDocumentIngestionJobsQuerySchema.safeParse({
+      status: 'completed',
+      cursor: 'tok_abc',
+      limit: 50,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('coerce string "50" para numero 50', () => {
+    const result = ListDocumentIngestionJobsQuerySchema.safeParse({ limit: '50' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.limit).toBe(50);
+  });
+
+  it('rejeita limit "0" via coerce', () => {
+    expect(ListDocumentIngestionJobsQuerySchema.safeParse({ limit: '0' }).success).toBe(false);
+  });
+
+  it('rejeita limit "101" via coerce', () => {
+    expect(ListDocumentIngestionJobsQuerySchema.safeParse({ limit: '101' }).success).toBe(false);
+  });
+
+  it('aceita limit maximo de 100', () => {
+    expect(ListDocumentIngestionJobsQuerySchema.safeParse({ limit: 100 }).success).toBe(true);
+  });
+
+  it('rejeita campo desconhecido por modo estrito', () => {
+    expect(ListDocumentIngestionJobsQuerySchema.safeParse({ tenantId: 'ten_123' }).success).toBe(false);
+  });
+});
+
+// ── document extraction review ────────────────────────────────────────────────
+
+describe('DocumentExtractionReviewStatusSchema', () => {
+  it('aceita todos os status validos de review', () => {
+    const valid = ['pending', 'approved', 'rejected', 'partially_applied'];
+    for (const status of valid) {
+      expect(DocumentExtractionReviewStatusSchema.safeParse(status).success).toBe(true);
+    }
+  });
+
+  it('rejeita status invalido de review', () => {
+    expect(DocumentExtractionReviewStatusSchema.safeParse('done').success).toBe(false);
+  });
+});
+
+describe('ReviewDocumentExtractionInputSchema', () => {
+  it('aceita review aprovado', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'approved' }).success).toBe(true);
+  });
+
+  it('aceita review rejeitado', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'rejected' }).success).toBe(true);
+  });
+
+  it('aceita review parcialmente aplicado', () => {
+    const result = ReviewDocumentExtractionInputSchema.safeParse({
+      status: 'partially_applied',
+      notes: 'Apenas sistemas tecnicos foram aplicados.',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejeita status invalido', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'pending' }).success).toBe(false);
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'done' }).success).toBe(false);
+  });
+
+  it('rejeita reviewedBy por modo estrito', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'approved', reviewedBy: 'usr_123' }).success).toBe(false);
+  });
+
+  it('rejeita reviewedAt por modo estrito', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'approved', reviewedAt: '2025-01-01' }).success).toBe(false);
+  });
+
+  it('rejeita tenantId por modo estrito', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'approved', tenantId: 'ten_123' }).success).toBe(false);
+  });
+
+  it('rejeita propertyId por modo estrito', () => {
+    expect(ReviewDocumentExtractionInputSchema.safeParse({ status: 'approved', propertyId: 'prop_123' }).success).toBe(false);
+  });
+});
+
+// ── document extraction detail ────────────────────────────────────────────────
+
+describe('DocumentExtractionDetailSchema', () => {
+  const validSummaryBase = {
+    id: 'ext_001',
+    documentId: 'doc_001',
+    jobId: 'job_001',
+    schemaVersion: 'v1',
+    createdAt: '2025-03-01T00:00:00Z',
+    hasRawText: true,
+    hasRawJson: true,
+    hasNormalizedJson: true,
+  };
+
+  it('aceita detail completo com normalizedJson compativel com PropertyDocumentExtractionSchema', () => {
+    const result = DocumentExtractionDetailSchema.safeParse({
+      ...validSummaryBase,
+      confidenceScore: 0.87,
+      rawText: 'Conteudo extraido do documento.',
+      rawJson: { pages: 4, lang: 'pt' },
+      normalizedJson: {
+        documentType: 'manual',
+        confidenceScore: 0.87,
+        schemaVersion: 'v1',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('aceita detail sem campos opcionais', () => {
+    expect(DocumentExtractionDetailSchema.safeParse(validSummaryBase).success).toBe(true);
+  });
+
+  it('aceita normalizedJson nulo', () => {
+    expect(DocumentExtractionDetailSchema.safeParse({ ...validSummaryBase, normalizedJson: null }).success).toBe(true);
+  });
+
+  it('rejeita confidenceScore acima de 1', () => {
+    expect(DocumentExtractionDetailSchema.safeParse({ ...validSummaryBase, confidenceScore: 1.1 }).success).toBe(false);
+  });
+
+  it('rejeita confidenceScore negativo', () => {
+    expect(DocumentExtractionDetailSchema.safeParse({ ...validSummaryBase, confidenceScore: -0.1 }).success).toBe(false);
+  });
+
+  it('rejeita normalizedJson com documentType invalido', () => {
+    const result = DocumentExtractionDetailSchema.safeParse({
+      ...validSummaryBase,
+      normalizedJson: {
+        documentType: 'unknown_type',
+        confidenceScore: 0.5,
+        schemaVersion: 'v1',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejeita normalizedJson com confidenceScore fora de 0..1', () => {
+    const result = DocumentExtractionDetailSchema.safeParse({
+      ...validSummaryBase,
+      normalizedJson: {
+        documentType: 'invoice',
+        confidenceScore: 2.0,
+        schemaVersion: 'v1',
+      },
+    });
+    expect(result.success).toBe(false);
   });
 });
