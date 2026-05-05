@@ -20,7 +20,9 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@houselog/contracts": ["../packages/contracts/src/index.ts"]
+      "@houselog/contracts": ["../packages/contracts/src/index.ts"],
+      "zod": ["./node_modules/zod/index.d.ts"],
+      "zod/*": ["./node_modules/zod/*"]
     }
   },
   "include": [
