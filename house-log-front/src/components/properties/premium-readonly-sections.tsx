@@ -18,7 +18,6 @@ import {
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -38,110 +37,90 @@ import {
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { HandoverChecklistItemFormDialog } from './handover-checklist-item-form-dialog';
 import { HandoverPackageFormDialog } from './handover-package-form-dialog';
 import { RenovationFormDialog } from './renovation-form-dialog';
 import { WarrantyFormDialog } from './warranty-form-dialog';
 
 const WARRANTY_TYPE_LABELS: Record<string, string> = {
-  service: 'Servico',
-  equipment: 'Equipamento',
-  material: 'Material',
+  service:    'Serviço',
+  equipment:  'Equipamento',
+  material:   'Material',
   structural: 'Estrutural',
-  appliance: 'Eletro',
-  finish: 'Acabamento',
-  other: 'Outro',
+  appliance:  'Eletro',
+  finish:     'Acabamento',
+  other:      'Outro',
 };
 
 const WARRANTY_STATUS_LABELS: Record<string, string> = {
-  active: 'Ativa',
-  expired: 'Vencida',
-  claimed: 'Acionada',
-  void: 'Invalidada',
+  active:   'Ativa',
+  expired:  'Vencida',
+  expiring: 'Vencendo',
+  claimed:  'Acionada',
+  void:     'Invalidada',
 };
 
 const RENOVATION_CATEGORY_LABELS: Record<string, string> = {
-  structural: 'Estrutural',
-  electrical: 'Eletrica',
-  plumbing: 'Hidraulica',
-  finishing: 'Acabamento',
-  layout: 'Layout',
-  roofing: 'Cobertura',
-  waterproofing: 'Impermeabilizacao',
-  painting: 'Pintura',
-  flooring: 'Piso',
-  other: 'Outro',
+  structural:     'Estrutural',
+  electrical:     'Elétrica',
+  plumbing:       'Hidráulica',
+  finishing:      'Acabamento',
+  layout:         'Layout',
+  roofing:        'Cobertura',
+  waterproofing:  'Impermeabilização',
+  painting:       'Pintura',
+  flooring:       'Piso',
+  other:          'Outro',
 };
 
 const RENOVATION_STATUS_LABELS: Record<string, string> = {
-  planned: 'Planejada',
+  planned:     'Planejada',
   in_progress: 'Em andamento',
-  completed: 'Concluida',
-  cancelled: 'Cancelada',
+  completed:   'Concluída',
+  cancelled:   'Cancelada',
 };
 
 const HANDOVER_TYPE_LABELS: Record<string, string> = {
-  handover: 'Entrega tecnica',
-  move_in: 'Entrada',
-  move_out: 'Saida',
+  handover:   'Entrega técnica',
+  move_in:    'Entrada',
+  move_out:   'Saída',
   inspection: 'Vistoria',
 };
 
 const HANDOVER_STATUS_LABELS: Record<string, string> = {
-  draft: 'Rascunho',
-  in_review: 'Em revisao',
-  approved: 'Aprovado',
-  completed: 'Concluido',
-  archived: 'Arquivado',
+  draft:     'Rascunho',
+  in_review: 'Em revisão',
+  approved:  'Aprovado',
+  completed: 'Concluído',
+  archived:  'Arquivado',
 };
 
 const CHECKLIST_CATEGORY_LABELS: Record<string, string> = {
-  keys: 'Chaves',
-  documents: 'Documentos',
-  utilities: 'Utilidades',
-  inventory: 'Inventario',
-  cleaning: 'Limpeza',
-  maintenance: 'Manutencao',
-  safety: 'Seguranca',
-  general: 'Geral',
+  keys:        'Chaves',
+  documents:   'Documentos',
+  utilities:   'Utilidades',
+  inventory:   'Inventário',
+  cleaning:    'Limpeza',
+  maintenance: 'Manutenção',
+  safety:      'Segurança',
+  general:     'Geral',
 };
 
 const CHECKLIST_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendente',
-  done: 'Concluido',
-  issue: 'Pendencia',
-  not_applicable: 'Nao aplicavel',
+  pending:        'Pendente',
+  done:           'Concluído',
+  issue:          'Pendência',
+  not_applicable: 'Não aplicável',
 };
 
 const CHECKLIST_STATUS_OPTIONS: Array<{ value: HandoverChecklistItem['status']; label: string }> = [
-  { value: 'pending', label: 'Pendente' },
-  { value: 'done', label: 'Concluido' },
-  { value: 'issue', label: 'Pendencia' },
-  { value: 'not_applicable', label: 'Nao aplicavel' },
+  { value: 'pending',        label: 'Pendente' },
+  { value: 'done',           label: 'Concluído' },
+  { value: 'issue',          label: 'Pendência' },
+  { value: 'not_applicable', label: 'Não aplicável' },
 ];
 
-const STATUS_TONE: Record<string, string> = {
-  active: 'bg-bg-success text-text-success',
-  expired: 'bg-bg-subtle text-text-secondary',
-  claimed: 'bg-bg-warning text-text-warning',
-  void: 'bg-bg-danger text-text-danger',
-  planned: 'bg-bg-subtle text-text-secondary',
-  in_progress: 'bg-bg-accent-subtle text-text-accent',
-  completed: 'bg-bg-success text-text-success',
-  cancelled: 'bg-bg-danger text-text-danger',
-  draft: 'bg-bg-subtle text-text-secondary',
-  in_review: 'bg-bg-warning text-text-warning',
-  approved: 'bg-bg-accent-subtle text-text-accent',
-  archived: 'bg-bg-subtle text-text-tertiary',
-  pending: 'bg-bg-subtle text-text-secondary',
-  done: 'bg-bg-success text-text-success',
-  issue: 'bg-bg-danger text-text-danger',
-  not_applicable: 'bg-bg-subtle text-text-tertiary',
-};
-
-function StatusBadge({ status, label }: { status: string; label: string }) {
-  return <Badge className={cn('border-0 text-xs', STATUS_TONE[status] ?? 'bg-bg-subtle text-text-secondary')}>{label}</Badge>;
-}
 
 function LoadingGrid() {
   return (
@@ -211,7 +190,7 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
       setFormOpen(false);
       setEditingWarranty(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar a garantia.';
+      const message = err instanceof Error ? err.message : 'Não foi possível salvar a garantia.';
       setFormError(message);
       toast.error('Erro ao salvar garantia', { description: message });
     } finally {
@@ -225,10 +204,10 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
     try {
       await warrantiesApi.delete(propertyId, pendingDeleteWarranty.id);
       await mutate();
-      toast.success('Garantia excluida.');
+      toast.success('Garantia excluída.');
       setPendingDeleteWarranty(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir a garantia.';
+      const message = err instanceof Error ? err.message : 'Não foi possível excluir a garantia.';
       toast.error('Erro ao excluir garantia', { description: message });
     } finally {
       setDeletingId(null);
@@ -238,9 +217,9 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
   return (
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        eyebrow="Prontuario tecnico"
+        eyebrow="Prontuário técnico"
         title="Garantias"
-        description="Garantias de servicos, equipamentos, materiais e acabamentos vinculadas ao historico tecnico do imovel."
+        description="Garantias de serviços, equipamentos, materiais e acabamentos vinculadas ao histórico técnico do imóvel."
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -249,7 +228,7 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
         }
       />
 
-      <PageSection title="Leitura de garantias" description="Controle inicial read-only para prazos, fornecedores e cobertura." tone="strong" density="compact">
+      <PageSection title="Resumo das garantias" description="Controle de prazos, fornecedores e cobertura." tone="strong" density="compact">
         <div className="grid gap-2 sm:grid-cols-3">
           <MetricBox label="Garantias" value={warranties.length} />
           <MetricBox label="Ativas" value={activeCount} tone="success" />
@@ -260,7 +239,7 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
       {isLoading && <LoadingGrid />}
       {!isLoading && error && (
         <ErrorState
-          title="Nao foi possivel carregar as garantias"
+          title="Não foi possível carregar as garantias"
           description={error instanceof Error ? error.message : undefined}
           onRetry={() => void mutate()}
         />
@@ -269,7 +248,7 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
         <EmptyState
           icon={<ShieldCheck className="h-6 w-6" aria-hidden="true" />}
           title="Nenhuma garantia registrada ainda"
-          description="Quando garantias tecnicas forem cadastradas, elas aparecerao aqui com prazos, fornecedor e cobertura resumida."
+          description="Quando garantias técnicas forem cadastradas, elas aparecerão aqui com prazos, fornecedor e cobertura resumida."
           actions={
             <Button variant="outline" onClick={openCreate}>
               <Plus className="h-4 w-4" aria-hidden="true" />
@@ -350,14 +329,14 @@ function WarrantyCard({
 
       <dl className="mt-4 grid gap-2 text-sm">
         <div className="grid grid-cols-2 gap-2">
-          <InfoCell label="Inicio" value={formatDate(warranty.start_date)} />
+          <InfoCell label="Início" value={formatDate(warranty.start_date)} />
           <InfoCell label="Fim" value={formatDate(warranty.end_date)} />
         </div>
-        <InfoCell label="Fornecedor" value={warranty.provider_name || 'Nao informado'} />
+        <InfoCell label="Fornecedor" value={warranty.provider_name || 'Não informado'} />
         <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2">
           <dt className="text-xs text-text-tertiary">Cobertura</dt>
           <dd className="mt-1">
-            <SummaryText>{warranty.coverage || warranty.description || 'Cobertura nao informada.'}</SummaryText>
+            <SummaryText>{warranty.coverage || warranty.description || 'Cobertura não informada.'}</SummaryText>
           </dd>
         </div>
       </dl>
@@ -424,7 +403,7 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
       setFormOpen(false);
       setEditingRenovation(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar a reforma.';
+      const message = err instanceof Error ? err.message : 'Não foi possível salvar a reforma.';
       setFormError(message);
       toast.error('Erro ao salvar reforma', { description: message });
     } finally {
@@ -438,10 +417,10 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
     try {
       await renovationsApi.delete(propertyId, pendingDeleteRenovation.id);
       await mutate();
-      toast.success('Reforma excluida.');
+      toast.success('Reforma excluída.');
       setPendingDeleteRenovation(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir a reforma.';
+      const message = err instanceof Error ? err.message : 'Não foi possível excluir a reforma.';
       toast.error('Erro ao excluir reforma', { description: message });
     } finally {
       setDeletingId(null);
@@ -451,9 +430,9 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
   return (
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        eyebrow="Historico premium"
+        eyebrow="Histórico técnico"
         title="Reformas"
-        description="Registro read-only de reformas e intervencoes tecnicas que alteram a memoria tecnica do imovel."
+        description="Registro de reformas e intervenções técnicas que alteram a memória técnica do imóvel."
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -462,7 +441,7 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
         }
       />
 
-      <PageSection title="Leitura das intervencoes" description="Resumo operacional de status, custo e execucao." tone="strong" density="compact">
+      <PageSection title="Resumo das reformas" description="Resumo de status, custo e execução." tone="strong" density="compact">
         <div className="grid gap-2 sm:grid-cols-4">
           <MetricBox label="Reformas" value={renovations.length} />
           <MetricBox label="Em andamento" value={inProgressCount} tone={inProgressCount > 0 ? 'accent' : 'default'} />
@@ -474,7 +453,7 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
       {isLoading && <LoadingGrid />}
       {!isLoading && error && (
         <ErrorState
-          title="Nao foi possivel carregar as reformas"
+          title="Não foi possível carregar as reformas"
           description={error instanceof Error ? error.message : undefined}
           onRetry={() => void mutate()}
         />
@@ -483,7 +462,7 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
         <EmptyState
           icon={<FolderKanban className="h-6 w-6" aria-hidden="true" />}
           title="Nenhuma reforma registrada ainda"
-          description="Reformas, obras e intervencoes tecnicas aparecerao aqui com periodo, contratado, categoria e custo."
+          description="Reformas, obras e intervenções técnicas aparecerão aqui com período, contratado, categoria e custo."
           actions={
             <Button variant="outline" onClick={openCreate}>
               <Plus className="h-4 w-4" aria-hidden="true" />
@@ -565,11 +544,11 @@ function RenovationCard({
 
       <dl className="mt-4 grid gap-2 text-sm">
         <div className="grid grid-cols-2 gap-2">
-          <InfoCell label="Inicio" value={formatDate(renovation.started_at)} />
-          <InfoCell label="Conclusao" value={formatDate(renovation.completed_at)} />
+          <InfoCell label="Início" value={formatDate(renovation.started_at)} />
+          <InfoCell label="Conclusão" value={formatDate(renovation.completed_at)} />
         </div>
-        <InfoCell label="Contratado" value={renovation.contractor_name || 'Nao informado'} />
-        <InfoCell label="Custo" value={renovation.cost != null ? formatCurrency(renovation.cost) : 'Nao informado'} />
+        <InfoCell label="Contratado" value={renovation.contractor_name || 'Não informado'} />
+        <InfoCell label="Custo" value={renovation.cost != null ? formatCurrency(renovation.cost) : 'Não informado'} />
       </dl>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -625,19 +604,19 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
     try {
       if (editingPkg) {
         await handoverPackagesApi.update(propertyId, editingPkg.id, input);
-        toast.success('Dossie atualizado.');
+        toast.success('Dossiê atualizado.');
       } else {
         const result = await handoverPackagesApi.create(propertyId, input);
         setSelectedPackageId(result.package.id);
-        toast.success('Dossie criado.');
+        toast.success('Dossiê criado.');
       }
       await mutate();
       setFormOpen(false);
       setEditingPkg(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar o dossie.';
+      const message = err instanceof Error ? err.message : 'Não foi possível salvar o dossiê.';
       setFormError(message);
-      toast.error('Erro ao salvar dossie', { description: message });
+      toast.error('Erro ao salvar dossiê', { description: message });
     } finally {
       setSubmitting(false);
     }
@@ -650,10 +629,10 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
       await handoverPackagesApi.delete(propertyId, pendingDeletePkg.id);
       if (selectedPackageId === pendingDeletePkg.id) setSelectedPackageId(null);
       await mutate();
-      toast.success('Dossie excluido.');
+      toast.success('Dossiê excluído.');
       setPendingDeletePkg(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir o dossie.';
+      const message = err instanceof Error ? err.message : 'Não foi possível excluir o dossiê.';
       toast.error('Erro ao excluir dossie', { description: message });
     } finally {
       setDeletingId(null);
@@ -663,9 +642,9 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
   return (
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
-        eyebrow="Dossie tecnico"
+        eyebrow="Dossiê técnico"
         title="Handover"
-        description="Pacotes de entrega tecnica e checklist para vistoria, pendencias e validacao do imovel."
+        description="Pacotes de entrega técnica e checklist para vistoria, pendências e validação do imóvel."
         actions={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" aria-hidden="true" />
@@ -677,7 +656,7 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
       {isLoading && <LoadingGrid />}
       {!isLoading && error && (
         <ErrorState
-          title="Nao foi possivel carregar os dossies"
+          title="Não foi possível carregar os dossiês"
           description={error instanceof Error ? error.message : undefined}
           onRetry={() => void mutate()}
         />
@@ -686,7 +665,7 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
         <EmptyState
           icon={<ClipboardCheck className="h-6 w-6" aria-hidden="true" />}
           title="Nenhum pacote de entrega registrado ainda"
-          description="Quando houver dossies de entrega, vistoria, entrada ou saida, eles aparecerao aqui com progresso do checklist."
+          description="Quando houver dossiês de entrega, vistoria, entrada ou saída, eles aparecerão aqui com progresso do checklist."
           actions={
             <Button variant="outline" onClick={openCreate}>
               <Plus className="h-4 w-4" aria-hidden="true" />
@@ -699,7 +678,7 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
       )}
       {!isLoading && !error && packages.length > 0 && (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <PageSection title="Pacotes" description="Selecione um dossie para ver o checklist." tone="surface" density="compact">
+          <PageSection title="Pacotes" description="Selecione um dossiê para ver o checklist." tone="surface" density="compact">
             <div className="space-y-2">
               {packages.map((pkg) => (
                 <div
@@ -824,7 +803,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
       setFormOpen(false);
       setEditingItem(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar o item.';
+      const message = err instanceof Error ? err.message : 'Não foi possível salvar o item.';
       setFormError(message);
       toast.error('Erro ao salvar item', { description: message });
     } finally {
@@ -838,10 +817,10 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
     try {
       await handoverChecklistApi.delete(propertyId, handoverPackage.id, pendingDeleteItem.id);
       await mutate();
-      toast.success('Item excluido.');
+      toast.success('Item excluído.');
       setPendingDeleteItem(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir o item.';
+      const message = err instanceof Error ? err.message : 'Não foi possível excluir o item.';
       toast.error('Erro ao excluir item', { description: message });
     } finally {
       setDeletingId(null);
@@ -856,7 +835,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
       await mutate();
       toast.success('Status atualizado.');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Nao foi possivel atualizar o status.';
+      const message = err instanceof Error ? err.message : 'Não foi possível atualizar o status.';
       toast.error('Erro ao atualizar status', { description: message });
     } finally {
       setUpdatingStatusId(null);
@@ -867,7 +846,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
     <>
       <PageSection
         title={handoverPackage.title}
-        description="Progresso do checklist de entrega tecnica."
+        description="Progresso do checklist de entrega técnica."
         tone="strong"
         density="compact"
         actions={
@@ -887,7 +866,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
         )}
         {!isLoading && error && (
           <ErrorState
-            title="Nao foi possivel carregar o checklist"
+            title="Não foi possível carregar o checklist"
             description={error instanceof Error ? error.message : undefined}
             onRetry={() => void mutate()}
           />
@@ -896,8 +875,8 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
           <div className="space-y-4">
             <div className="grid gap-2 sm:grid-cols-4">
               <MetricBox label="Itens" value={progress.total} />
-              <MetricBox label="Concluidos" value={progress.done} tone="success" />
-              <MetricBox label="Pendencias" value={progress.issue} tone={progress.issue > 0 ? 'danger' : 'default'} />
+              <MetricBox label="Concluídos" value={progress.done} tone="success" />
+              <MetricBox label="Pendências" value={progress.issue} tone={progress.issue > 0 ? 'danger' : 'default'} />
               <MetricBox label="Progresso" value={`${progress.percent}%`} tone="accent" />
             </div>
 
@@ -909,7 +888,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
               <EmptyState
                 icon={<FileCheck2 className="h-6 w-6" aria-hidden="true" />}
                 title="Checklist ainda sem itens"
-                description="Os itens de vistoria, evidencias e pendencias deste pacote aparecerao aqui quando forem cadastrados."
+                description="Os itens de vistoria, evidências e pendências deste pacote aparecerão aqui quando forem cadastrados."
                 actions={
                   <Button variant="outline" onClick={openCreate}>
                     <Plus className="h-4 w-4" aria-hidden="true" />
@@ -1003,7 +982,7 @@ function ChecklistItemRow({
               </SelectContent>
             </Select>
             <span className="text-xs text-text-tertiary">{CHECKLIST_CATEGORY_LABELS[item.category] ?? item.category}</span>
-            {item.required && <span className="text-xs font-medium text-text-warning">Obrigatorio</span>}
+            {item.required && <span className="text-xs font-medium text-text-warning">Obrigatório</span>}
           </div>
           <p className="mt-2 text-sm font-medium text-text-primary">{item.title}</p>
           {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{item.description}</p>}
