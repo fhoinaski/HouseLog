@@ -30,7 +30,6 @@ import {
   Settings,
 } from 'lucide-react';
 import { PageSection } from '@/components/layout/page-section';
-import { PremiumPropertyDashboard } from '@/components/properties/premium-property-dashboard';
 import { PropertySummaryCard } from '@/components/properties/property-summary-card';
 import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { ActionTile } from '@/components/ui/action-tile';
@@ -584,9 +583,14 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 })}
               </div>
             ) : (
-              <div className="flex min-h-20 items-center gap-3 rounded-[var(--radius-xl)] bg-bg-success px-4 py-3">
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-text-success" aria-hidden="true" />
-                <p className="text-sm font-medium text-text-primary">Tudo certo neste imovel no momento.</p>
+              <div className="flex min-h-20 items-start gap-3 rounded-[var(--radius-xl)] bg-bg-success px-4 py-4">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-text-success" aria-hidden="true" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-text-primary">Imóvel sem alertas ativos</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-text-secondary">
+                    Nenhum sinal operacional crítico identificado. Continue monitorando pelo prontuário técnico.
+                  </span>
+                </span>
               </div>
             )}
           </PageSection>
@@ -621,9 +625,6 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               </div>
             </PageSection>
           )}
-
-          {/* Premium prontuario dashboard */}
-          <PremiumPropertyDashboard propertyId={id} />
 
           {/* Summary card + quick access */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
