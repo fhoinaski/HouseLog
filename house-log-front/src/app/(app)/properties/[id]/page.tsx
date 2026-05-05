@@ -30,6 +30,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { PageSection } from '@/components/layout/page-section';
+import { PremiumPropertyDashboard } from '@/components/properties/premium-property-dashboard';
 import { PropertySummaryCard } from '@/components/properties/property-summary-card';
 import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { ActionTile } from '@/components/ui/action-tile';
@@ -620,6 +621,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               </div>
             </PageSection>
           )}
+
+          {/* Premium prontuario dashboard */}
+          <PremiumPropertyDashboard propertyId={id} />
 
           {/* Summary card + quick access */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
