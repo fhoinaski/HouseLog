@@ -120,6 +120,7 @@ export function ServiceOrderCreateModal({
   const assignedTo = useWatch({ control, name: 'assigned_to' });
   const title = useWatch({ control, name: 'title' });
   const selectedSystemType = useWatch({ control, name: 'system_type' });
+  const priority = useWatch({ control, name: 'priority' });
 
   function resetWizard() {
     setStep(0);
@@ -257,7 +258,7 @@ export function ServiceOrderCreateModal({
                 <div className="space-y-1.5">
                   <Label>Sistema *</Label>
                   <Select
-                    defaultValue="electrical"
+                    value={selectedSystemType ?? systemType}
                     onValueChange={(v) => {
                       setValue('system_type', v);
                       setSystemType(v);
@@ -276,7 +277,7 @@ export function ServiceOrderCreateModal({
 
               <div className="space-y-1.5">
                 <Label>Prioridade *</Label>
-                <Select defaultValue="normal" onValueChange={(v) => setValue('priority', v as FormData['priority'])}>
+                <Select value={priority ?? 'normal'} onValueChange={(v) => setValue('priority', v as FormData['priority'])}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(SERVICE_PRIORITY_LABELS).map(([k, v]) => (

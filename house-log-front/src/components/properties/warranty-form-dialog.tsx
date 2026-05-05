@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { warrantyCreateSchema } from '@houselog/contracts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -63,11 +63,15 @@ export function WarrantyFormDialog({
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
   } = useForm<WarrantyCreateInput>({
     resolver: zodResolver(warrantyCreateSchema),
     defaultValues: DEFAULT_VALUES,
   });
+
+  const warrantyType = useWatch({ control, name: 'warranty_type' });
+  const status = useWatch({ control, name: 'status' });
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +96,7 @@ export function WarrantyFormDialog({
             <div className="space-y-1.5">
               <Label>Tipo *</Label>
               <Select
-                defaultValue={warranty?.warranty_type ?? DEFAULT_VALUES.warranty_type}
+                value={warrantyType ?? DEFAULT_VALUES.warranty_type}
                 onValueChange={(value) => setValue('warranty_type', value as WarrantyCreateInput['warranty_type'], { shouldValidate: true })}
               >
                 <SelectTrigger>
@@ -111,7 +115,7 @@ export function WarrantyFormDialog({
             <div className="space-y-1.5">
               <Label>Status *</Label>
               <Select
-                defaultValue={warranty?.status ?? DEFAULT_VALUES.status}
+                value={status ?? DEFAULT_VALUES.status}
                 onValueChange={(value) => setValue('status', value as WarrantyCreateInput['status'], { shouldValidate: true })}
               >
                 <SelectTrigger>

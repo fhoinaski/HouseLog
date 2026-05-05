@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { handoverPackageCreateSchema } from '@houselog/contracts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -59,11 +59,15 @@ export function HandoverPackageFormDialog({
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
   } = useForm<HandoverPackageCreateInput>({
     resolver: zodResolver(handoverPackageCreateSchema),
     defaultValues: DEFAULT_VALUES,
   });
+
+  const type = useWatch({ control, name: 'type' });
+  const status = useWatch({ control, name: 'status' });
 
   useEffect(() => {
     if (!open) return;
@@ -88,7 +92,7 @@ export function HandoverPackageFormDialog({
             <div className="space-y-1.5">
               <Label>Tipo *</Label>
               <Select
-                defaultValue={pkg?.type ?? DEFAULT_VALUES.type}
+                value={type ?? DEFAULT_VALUES.type}
                 onValueChange={(value) => setValue('type', value as HandoverPackageCreateInput['type'], { shouldValidate: true })}
               >
                 <SelectTrigger>
@@ -107,7 +111,7 @@ export function HandoverPackageFormDialog({
             <div className="space-y-1.5">
               <Label>Status *</Label>
               <Select
-                defaultValue={pkg?.status ?? DEFAULT_VALUES.status}
+                value={status ?? DEFAULT_VALUES.status}
                 onValueChange={(value) => setValue('status', value as HandoverPackageCreateInput['status'], { shouldValidate: true })}
               >
                 <SelectTrigger>

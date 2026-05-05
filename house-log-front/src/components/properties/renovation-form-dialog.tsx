@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { renovationCreateSchema } from '@houselog/contracts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -68,11 +68,15 @@ export function RenovationFormDialog({
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
   } = useForm<RenovationCreateInput>({
     resolver: zodResolver(renovationCreateSchema),
     defaultValues: DEFAULT_VALUES,
   });
+
+  const category = useWatch({ control, name: 'category' });
+  const status = useWatch({ control, name: 'status' });
 
   useEffect(() => {
     if (!open) return;
@@ -97,7 +101,7 @@ export function RenovationFormDialog({
             <div className="space-y-1.5">
               <Label>Categoria *</Label>
               <Select
-                defaultValue={renovation?.category ?? DEFAULT_VALUES.category}
+                value={category ?? DEFAULT_VALUES.category}
                 onValueChange={(value) => setValue('category', value as RenovationCreateInput['category'], { shouldValidate: true })}
               >
                 <SelectTrigger>
@@ -116,7 +120,7 @@ export function RenovationFormDialog({
             <div className="space-y-1.5">
               <Label>Status *</Label>
               <Select
-                defaultValue={renovation?.status ?? DEFAULT_VALUES.status}
+                value={status ?? DEFAULT_VALUES.status}
                 onValueChange={(value) => setValue('status', value as RenovationCreateInput['status'], { shouldValidate: true })}
               >
                 <SelectTrigger>

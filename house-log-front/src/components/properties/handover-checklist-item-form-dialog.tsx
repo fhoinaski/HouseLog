@@ -79,6 +79,9 @@ export function HandoverChecklistItemFormDialog({
     defaultValues: DEFAULT_VALUES,
   });
 
+  const category = useWatch({ control, name: 'category' });
+  const status = useWatch({ control, name: 'status' });
+  const condition = useWatch({ control, name: 'condition' });
   const required = useWatch({ control, name: 'required' });
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export function HandoverChecklistItemFormDialog({
             <div className="space-y-1.5">
               <Label>Categoria *</Label>
               <Select
-                defaultValue={item?.category ?? DEFAULT_VALUES.category}
+                value={category ?? DEFAULT_VALUES.category}
                 onValueChange={(value) =>
                   setValue('category', value as HandoverChecklistItemCreateInput['category'], { shouldValidate: true })
                 }
@@ -125,7 +128,7 @@ export function HandoverChecklistItemFormDialog({
             <div className="space-y-1.5">
               <Label>Status *</Label>
               <Select
-                defaultValue={item?.status ?? DEFAULT_VALUES.status}
+                value={status ?? DEFAULT_VALUES.status}
                 onValueChange={(value) =>
                   setValue('status', value as HandoverChecklistItemCreateInput['status'], { shouldValidate: true })
                 }
@@ -146,7 +149,7 @@ export function HandoverChecklistItemFormDialog({
             <div className="space-y-1.5">
               <Label>Condicao</Label>
               <Select
-                defaultValue={item?.condition ?? ''}
+                value={condition ?? ''}
                 onValueChange={(value) =>
                   setValue(
                     'condition',
