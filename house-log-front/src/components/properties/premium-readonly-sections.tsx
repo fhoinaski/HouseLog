@@ -29,10 +29,12 @@ import {
   type HandoverChecklistItem,
   type HandoverPackage,
   type Renovation,
+  type RenovationCreateInput,
   type Warranty,
   type WarrantyCreateInput,
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { RenovationFormDialog } from './renovation-form-dialog';
 import { WarrantyFormDialog } from './warranty-form-dialog';
 
 const WARRANTY_TYPE_LABELS: Record<string, string> = {
@@ -359,10 +361,65 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
   const { data, error, isLoading, mutate } = useSWR(['renovations', propertyId], () =>
     renovationsApi.list(propertyId)
   );
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingRenovation, setEditingRenovation] = useState<Renovation | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const renovations = data?.renovations ?? [];
   const completedCount = renovations.filter((renovation) => renovation.status === 'completed').length;
   const inProgressCount = renovations.filter((renovation) => renovation.status === 'in_progress').length;
   const totalCost = renovations.reduce((sum, renovation) => sum + (renovation.cost ?? 0), 0);
+
+  function openCreate() {
+    setEditingRenovation(null);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(renovation: Renovation) {
+    setEditingRenovation(renovation);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  async function submitRenovation(input: RenovationCreateInput) {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      if (editingRenovation) {
+        await renovationsApi.update(propertyId, editingRenovation.id, input);
+        toast.success('Reforma atualizada.');
+      } else {
+        await renovationsApi.create(propertyId, input);
+        toast.success('Reforma criada.');
+      }
+      await mutate();
+      setFormOpen(false);
+      setEditingRenovation(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar a reforma.';
+      setFormError(message);
+      toast.error('Erro ao salvar reforma', { description: message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deleteRenovation(renovation: Renovation) {
+    if (!window.confirm(`Excluir "${renovation.title}" do historico de reformas?`)) return;
+    setDeletingId(renovation.id);
+    try {
+      await renovationsApi.delete(propertyId, renovation.id);
+      await mutate();
+      toast.success('Reforma excluida.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir a reforma.';
+      toast.error('Erro ao excluir reforma', { description: message });
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
@@ -370,6 +427,12 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
         eyebrow="Historico premium"
         title="Reformas"
         description="Registro read-only de reformas e intervencoes tecnicas que alteram a memoria tecnica do imovel."
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Nova reforma
+          </Button>
+        }
       />
 
       <PageSection title="Leitura das intervencoes" description="Resumo operacional de status, custo e execucao." tone="strong" density="compact">
@@ -394,20 +457,59 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
           icon={<FolderKanban className="h-6 w-6" aria-hidden="true" />}
           title="Nenhuma reforma registrada ainda"
           description="Reformas, obras e intervencoes tecnicas aparecerao aqui com periodo, contratado, categoria e custo."
+          actions={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Criar primeira reforma
+            </Button>
+          }
           tone="subtle"
           density="spacious"
         />
       )}
       {!isLoading && !error && renovations.length > 0 && (
         <div className="grid gap-3 md:grid-cols-2">
-          {renovations.map((renovation) => <RenovationCard key={renovation.id} renovation={renovation} />)}
+          {renovations.map((renovation) => (
+            <RenovationCard
+              key={renovation.id}
+              renovation={renovation}
+              deleting={deletingId === renovation.id}
+              onEdit={openEdit}
+              onDelete={deleteRenovation}
+            />
+          ))}
         </div>
       )}
+
+      <RenovationFormDialog
+        open={formOpen}
+        renovation={editingRenovation}
+        submitting={submitting}
+        error={formError}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) {
+            setEditingRenovation(null);
+            setFormError(null);
+          }
+        }}
+        onSubmit={submitRenovation}
+      />
     </div>
   );
 }
 
-function RenovationCard({ renovation }: { renovation: Renovation }) {
+function RenovationCard({
+  renovation,
+  deleting,
+  onEdit,
+  onDelete,
+}: {
+  renovation: Renovation;
+  deleting: boolean;
+  onEdit: (renovation: Renovation) => void;
+  onDelete: (renovation: Renovation) => void;
+}) {
   return (
     <article className="rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 shadow-[var(--shadow-card)]">
       <div className="flex items-start justify-between gap-3">
@@ -432,6 +534,23 @@ function RenovationCard({ renovation }: { renovation: Renovation }) {
         <InfoCell label="Contratado" value={renovation.contractor_name || 'Nao informado'} />
         <InfoCell label="Custo" value={renovation.cost != null ? formatCurrency(renovation.cost) : 'Nao informado'} />
       </dl>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => onEdit(renovation)}>
+          <Pencil className="h-4 w-4" aria-hidden="true" />
+          Editar
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-text-danger hover:bg-bg-danger"
+          loading={deleting}
+          onClick={() => void onDelete(renovation)}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          Excluir
+        </Button>
+      </div>
     </article>
   );
 }

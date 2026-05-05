@@ -18,7 +18,7 @@
     "dev:api": "npm --prefix house-log-back/apps/api run dev",
     "build:api": "npm --prefix house-log-back/apps/api run build"
   },
-  "devDependencies": {
+  "dependencies": {
     "zod": "^3.25.76"
   }
 }
