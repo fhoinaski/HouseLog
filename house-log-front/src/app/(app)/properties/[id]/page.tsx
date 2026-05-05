@@ -535,8 +535,8 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </PageSection>
 
           <PageSection
-            title="Atencao agora"
-            description="Sinais operacionais que merecem revisao antes de navegar pelo prontuario."
+            title="Atenção agora"
+            description="Sinais operacionais que merecem revisão antes de navegar pelo prontuário."
             tone="strong"
             density="editorial"
           >
@@ -636,23 +636,29 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               density="editorial"
             >
               <div className="space-y-4">
-                <div>
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                    Prontuário técnico
-                  </p>
+                {/* Prontuário técnico — módulos premium do imóvel */}
+                <div className="rounded-[var(--radius-xl)] border border-border-subtle bg-[var(--surface-base)] p-3">
+                  <div className="mb-2.5 flex items-center gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                      Prontuário técnico
+                    </p>
+                    <span className="flex-1 border-t border-border-subtle" aria-hidden="true" />
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { href: `/properties/${id}/warranties`,  icon: ShieldCheck,    label: 'Garantias',  tone: 'success' as const },
-                      { href: `/properties/${id}/renovations`, icon: FolderKanban,   label: 'Reformas',   tone: 'accent'  as const },
-                      { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover',   tone: 'muted'   as const },
-                      { href: `/properties/${id}/documents`,   icon: FileText,       label: 'Documentos', tone: 'muted'   as const },
-                      { href: `/properties/${id}/inventory`,   icon: Package,        label: 'Inventário', tone: 'warning' as const },
-                      { href: `/properties/${id}/services`,    icon: Wrench,         label: 'Serviços',   tone: 'accent'  as const },
-                    ].map(({ href, icon, label, tone }) => (
-                      <ActionTile key={href} href={href} icon={icon} label={label} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
+                      { href: `/properties/${id}/warranties`,  icon: ShieldCheck,    label: 'Garantias',  description: 'Contratos e prazos',   tone: 'success' as const },
+                      { href: `/properties/${id}/renovations`, icon: FolderKanban,   label: 'Reformas',   description: 'Obras e intervenções',  tone: 'accent'  as const },
+                      { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover',   description: 'Entrega técnica',       tone: 'muted'   as const },
+                      { href: `/properties/${id}/documents`,   icon: FileText,       label: 'Documentos', description: 'Arquivos do imóvel',    tone: 'muted'   as const },
+                      { href: `/properties/${id}/inventory`,   icon: Package,        label: 'Inventário', description: 'Itens e sistemas',      tone: 'warning' as const },
+                      { href: `/properties/${id}/services`,    icon: Wrench,         label: 'OS',         description: 'Ordens de serviço',     tone: 'accent'  as const },
+                    ].map(({ href, icon, label, description, tone }) => (
+                      <ActionTile key={href} href={href} icon={icon} label={label} description={description} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
                     ))}
                   </div>
                 </div>
+
+                {/* Gestão operacional — módulos de suporte e controle */}
                 <div>
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
                     Gestão operacional

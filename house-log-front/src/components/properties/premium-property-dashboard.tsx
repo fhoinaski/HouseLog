@@ -254,8 +254,8 @@ export function PremiumPropertyDashboard({ propertyId }: { propertyId: string })
   if (anyLoading) {
     return (
       <PageSection
-        title="Prontuario tecnico"
-        description="Consolidado de garantias, reformas e handover do imovel."
+        title="Prontuário técnico"
+        description="Consolidado de garantias, reformas e handover do imóvel."
         tone="strong"
         density="editorial"
       >
@@ -272,8 +272,8 @@ export function PremiumPropertyDashboard({ propertyId }: { propertyId: string })
 
   return (
     <PageSection
-      title="Prontuario tecnico"
-      description="Consolidado de garantias, reformas e handover do imovel."
+      title="Prontuário técnico"
+      description="Consolidado de garantias, reformas e handover do imóvel."
       tone="strong"
       density="editorial"
     >

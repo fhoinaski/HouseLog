@@ -151,6 +151,7 @@
   --z-index-dropdown: 200;
   --z-index-overlay: 400;
   --z-index-modal: 500;
+  --z-index-popover: 550;
   --z-index-toast: 600;
   --z-index-tooltip: 700;
 }

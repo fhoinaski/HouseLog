@@ -235,6 +235,7 @@
     --z-sticky:  300;
     --z-overlay: 400;
     --z-modal:   500;
+    --z-popover: 550;
     --z-toast:   600;
     --z-tooltip: 700;
 
