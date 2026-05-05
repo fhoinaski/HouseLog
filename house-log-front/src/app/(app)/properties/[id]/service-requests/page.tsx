@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { AlertTriangle, ClipboardList, FileSearch, HandCoins, Loader2, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { usePagination } from '@/hooks/usePagination';
 import { type ServiceRequestSummary } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -23,16 +23,18 @@ const REQUEST_TABS = [
 
 type RequestTabKey = (typeof REQUEST_TABS)[number]['key'];
 
-const REQUEST_STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  OPEN: 'requested',
-  CLOSED: 'completed',
-};
-
 function getRequestStage(request: ServiceRequestSummary) {
   if (request.accepted_proposals_count > 0) return 'Aprovado';
   if (request.status === 'CLOSED') return 'Cancelado';
   if (request.proposals_count > 0) return 'Com propostas';
   return 'Aguardando';
+}
+
+function getRequestCommercialStatus(request: ServiceRequestSummary) {
+  if (request.accepted_proposals_count > 0) return 'accepted';
+  if (request.status === 'CLOSED') return 'commercial_cancelled';
+  if (request.proposals_count > 0) return 'submitted';
+  return 'pending';
 }
 
 function matchesTab(request: ServiceRequestSummary, tab: RequestTabKey) {
@@ -75,20 +77,20 @@ export default function ServiceRequestsPage({ params }: { params: Promise<{ id: 
       <PageHeader
         density="compact"
         eyebrow="Ciclo de compra"
-        title="Orcamentos"
-        description="Solicitacoes enviadas para prestadores e propostas recebidas."
+        title="Orçamentos"
+        description="Solicitações enviadas para prestadores e propostas recebidas."
         actions={
           <Button variant="outline" disabled title="TODO: conectar ao fluxo real de criacao de service_request com upload.">
             <ClipboardList className="h-4 w-4" />
-            Nova solicitacao
+            Nova solicitação
           </Button>
         }
       />
 
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <MetricCard icon={FileSearch} label="Aguardando" value={counts.waiting} helper="sem proposta" tone="warning" density="compact" />
-        <MetricCard icon={HandCoins} label="Propostas" value={counts.proposals} helper="para analise" tone="accent" density="compact" />
-        <MetricCard icon={ClipboardList} label="Aprovados" value={counts.approved} helper="viram servicos" tone="success" density="compact" />
+        <MetricCard icon={HandCoins} label="Propostas" value={counts.proposals} helper="para análise" tone="accent" density="compact" />
+        <MetricCard icon={ClipboardList} label="Aprovados" value={counts.approved} helper="viram serviços" tone="success" density="compact" />
         <MetricCard icon={XCircle} label="Cancelados" value={counts.cancelled} helper="encerrados" tone="default" density="compact" />
       </div>
 
@@ -107,19 +109,19 @@ export default function ServiceRequestsPage({ params }: { params: Promise<{ id: 
       </div>
 
       <PageSection
-        title="Solicitacoes de orcamento"
-        description="Pedidos de orcamento ficam separados dos servicos ja aprovados."
+        title="Solicitações de orçamento"
+        description="Pedidos de orçamento ficam separados dos serviços já aprovados."
         tone="strong"
         density="default"
       >
         {visibleRequests.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="h-6 w-6" />}
-            title="Nenhum orcamento encontrado"
-            description="Pedidos de orcamento enviados para prestadores e suas propostas aparecem aqui."
+            title="Nenhum orçamento encontrado"
+            description="Pedidos de orçamento enviados para prestadores e suas propostas aparecem aqui."
             actions={
               <Button variant="outline" disabled title="TODO: conectar criacao de service_request.">
-                Nova solicitacao
+                Nova solicitação
               </Button>
             }
             tone="subtle"
@@ -137,19 +139,21 @@ export default function ServiceRequestsPage({ params }: { params: Promise<{ id: 
                     <div className="min-w-0">
                       <h3 className="truncate text-sm font-medium text-text-primary">{request.title}</h3>
                       <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">
-                        {request.description ?? 'Sem descricao detalhada.'}
+                        {request.description ?? 'Sem descrição detalhada.'}
                       </p>
                     </div>
-                    <Badge variant={REQUEST_STATUS_VARIANT[request.status]} className="shrink-0">
-                      {getRequestStage(request)}
-                    </Badge>
+                    <StatusBadge
+                      status={getRequestCommercialStatus(request)}
+                      label={getRequestStage(request)}
+                      className="shrink-0"
+                    />
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
                     <RequestInfo label="Sistema" value="A definir" />
                     <RequestInfo
                       label="Urgencia"
-                      value={request.proposals_count === 0 ? 'Aguardando' : 'Em analise'}
+                      value={request.proposals_count === 0 ? 'Aguardando' : 'Em análise'}
                       urgent={request.proposals_count === 0}
                     />
                     <RequestInfo label="Propostas" value={String(request.proposals_count)} />

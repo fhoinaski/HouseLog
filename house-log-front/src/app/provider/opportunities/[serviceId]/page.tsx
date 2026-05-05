@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Textarea } from '@/components/ui/textarea';
 import { bidsApi, providerApi, type ServiceBid } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
@@ -36,14 +37,8 @@ const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
 
 const BID_STATUS_LABEL: Record<ServiceBid['status'], string> = {
   accepted: 'Aceita',
-  pending: 'Em analise',
+  pending: 'Em análise',
   rejected: 'Recusada',
-};
-
-const BID_STATUS_VARIANT: Record<ServiceBid['status'], BadgeProps['variant']> = {
-  accepted: 'success',
-  pending: 'secondary',
-  rejected: 'destructive',
 };
 
 function DetailItem({
@@ -110,7 +105,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           density="editorial"
           eyebrow="Rede homologada"
           title="Analise da operacao"
-          description="Carregando os dados da solicitacao elegivel."
+          description="Carregando os dados da solicitação elegível."
           actions={
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
@@ -135,7 +130,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
           density="editorial"
           eyebrow="Rede homologada"
           title="Oportunidade indisponivel"
-          description="Nao foi possivel carregar esta solicitacao da rede homologada."
+          description="Não foi possível carregar esta solicitação da rede homologada."
           actions={
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
@@ -145,7 +140,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
         />
         <EmptyState
           icon={<Briefcase className="h-6 w-6" />}
-          title="Solicitacao nao encontrada"
+          title="Solicitação não encontrada"
           description="A operacao pode ter sido encerrada, atribuida ou removida da sua fila elegivel."
           tone="strong"
         />
@@ -190,7 +185,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                 label="Imovel"
                 value={order.property_name}
               />
-              <DetailItem label="Ambiente" value={order.room_name ?? 'Nao informado'} />
+              <DetailItem label="Ambiente" value={order.room_name ?? 'Não informado'} />
             </dl>
 
             {order.description ? (
@@ -226,8 +221,8 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             {hasPendingBid ? (
               <EmptyState
                 icon={<ShieldCheck className="h-6 w-6" />}
-                title="Proposta em analise"
-                description="Aguarde o retorno antes de enviar uma nova proposta para esta solicitacao."
+                title="Proposta em análise"
+                description="Aguarde o retorno antes de enviar uma nova proposta para esta solicitação."
                 tone="strong"
                 density="compact"
               />
@@ -273,7 +268,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
               <EmptyState
                 icon={<CheckCircle2 className="h-6 w-6" />}
                 title="Nenhuma proposta enviada"
-                description="Quando uma proposta for registrada, ela aparecera aqui com o status de avaliacao."
+                description="Quando uma proposta for registrada, ela aparecerá aqui com o status de avaliação."
                 tone="subtle"
                 density="compact"
               />
@@ -286,9 +281,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                         <p className="text-lg font-medium text-text-primary">{formatCurrency(bid.amount)}</p>
                         <p className="mt-1 text-xs text-text-tertiary">{formatDate(bid.created_at)}</p>
                       </div>
-                      <Badge variant={BID_STATUS_VARIANT[bid.status]} className="shrink-0 text-xs">
-                        {BID_STATUS_LABEL[bid.status]}
-                      </Badge>
+                      <StatusBadge status={bid.status} label={BID_STATUS_LABEL[bid.status]} className="shrink-0" />
                     </div>
                     {bid.notes && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{bid.notes}</p>}
                   </article>

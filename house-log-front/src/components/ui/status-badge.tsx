@@ -32,6 +32,12 @@ export const STATUS_TONE: Record<string, string> = {
   low_stock:      'bg-bg-warning text-text-warning',
   warranty_active: 'bg-bg-success text-text-success',
   warranty_expired: 'bg-bg-danger text-text-danger',
+  // Commercial requests and proposals
+  submitted:      'bg-bg-accent-subtle text-text-accent',
+  accepted:       'bg-bg-success text-text-success',
+  rejected:       'bg-bg-danger text-text-danger',
+  converted:      'bg-bg-success text-text-success',
+  commercial_cancelled: 'bg-bg-subtle text-text-tertiary',
 };
 
 export function StatusBadge({

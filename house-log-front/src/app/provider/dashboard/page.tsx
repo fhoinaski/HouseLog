@@ -6,8 +6,8 @@ import { providerApi } from '@/lib/api';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
-import { Badge } from '@/components/ui/badge';
 import { MetricCard } from '@/components/ui/metric-card';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Briefcase, Wrench, CheckCircle2, Clock, AlertTriangle, ChevronRight } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
@@ -19,6 +19,12 @@ export default function ProviderDashboard() {
   const stats = data?.stats ?? {};
   const total = data?.total ?? 0;
   const recentBids = data?.recent_bids ?? [];
+
+  const bidStatusLabel: Record<string, string> = {
+    accepted: 'Aceita',
+    pending: 'Pendente',
+    rejected: 'Recusada',
+  };
 
   const statCards = [
     { label: 'Em andamento', value: (stats.in_progress ?? 0) + (stats.approved ?? 0), icon: Wrench, tone: 'warning' as const },
@@ -89,9 +95,7 @@ export default function ProviderDashboard() {
                 meta={`${bid.property_name} · ${formatDate(bid.created_at)}`}
                 value={formatCurrency(bid.amount)}
                 status={
-                  <Badge variant={bid.status === 'accepted' ? 'success' : bid.status === 'rejected' ? 'destructive' : 'secondary'} className="text-xs">
-                    {bid.status === 'accepted' ? 'Aceita' : bid.status === 'rejected' ? 'Recusada' : 'Pendente'}
-                  </Badge>
+                  <StatusBadge status={bid.status} label={bidStatusLabel[bid.status] ?? bid.status} />
                 }
               />
             ))}

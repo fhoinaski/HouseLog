@@ -11,7 +11,7 @@ import { ArrowLeft, Calendar, CheckCircle2, Clock, FileText, ImageIcon, MapPin, 
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceChat } from '@/components/services/service-chat';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -37,14 +37,8 @@ type BidForm = z.infer<typeof bidSchema>;
 
 const BID_STATUS_LABEL: Record<ServiceBid['status'], string> = {
   accepted: 'Aceita',
-  pending: 'Em analise',
+  pending: 'Em análise',
   rejected: 'Recusada',
-};
-
-const BID_STATUS_VARIANT: Record<ServiceBid['status'], BadgeProps['variant']> = {
-  accepted: 'success',
-  pending: 'secondary',
-  rejected: 'destructive',
 };
 
 const BID_STATUS_ICON: Record<ServiceBid['status'], React.ReactNode> = {
@@ -295,7 +289,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             ) : hasPendingBid ? (
               <EmptyState
                 icon={<Clock className="h-6 w-6" />}
-                title="Proposta em analise"
+                title="Proposta em análise"
                 description="Aguarde o retorno da operacao privada antes de registrar nova proposta."
                 tone="strong"
                 density="compact"
@@ -350,7 +344,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
               <EmptyState
                 icon={<ImageIcon className="h-6 w-6" />}
                 title="Nenhuma proposta registrada"
-                description="Quando uma proposta for enviada, ela aparecera aqui com o status de avaliacao."
+                description="Quando uma proposta for enviada, ela aparecerá aqui com o status de avaliação."
                 tone="subtle"
                 density="compact"
               />
@@ -366,9 +360,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         {BID_STATUS_ICON[bid.status]}
-                        <Badge variant={BID_STATUS_VARIANT[bid.status]} className="text-xs">
-                          {BID_STATUS_LABEL[bid.status]}
-                        </Badge>
+                        <StatusBadge status={bid.status} label={BID_STATUS_LABEL[bid.status]} />
                       </div>
                     </div>
                   </article>

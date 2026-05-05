@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { handoverChecklistItemCreateSchema } from '@houselog/contracts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -72,14 +72,14 @@ export function HandoverChecklistItemFormDialog({
     handleSubmit,
     reset,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<HandoverChecklistItemCreateInput>({
     resolver: zodResolver(handoverChecklistItemCreateSchema),
     defaultValues: DEFAULT_VALUES,
   });
 
-  const required = watch('required');
+  const required = useWatch({ control, name: 'required' });
 
   useEffect(() => {
     if (!open) return;

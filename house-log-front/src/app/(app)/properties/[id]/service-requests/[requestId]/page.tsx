@@ -8,13 +8,14 @@ import { ArrowLeft, CheckCircle2, ClipboardList, HandCoins, Mail, Phone, Wrench 
 import { toast } from 'sonner';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Textarea } from '@/components/ui/textarea';
 import { serviceRequestsApi, type ServiceOrder, type ServiceRequestBid } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
@@ -23,12 +24,6 @@ const BID_STATUS_LABEL: Record<ServiceRequestBid['status'], string> = {
   PENDING: 'Pendente',
   ACCEPTED: 'Aceita',
   REJECTED: 'Recusada',
-};
-
-const BID_STATUS_VARIANT: Record<ServiceRequestBid['status'], BadgeProps['variant']> = {
-  PENDING: 'requested',
-  ACCEPTED: 'approved',
-  REJECTED: 'destructive',
 };
 
 const SYSTEM_TYPES = Object.keys(SYSTEM_TYPE_LABELS) as Array<ServiceOrder['system_type']>;
@@ -42,6 +37,12 @@ type ConvertForm = {
   scheduledAt: string;
   warrantyUntil: string;
 };
+
+function getRequestCommercialStatus(status: string, hasAcceptedProposal: boolean) {
+  if (hasAcceptedProposal) return 'accepted';
+  if (status === 'CLOSED') return 'commercial_cancelled';
+  return 'pending';
+}
 
 export default function ServiceRequestDetailPage({
   params,
@@ -106,10 +107,10 @@ export default function ServiceRequestDetailPage({
         scheduled_at: convertForm.scheduledAt || undefined,
         warranty_until: convertForm.warrantyUntil || undefined,
       });
-      toast.success('Servico criado a partir do orcamento');
+      toast.success('Serviço criado a partir do orçamento');
       router.push(`/properties/${propertyId}/services/${created.order.id}`);
     } catch (e) {
-      toast.error('Erro ao converter orcamento', { description: (e as Error).message });
+      toast.error('Erro ao converter orçamento', { description: (e as Error).message });
     } finally {
       setConverting(false);
     }
@@ -120,8 +121,8 @@ export default function ServiceRequestDetailPage({
       <div className="mx-auto max-w-[1040px] space-y-4 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="compact"
-          eyebrow="Orcamento"
-          title="Carregando solicitacao"
+          eyebrow="Orçamento"
+          title="Carregando solicitação"
           description="Preparando propostas recebidas para este imovel."
         />
         <PageSection tone="strong" density="default">
@@ -135,9 +136,9 @@ export default function ServiceRequestDetailPage({
     <div className="mx-auto max-w-[1040px] space-y-4 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="compact"
-        eyebrow="Orcamento"
+        eyebrow="Orçamento"
         title={request.title}
-        description={request.description ?? 'Solicitacao enviada para prestadores e propostas recebidas.'}
+        description={request.description ?? 'Solicitação enviada para prestadores e propostas recebidas.'}
         actions={
           <Button asChild variant="ghost">
             <Link href={`/properties/${propertyId}/service-requests`}>
@@ -149,17 +150,20 @@ export default function ServiceRequestDetailPage({
       />
 
       <PageSection
-        title="Resumo da solicitacao"
-        description="Pedido de orcamento separado das ordens de servico ja aprovadas."
+        title="Resumo da solicitação"
+        description="Pedido de orçamento separado das ordens de serviço já aprovadas."
         tone="strong"
         density="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={request.status === 'OPEN' ? 'requested' : 'completed'}>{request.status === 'OPEN' ? 'Aberta' : 'Fechada'}</Badge>
+            <StatusBadge
+              status={getRequestCommercialStatus(request.status, Boolean(acceptedBid))}
+              label={acceptedBid ? 'Aprovado' : request.status === 'OPEN' ? 'Aberto' : 'Fechado'}
+            />
             {acceptedBid && request.status === 'OPEN' && (
               <Button onClick={openConvertDialog}>
                 <Wrench className="h-4 w-4" />
-                Converter em servico
+                Converter em serviço
               </Button>
             )}
           </div>
@@ -168,7 +172,7 @@ export default function ServiceRequestDetailPage({
         <div className="grid gap-2 sm:grid-cols-3">
           <SummaryItem label="Criada em" value={formatDate(request.created_at)} />
           <SummaryItem label="Atualizada em" value={formatDate(request.updated_at)} />
-          <SummaryItem label="Midias" value={`${request.media_urls.length}`} />
+          <SummaryItem label="Mídias" value={`${request.media_urls.length}`} />
         </div>
       </PageSection>
 
@@ -210,7 +214,7 @@ export default function ServiceRequestDetailPage({
                       )}
                     </p>
                   </div>
-                  <Badge variant={BID_STATUS_VARIANT[bid.status]}>{BID_STATUS_LABEL[bid.status]}</Badge>
+                  <StatusBadge status={bid.status.toLowerCase()} label={BID_STATUS_LABEL[bid.status]} />
                 </div>
 
                 <div className="mt-4 rounded-[var(--radius-lg)] bg-bg-subtle p-3">
@@ -247,7 +251,7 @@ export default function ServiceRequestDetailPage({
       <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Converter orcamento em servico</DialogTitle>
+            <DialogTitle>Converter orçamento em serviço</DialogTitle>
           </DialogHeader>
           <form onSubmit={convertToService} className="space-y-4">
             <div className="space-y-1.5">
@@ -335,7 +339,7 @@ export default function ServiceRequestDetailPage({
                 Cancelar
               </Button>
               <Button type="submit" loading={converting}>
-                Criar servico
+                Criar serviço
               </Button>
             </div>
           </form>

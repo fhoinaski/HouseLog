@@ -9,6 +9,7 @@ import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { providerApi, type ProviderNetworkOpportunity } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS, formatCurrency, formatDate } from '@/lib/utils';
 
@@ -16,6 +17,12 @@ const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
   normal: 'normal',
   preventive: 'preventive',
+};
+
+const BID_STATUS_LABEL: Record<NonNullable<ProviderNetworkOpportunity['my_bid']>['status'], string> = {
+  accepted: 'Aceita',
+  pending: 'Em análise',
+  rejected: 'Recusada',
 };
 
 const SYSTEM_FILTERS = [
@@ -91,22 +98,9 @@ export default function ProviderOpportunitiesPage() {
                         {SERVICE_PRIORITY_LABELS[item.priority]}
                       </Badge>
                       {item.my_bid ? (
-                        <Badge
-                          variant={
-                            item.my_bid.status === 'accepted'
-                              ? 'success'
-                              : item.my_bid.status === 'rejected'
-                                ? 'destructive'
-                                : 'secondary'
-                          }
-                          className="text-xs"
-                        >
-                          Proposta enviada
-                        </Badge>
+                        <StatusBadge status={item.my_bid.status} label={BID_STATUS_LABEL[item.my_bid.status]} />
                       ) : (
-                        <Badge variant="outline" className="text-xs">
-                          Elegível
-                        </Badge>
+                        <StatusBadge status="submitted" label="Elegível" />
                       )}
                     </div>
                   }

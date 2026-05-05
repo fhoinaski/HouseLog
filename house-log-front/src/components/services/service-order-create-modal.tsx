@@ -98,7 +98,6 @@ export function ServiceOrderCreateModal({
     register,
     handleSubmit,
     setValue,
-    watch,
     control,
     reset,
     formState: { errors, isSubmitting },
@@ -119,6 +118,8 @@ export function ServiceOrderCreateModal({
   }, [providersData, systemType]);
 
   const assignedTo = useWatch({ control, name: 'assigned_to' });
+  const title = useWatch({ control, name: 'title' });
+  const selectedSystemType = useWatch({ control, name: 'system_type' });
 
   function resetWizard() {
     setStep(0);
@@ -183,7 +184,7 @@ export function ServiceOrderCreateModal({
     }
   }
 
-  const canGoStep2 = Boolean(watch('title')?.trim()) && Boolean(watch('system_type') || systemType);
+  const canGoStep2 = Boolean(title?.trim()) && Boolean(selectedSystemType || systemType);
   const canGoStep3 = serviceFlow === 'quote' || Boolean(assignedTo);
 
   return (
