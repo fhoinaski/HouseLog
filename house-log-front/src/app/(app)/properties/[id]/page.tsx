@@ -630,35 +630,45 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             <PropertySummaryCard property={property} className="h-full" />
 
             <PageSection
-              title="Acesso rápido"
-              description="Entradas diretas para os módulos do prontuário."
+              title="Gestão técnica"
+              description="Acesso direto a todos os módulos do imóvel."
               tone="surface"
               density="editorial"
             >
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-                {[
-                  { href: `/properties/${id}/rooms`,       icon: Home,      label: 'Cômodos',    tone: 'default'  as const },
-                  { href: `/properties/${id}/inventory`,   icon: Package,   label: 'Inventário', tone: 'warning'  as const },
-                  { href: `/properties/${id}/services`,    icon: Wrench,    label: 'Serviços',   tone: 'accent'   as const },
-                  { href: `/properties/${id}/timeline`,    icon: GitBranch, label: 'Timeline',   tone: 'muted'    as const },
-                  { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', tone: 'warning'  as const },
-                  { href: `/properties/${id}/documents`,   icon: FileText,  label: 'Documentos', tone: 'muted'    as const },
-                  { href: `/properties/${id}/financial`,   icon: BarChart3, label: 'Financeiro', tone: 'success'  as const },
-                  { href: `/properties/${id}/report`,      icon: Activity,  label: 'Relatório',  tone: 'accent'   as const },
-                  { href: `/properties/${id}/warranties`,  icon: ShieldCheck, label: 'Garantias', tone: 'success' as const },
-                  { href: `/properties/${id}/renovations`, icon: FolderKanban, label: 'Reformas', tone: 'accent' as const },
-                  { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover', tone: 'muted' as const },
-                ].map(({ href, icon, label, tone }) => (
-                  <ActionTile
-                    key={href}
-                    href={href}
-                    icon={icon}
-                    label={label}
-                    tone={tone}
-                    density="compact"
-                    aria-label={`Abrir ${label}`}
-                  />
-                ))}
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    Prontuário técnico
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { href: `/properties/${id}/warranties`,  icon: ShieldCheck,    label: 'Garantias',  tone: 'success' as const },
+                      { href: `/properties/${id}/renovations`, icon: FolderKanban,   label: 'Reformas',   tone: 'accent'  as const },
+                      { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover',   tone: 'muted'   as const },
+                      { href: `/properties/${id}/documents`,   icon: FileText,       label: 'Documentos', tone: 'muted'   as const },
+                      { href: `/properties/${id}/inventory`,   icon: Package,        label: 'Inventário', tone: 'warning' as const },
+                      { href: `/properties/${id}/services`,    icon: Wrench,         label: 'Serviços',   tone: 'accent'  as const },
+                    ].map(({ href, icon, label, tone }) => (
+                      <ActionTile key={href} href={href} icon={icon} label={label} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    Gestão operacional
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { href: `/properties/${id}/rooms`,       icon: Home,      label: 'Cômodos',    tone: 'default' as const },
+                      { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', tone: 'warning' as const },
+                      { href: `/properties/${id}/financial`,   icon: BarChart3, label: 'Financeiro', tone: 'success' as const },
+                      { href: `/properties/${id}/report`,      icon: Activity,  label: 'Relatório',  tone: 'accent'  as const },
+                      { href: `/properties/${id}/timeline`,    icon: GitBranch, label: 'Timeline',   tone: 'muted'   as const },
+                    ].map(({ href, icon, label, tone }) => (
+                      <ActionTile key={href} href={href} icon={icon} label={label} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
+                    ))}
+                  </div>
+                </div>
               </div>
             </PageSection>
           </div>
