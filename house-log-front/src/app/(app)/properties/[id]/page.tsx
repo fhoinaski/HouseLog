@@ -90,7 +90,7 @@ const SYSTEM_ACCENT: Record<string, string> = {
 
 // ─── tab types ────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'timeline' | 'sistemas';
+type Tab = 'overview' | 'historico';
 
 // ─── systems tab ─────────────────────────────────────────────────────────────
 
@@ -349,8 +349,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview',  label: 'Visão geral' },
-    { id: 'timeline',  label: 'Linha do tempo' },
-    { id: 'sistemas',  label: 'Sistemas' },
+    { id: 'historico', label: 'Histórico' },
   ];
 
   return (
@@ -637,7 +636,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               density="editorial"
             >
               <div className="space-y-4">
-                {/* Prontuário técnico — módulos premium do imóvel */}
+                {/* Prontuário técnico — memória técnica e documentação do imóvel */}
                 <div className="rounded-[var(--radius-xl)] border border-border-subtle bg-[var(--surface-base)] p-3">
                   <div className="mb-2.5 flex items-center gap-2">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
@@ -645,34 +644,46 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                     </p>
                     <span className="flex-1 border-t border-border-subtle" aria-hidden="true" />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                     {[
-                      { href: `/properties/${id}/warranties`,  icon: ShieldCheck,    label: 'Garantias',  description: 'Contratos e prazos',   tone: 'success' as const },
-                      { href: `/properties/${id}/renovations`, icon: FolderKanban,   label: 'Reformas',   description: 'Obras e intervenções',  tone: 'accent'  as const },
-                      { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover',   description: 'Entrega técnica',       tone: 'muted'   as const },
-                      { href: `/properties/${id}/documents`,   icon: FileText,       label: 'Documentos', description: 'Arquivos do imóvel',    tone: 'muted'   as const },
-                      { href: `/properties/${id}/inventory`,   icon: Package,        label: 'Inventário', description: 'Itens e sistemas',      tone: 'warning' as const },
-                      { href: `/properties/${id}/services`,    icon: Wrench,         label: 'OS',         description: 'Ordens de serviço',     tone: 'accent'  as const },
+                      { href: `/properties/${id}/warranties`,  icon: ShieldCheck,    label: 'Garantias',  description: 'Contratos e prazos',  tone: 'success' as const },
+                      { href: `/properties/${id}/renovations`, icon: FolderKanban,   label: 'Reformas',   description: 'Obras e intervenções', tone: 'accent'  as const },
+                      { href: `/properties/${id}/handover`,    icon: ClipboardCheck, label: 'Handover',   description: 'Entrega técnica',      tone: 'muted'   as const },
+                      { href: `/properties/${id}/documents`,   icon: FileText,       label: 'Documentos', description: 'Arquivos do imóvel',   tone: 'muted'   as const },
+                      { href: `/properties/${id}/inventory`,   icon: Package,        label: 'Inventário', description: 'Itens e sistemas',     tone: 'warning' as const },
                     ].map(({ href, icon, label, description, tone }) => (
                       <ActionTile key={href} href={href} icon={icon} label={label} description={description} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
                     ))}
                   </div>
                 </div>
 
-                {/* Gestão operacional — módulos de suporte e controle */}
+                {/* Operacional — execução e acompanhamento */}
                 <div>
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
-                    Gestão operacional
+                    Operacional
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { href: `/properties/${id}/rooms`,       icon: Home,      label: 'Cômodos',    tone: 'default' as const },
-                      { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', tone: 'warning' as const },
-                      { href: `/properties/${id}/financial`,   icon: BarChart3, label: 'Financeiro', tone: 'success' as const },
-                      { href: `/properties/${id}/report`,      icon: Activity,  label: 'Relatório',  tone: 'accent'  as const },
-                      { href: `/properties/${id}/timeline`,    icon: GitBranch, label: 'Timeline',   tone: 'muted'   as const },
-                    ].map(({ href, icon, label, tone }) => (
-                      <ActionTile key={href} href={href} icon={icon} label={label} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
+                      { href: `/properties/${id}/services`,    icon: Wrench,    label: 'OS',         description: 'Ordens de serviço',   tone: 'accent'  as const },
+                      { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', description: 'Plano preventivo',    tone: 'warning' as const },
+                      { href: `/properties/${id}/rooms`,       icon: Home,      label: 'Cômodos',    description: 'Ambientes do imóvel', tone: 'default' as const },
+                    ].map(({ href, icon, label, description, tone }) => (
+                      <ActionTile key={href} href={href} icon={icon} label={label} description={description} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Financeiro — custos, despesas e relatórios */}
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                    Financeiro
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { href: `/properties/${id}/financial`, icon: BarChart3, label: 'Financeiro', description: 'Despesas e custos',   tone: 'success' as const },
+                      { href: `/properties/${id}/report`,    icon: Activity,  label: 'Relatório',  description: 'Relatório do imóvel', tone: 'accent'  as const },
+                    ].map(({ href, icon, label, description, tone }) => (
+                      <ActionTile key={href} href={href} icon={icon} label={label} description={description} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
                     ))}
                   </div>
                 </div>
@@ -682,23 +693,24 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
-      {/* ── TAB: LINHA DO TEMPO ──────────────────────────────────────────── */}
-      {activeTab === 'timeline' && (
-        <div className="mx-auto max-w-2xl space-y-4 pb-8">
-          <p className="text-sm text-text-tertiary">
-            Últimas OS concluídas · <Link href={`/properties/${id}/timeline`} className="text-text-accent hover:underline">Ver tudo</Link>
-          </p>
-          <TimelinePreview propertyId={id} />
-        </div>
-      )}
+      {/* ── TAB: HISTÓRICO ───────────────────────────────────────────────── */}
+      {activeTab === 'historico' && (
+        <div className="mx-auto max-w-2xl space-y-8 pb-8">
+          <div className="space-y-4">
+            <p className="text-sm text-text-tertiary">
+              Últimas OS concluídas · <Link href={`/properties/${id}/timeline`} className="text-text-accent hover:underline">Ver linha do tempo completa</Link>
+            </p>
+            <TimelinePreview propertyId={id} />
+          </div>
 
-      {/* ── TAB: SISTEMAS ────────────────────────────────────────────────── */}
-      {activeTab === 'sistemas' && (
-        <div className="mx-auto max-w-2xl space-y-4 pb-8">
-          <p className="text-sm text-text-tertiary">
-            Saúde técnica por sistema · baseado nas OS registradas
-          </p>
-          <SystemsTab propertyId={id} />
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-text-secondary">Saúde por sistema</p>
+              <span className="flex-1 border-t border-border-subtle" aria-hidden="true" />
+            </div>
+            <p className="text-xs text-text-tertiary">Estado técnico derivado das OS registradas.</p>
+            <SystemsTab propertyId={id} />
+          </div>
         </div>
       )}
 
