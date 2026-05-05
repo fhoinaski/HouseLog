@@ -10,16 +10,20 @@ import {
   Building2,
   CheckCircle2,
   ClipboardCheck,
+  Compass,
   FileText,
   FolderKanban,
   GitBranch,
   Home,
+  KeyRound,
+  Lock,
   MapPin,
   Package,
   Pencil,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  Users,
   Wrench,
   Zap,
   Droplets,
@@ -625,7 +629,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             </PageSection>
           )}
 
-          {/* Summary card + quick access */}
+          {/* Summary card + gestão técnica */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
             <PropertySummaryCard property={property} className="h-full" />
 
@@ -689,6 +693,26 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                 </div>
               </div>
             </PageSection>
+          </div>
+
+          {/* Administração do imóvel — módulos de configuração e controle de acesso */}
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
+                Administração do imóvel
+              </p>
+              <span className="flex-1 border-t border-border-subtle" aria-hidden="true" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { href: `/properties/${id}/team`,        icon: Users,    label: 'Equipe',       description: 'Responsáveis e colaboradores', tone: 'muted' as const },
+                { href: `/properties/${id}/access`,      icon: KeyRound, label: 'Acessos',      description: 'Permissões e convites',        tone: 'muted' as const },
+                { href: `/properties/${id}/credentials`, icon: Lock,     label: 'Credenciais',  description: 'Acessos técnicos seguros',     tone: 'muted' as const },
+                { href: `/properties/${id}/map`,         icon: Compass,  label: 'Mapa técnico', description: 'Pontos e sistemas do imóvel',  tone: 'muted' as const },
+              ].map(({ href, icon, label, description, tone }) => (
+                <ActionTile key={href} href={href} icon={icon} label={label} description={description} tone={tone} density="compact" aria-label={`Abrir ${label}`} />
+              ))}
+            </div>
           </div>
         </div>
       )}
