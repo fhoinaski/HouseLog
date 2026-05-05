@@ -21,19 +21,24 @@ import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import {
   handoverChecklistApi,
   handoverPackagesApi,
   renovationsApi,
   warrantiesApi,
   type HandoverChecklistItem,
+  type HandoverChecklistItemCreateInput,
   type HandoverPackage,
+  type HandoverPackageCreateInput,
   type Renovation,
   type RenovationCreateInput,
   type Warranty,
   type WarrantyCreateInput,
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { HandoverChecklistItemFormDialog } from './handover-checklist-item-form-dialog';
+import { HandoverPackageFormDialog } from './handover-package-form-dialog';
 import { RenovationFormDialog } from './renovation-form-dialog';
 import { WarrantyFormDialog } from './warranty-form-dialog';
 
@@ -106,6 +111,13 @@ const CHECKLIST_STATUS_LABELS: Record<string, string> = {
   issue: 'Pendencia',
   not_applicable: 'Nao aplicavel',
 };
+
+const CHECKLIST_STATUS_OPTIONS: Array<{ value: HandoverChecklistItem['status']; label: string }> = [
+  { value: 'pending', label: 'Pendente' },
+  { value: 'done', label: 'Concluido' },
+  { value: 'issue', label: 'Pendencia' },
+  { value: 'not_applicable', label: 'Nao aplicavel' },
+];
 
 const STATUS_TONE: Record<string, string> = {
   active: 'bg-bg-success text-text-success',
@@ -563,12 +575,76 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const selectedPackage = packages.find((pkg) => pkg.id === selectedPackageId) ?? packages[0] ?? null;
 
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingPkg, setEditingPkg] = useState<HandoverPackage | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditingPkg(null);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(pkg: HandoverPackage) {
+    setEditingPkg(pkg);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  async function submitPackage(input: HandoverPackageCreateInput) {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      if (editingPkg) {
+        await handoverPackagesApi.update(propertyId, editingPkg.id, input);
+        toast.success('Dossie atualizado.');
+      } else {
+        const result = await handoverPackagesApi.create(propertyId, input);
+        setSelectedPackageId(result.package.id);
+        toast.success('Dossie criado.');
+      }
+      await mutate();
+      setFormOpen(false);
+      setEditingPkg(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar o dossie.';
+      setFormError(message);
+      toast.error('Erro ao salvar dossie', { description: message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deletePackage(pkg: HandoverPackage) {
+    if (!window.confirm(`Excluir "${pkg.title}" do historico de handover?`)) return;
+    setDeletingId(pkg.id);
+    try {
+      await handoverPackagesApi.delete(propertyId, pkg.id);
+      if (selectedPackageId === pkg.id) setSelectedPackageId(null);
+      await mutate();
+      toast.success('Dossie excluido.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir o dossie.';
+      toast.error('Erro ao excluir dossie', { description: message });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         eyebrow="Dossie tecnico"
         title="Handover"
-        description="Pacotes de entrega tecnica e checklist read-only para vistoria, pendencias e validacao do imovel."
+        description="Pacotes de entrega tecnica e checklist para vistoria, pendencias e validacao do imovel."
+        actions={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Novo dossie
+          </Button>
+        }
       />
 
       {isLoading && <LoadingGrid />}
@@ -584,6 +660,12 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
           icon={<ClipboardCheck className="h-6 w-6" aria-hidden="true" />}
           title="Nenhum pacote de entrega registrado ainda"
           description="Quando houver dossies de entrega, vistoria, entrada ou saida, eles aparecerao aqui com progresso do checklist."
+          actions={
+            <Button variant="outline" onClick={openCreate}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Criar primeiro dossie
+            </Button>
+          }
           tone="subtle"
           density="spacious"
         />
@@ -593,15 +675,19 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
           <PageSection title="Pacotes" description="Selecione um dossie para ver o checklist." tone="surface" density="compact">
             <div className="space-y-2">
               {packages.map((pkg) => (
-                <button
+                <div
                   key={pkg.id}
-                  type="button"
-                  onClick={() => setSelectedPackageId(pkg.id)}
                   className={cn(
-                    'w-full rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 text-left transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+                    'group relative w-full rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 text-left transition-colors hover:bg-bg-subtle',
                     selectedPackage?.id === pkg.id && 'border-border-focus bg-bg-accent-subtle'
                   )}
                 >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPackageId(pkg.id)}
+                    className="absolute inset-0 rounded-[var(--radius-xl)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                    aria-label={pkg.title}
+                  />
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -611,9 +697,28 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
                       <p className="mt-3 text-sm font-medium text-text-primary">{pkg.title}</p>
                       {pkg.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{pkg.description}</p>}
                     </div>
-                    <span className="shrink-0 text-xs text-text-tertiary">v{pkg.version}</span>
+                    <div className="relative z-10 flex shrink-0 items-center gap-1">
+                      <span className="mr-1 text-xs text-text-tertiary">v{pkg.version}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Editar dossie"
+                        onClick={() => openEdit(pkg)}
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Excluir dossie"
+                        loading={deletingId === pkg.id}
+                        onClick={() => void deletePackage(pkg)}
+                      >
+                        <Trash2 className="h-4 w-4 text-text-danger" aria-hidden="true" />
+                      </Button>
+                    </div>
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </PageSection>
@@ -621,6 +726,21 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
           {selectedPackage && <ChecklistPanel propertyId={propertyId} handoverPackage={selectedPackage} />}
         </div>
       )}
+
+      <HandoverPackageFormDialog
+        open={formOpen}
+        pkg={editingPkg}
+        submitting={submitting}
+        error={formError}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) {
+            setEditingPkg(null);
+            setFormError(null);
+          }
+        }}
+        onSubmit={submitPackage}
+      />
     </div>
   );
 }
@@ -632,67 +752,207 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const progress = useMemo(() => calculateChecklistProgress(items), [items]);
 
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<HandoverChecklistItem | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
+  function openCreate() {
+    setEditingItem(null);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(item: HandoverChecklistItem) {
+    setEditingItem(item);
+    setFormError(null);
+    setFormOpen(true);
+  }
+
+  async function submitItem(input: HandoverChecklistItemCreateInput) {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      if (editingItem) {
+        await handoverChecklistApi.update(propertyId, handoverPackage.id, editingItem.id, input);
+        toast.success('Item atualizado.');
+      } else {
+        await handoverChecklistApi.create(propertyId, handoverPackage.id, input);
+        toast.success('Item criado.');
+      }
+      await mutate();
+      setFormOpen(false);
+      setEditingItem(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel salvar o item.';
+      setFormError(message);
+      toast.error('Erro ao salvar item', { description: message });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deleteItem(item: HandoverChecklistItem) {
+    if (!window.confirm(`Excluir "${item.title}" do checklist?`)) return;
+    setDeletingId(item.id);
+    try {
+      await handoverChecklistApi.delete(propertyId, handoverPackage.id, item.id);
+      await mutate();
+      toast.success('Item excluido.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel excluir o item.';
+      toast.error('Erro ao excluir item', { description: message });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function changeItemStatus(item: HandoverChecklistItem, status: HandoverChecklistItem['status']) {
+    if (item.status === status) return;
+    setUpdatingStatusId(item.id);
+    try {
+      await handoverChecklistApi.updateStatus(propertyId, handoverPackage.id, item.id, { status });
+      await mutate();
+      toast.success('Status atualizado.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nao foi possivel atualizar o status.';
+      toast.error('Erro ao atualizar status', { description: message });
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }
+
   return (
-    <PageSection
-      title={handoverPackage.title}
-      description="Progresso do checklist de entrega tecnica."
-      tone="strong"
-      density="compact"
-    >
-      {isLoading && (
-        <div className="space-y-3">
-          <div className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
-          {[...Array(4)].map((_, index) => (
-            <div key={index} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
-          ))}
-        </div>
-      )}
-      {!isLoading && error && (
-        <ErrorState
-          title="Nao foi possivel carregar o checklist"
-          description={error instanceof Error ? error.message : undefined}
-          onRetry={() => void mutate()}
-        />
-      )}
-      {!isLoading && !error && (
-        <div className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-4">
-            <MetricBox label="Itens" value={progress.total} />
-            <MetricBox label="Concluidos" value={progress.done} tone="success" />
-            <MetricBox label="Pendencias" value={progress.issue} tone={progress.issue > 0 ? 'danger' : 'default'} />
-            <MetricBox label="Progresso" value={`${progress.percent}%`} tone="accent" />
+    <>
+      <PageSection
+        title={handoverPackage.title}
+        description="Progresso do checklist de entrega tecnica."
+        tone="strong"
+        density="compact"
+        actions={
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Novo item
+          </Button>
+        }
+      >
+        {isLoading && (
+          <div className="space-y-3">
+            <div className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
+            {[...Array(4)].map((_, index) => (
+              <div key={index} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
+            ))}
           </div>
-
-          <div className="h-2 overflow-hidden rounded-full bg-bg-subtle">
-            <div className="h-full rounded-full bg-bg-accent-subtle" style={{ width: `${progress.percent}%` }} />
-          </div>
-
-          {items.length === 0 ? (
-            <EmptyState
-              icon={<FileCheck2 className="h-6 w-6" aria-hidden="true" />}
-              title="Checklist ainda sem itens"
-              description="Os itens de vistoria, evidencias e pendencias deste pacote aparecerao aqui quando forem cadastrados."
-              tone="subtle"
-              density="spacious"
-            />
-          ) : (
-            <div className="space-y-2">
-              {items.map((item) => <ChecklistItemRow key={item.id} item={item} />)}
+        )}
+        {!isLoading && error && (
+          <ErrorState
+            title="Nao foi possivel carregar o checklist"
+            description={error instanceof Error ? error.message : undefined}
+            onRetry={() => void mutate()}
+          />
+        )}
+        {!isLoading && !error && (
+          <div className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-4">
+              <MetricBox label="Itens" value={progress.total} />
+              <MetricBox label="Concluidos" value={progress.done} tone="success" />
+              <MetricBox label="Pendencias" value={progress.issue} tone={progress.issue > 0 ? 'danger' : 'default'} />
+              <MetricBox label="Progresso" value={`${progress.percent}%`} tone="accent" />
             </div>
-          )}
-        </div>
-      )}
-    </PageSection>
+
+            <div className="h-2 overflow-hidden rounded-full bg-bg-subtle">
+              <div className="h-full rounded-full bg-bg-accent-subtle" style={{ width: `${progress.percent}%` }} />
+            </div>
+
+            {items.length === 0 ? (
+              <EmptyState
+                icon={<FileCheck2 className="h-6 w-6" aria-hidden="true" />}
+                title="Checklist ainda sem itens"
+                description="Os itens de vistoria, evidencias e pendencias deste pacote aparecerao aqui quando forem cadastrados."
+                actions={
+                  <Button variant="outline" onClick={openCreate}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Adicionar primeiro item
+                  </Button>
+                }
+                tone="subtle"
+                density="spacious"
+              />
+            ) : (
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <ChecklistItemRow
+                    key={item.id}
+                    item={item}
+                    deleting={deletingId === item.id}
+                    updatingStatus={updatingStatusId === item.id}
+                    onEdit={openEdit}
+                    onDelete={deleteItem}
+                    onStatusChange={changeItemStatus}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </PageSection>
+
+      <HandoverChecklistItemFormDialog
+        open={formOpen}
+        item={editingItem}
+        submitting={submitting}
+        error={formError}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) {
+            setEditingItem(null);
+            setFormError(null);
+          }
+        }}
+        onSubmit={submitItem}
+      />
+    </>
   );
 }
 
-function ChecklistItemRow({ item }: { item: HandoverChecklistItem }) {
+function ChecklistItemRow({
+  item,
+  deleting,
+  updatingStatus,
+  onEdit,
+  onDelete,
+  onStatusChange,
+}: {
+  item: HandoverChecklistItem;
+  deleting: boolean;
+  updatingStatus: boolean;
+  onEdit: (item: HandoverChecklistItem) => void;
+  onDelete: (item: HandoverChecklistItem) => void;
+  onStatusChange: (item: HandoverChecklistItem, status: HandoverChecklistItem['status']) => void;
+}) {
   return (
     <article className="rounded-[var(--radius-lg)] border border-border-subtle bg-bg-surface px-3 py-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={item.status} label={CHECKLIST_STATUS_LABELS[item.status] ?? item.status} />
+            <Select
+              value={item.status}
+              disabled={updatingStatus || deleting}
+              onValueChange={(value) => onStatusChange(item, value as HandoverChecklistItem['status'])}
+            >
+              <SelectTrigger className="min-h-0 h-auto w-auto gap-0.5 border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-40">
+                <StatusBadge status={item.status} label={CHECKLIST_STATUS_LABELS[item.status] ?? item.status} />
+              </SelectTrigger>
+              <SelectContent>
+                {CHECKLIST_STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <span className="text-xs text-text-tertiary">{CHECKLIST_CATEGORY_LABELS[item.category] ?? item.category}</span>
             {item.required && <span className="text-xs font-medium text-text-warning">Obrigatorio</span>}
           </div>
@@ -700,13 +960,30 @@ function ChecklistItemRow({ item }: { item: HandoverChecklistItem }) {
           {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{item.description}</p>}
           {item.notes && <p className="mt-2 text-xs leading-5 text-text-secondary">Notas: {item.notes}</p>}
         </div>
-        {item.status === 'issue' ? (
-          <AlertTriangle className="h-4 w-4 shrink-0 text-text-danger" aria-hidden="true" />
-        ) : item.status === 'done' ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-text-success" aria-hidden="true" />
-        ) : (
-          <PackageCheck className="h-4 w-4 shrink-0 text-text-tertiary" aria-hidden="true" />
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {updatingStatus ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-border-subtle border-t-text-accent" aria-hidden="true" />
+          ) : item.status === 'issue' ? (
+            <AlertTriangle className="h-4 w-4 text-text-danger" aria-hidden="true" />
+          ) : item.status === 'done' ? (
+            <CheckCircle2 className="h-4 w-4 text-text-success" aria-hidden="true" />
+          ) : (
+            <PackageCheck className="h-4 w-4 text-text-tertiary" aria-hidden="true" />
+          )}
+          <Button variant="ghost" size="icon" aria-label="Editar item" disabled={updatingStatus} onClick={() => onEdit(item)}>
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Excluir item"
+            loading={deleting}
+            disabled={updatingStatus}
+            onClick={() => void onDelete(item)}
+          >
+            <Trash2 className="h-4 w-4 text-text-danger" aria-hidden="true" />
+          </Button>
+        </div>
       </div>
     </article>
   );
