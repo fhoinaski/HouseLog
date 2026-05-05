@@ -4,16 +4,16 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { warrantyCreateSchema } from '@houselog/contracts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { PremiumFormActions, PremiumFormError, PremiumFormGrid, PremiumFormSection } from './premium-form-layout';
 import type { Warranty, WarrantyCreateInput } from '@/lib/api';
 
 const WARRANTY_TYPES: Array<{ value: WarrantyCreateInput['warranty_type']; label: string }> = [
-  { value: 'service', label: 'Servico' },
+  { value: 'service', label: 'Serviço' },
   { value: 'equipment', label: 'Equipamento' },
   { value: 'material', label: 'Material' },
   { value: 'structural', label: 'Estrutural' },
@@ -80,15 +80,19 @@ export function WarrantyFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{warranty ? 'Editar garantia' : 'Nova garantia'}</DialogTitle>
+          <DialogDescription>
+            Registre cobertura, vigência e condições vinculadas ao prontuário do imóvel.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <PremiumFormSection title="Identificação" description="Informe o título, tipo e responsável pela garantia.">
+            <PremiumFormGrid>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="warranty-title">Titulo *</Label>
+              <Label htmlFor="warranty-title">Título *</Label>
               <Input id="warranty-title" placeholder="Ex.: Garantia do sistema de ar condicionado" {...register('title')} />
               {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
             </div>
@@ -135,9 +139,13 @@ export function WarrantyFormDialog({
               <Label htmlFor="warranty-provider">Fornecedor</Label>
               <Input id="warranty-provider" placeholder="Empresa, profissional ou fabricante" {...register('provider_name')} />
             </div>
+            </PremiumFormGrid>
+          </PremiumFormSection>
 
+          <PremiumFormSection title="Vigência e cobertura" description="Detalhe prazo, escopo coberto e restrições relevantes.">
+            <PremiumFormGrid>
             <div className="space-y-1.5">
-              <Label htmlFor="warranty-start">Inicio</Label>
+              <Label htmlFor="warranty-start">Início</Label>
               <Input id="warranty-start" type="date" {...register('start_date')} />
             </div>
 
@@ -149,34 +157,28 @@ export function WarrantyFormDialog({
 
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="warranty-coverage">Cobertura</Label>
-              <Textarea id="warranty-coverage" rows={3} placeholder="Resumo objetivo do que esta coberto" {...register('coverage')} />
+              <Textarea id="warranty-coverage" rows={3} placeholder="Resumo objetivo do que está coberto" {...register('coverage')} />
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="warranty-description">Descricao</Label>
-              <Textarea id="warranty-description" rows={3} placeholder="Contexto tecnico, fornecedor, escopo e observacoes" {...register('description')} />
+              <Label htmlFor="warranty-description">Descrição</Label>
+              <Textarea id="warranty-description" rows={3} placeholder="Contexto técnico, fornecedor, escopo e observações" {...register('description')} />
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="warranty-exclusions">Exclusoes</Label>
-              <Textarea id="warranty-exclusions" rows={3} placeholder="Condicoes nao cobertas ou restricoes relevantes" {...register('exclusions')} />
+              <Label htmlFor="warranty-exclusions">Exclusões</Label>
+              <Textarea id="warranty-exclusions" rows={3} placeholder="Condições não cobertas ou restrições relevantes" {...register('exclusions')} />
             </div>
-          </div>
+            </PremiumFormGrid>
+          </PremiumFormSection>
 
-          {error && (
-            <div className="rounded-[var(--radius-md)] border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
-              {error}
-            </div>
-          )}
+          <PremiumFormError error={error} />
 
-          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={submitting}>
-              {warranty ? 'Salvar alteracoes' : 'Criar garantia'}
-            </Button>
-          </div>
+          <PremiumFormActions
+            submitting={submitting}
+            submitLabel={warranty ? 'Salvar alterações' : 'Criar'}
+            onCancel={() => onOpenChange(false)}
+          />
         </form>
       </DialogContent>
     </Dialog>

@@ -4,12 +4,12 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { handoverChecklistItemCreateSchema } from '@houselog/contracts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { PremiumFormActions, PremiumFormError, PremiumFormGrid, PremiumFormSection } from './premium-form-layout';
 import type { HandoverChecklistItem, HandoverChecklistItemCreateInput } from '@/lib/api';
 
 const ITEM_CATEGORIES: Array<{ value: HandoverChecklistItemCreateInput['category']; label: string }> = [
@@ -17,17 +17,17 @@ const ITEM_CATEGORIES: Array<{ value: HandoverChecklistItemCreateInput['category
   { value: 'keys', label: 'Chaves' },
   { value: 'documents', label: 'Documentos' },
   { value: 'utilities', label: 'Utilidades' },
-  { value: 'inventory', label: 'Inventario' },
+  { value: 'inventory', label: 'Inventário' },
   { value: 'cleaning', label: 'Limpeza' },
-  { value: 'maintenance', label: 'Manutencao' },
-  { value: 'safety', label: 'Seguranca' },
+  { value: 'maintenance', label: 'Manutenção' },
+  { value: 'safety', label: 'Segurança' },
 ];
 
 const ITEM_STATUSES: Array<{ value: HandoverChecklistItemCreateInput['status']; label: string }> = [
   { value: 'pending', label: 'Pendente' },
-  { value: 'done', label: 'Concluido' },
-  { value: 'issue', label: 'Pendencia' },
-  { value: 'not_applicable', label: 'Nao aplicavel' },
+  { value: 'done', label: 'Concluído' },
+  { value: 'issue', label: 'Pendência' },
+  { value: 'not_applicable', label: 'Não aplicável' },
 ];
 
 const ITEM_CONDITIONS: Array<{ value: NonNullable<HandoverChecklistItemCreateInput['condition']>; label: string }> = [
@@ -91,146 +91,148 @@ export function HandoverChecklistItemFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{item ? 'Editar item do checklist' : 'Novo item do checklist'}</DialogTitle>
+          <DialogDescription>
+            Defina controles, condição e observações do checklist de entrega.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="ci-title">Titulo *</Label>
-              <Input id="ci-title" placeholder="Ex.: Entrega de chaves do apartamento" {...register('title')} />
-              {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <PremiumFormSection title="Controle do item" description="Informe título, categoria, status e ordem de exibição.">
+            <PremiumFormGrid>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="ci-title">Título *</Label>
+                <Input id="ci-title" placeholder="Ex.: Entrega de chaves do apartamento" {...register('title')} />
+                {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Categoria *</Label>
-              <Select
-                value={category ?? DEFAULT_VALUES.category}
-                onValueChange={(value) =>
-                  setValue('category', value as HandoverChecklistItemCreateInput['category'], { shouldValidate: true })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ITEM_CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              <div className="space-y-1.5">
+                <Label>Categoria *</Label>
+                <Select
+                  value={category ?? DEFAULT_VALUES.category}
+                  onValueChange={(value) =>
+                    setValue('category', value as HandoverChecklistItemCreateInput['category'], { shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ITEM_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Status *</Label>
-              <Select
-                value={status ?? DEFAULT_VALUES.status}
-                onValueChange={(value) =>
-                  setValue('status', value as HandoverChecklistItemCreateInput['status'], { shouldValidate: true })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ITEM_STATUSES.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              <div className="space-y-1.5">
+                <Label>Status *</Label>
+                <Select
+                  value={status ?? DEFAULT_VALUES.status}
+                  onValueChange={(value) =>
+                    setValue('status', value as HandoverChecklistItemCreateInput['status'], { shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ITEM_STATUSES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Condicao</Label>
-              <Select
-                value={condition ?? ''}
-                onValueChange={(value) =>
-                  setValue(
-                    'condition',
-                    value === '' ? null : (value as NonNullable<HandoverChecklistItemCreateInput['condition']>),
-                    { shouldValidate: true }
-                  )
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Nao informada" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Nao informada</SelectItem>
-                  {ITEM_CONDITIONS.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              <div className="space-y-1.5">
+                <Label>Condição</Label>
+                <Select
+                  value={condition ?? ''}
+                  onValueChange={(value) =>
+                    setValue(
+                      'condition',
+                      value === '' ? null : (value as NonNullable<HandoverChecklistItemCreateInput['condition']>),
+                      { shouldValidate: true }
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Não informada" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Não informada</SelectItem>
+                    {ITEM_CONDITIONS.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="ci-sort-order">Ordem</Label>
-              <Input
-                id="ci-sort-order"
-                type="number"
-                min={0}
-                step={1}
-                {...register('sort_order', { valueAsNumber: true })}
-              />
-            </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ci-sort-order">Ordem</Label>
+                <Input
+                  id="ci-sort-order"
+                  type="number"
+                  min={0}
+                  step={1}
+                  {...register('sort_order', { valueAsNumber: true })}
+                />
+              </div>
 
-            <div className="flex items-center gap-3 sm:col-span-2">
-              <input
-                id="ci-required"
-                type="checkbox"
-                checked={required ?? true}
-                onChange={(e) => setValue('required', e.target.checked, { shouldValidate: true })}
-                className="h-4 w-4 rounded accent-[var(--color-accent)]"
-              />
-              <Label htmlFor="ci-required" className="cursor-pointer">
-                Item obrigatorio
-              </Label>
-            </div>
+              <div className="flex items-center gap-3 sm:col-span-2">
+                <input
+                  id="ci-required"
+                  type="checkbox"
+                  checked={required ?? true}
+                  onChange={(e) => setValue('required', e.target.checked, { shouldValidate: true })}
+                  className="h-4 w-4 rounded accent-[var(--color-accent)]"
+                />
+                <Label htmlFor="ci-required" className="cursor-pointer">
+                  Item obrigatório
+                </Label>
+              </div>
+            </PremiumFormGrid>
+          </PremiumFormSection>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="ci-description">Descricao</Label>
-              <Textarea
-                id="ci-description"
-                rows={3}
-                placeholder="Contexto tecnico ou instrucoes para este item"
-                {...register('description')}
-              />
-            </div>
+          <PremiumFormSection title="Contexto técnico" description="Adicione instruções, observações e ressalvas quando necessário.">
+            <PremiumFormGrid>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="ci-description">Descrição</Label>
+                <Textarea
+                  id="ci-description"
+                  rows={3}
+                  placeholder="Contexto técnico ou instruções para este item"
+                  {...register('description')}
+                />
+              </div>
 
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="ci-notes">Notas</Label>
-              <Textarea
-                id="ci-notes"
-                rows={3}
-                placeholder="Observacoes adicionais, pendencias ou ressalvas"
-                {...register('notes')}
-              />
-            </div>
-          </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="ci-notes">Notas</Label>
+                <Textarea
+                  id="ci-notes"
+                  rows={3}
+                  placeholder="Observações adicionais, pendências ou ressalvas"
+                  {...register('notes')}
+                />
+              </div>
+            </PremiumFormGrid>
+          </PremiumFormSection>
 
-          {error && (
-            <div className="rounded-[var(--radius-md)] border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
-              {error}
-            </div>
-          )}
+          <PremiumFormError error={error} />
 
-          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={submitting}>
-              {item ? 'Salvar alteracoes' : 'Criar item'}
-            </Button>
-          </div>
+          <PremiumFormActions
+            submitting={submitting}
+            submitLabel={item ? 'Salvar alterações' : 'Criar'}
+            onCancel={() => onOpenChange(false)}
+          />
         </form>
       </DialogContent>
     </Dialog>

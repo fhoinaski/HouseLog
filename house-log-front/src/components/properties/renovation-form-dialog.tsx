@@ -4,22 +4,22 @@ import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import { renovationCreateSchema } from '@houselog/contracts';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { PremiumFormActions, PremiumFormError, PremiumFormGrid, PremiumFormSection } from './premium-form-layout';
 import type { Renovation, RenovationCreateInput } from '@/lib/api';
 
 const RENOVATION_CATEGORIES: Array<{ value: RenovationCreateInput['category']; label: string }> = [
   { value: 'structural', label: 'Estrutural' },
-  { value: 'electrical', label: 'Eletrica' },
-  { value: 'plumbing', label: 'Hidraulica' },
+  { value: 'electrical', label: 'Elétrica' },
+  { value: 'plumbing', label: 'Hidráulica' },
   { value: 'finishing', label: 'Acabamento' },
   { value: 'layout', label: 'Layout' },
   { value: 'roofing', label: 'Cobertura' },
-  { value: 'waterproofing', label: 'Impermeabilizacao' },
+  { value: 'waterproofing', label: 'Impermeabilização' },
   { value: 'painting', label: 'Pintura' },
   { value: 'flooring', label: 'Piso' },
   { value: 'other', label: 'Outro' },
@@ -28,7 +28,7 @@ const RENOVATION_CATEGORIES: Array<{ value: RenovationCreateInput['category']; l
 const RENOVATION_STATUSES: Array<{ value: RenovationCreateInput['status']; label: string }> = [
   { value: 'planned', label: 'Planejada' },
   { value: 'in_progress', label: 'Em andamento' },
-  { value: 'completed', label: 'Concluida' },
+  { value: 'completed', label: 'Concluída' },
   { value: 'cancelled', label: 'Cancelada' },
 ];
 
@@ -85,16 +85,20 @@ export function RenovationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{renovation ? 'Editar reforma' : 'Nova reforma'}</DialogTitle>
+          <DialogDescription>
+            Organize escopo, datas, responsável e custo da intervenção.
+          </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <PremiumFormSection title="Identificação" description="Informe nome, categoria e status da reforma.">
+            <PremiumFormGrid>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="renovation-title">Titulo *</Label>
-              <Input id="renovation-title" placeholder="Ex.: Reforma da area gourmet" {...register('title')} />
+              <Label htmlFor="renovation-title">Título *</Label>
+              <Input id="renovation-title" placeholder="Ex.: Reforma da área gourmet" {...register('title')} />
               {errors.title && <p className="text-xs text-text-danger">{errors.title.message}</p>}
             </div>
 
@@ -137,23 +141,27 @@ export function RenovationFormDialog({
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="renovation-description">Descricao</Label>
-              <Textarea id="renovation-description" rows={3} placeholder="Escopo, contexto tecnico e areas afetadas" {...register('description')} />
+              <Label htmlFor="renovation-description">Descrição</Label>
+              <Textarea id="renovation-description" rows={3} placeholder="Escopo, contexto técnico e áreas afetadas" {...register('description')} />
             </div>
+            </PremiumFormGrid>
+          </PremiumFormSection>
 
+          <PremiumFormSection title="Cronograma e custo" description="Registre datas, contratado, custo e observações operacionais.">
+            <PremiumFormGrid>
             <div className="space-y-1.5">
-              <Label htmlFor="renovation-started">Inicio</Label>
+              <Label htmlFor="renovation-started">Início</Label>
               <Input id="renovation-started" type="date" {...register('started_at')} />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="renovation-completed">Conclusao</Label>
+              <Label htmlFor="renovation-completed">Conclusão</Label>
               <Input id="renovation-completed" type="date" {...register('completed_at')} />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="renovation-contractor">Contratado</Label>
-              <Input id="renovation-contractor" placeholder="Empresa ou profissional responsavel" {...register('contractor_name')} />
+              <Input id="renovation-contractor" placeholder="Empresa ou profissional responsável" {...register('contractor_name')} />
             </div>
 
             <div className="space-y-1.5">
@@ -173,24 +181,18 @@ export function RenovationFormDialog({
 
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="renovation-notes">Notas</Label>
-              <Textarea id="renovation-notes" rows={3} placeholder="Observacoes operacionais, pendencias ou decisoes tecnicas" {...register('notes')} />
+              <Textarea id="renovation-notes" rows={3} placeholder="Observações operacionais, pendências ou decisões técnicas" {...register('notes')} />
             </div>
-          </div>
+            </PremiumFormGrid>
+          </PremiumFormSection>
 
-          {error && (
-            <div className="rounded-[var(--radius-md)] border-half border-border-danger bg-bg-danger px-3 py-2 text-sm text-text-danger">
-              {error}
-            </div>
-          )}
+          <PremiumFormError error={error} />
 
-          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" disabled={submitting} onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" loading={submitting}>
-              {renovation ? 'Salvar alteracoes' : 'Criar reforma'}
-            </Button>
-          </div>
+          <PremiumFormActions
+            submitting={submitting}
+            submitLabel={renovation ? 'Salvar alterações' : 'Criar'}
+            onCancel={() => onOpenChange(false)}
+          />
         </form>
       </DialogContent>
     </Dialog>
