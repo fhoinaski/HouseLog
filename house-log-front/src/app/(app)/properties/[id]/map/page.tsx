@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -138,6 +139,7 @@ export default function PropertyMapPage({ params }: { params: Promise<{ id: stri
   const [form, setForm] = useState<PointFormState>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeletePoint, setPendingDeletePoint] = useState<TechnicalPoint | null>(null);
 
   const { data, error, isLoading, mutate } = useSWR(['technical-points', id], () =>
     technicalPointsApi.list(id)
@@ -201,13 +203,14 @@ export default function PropertyMapPage({ params }: { params: Promise<{ id: stri
     }
   }
 
-  async function removePoint(point: TechnicalPoint) {
-    if (!window.confirm(`Remover "${point.name}" do mapa técnico?`)) return;
-    setDeletingId(point.id);
+  async function confirmRemovePoint() {
+    if (!pendingDeletePoint) return;
+    setDeletingId(pendingDeletePoint.id);
     try {
-      await technicalPointsApi.delete(id, point.id);
+      await technicalPointsApi.delete(id, pendingDeletePoint.id);
       await mutate();
       toast.success('Ponto técnico removido.');
+      setPendingDeletePoint(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível remover o ponto técnico.';
       toast.error('Erro ao remover ponto', { description: message });
@@ -355,7 +358,7 @@ export default function PropertyMapPage({ params }: { params: Promise<{ id: stri
                       size="sm"
                       className="text-text-danger hover:bg-bg-danger"
                       loading={deletingId === point.id}
-                      onClick={() => void removePoint(point)}
+                      onClick={() => setPendingDeletePoint(point)}
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                       Remover
@@ -508,6 +511,17 @@ export default function PropertyMapPage({ params }: { params: Promise<{ id: stri
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!pendingDeletePoint}
+        onOpenChange={(open) => { if (!open) setPendingDeletePoint(null); }}
+        title="Remover ponto técnico?"
+        itemName={pendingDeletePoint?.name}
+        description="Esta ação remove o ponto do mapa técnico do imóvel."
+        confirmLabel="Remover"
+        onConfirm={() => void confirmRemovePoint()}
+        isLoading={deletingId === pendingDeletePoint?.id}
+      />
     </div>
   );
 }

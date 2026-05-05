@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -128,6 +129,7 @@ export default function PropertySystemsPage({ params }: { params: Promise<{ id: 
   const [form, setForm] = useState<SystemFormState>(DEFAULT_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteSystem, setPendingDeleteSystem] = useState<TechnicalSystem | null>(null);
 
   const { data, error, isLoading, mutate } = useSWR(['technical-systems', id], () =>
     technicalSystemsApi.list(id)
@@ -186,13 +188,14 @@ export default function PropertySystemsPage({ params }: { params: Promise<{ id: 
     }
   }
 
-  async function removeSystem(system: TechnicalSystem) {
-    if (!window.confirm(`Remover "${system.name}" do prontuario tecnico?`)) return;
-    setDeletingId(system.id);
+  async function confirmRemoveSystem() {
+    if (!pendingDeleteSystem) return;
+    setDeletingId(pendingDeleteSystem.id);
     try {
-      await technicalSystemsApi.delete(id, system.id);
+      await technicalSystemsApi.delete(id, pendingDeleteSystem.id);
       await mutate();
       toast.success('Sistema técnico removido.');
+      setPendingDeleteSystem(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível remover o sistema.';
       toast.error('Erro ao remover sistema', { description: message });
@@ -341,7 +344,7 @@ export default function PropertySystemsPage({ params }: { params: Promise<{ id: 
                       size="sm"
                       className="text-text-danger hover:bg-bg-danger"
                       loading={deletingId === system.id}
-                      onClick={() => void removeSystem(system)}
+                      onClick={() => setPendingDeleteSystem(system)}
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                       Remover
@@ -463,6 +466,17 @@ export default function PropertySystemsPage({ params }: { params: Promise<{ id: 
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        open={!!pendingDeleteSystem}
+        onOpenChange={(open) => { if (!open) setPendingDeleteSystem(null); }}
+        title="Remover sistema técnico?"
+        itemName={pendingDeleteSystem?.name}
+        description="Esta ação remove o sistema do prontuário técnico do imóvel."
+        confirmLabel="Remover"
+        onConfirm={() => void confirmRemoveSystem()}
+        isLoading={deletingId === pendingDeleteSystem?.id}
+      />
     </div>
   );
 }

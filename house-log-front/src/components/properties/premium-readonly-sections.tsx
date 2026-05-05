@@ -37,6 +37,7 @@ import {
   type WarrantyCreateInput,
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { ConfirmDeleteDialog } from '@/components/ui/confirm-delete-dialog';
 import { HandoverChecklistItemFormDialog } from './handover-checklist-item-form-dialog';
 import { HandoverPackageFormDialog } from './handover-package-form-dialog';
 import { RenovationFormDialog } from './renovation-form-dialog';
@@ -178,6 +179,7 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteWarranty, setPendingDeleteWarranty] = useState<Warranty | null>(null);
   const warranties = data?.warranties ?? [];
   const activeCount = warranties.filter((warranty) => warranty.status === 'active').length;
   const expiredCount = warranties.filter((warranty) => warranty.status === 'expired').length;
@@ -217,13 +219,14 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
     }
   }
 
-  async function deleteWarranty(warranty: Warranty) {
-    if (!window.confirm(`Excluir "${warranty.title}" do prontuario de garantias?`)) return;
-    setDeletingId(warranty.id);
+  async function confirmDeleteWarranty() {
+    if (!pendingDeleteWarranty) return;
+    setDeletingId(pendingDeleteWarranty.id);
     try {
-      await warrantiesApi.delete(propertyId, warranty.id);
+      await warrantiesApi.delete(propertyId, pendingDeleteWarranty.id);
       await mutate();
       toast.success('Garantia excluida.');
+      setPendingDeleteWarranty(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Nao foi possivel excluir a garantia.';
       toast.error('Erro ao excluir garantia', { description: message });
@@ -285,7 +288,7 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
               warranty={warranty}
               deleting={deletingId === warranty.id}
               onEdit={openEdit}
-              onDelete={deleteWarranty}
+              onDelete={setPendingDeleteWarranty}
             />
           ))}
         </div>
@@ -304,6 +307,16 @@ export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string 
           }
         }}
         onSubmit={submitWarranty}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!pendingDeleteWarranty}
+        onOpenChange={(open) => { if (!open) setPendingDeleteWarranty(null); }}
+        title="Excluir garantia?"
+        itemName={pendingDeleteWarranty?.title}
+        description="Esta ação remove a garantia do prontuário ativo do imóvel."
+        onConfirm={() => void confirmDeleteWarranty()}
+        isLoading={deletingId === pendingDeleteWarranty?.id}
       />
     </div>
   );
@@ -378,6 +391,7 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteRenovation, setPendingDeleteRenovation] = useState<Renovation | null>(null);
   const renovations = data?.renovations ?? [];
   const completedCount = renovations.filter((renovation) => renovation.status === 'completed').length;
   const inProgressCount = renovations.filter((renovation) => renovation.status === 'in_progress').length;
@@ -418,13 +432,14 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
     }
   }
 
-  async function deleteRenovation(renovation: Renovation) {
-    if (!window.confirm(`Excluir "${renovation.title}" do historico de reformas?`)) return;
-    setDeletingId(renovation.id);
+  async function confirmDeleteRenovation() {
+    if (!pendingDeleteRenovation) return;
+    setDeletingId(pendingDeleteRenovation.id);
     try {
-      await renovationsApi.delete(propertyId, renovation.id);
+      await renovationsApi.delete(propertyId, pendingDeleteRenovation.id);
       await mutate();
       toast.success('Reforma excluida.');
+      setPendingDeleteRenovation(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Nao foi possivel excluir a reforma.';
       toast.error('Erro ao excluir reforma', { description: message });
@@ -487,7 +502,7 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
               renovation={renovation}
               deleting={deletingId === renovation.id}
               onEdit={openEdit}
-              onDelete={deleteRenovation}
+              onDelete={setPendingDeleteRenovation}
             />
           ))}
         </div>
@@ -506,6 +521,16 @@ export function PropertyRenovationsReadonly({ propertyId }: { propertyId: string
           }
         }}
         onSubmit={submitRenovation}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!pendingDeleteRenovation}
+        onOpenChange={(open) => { if (!open) setPendingDeleteRenovation(null); }}
+        title="Excluir reforma?"
+        itemName={pendingDeleteRenovation?.title}
+        description="Esta ação remove a reforma do histórico técnico do imóvel."
+        onConfirm={() => void confirmDeleteRenovation()}
+        isLoading={deletingId === pendingDeleteRenovation?.id}
       />
     </div>
   );
@@ -580,6 +605,7 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeletePkg, setPendingDeletePkg] = useState<HandoverPackage | null>(null);
 
   function openCreate() {
     setEditingPkg(null);
@@ -617,14 +643,15 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
     }
   }
 
-  async function deletePackage(pkg: HandoverPackage) {
-    if (!window.confirm(`Excluir "${pkg.title}" do historico de handover?`)) return;
-    setDeletingId(pkg.id);
+  async function confirmDeletePackage() {
+    if (!pendingDeletePkg) return;
+    setDeletingId(pendingDeletePkg.id);
     try {
-      await handoverPackagesApi.delete(propertyId, pkg.id);
-      if (selectedPackageId === pkg.id) setSelectedPackageId(null);
+      await handoverPackagesApi.delete(propertyId, pendingDeletePkg.id);
+      if (selectedPackageId === pendingDeletePkg.id) setSelectedPackageId(null);
       await mutate();
       toast.success('Dossie excluido.');
+      setPendingDeletePkg(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Nao foi possivel excluir o dossie.';
       toast.error('Erro ao excluir dossie', { description: message });
@@ -712,7 +739,7 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
                         size="icon"
                         aria-label="Excluir dossie"
                         loading={deletingId === pkg.id}
-                        onClick={() => void deletePackage(pkg)}
+                        onClick={() => setPendingDeletePkg(pkg)}
                       >
                         <Trash2 className="h-4 w-4 text-text-danger" aria-hidden="true" />
                       </Button>
@@ -741,6 +768,16 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
         }}
         onSubmit={submitPackage}
       />
+
+      <ConfirmDeleteDialog
+        open={!!pendingDeletePkg}
+        onOpenChange={(open) => { if (!open) setPendingDeletePkg(null); }}
+        title="Excluir pacote de entrega?"
+        itemName={pendingDeletePkg?.title}
+        description="Esta ação remove o dossiê e seu checklist do histórico de handover do imóvel."
+        onConfirm={() => void confirmDeletePackage()}
+        isLoading={deletingId === pendingDeletePkg?.id}
+      />
     </div>
   );
 }
@@ -758,6 +795,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<HandoverChecklistItem | null>(null);
 
   function openCreate() {
     setEditingItem(null);
@@ -794,13 +832,14 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
     }
   }
 
-  async function deleteItem(item: HandoverChecklistItem) {
-    if (!window.confirm(`Excluir "${item.title}" do checklist?`)) return;
-    setDeletingId(item.id);
+  async function confirmDeleteItem() {
+    if (!pendingDeleteItem) return;
+    setDeletingId(pendingDeleteItem.id);
     try {
-      await handoverChecklistApi.delete(propertyId, handoverPackage.id, item.id);
+      await handoverChecklistApi.delete(propertyId, handoverPackage.id, pendingDeleteItem.id);
       await mutate();
       toast.success('Item excluido.');
+      setPendingDeleteItem(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Nao foi possivel excluir o item.';
       toast.error('Erro ao excluir item', { description: message });
@@ -889,7 +928,7 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
                     deleting={deletingId === item.id}
                     updatingStatus={updatingStatusId === item.id}
                     onEdit={openEdit}
-                    onDelete={deleteItem}
+                    onDelete={setPendingDeleteItem}
                     onStatusChange={changeItemStatus}
                   />
                 ))}
@@ -912,6 +951,16 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
           }
         }}
         onSubmit={submitItem}
+      />
+
+      <ConfirmDeleteDialog
+        open={!!pendingDeleteItem}
+        onOpenChange={(open) => { if (!open) setPendingDeleteItem(null); }}
+        title="Excluir item do checklist?"
+        itemName={pendingDeleteItem?.title}
+        description="Esta ação remove o item do checklist de entrega técnica do imóvel."
+        onConfirm={() => void confirmDeleteItem()}
+        isLoading={deletingId === pendingDeleteItem?.id}
       />
     </>
   );
