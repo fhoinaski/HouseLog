@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Textarea } from '@/components/ui/textarea';
 import { bidsApi, normalizeMediaUrl, providerApi, type ServiceBid } from '@/lib/api';
 import {
@@ -33,14 +34,6 @@ const bidSchema = z.object({
 });
 
 type BidForm = z.infer<typeof bidSchema>;
-
-const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  requested: 'requested',
-  approved: 'approved',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  verified: 'verified',
-};
 
 const BID_STATUS_LABEL: Record<ServiceBid['status'], string> = {
   accepted: 'Aceita',
@@ -213,7 +206,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             density="editorial"
             actions={
               <div className="flex flex-wrap gap-2">
-                <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
+                <StatusBadge status={order.status} label={SERVICE_STATUS_LABELS[order.status]} />
                 <Badge variant="outline">{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
               </div>
             }

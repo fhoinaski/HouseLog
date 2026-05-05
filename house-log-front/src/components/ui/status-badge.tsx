@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -23,11 +25,29 @@ export const STATUS_TONE: Record<string, string> = {
   done:           'bg-bg-success text-text-success',
   issue:          'bg-bg-danger text-text-danger',
   not_applicable: 'bg-bg-subtle text-text-tertiary',
+  // Service order
+  requested:      'bg-bg-warning text-text-warning',
+  verified:       'bg-bg-success text-text-success',
+  // Inventory
+  low_stock:      'bg-bg-warning text-text-warning',
+  warranty_active: 'bg-bg-success text-text-success',
+  warranty_expired: 'bg-bg-danger text-text-danger',
 };
 
-export function StatusBadge({ status, label }: { status: string; label: string }) {
+export function StatusBadge({
+  status,
+  label,
+  className,
+  icon,
+}: {
+  status: string;
+  label: ReactNode;
+  className?: string;
+  icon?: ReactNode;
+}) {
   return (
-    <Badge className={cn('border-0 text-xs', STATUS_TONE[status] ?? 'bg-bg-subtle text-text-secondary')}>
+    <Badge className={cn('border-0 text-xs', STATUS_TONE[status] ?? 'bg-bg-subtle text-text-secondary', className)}>
+      {icon}
       {label}
     </Badge>
   );

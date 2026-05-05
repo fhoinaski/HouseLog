@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MetricCard } from '@/components/ui/metric-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { inventoryItemCardVariants, inventoryPhotoFrameVariants } from '@/components/ui/visual-system';
 import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
 import { cn, INVENTORY_CATEGORY_LABELS } from '@/lib/utils';
@@ -109,23 +110,23 @@ function ItemCard({
 
         {isLowStock && (
           <div className="absolute left-2 top-2">
-            <Badge variant="urgent" className="gap-1 text-xs">
-              <AlertTriangle className="h-3 w-3" />
-              Baixo estoque
-            </Badge>
+            <StatusBadge
+              status="low_stock"
+              label="Baixo estoque"
+              className="gap-1"
+              icon={<AlertTriangle className="h-3 w-3" />}
+            />
           </div>
         )}
 
         {item.warranty_until && (
           <div className="absolute right-2 top-2" title={`Garantia ate ${item.warranty_until}`}>
-            <div
-              className={cn(
-                'flex h-6 w-6 items-center justify-center rounded-[var(--radius-md)]',
-                warrantyExpired ? 'bg-bg-danger text-text-danger' : 'bg-bg-success text-text-success'
-              )}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-            </div>
+            <StatusBadge
+              status={warrantyExpired ? 'warranty_expired' : 'warranty_active'}
+              label={warrantyExpired ? 'Vencida' : 'Garantia'}
+              className="gap-1"
+              icon={<ShieldCheck className="h-3.5 w-3.5" />}
+            />
           </div>
         )}
 

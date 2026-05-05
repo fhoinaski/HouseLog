@@ -35,6 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { invitesApi, normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, cn, formatCurrency, formatDate } from '@/lib/utils';
@@ -59,14 +60,6 @@ const STATUS_TRANSITIONS: Record<string, string[]> = {
   in_progress: ['completed'],
   completed: ['verified', 'in_progress'],
   verified: [],
-};
-
-const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  requested: 'requested',
-  approved: 'approved',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  verified: 'verified',
 };
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
@@ -390,7 +383,7 @@ export default function ServiceDetailPage({
         density="editorial"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Badge variant={STATUS_VARIANT[order.status]}>{SERVICE_STATUS_LABELS[order.status]}</Badge>
+            <StatusBadge status={order.status} label={SERVICE_STATUS_LABELS[order.status]} />
             <Badge variant={PRIORITY_VARIANT[order.priority]}>{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
             {order.priority === 'urgent' && <AlertTriangle className="h-4 w-4 text-text-danger" />}
           </div>

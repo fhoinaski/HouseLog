@@ -9,16 +9,9 @@ import { PageSection } from '@/components/layout/page-section';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { providerApi, type ProviderServiceOrder } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatDate } from '@/lib/utils';
-
-const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  requested: 'requested',
-  approved: 'approved',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  verified: 'verified',
-};
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -90,9 +83,7 @@ export default function ProviderServicesPage() {
                   meta={`${SYSTEM_TYPE_LABELS[order.system_type]} - ${SERVICE_STATUS_LABELS[order.status]}`}
                   status={
                     <div className="flex max-w-[10rem] flex-wrap justify-end gap-1.5">
-                      <Badge variant={STATUS_VARIANT[order.status]} className="text-xs">
-                        {SERVICE_STATUS_LABELS[order.status]}
-                      </Badge>
+                      <StatusBadge status={order.status} label={SERVICE_STATUS_LABELS[order.status]} />
                       <Badge variant={PRIORITY_VARIANT[order.priority]} className="text-xs">
                         {SERVICE_PRIORITY_LABELS[order.priority]}
                       </Badge>

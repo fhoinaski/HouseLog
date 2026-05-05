@@ -12,6 +12,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { usePagination } from '@/hooks/usePagination';
 import { type ServiceOrder } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatDate } from '@/lib/utils';
@@ -30,14 +31,6 @@ const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
   normal: 'normal',
   preventive: 'preventive',
-};
-
-const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
-  requested: 'requested',
-  approved: 'approved',
-  in_progress: 'in_progress',
-  completed: 'completed',
-  verified: 'verified',
 };
 
 function getOperationalStage(order: ServiceOrder) {
@@ -203,9 +196,7 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
                       value={getServiceValue(order)}
                       status={
                         <div className="flex max-w-[10rem] flex-wrap justify-end gap-1.5">
-                          <Badge variant={STATUS_VARIANT[order.status]} className="text-xs">
-                            {getOperationalStage(order)}
-                          </Badge>
+                          <StatusBadge status={order.status} label={getOperationalStage(order)} />
                           <Badge variant={PRIORITY_VARIANT[order.priority]} className="text-xs">
                             {SERVICE_PRIORITY_LABELS[order.priority]}
                           </Badge>

@@ -10,6 +10,7 @@ import { shareApi, type PublicServiceView } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { cn, formatDate, formatCurrency, SERVICE_STATUS_LABELS, SERVICE_PRIORITY_LABELS, SYSTEM_TYPE_LABELS } from '@/lib/utils';
 
 const CRED_ICONS: Record<string, React.ElementType> = {
@@ -18,14 +19,6 @@ const CRED_ICONS: Record<string, React.ElementType> = {
 
 const CRED_LABELS: Record<string, string> = {
   wifi: 'Wi-Fi', alarm: 'Alarme', smart_lock: 'Fechadura', gate: 'Portao', app: 'App/Sistema', other: 'Acesso',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  requested: 'hl-badge hl-badge-pending',
-  approved: 'hl-badge hl-badge-approval',
-  in_progress: 'hl-badge hl-badge-progress',
-  completed: 'hl-badge hl-badge-done',
-  verified: 'hl-badge hl-badge-done',
 };
 
 function RevealSecret({ secret }: { secret: string }) {
@@ -144,9 +137,11 @@ export default function PublicServicePage({ params }: { params: Promise<{ token:
           <CardHeader className="pb-3">
             <div className="flex items-start justify-between gap-2">
               <CardTitle className="text-base">{service.title}</CardTitle>
-              <span className={cn('shrink-0', STATUS_COLORS[service.status])}>
-                {SERVICE_STATUS_LABELS[service.status]}
-              </span>
+              <StatusBadge
+                status={service.status}
+                label={SERVICE_STATUS_LABELS[service.status]}
+                className="shrink-0"
+              />
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
