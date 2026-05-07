@@ -644,6 +644,11 @@ describe('CreateDocumentIngestionJobInputSchema', () => {
   it('rejeita updatedAt por modo estrito', () => {
     expect(CreateDocumentIngestionJobInputSchema.safeParse({ updatedAt: '2025-01-01' }).success).toBe(false);
   });
+
+  it('rejeita provider invalido', () => {
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ provider: 'cohere' }).success).toBe(false);
+    expect(CreateDocumentIngestionJobInputSchema.safeParse({ provider: 'azure' }).success).toBe(false);
+  });
 });
 
 describe('DocumentIngestionJobStatusSchema', () => {

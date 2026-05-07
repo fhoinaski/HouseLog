@@ -1,14 +1,14 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
-import { and, desc, eq, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { canDeleteDocument, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
-import { documents as documentsTable, properties, serviceOrders, users } from '../db/schema';
-import { documentCreateSchema } from '@houselog/contracts';
+import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, properties, serviceOrders, users } from '../db/schema';
+import { documentCreateSchema, CreateDocumentIngestionJobInputSchema } from '@houselog/contracts';
 import type { Bindings, Variables } from '../lib/types';
 
 type Document = {
@@ -466,6 +466,112 @@ documents.post('/:id/ocr', async (c) => {
   });
 
   return ok(c, { ocr_data: ocrResult });
+});
+
+// ── POST /properties/:propertyId/documents/:id/ingestion-jobs ────────────────
+
+documents.post('/:id/ingestion-jobs', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  let rawBody: unknown = {};
+  try { rawBody = await c.req.json(); } catch { rawBody = {}; }
+  const parsed = CreateDocumentIngestionJobInputSchema.safeParse(rawBody);
+  if (!parsed.success) return err(c, 'Body invalido', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [existingJob] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.documentId, documentId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      or(
+        eq(ingestionJobsTable.status, 'queued'),
+        eq(ingestionJobsTable.status, 'processing'),
+        eq(ingestionJobsTable.status, 'needs_review'),
+      ),
+    ))
+    .limit(1);
+
+  if (existingJob) return err(c, 'Ja existe job ativo para este documento', 'ACTIVE_JOB_EXISTS', 409);
+
+  const jobId = nanoid();
+  await db.insert(ingestionJobsTable).values({
+    id: jobId,
+    tenantId,
+    propertyId,
+    documentId,
+    status: 'queued',
+    provider: parsed.data.provider ?? 'none',
+    modelName: parsed.data.modelName ?? null,
+    attempts: 0,
+  });
+
+  const [job] = await db
+    .select({
+      id: ingestionJobsTable.id,
+      documentId: ingestionJobsTable.documentId,
+      propertyId: ingestionJobsTable.propertyId,
+      status: ingestionJobsTable.status,
+      provider: ingestionJobsTable.provider,
+      modelName: ingestionJobsTable.modelName,
+      attempts: ingestionJobsTable.attempts,
+      lastError: ingestionJobsTable.lastError,
+      startedAt: ingestionJobsTable.startedAt,
+      finishedAt: ingestionJobsTable.finishedAt,
+      createdAt: ingestionJobsTable.createdAt,
+      updatedAt: ingestionJobsTable.updatedAt,
+    })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+    ))
+    .limit(1);
+
+  if (!job) return err(c, 'Job nao encontrado apos criacao', 'JOB_CREATE_READ_FAILED', 500);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'document_ingestion_job',
+    entityId: jobId,
+    action: 'document_ingestion_job_created',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      document_id: documentId,
+      job_id: jobId,
+      provider: job.provider,
+      model_name: job.modelName,
+    },
+  });
+
+  return ok(c, { job }, 201);
 });
 
 export default documents;
