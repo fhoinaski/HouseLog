@@ -1127,9 +1127,9 @@ describe('getDocumentExtractionDetail', () => {
     expect(detailJobRow).toEqual(jobBefore);
   });
 
-  it('nao cria review (test 15)', () => {
+  it('retorna review nulo quando nao informado (test 15)', () => {
     const detail = mapExtractionToDetail(extractionDetailRow);
-    expect(detail).not.toHaveProperty('review');
+    expect(detail.review).toBeNull();
     expect(detail).not.toHaveProperty('reviewStatus');
     expect(detail).not.toHaveProperty('reviewedBy');
   });
@@ -1739,6 +1739,68 @@ const reviewRow: DocumentExtractionReviewRow = {
   createdAt: '2026-05-08T10:00:00.000Z',
   updatedAt: '2026-05-08T10:00:00.000Z',
 };
+
+describe('getDocumentExtractionDetail com review persistido', () => {
+  it('retorna review aprovado no detalhe sem expor tenantId', () => {
+    const detail = getDocumentExtractionDetail({
+      extraction: detailExtractionRow,
+      review: reviewRow,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-001',
+    });
+
+    expect(detail?.review).toMatchObject({
+      id: 'review-001',
+      documentId: 'doc-a',
+      extractionId: 'ext-001',
+      status: 'approved',
+      reviewedBy: 'user-reviewer',
+    });
+    expect(detail?.review).not.toHaveProperty('tenantId');
+    expect(detail?.review).not.toHaveProperty('propertyId');
+  });
+
+  it('retorna review partially_applied no detalhe', () => {
+    const detail = getDocumentExtractionDetail({
+      extraction: detailExtractionRow,
+      review: { ...reviewRow, status: 'partially_applied' },
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-001',
+    });
+
+    expect(detail?.review?.status).toBe('partially_applied');
+  });
+
+  it('retorna review rejected no detalhe', () => {
+    const detail = getDocumentExtractionDetail({
+      extraction: detailExtractionRow,
+      review: { ...reviewRow, status: 'rejected' },
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-001',
+    });
+
+    expect(detail?.review?.status).toBe('rejected');
+  });
+
+  it('retorna review null no detalhe quando nao existe review persistido', () => {
+    const detail = getDocumentExtractionDetail({
+      extraction: detailExtractionRow,
+      review: null,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-001',
+    });
+
+    expect(detail?.review).toBeNull();
+  });
+});
 
 describe('mapReviewToContract', () => {
   it('retorna review aprovado compativel com contract', () => {

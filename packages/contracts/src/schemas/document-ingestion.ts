@@ -58,12 +58,6 @@ export const DocumentExtractionSummarySchema = z.object({
   hasNormalizedJson: z.boolean(),
 });
 
-export const DocumentExtractionDetailSchema = DocumentExtractionSummarySchema.extend({
-  rawText: z.string().nullable().optional(),
-  rawJson: z.record(z.unknown()).nullable().optional(),
-  normalizedJson: PropertyDocumentExtractionSchema.nullable().optional(),
-});
-
 export const DocumentExtractionReviewSchema = z.object({
   id: z.string(),
   documentId: z.string(),
@@ -74,6 +68,13 @@ export const DocumentExtractionReviewSchema = z.object({
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+export const DocumentExtractionDetailSchema = DocumentExtractionSummarySchema.extend({
+  rawText: z.string().nullable().optional(),
+  rawJson: z.record(z.unknown()).nullable().optional(),
+  normalizedJson: PropertyDocumentExtractionSchema.nullable().optional(),
+  review: DocumentExtractionReviewSchema.nullable().default(null),
 });
 
 // ── Input schemas ──────────────────────────────────────────────────────────────

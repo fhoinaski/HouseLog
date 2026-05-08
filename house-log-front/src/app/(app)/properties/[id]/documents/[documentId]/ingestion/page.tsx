@@ -57,6 +57,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 
 type IngestionState = 'empty' | 'processing' | 'review' | 'failed' | 'completed';
 type ExtractionReviewAction = 'approved' | 'rejected' | 'partially_applied';
+type CandidateGenerationReviewStatus = ExtractionReviewAction | 'pending' | null | undefined;
 type ActionKey =
   | 'create-job'
   | `review-extraction:${ExtractionReviewAction}`
@@ -123,6 +124,10 @@ function resolveState(summary?: DocumentIngestionSummary): IngestionState {
   return 'completed';
 }
 
+function canGenerateCandidatesFromReview(status: CandidateGenerationReviewStatus): boolean {
+  return status === 'approved' || status === 'partially_applied';
+}
+
 export default function DocumentIngestionPage({
   params,
 }: {
@@ -132,7 +137,7 @@ export default function DocumentIngestionPage({
   const [creating, setCreating] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [selectedExtractionId, setSelectedExtractionId] = useState<string | null>(null);
-  const [reviewStatusByExtraction, setReviewStatusByExtraction] = useState<Record<string, ExtractionReviewAction>>({});
+  const [reviewStatusByExtraction, setReviewStatusByExtraction] = useState<Record<string, CandidateGenerationReviewStatus>>({});
   const [actionKey, setActionKey] = useState<ActionKey | null>(null);
   const [applyCandidateTarget, setApplyCandidateTarget] = useState<DocumentExtractionCandidate | null>(null);
 
@@ -194,16 +199,13 @@ export default function DocumentIngestionPage({
     () => [...jobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [jobs]
   );
-  const selectedJob = selectedJobId ? orderedJobs.find((job) => job.id === selectedJobId) : undefined;
   const selectedReviewStatus = selectedExtractionId ? reviewStatusByExtraction[selectedExtractionId] : undefined;
   const canGenerateCandidates = Boolean(
     selectedJobId &&
     selectedExtractionId &&
     selectedExtraction &&
     candidates.length === 0 &&
-    (selectedReviewStatus === 'approved' ||
-      selectedReviewStatus === 'partially_applied' ||
-      selectedJob?.status === 'completed')
+    canGenerateCandidatesFromReview(selectedReviewStatus)
   );
 
   useEffect(() => {
@@ -227,6 +229,16 @@ export default function DocumentIngestionPage({
       setSelectedExtractionId(selectedExtractions[0].id);
     }
   }, [selectedExtractions, selectedExtractionId]);
+
+  useEffect(() => {
+    if (!selectedExtractionId) return;
+
+    const persistedReviewStatus = selectedExtraction?.review?.status ?? null;
+    setReviewStatusByExtraction((current) => {
+      if (current[selectedExtractionId] === persistedReviewStatus) return current;
+      return { ...current, [selectedExtractionId]: persistedReviewStatus };
+    });
+  }, [selectedExtractionId, selectedExtraction?.review?.status]);
 
   async function handleCreateJob() {
     setCreating(true);
@@ -262,8 +274,8 @@ export default function DocumentIngestionPage({
 
     setActionKey(`review-extraction:${status}`);
     try {
-      await documentIngestionApi.reviewExtraction(propertyId, documentId, selectedJobId, selectedExtractionId, { status });
-      setReviewStatusByExtraction((current) => ({ ...current, [selectedExtractionId]: status }));
+      const result = await documentIngestionApi.reviewExtraction(propertyId, documentId, selectedJobId, selectedExtractionId, { status });
+      setReviewStatusByExtraction((current) => ({ ...current, [selectedExtractionId]: result.review.status }));
       await refreshIngestionState();
       const message =
         status === 'approved'
@@ -559,17 +571,24 @@ export default function DocumentIngestionPage({
         tone="strong"
         density="editorial"
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            loading={actionKey === 'generate-candidates'}
-            disabled={!canGenerateCandidates}
-            title={!canGenerateCandidates ? 'Gere candidates apenas após aprovar ou marcar a extraction como parcialmente aplicada.' : undefined}
-            onClick={handleGenerateCandidates}
-          >
-            <Sparkles className="h-4 w-4" />
-            Gerar candidates
-          </Button>
+          <div className="flex max-w-xs flex-col items-start gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              loading={actionKey === 'generate-candidates'}
+              disabled={!canGenerateCandidates}
+              title={!canGenerateCandidates ? 'Aprove ou marque a extracao como parcialmente aplicada antes de gerar candidates.' : undefined}
+              onClick={handleGenerateCandidates}
+            >
+              <Sparkles className="h-4 w-4" />
+              Gerar candidates
+            </Button>
+            {!canGenerateCandidates && (
+              <p className="text-xs leading-5 text-text-tertiary">
+                Aprove ou marque a extracao como parcialmente aplicada antes de gerar candidates.
+              </p>
+            )}
+          </div>
         }
       >
         <CandidateList

@@ -601,7 +601,10 @@ export function mapExtractionToSummary(row: ExtractionSummaryInput): DocumentExt
   });
 }
 
-export function mapExtractionToDetail(row: ExtractionDetailInput): DocumentExtractionDetail {
+export function mapExtractionToDetail(
+  row: ExtractionDetailInput,
+  review?: DocumentExtractionReviewRow | null
+): DocumentExtractionDetail {
   const rawJson = sanitizeExtractionRawJson(row.rawJson);
   const normalizedJson: PropertyDocumentExtraction | null = row.normalizedJson
     ? PropertyDocumentExtractionSchema.parse(row.normalizedJson)
@@ -621,6 +624,7 @@ export function mapExtractionToDetail(row: ExtractionDetailInput): DocumentExtra
     rawText: row.rawText ?? null,
     rawJson,
     normalizedJson,
+    review: review ? mapReviewToContract(review) : null,
   });
 }
 
@@ -1382,6 +1386,7 @@ export function getDocumentIngestionJobDetail(input: {
 
 export function getDocumentExtractionDetail(input: {
   extraction: ExtractionDetailInput;
+  review?: DocumentExtractionReviewRow | null;
   tenantId: string;
   propertyId: string;
   documentId: string;
@@ -1400,7 +1405,7 @@ export function getDocumentExtractionDetail(input: {
 
   if (!decision.allowed) return null;
 
-  return mapExtractionToDetail(input.extraction);
+  return mapExtractionToDetail(input.extraction, input.review);
 }
 
 export function listDocumentIngestionJobsForDocument(input: {

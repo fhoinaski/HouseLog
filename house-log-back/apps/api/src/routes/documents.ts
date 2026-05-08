@@ -942,8 +942,32 @@ documents.get('/:id/ingestion-jobs/:jobId/extractions/:extractionId', async (c) 
 
   if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
 
+  const [review] = await db
+    .select({
+      id: extractionReviewsTable.id,
+      tenantId: extractionReviewsTable.tenantId,
+      propertyId: extractionReviewsTable.propertyId,
+      documentId: extractionReviewsTable.documentId,
+      extractionId: extractionReviewsTable.extractionId,
+      status: extractionReviewsTable.status,
+      reviewedBy: extractionReviewsTable.reviewedBy,
+      reviewedAt: extractionReviewsTable.reviewedAt,
+      notes: extractionReviewsTable.notes,
+      createdAt: extractionReviewsTable.createdAt,
+      updatedAt: extractionReviewsTable.updatedAt,
+    })
+    .from(extractionReviewsTable)
+    .where(and(
+      eq(extractionReviewsTable.tenantId, tenantId),
+      eq(extractionReviewsTable.propertyId, propertyId),
+      eq(extractionReviewsTable.documentId, documentId),
+      eq(extractionReviewsTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
   const detail = getDocumentExtractionDetail({
     extraction,
+    review: review ?? null,
     tenantId,
     propertyId,
     documentId,
