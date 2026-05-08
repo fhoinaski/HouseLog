@@ -40,8 +40,17 @@ id = "COLE_AQUI_O_ID_DO_KV_PRODUCAO"
 binding = "QUEUE"
 queue = "houselog-jobs"
 
+[[queues.producers]]
+binding = "DOCUMENT_INGESTION_QUEUE"
+queue = "houselog-document-ingestion"
+
 [[queues.consumers]]
 queue = "houselog-queue"
+max_batch_size = 10
+max_retries = 3
+
+[[queues.consumers]]
+queue = "houselog-document-ingestion"
 max_batch_size = 10
 max_retries = 3
 
@@ -86,6 +95,15 @@ id = "30d1ccabab2349e79151d3dec9eb11de"
 [[env.dev.queues.producers]]
 binding = "QUEUE"
 queue = "houselog-jobs"
+
+[[env.dev.queues.producers]]
+binding = "DOCUMENT_INGESTION_QUEUE"
+queue = "houselog-document-ingestion-dev"
+
+[[env.dev.queues.consumers]]
+queue = "houselog-document-ingestion-dev"
+max_batch_size = 10
+max_retries = 3
 
 [env.dev.ai]
 binding = "AI"

@@ -38,9 +38,13 @@ import { pushToUser } from './lib/webpush';
 import { getDb } from './db/client';
 import { auditLinks as auditLinksTable, mfaChallenges, refreshTokens } from './db/schema';
 import { and, eq, lt, sql } from 'drizzle-orm';
-import type { Bindings, Variables, QueueMessage } from './lib/types';
+import type { Bindings, Variables, WorkerQueueMessage } from './lib/types';
 import { canServeDirectMediaKey } from './lib/media-security';
 import { buildCorsOriginHandler } from './lib/cors';
+import {
+  isDocumentIngestionQueueMessage,
+  processFakeDocumentIngestionQueueMessage,
+} from './lib/document-ingestion-queue';
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -206,10 +210,18 @@ export default {
     }
   },
 
-  async queue(batch: MessageBatch<QueueMessage>, env: Bindings) {
+  async queue(batch: MessageBatch<WorkerQueueMessage>, env: Bindings) {
+    const db = getDb(env.DB);
     for (const msg of batch.messages) {
       try {
-        if (msg.body.type === 'GENERATE_THUMBNAIL') {
+        if (isDocumentIngestionQueueMessage(msg.body)) {
+          const result = await processFakeDocumentIngestionQueueMessage(db, msg.body);
+          log.info('document_ingestion_queue_processed', {
+            jobId: result.jobId,
+            processed: result.processed,
+            status: result.processed ? result.status : result.status ?? result.reason,
+          });
+        } else if (msg.body.type === 'GENERATE_THUMBNAIL') {
           const { r2Key, itemId, itemType } = msg.body;
           const result = await generateThumbnails(env, r2Key);
           log.info('thumbnail_generated', { itemType, itemId, ...result });

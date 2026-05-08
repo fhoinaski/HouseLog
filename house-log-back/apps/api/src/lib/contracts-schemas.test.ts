@@ -20,6 +20,13 @@ import {
   CreateDocumentIngestionJobInputSchema,
   ListDocumentIngestionJobsQuerySchema,
   ReviewDocumentExtractionInputSchema,
+  ReviewDocumentExtractionCandidateInputSchema,
+  DocumentExtractionCandidateSchema,
+  DocumentExtractionCandidateStatusSchema,
+  DocumentExtractionCandidateTargetEntityTypeSchema,
+  DocumentExtractionCandidateTypeSchema,
+  GenerateDocumentExtractionCandidatesInputSchema,
+  ListDocumentExtractionCandidatesQuerySchema,
   DocumentIngestionJobStatusSchema,
   DocumentIngestionProviderSchema,
   DocumentExtractionDetailSchema,
@@ -839,5 +846,98 @@ describe('DocumentExtractionDetailSchema', () => {
       },
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('DocumentExtractionCandidate contracts', () => {
+  const validCandidate = {
+    id: 'cand_001',
+    documentId: 'doc_001',
+    jobId: 'job_001',
+    extractionId: 'ext_001',
+    candidateType: 'technical_system',
+    status: 'pending',
+    targetEntityType: 'technical_system',
+    targetEntityId: null,
+    sourcePath: 'technicalSystems[0]',
+    payloadJson: { name: 'Quadro geral', type: 'electrical', confidenceScore: 0.9 },
+    confidenceScore: 0.9,
+    reviewNotes: null,
+    createdAt: '2026-05-08T12:00:00.000Z',
+    updatedAt: '2026-05-08T12:00:00.000Z',
+    appliedAt: null,
+    appliedBy: null,
+  };
+
+  it('aceita enums de candidates', () => {
+    for (const type of ['technical_system', 'warranty', 'inventory_item', 'maintenance_recommendation']) {
+      expect(DocumentExtractionCandidateTypeSchema.safeParse(type).success).toBe(true);
+    }
+    for (const status of ['pending', 'approved', 'rejected', 'applied', 'superseded']) {
+      expect(DocumentExtractionCandidateStatusSchema.safeParse(status).success).toBe(true);
+    }
+    for (const target of ['technical_system', 'warranty', 'inventory_item', 'maintenance_schedule', 'none']) {
+      expect(DocumentExtractionCandidateTargetEntityTypeSchema.safeParse(target).success).toBe(true);
+    }
+  });
+
+  it('retorna DTO sem tenantId', () => {
+    const result = DocumentExtractionCandidateSchema.safeParse(validCandidate);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty('tenantId');
+  });
+
+  it('rejeita confidenceScore invalido', () => {
+    expect(DocumentExtractionCandidateSchema.safeParse({ ...validCandidate, confidenceScore: 1.1 }).success).toBe(false);
+  });
+
+  it('input de generate nao aceita tenantId nem campos server-only', () => {
+    expect(GenerateDocumentExtractionCandidatesInputSchema.safeParse({}).success).toBe(true);
+    expect(GenerateDocumentExtractionCandidatesInputSchema.safeParse({ tenantId: 'ten_123' }).success).toBe(false);
+    expect(GenerateDocumentExtractionCandidatesInputSchema.safeParse({ status: 'pending' }).success).toBe(false);
+  });
+
+  it('query de list aceita apenas status opcional', () => {
+    expect(ListDocumentExtractionCandidatesQuerySchema.safeParse({ status: 'pending' }).success).toBe(true);
+    expect(ListDocumentExtractionCandidatesQuerySchema.safeParse({ tenantId: 'ten_123' }).success).toBe(false);
+  });
+
+  it('review input aceita apenas approved ou rejected', () => {
+    expect(ReviewDocumentExtractionCandidateInputSchema.safeParse({ status: 'approved' }).success).toBe(true);
+    expect(ReviewDocumentExtractionCandidateInputSchema.safeParse({ status: 'rejected' }).success).toBe(true);
+    expect(ReviewDocumentExtractionCandidateInputSchema.safeParse({ status: 'pending' }).success).toBe(false);
+    expect(ReviewDocumentExtractionCandidateInputSchema.safeParse({ status: 'applied' }).success).toBe(false);
+    expect(ReviewDocumentExtractionCandidateInputSchema.safeParse({ status: 'superseded' }).success).toBe(false);
+  });
+
+  it('review input aceita reviewNotes opcional', () => {
+    const result = ReviewDocumentExtractionCandidateInputSchema.safeParse({
+      status: 'approved',
+      reviewNotes: 'Validado para aplicacao futura.',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('review input rejeita campos de escopo, server-only e aplicacao por modo estrito', () => {
+    const blockedFields = [
+      'tenantId',
+      'propertyId',
+      'documentId',
+      'jobId',
+      'extractionId',
+      'candidateId',
+      'targetEntityId',
+      'appliedAt',
+      'appliedBy',
+      'createdAt',
+      'updatedAt',
+    ];
+
+    for (const field of blockedFields) {
+      expect(ReviewDocumentExtractionCandidateInputSchema.safeParse({
+        status: 'approved',
+        [field]: 'server-only',
+      }).success).toBe(false);
+    }
   });
 });

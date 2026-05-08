@@ -1,9 +1,17 @@
+export type DocumentIngestionQueueMessage = {
+  tenantId: string;
+  propertyId: string;
+  documentId: string;
+  jobId: string;
+};
+
 // Cloudflare Workers bindings type
 export type Bindings = {
   DB: D1Database;
   STORAGE: R2Bucket;
   KV: KVNamespace;
-  QUEUE: Queue;
+  QUEUE: Queue<QueueMessage>;
+  DOCUMENT_INGESTION_QUEUE: Queue<DocumentIngestionQueueMessage>;
   AI: Ai;
   JWT_SECRET: string;
   CORS_ORIGINS: string;
@@ -172,6 +180,8 @@ export type Expense = {
 export type QueueMessage =
   | { type: 'GENERATE_THUMBNAIL'; r2Key: string; itemId: string; itemType: string }
   | { type: 'SEND_PUSH'; userId: string; payload: PushPayload };
+
+export type WorkerQueueMessage = QueueMessage | DocumentIngestionQueueMessage;
 
 export type PushPayload = {
   title: string;

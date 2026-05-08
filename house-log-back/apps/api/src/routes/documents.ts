@@ -7,9 +7,31 @@ import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
-import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, properties, serviceOrders, users } from '../db/schema';
-import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, ListDocumentIngestionJobsQuerySchema } from '@houselog/contracts';
-import { getDocumentIngestionJobDetail, listDocumentIngestionJobsForDocument } from '../lib/document-ingestion-tenant';
+import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, properties, serviceOrders, technicalSystems, users } from '../db/schema';
+import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, GenerateDocumentExtractionCandidatesInputSchema, ListDocumentExtractionCandidatesQuerySchema, ListDocumentIngestionJobsQuerySchema, ReviewDocumentExtractionCandidateInputSchema, ReviewDocumentExtractionInputSchema } from '@houselog/contracts';
+import {
+  buildDocumentExtractionCandidates,
+  buildDocumentExtractionCandidatesAuditData,
+  buildDocumentExtractionCandidateAppliedAuditData,
+  buildDocumentExtractionCandidateApplyPatch,
+  buildDocumentExtractionCandidateReviewAuditData,
+  buildDocumentExtractionCandidateReviewPatch,
+  buildDocumentExtractionReviewAuditData,
+  buildDocumentExtractionReviewJobPatch,
+  buildDocumentIngestionQueueFailurePatch,
+  buildTechnicalSystemFromCandidatePayload,
+  canApplyTechnicalSystemCandidate,
+  canGenerateDocumentExtractionCandidates,
+  canReviewDocumentExtractionCandidate,
+  enqueueDocumentIngestionJob,
+  getDocumentExtractionDetail,
+  getDocumentIngestionJobDetail,
+  listDocumentIngestionJobsForDocument,
+  mapAppliedTechnicalSystemToResponse,
+  mapDocumentExtractionCandidateToContract,
+  mapJobToContract,
+  mapReviewToContract,
+} from '../lib/document-ingestion-tenant';
 import type { Bindings, Variables } from '../lib/types';
 
 type Document = {
@@ -582,6 +604,7 @@ documents.post('/:id/ingestion-jobs', async (c) => {
     .where(and(
       eq(ingestionJobsTable.documentId, documentId),
       eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
       or(
         eq(ingestionJobsTable.status, 'queued'),
         eq(ingestionJobsTable.status, 'processing'),
@@ -607,6 +630,7 @@ documents.post('/:id/ingestion-jobs', async (c) => {
   const [job] = await db
     .select({
       id: ingestionJobsTable.id,
+      tenantId: ingestionJobsTable.tenantId,
       documentId: ingestionJobsTable.documentId,
       propertyId: ingestionJobsTable.propertyId,
       status: ingestionJobsTable.status,
@@ -623,6 +647,8 @@ documents.post('/:id/ingestion-jobs', async (c) => {
     .where(and(
       eq(ingestionJobsTable.id, jobId),
       eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
     ))
     .limit(1);
 
@@ -645,7 +671,28 @@ documents.post('/:id/ingestion-jobs', async (c) => {
     },
   });
 
-  return ok(c, { job }, 201);
+  try {
+    await enqueueDocumentIngestionJob(c.env.DOCUMENT_INGESTION_QUEUE, {
+      tenantId,
+      propertyId,
+      documentId,
+      jobId,
+    });
+  } catch (queueError) {
+    await db
+      .update(ingestionJobsTable)
+      .set(buildDocumentIngestionQueueFailurePatch(queueError, new Date().toISOString()))
+      .where(and(
+        eq(ingestionJobsTable.id, jobId),
+        eq(ingestionJobsTable.tenantId, tenantId),
+        eq(ingestionJobsTable.propertyId, propertyId),
+        eq(ingestionJobsTable.documentId, documentId),
+      ));
+
+    return err(c, 'Falha ao enfileirar job de ingestao', 'INGESTION_QUEUE_FAILED', 500);
+  }
+
+  return ok(c, { job: mapJobToContract(job) }, 201);
 });
 
 // ── GET /properties/:propertyId/documents/:id/ingestion-jobs/:jobId ──────────
@@ -738,6 +785,931 @@ documents.get('/:id/ingestion-jobs/:jobId', async (c) => {
   if (!detail) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
 
   return ok(c, detail);
+});
+
+// ── GET /properties/:propertyId/documents/:id/ingestion-jobs/:jobId/extractions/:extractionId
+
+documents.get('/:id/ingestion-jobs/:jobId/extractions/:extractionId', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const extractionId = c.req.param('extractionId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const [extraction] = await db
+    .select({
+      id: extractionsTable.id,
+      tenantId: extractionsTable.tenantId,
+      propertyId: extractionsTable.propertyId,
+      documentId: extractionsTable.documentId,
+      jobId: extractionsTable.jobId,
+      rawText: extractionsTable.rawText,
+      rawJson: extractionsTable.rawJson,
+      normalizedJson: extractionsTable.normalizedJson,
+      confidenceScore: extractionsTable.confidenceScore,
+      schemaVersion: extractionsTable.schemaVersion,
+      modelName: extractionsTable.modelName,
+      createdAt: extractionsTable.createdAt,
+    })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.id, extractionId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+      eq(extractionsTable.jobId, jobId),
+    ))
+    .limit(1);
+
+  if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  const detail = getDocumentExtractionDetail({
+    extraction,
+    tenantId,
+    propertyId,
+    documentId,
+    jobId,
+  });
+
+  if (!detail) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  return ok(c, { extraction: detail });
+});
+
+documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/generate', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const extractionId = c.req.param('extractionId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  let rawBody: unknown = {};
+  try { rawBody = await c.req.json(); } catch { rawBody = {}; }
+  const parsed = GenerateDocumentExtractionCandidatesInputSchema.safeParse(rawBody);
+  if (!parsed.success) return err(c, 'Body invalido', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const [extraction] = await db
+    .select({
+      id: extractionsTable.id,
+      tenantId: extractionsTable.tenantId,
+      propertyId: extractionsTable.propertyId,
+      documentId: extractionsTable.documentId,
+      jobId: extractionsTable.jobId,
+      normalizedJson: extractionsTable.normalizedJson,
+      confidenceScore: extractionsTable.confidenceScore,
+    })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.id, extractionId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+      eq(extractionsTable.jobId, jobId),
+    ))
+    .limit(1);
+  if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  const [review] = await db
+    .select({ status: extractionReviewsTable.status })
+    .from(extractionReviewsTable)
+    .where(and(
+      eq(extractionReviewsTable.tenantId, tenantId),
+      eq(extractionReviewsTable.propertyId, propertyId),
+      eq(extractionReviewsTable.documentId, documentId),
+      eq(extractionReviewsTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
+  const existingCandidates = await db
+    .select({ id: extractionCandidatesTable.id })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
+  const decision = canGenerateDocumentExtractionCandidates({
+    activeTenantId: tenantId,
+    extractionTenantId: extraction.tenantId,
+    extractionPropertyId: extraction.propertyId,
+    extractionDocumentId: extraction.documentId,
+    extractionJobId: extraction.jobId,
+    requestedPropertyId: propertyId,
+    requestedDocumentId: documentId,
+    requestedJobId: jobId,
+    normalizedJson: extraction.normalizedJson,
+    reviewStatus: review?.status ?? null,
+    existingCandidateCount: existingCandidates.length,
+  });
+  if (!decision.allowed) {
+    const messages: Record<typeof decision.code, string> = {
+      TENANT_REQUIRED: 'Tenant ativo obrigatorio',
+      NOT_FOUND: 'Extraction nao encontrada',
+      NORMALIZED_JSON_REQUIRED: 'Extraction sem normalizedJson aprovado',
+      INVALID_NORMALIZED_JSON: 'normalizedJson invalido',
+      EXTRACTION_REVIEW_NOT_APPROVED: 'Extraction ainda nao aprovada para gerar candidates',
+      CANDIDATES_ALREADY_EXIST: 'Candidates ja existem para esta extraction',
+    };
+    return err(c, messages[decision.code], decision.code, decision.status);
+  }
+
+  const normalizedJson = extraction.normalizedJson;
+  if (!normalizedJson) return err(c, 'Extraction sem normalizedJson aprovado', 'NORMALIZED_JSON_REQUIRED', 409);
+
+  const now = new Date().toISOString();
+  const candidatesToInsert = buildDocumentExtractionCandidates({
+    tenantId,
+    propertyId,
+    documentId,
+    jobId,
+    extractionId,
+    normalizedJson,
+    extractionConfidenceScore: extraction.confidenceScore,
+    now,
+    idFactory: nanoid,
+  });
+  if (candidatesToInsert.length > 0) {
+    await db.insert(extractionCandidatesTable).values(candidatesToInsert);
+  }
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'document_extraction_candidate',
+    entityId: extractionId,
+    action: 'document_extraction_candidates_generated',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: buildDocumentExtractionCandidatesAuditData({
+      propertyId,
+      documentId,
+      jobId,
+      extractionId,
+      candidates: candidatesToInsert,
+    }),
+  });
+
+  const candidates = await db
+    .select({
+      id: extractionCandidatesTable.id,
+      tenantId: extractionCandidatesTable.tenantId,
+      propertyId: extractionCandidatesTable.propertyId,
+      documentId: extractionCandidatesTable.documentId,
+      jobId: extractionCandidatesTable.jobId,
+      extractionId: extractionCandidatesTable.extractionId,
+      candidateType: extractionCandidatesTable.candidateType,
+      status: extractionCandidatesTable.status,
+      targetEntityType: extractionCandidatesTable.targetEntityType,
+      targetEntityId: extractionCandidatesTable.targetEntityId,
+      sourcePath: extractionCandidatesTable.sourcePath,
+      payloadJson: extractionCandidatesTable.payloadJson,
+      confidenceScore: extractionCandidatesTable.confidenceScore,
+      reviewNotes: extractionCandidatesTable.reviewNotes,
+      createdAt: extractionCandidatesTable.createdAt,
+      updatedAt: extractionCandidatesTable.updatedAt,
+      appliedAt: extractionCandidatesTable.appliedAt,
+      appliedBy: extractionCandidatesTable.appliedBy,
+    })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ))
+    .orderBy(extractionCandidatesTable.createdAt);
+
+  return ok(c, { candidates: candidates.map(mapDocumentExtractionCandidateToContract) }, 201);
+});
+
+documents.get('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const extractionId = c.req.param('extractionId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const query = ListDocumentExtractionCandidatesQuerySchema.safeParse(
+    Object.fromEntries(new URL(c.req.url).searchParams.entries())
+  );
+  if (!query.success) return err(c, 'Query invalida', 'VALIDATION_ERROR', 422, query.error.flatten());
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const [extraction] = await db
+    .select({ id: extractionsTable.id })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.id, extractionId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+      eq(extractionsTable.jobId, jobId),
+    ))
+    .limit(1);
+  if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  const filters = [
+    eq(extractionCandidatesTable.tenantId, tenantId),
+    eq(extractionCandidatesTable.propertyId, propertyId),
+    eq(extractionCandidatesTable.documentId, documentId),
+    eq(extractionCandidatesTable.jobId, jobId),
+    eq(extractionCandidatesTable.extractionId, extractionId),
+  ];
+  if (query.data.status) filters.push(eq(extractionCandidatesTable.status, query.data.status));
+
+  const candidates = await db
+    .select({
+      id: extractionCandidatesTable.id,
+      tenantId: extractionCandidatesTable.tenantId,
+      propertyId: extractionCandidatesTable.propertyId,
+      documentId: extractionCandidatesTable.documentId,
+      jobId: extractionCandidatesTable.jobId,
+      extractionId: extractionCandidatesTable.extractionId,
+      candidateType: extractionCandidatesTable.candidateType,
+      status: extractionCandidatesTable.status,
+      targetEntityType: extractionCandidatesTable.targetEntityType,
+      targetEntityId: extractionCandidatesTable.targetEntityId,
+      sourcePath: extractionCandidatesTable.sourcePath,
+      payloadJson: extractionCandidatesTable.payloadJson,
+      confidenceScore: extractionCandidatesTable.confidenceScore,
+      reviewNotes: extractionCandidatesTable.reviewNotes,
+      createdAt: extractionCandidatesTable.createdAt,
+      updatedAt: extractionCandidatesTable.updatedAt,
+      appliedAt: extractionCandidatesTable.appliedAt,
+      appliedBy: extractionCandidatesTable.appliedBy,
+    })
+    .from(extractionCandidatesTable)
+    .where(and(...filters))
+    .orderBy(extractionCandidatesTable.createdAt);
+
+  return ok(c, { candidates: candidates.map(mapDocumentExtractionCandidateToContract) });
+});
+
+documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/:candidateId/apply', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const extractionId = c.req.param('extractionId')!;
+  const candidateId = c.req.param('candidateId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const [extraction] = await db
+    .select({ id: extractionsTable.id })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.id, extractionId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+      eq(extractionsTable.jobId, jobId),
+    ))
+    .limit(1);
+  if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  const [candidateBefore] = await db
+    .select({
+      id: extractionCandidatesTable.id,
+      tenantId: extractionCandidatesTable.tenantId,
+      propertyId: extractionCandidatesTable.propertyId,
+      documentId: extractionCandidatesTable.documentId,
+      jobId: extractionCandidatesTable.jobId,
+      extractionId: extractionCandidatesTable.extractionId,
+      candidateType: extractionCandidatesTable.candidateType,
+      status: extractionCandidatesTable.status,
+      targetEntityType: extractionCandidatesTable.targetEntityType,
+      targetEntityId: extractionCandidatesTable.targetEntityId,
+      sourcePath: extractionCandidatesTable.sourcePath,
+      payloadJson: extractionCandidatesTable.payloadJson,
+      confidenceScore: extractionCandidatesTable.confidenceScore,
+      reviewNotes: extractionCandidatesTable.reviewNotes,
+      createdAt: extractionCandidatesTable.createdAt,
+      updatedAt: extractionCandidatesTable.updatedAt,
+      appliedAt: extractionCandidatesTable.appliedAt,
+      appliedBy: extractionCandidatesTable.appliedBy,
+    })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.id, candidateId),
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ))
+    .limit(1);
+  if (!candidateBefore) return err(c, 'Candidate nao encontrado', 'NOT_FOUND', 404);
+
+  const applyDecision = canApplyTechnicalSystemCandidate(candidateBefore);
+  if (!applyDecision.allowed) {
+    const messages: Record<typeof applyDecision.code, string> = {
+      TENANT_REQUIRED: 'Tenant ativo obrigatorio',
+      NOT_FOUND: 'Candidate nao encontrado',
+      CANDIDATE_NOT_APPROVED: 'Candidate precisa estar aprovado antes da aplicacao',
+      CANDIDATE_ALREADY_APPLIED: 'Candidate ja aplicado',
+      UNSUPPORTED_CANDIDATE_TYPE: 'Tipo de candidate ainda nao suportado para aplicacao',
+      INVALID_CANDIDATE_TARGET: 'Target do candidate incompativel',
+      INVALID_TECHNICAL_SYSTEM_PAYLOAD: 'Payload de sistema tecnico invalido',
+      INVALID_WARRANTY_PAYLOAD: 'Payload de garantia invalido',
+      WARRANTY_END_DATE_REQUIRED: 'Garantia extraida sem data final',
+    };
+    return err(c, messages[applyDecision.code], applyDecision.code, applyDecision.status);
+  }
+
+  const now = new Date().toISOString();
+  const targetEntityId = nanoid();
+  const technicalSystemInsert = buildTechnicalSystemFromCandidatePayload({
+    technicalSystemId: targetEntityId,
+    tenantId,
+    propertyId,
+    payloadJson: candidateBefore.payloadJson,
+    now,
+  });
+
+  await db.insert(technicalSystems).values(technicalSystemInsert);
+
+  const [technicalSystem] = await db
+    .select({
+      id: technicalSystems.id,
+      propertyId: technicalSystems.propertyId,
+      name: technicalSystems.name,
+      type: technicalSystems.type,
+      description: technicalSystems.description,
+      locationSummary: technicalSystems.locationSummary,
+      installationDate: technicalSystems.installationDate,
+      status: technicalSystems.status,
+      createdAt: technicalSystems.createdAt,
+      updatedAt: technicalSystems.updatedAt,
+    })
+    .from(technicalSystems)
+    .where(and(
+      eq(technicalSystems.id, targetEntityId),
+      eq(technicalSystems.tenantId, tenantId),
+      eq(technicalSystems.propertyId, propertyId),
+      isNull(technicalSystems.deletedAt),
+    ))
+    .limit(1);
+  if (!technicalSystem) return err(c, 'Sistema tecnico nao encontrado apos aplicacao', 'TECHNICAL_SYSTEM_APPLY_READ_FAILED', 500);
+
+  await db
+    .update(extractionCandidatesTable)
+    .set(buildDocumentExtractionCandidateApplyPatch({
+      targetEntityId,
+      appliedBy: userId,
+      now,
+    }))
+    .where(and(
+      eq(extractionCandidatesTable.id, candidateId),
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+      eq(extractionCandidatesTable.candidateType, 'technical_system'),
+      eq(extractionCandidatesTable.targetEntityType, 'technical_system'),
+      eq(extractionCandidatesTable.status, 'approved'),
+      isNull(extractionCandidatesTable.targetEntityId),
+      isNull(extractionCandidatesTable.appliedAt),
+      isNull(extractionCandidatesTable.appliedBy),
+    ));
+
+  const [candidate] = await db
+    .select({
+      id: extractionCandidatesTable.id,
+      tenantId: extractionCandidatesTable.tenantId,
+      propertyId: extractionCandidatesTable.propertyId,
+      documentId: extractionCandidatesTable.documentId,
+      jobId: extractionCandidatesTable.jobId,
+      extractionId: extractionCandidatesTable.extractionId,
+      candidateType: extractionCandidatesTable.candidateType,
+      status: extractionCandidatesTable.status,
+      targetEntityType: extractionCandidatesTable.targetEntityType,
+      targetEntityId: extractionCandidatesTable.targetEntityId,
+      sourcePath: extractionCandidatesTable.sourcePath,
+      payloadJson: extractionCandidatesTable.payloadJson,
+      confidenceScore: extractionCandidatesTable.confidenceScore,
+      reviewNotes: extractionCandidatesTable.reviewNotes,
+      createdAt: extractionCandidatesTable.createdAt,
+      updatedAt: extractionCandidatesTable.updatedAt,
+      appliedAt: extractionCandidatesTable.appliedAt,
+      appliedBy: extractionCandidatesTable.appliedBy,
+    })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.id, candidateId),
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ))
+    .limit(1);
+  if (!candidate) return err(c, 'Candidate nao encontrado apos aplicacao', 'CANDIDATE_APPLY_WRITE_FAILED', 500);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'document_extraction_candidate',
+    entityId: candidateId,
+    action: 'document_extraction_candidate_applied',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: buildDocumentExtractionCandidateAppliedAuditData({
+      tenantId,
+      propertyId,
+      documentId,
+      jobId,
+      extractionId,
+      candidateId,
+      targetEntityType: 'technical_system',
+      targetEntityId,
+    }),
+  });
+
+  return ok(c, {
+    candidate: mapDocumentExtractionCandidateToContract(candidate),
+    technicalSystem: mapAppliedTechnicalSystemToResponse(technicalSystem),
+  }, 201);
+});
+
+// ── PATCH /properties/:propertyId/documents/:id/ingestion-jobs/:jobId/extractions/:extractionId/review
+
+documents.patch('/:id/ingestion-jobs/:jobId/extractions/:extractionId/review', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const extractionId = c.req.param('extractionId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  let rawBody: unknown = {};
+  try { rawBody = await c.req.json(); } catch { rawBody = {}; }
+  const parsed = ReviewDocumentExtractionInputSchema.safeParse(rawBody);
+  if (!parsed.success) return err(c, 'Body invalido', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const [extraction] = await db
+    .select({ id: extractionsTable.id })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.id, extractionId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+      eq(extractionsTable.jobId, jobId),
+    ))
+    .limit(1);
+
+  if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  const now = new Date().toISOString();
+  const [existingReview] = await db
+    .select({ id: extractionReviewsTable.id })
+    .from(extractionReviewsTable)
+    .where(and(
+      eq(extractionReviewsTable.tenantId, tenantId),
+      eq(extractionReviewsTable.propertyId, propertyId),
+      eq(extractionReviewsTable.documentId, documentId),
+      eq(extractionReviewsTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
+  const reviewId = existingReview?.id ?? nanoid();
+  const reviewPatch = {
+    status: parsed.data.status,
+    notes: parsed.data.notes ?? null,
+    reviewedBy: userId,
+    reviewedAt: now,
+    updatedAt: now,
+  };
+
+  if (existingReview) {
+    await db
+      .update(extractionReviewsTable)
+      .set(reviewPatch)
+      .where(and(
+        eq(extractionReviewsTable.id, reviewId),
+        eq(extractionReviewsTable.tenantId, tenantId),
+        eq(extractionReviewsTable.propertyId, propertyId),
+        eq(extractionReviewsTable.documentId, documentId),
+        eq(extractionReviewsTable.extractionId, extractionId),
+      ));
+  } else {
+    await db.insert(extractionReviewsTable).values({
+      id: reviewId,
+      tenantId,
+      propertyId,
+      documentId,
+      extractionId,
+      ...reviewPatch,
+      createdAt: now,
+    });
+  }
+
+  await db
+    .update(ingestionJobsTable)
+    .set(buildDocumentExtractionReviewJobPatch({ status: parsed.data.status, now }))
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ));
+
+  const [review] = await db
+    .select({
+      id: extractionReviewsTable.id,
+      tenantId: extractionReviewsTable.tenantId,
+      propertyId: extractionReviewsTable.propertyId,
+      documentId: extractionReviewsTable.documentId,
+      extractionId: extractionReviewsTable.extractionId,
+      status: extractionReviewsTable.status,
+      reviewedBy: extractionReviewsTable.reviewedBy,
+      reviewedAt: extractionReviewsTable.reviewedAt,
+      notes: extractionReviewsTable.notes,
+      createdAt: extractionReviewsTable.createdAt,
+      updatedAt: extractionReviewsTable.updatedAt,
+    })
+    .from(extractionReviewsTable)
+    .where(and(
+      eq(extractionReviewsTable.id, reviewId),
+      eq(extractionReviewsTable.tenantId, tenantId),
+      eq(extractionReviewsTable.propertyId, propertyId),
+      eq(extractionReviewsTable.documentId, documentId),
+      eq(extractionReviewsTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
+  if (!review) return err(c, 'Review nao encontrada apos gravacao', 'REVIEW_WRITE_FAILED', 500);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'document_extraction_review',
+    entityId: reviewId,
+    action: 'document_extraction_reviewed',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: buildDocumentExtractionReviewAuditData({
+      tenantId,
+      propertyId,
+      documentId,
+      jobId,
+      extractionId,
+      reviewId,
+      status: parsed.data.status,
+    }),
+  });
+
+  return ok(c, { review: mapReviewToContract(review) });
+});
+
+// â”€â”€ PATCH /properties/:propertyId/documents/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/:candidateId
+
+documents.patch('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/:candidateId', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const extractionId = c.req.param('extractionId')!;
+  const candidateId = c.req.param('candidateId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  let rawBody: unknown = {};
+  try { rawBody = await c.req.json(); } catch { rawBody = {}; }
+  const parsed = ReviewDocumentExtractionCandidateInputSchema.safeParse(rawBody);
+  if (!parsed.success) return err(c, 'Body invalido', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({ id: ingestionJobsTable.id })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const [extraction] = await db
+    .select({ id: extractionsTable.id })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.id, extractionId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+      eq(extractionsTable.jobId, jobId),
+    ))
+    .limit(1);
+
+  if (!extraction) return err(c, 'Extraction nao encontrada', 'NOT_FOUND', 404);
+
+  const [candidateBefore] = await db
+    .select({
+      id: extractionCandidatesTable.id,
+      tenantId: extractionCandidatesTable.tenantId,
+      propertyId: extractionCandidatesTable.propertyId,
+      documentId: extractionCandidatesTable.documentId,
+      jobId: extractionCandidatesTable.jobId,
+      extractionId: extractionCandidatesTable.extractionId,
+      status: extractionCandidatesTable.status,
+    })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.id, candidateId),
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
+  if (!candidateBefore) return err(c, 'Candidate nao encontrado', 'NOT_FOUND', 404);
+
+  const reviewDecision = canReviewDocumentExtractionCandidate({
+    activeTenantId: tenantId,
+    candidateTenantId: candidateBefore.tenantId,
+    candidatePropertyId: candidateBefore.propertyId,
+    candidateDocumentId: candidateBefore.documentId,
+    candidateJobId: candidateBefore.jobId,
+    candidateExtractionId: candidateBefore.extractionId,
+    requestedPropertyId: propertyId,
+    requestedDocumentId: documentId,
+    requestedJobId: jobId,
+    requestedExtractionId: extractionId,
+    candidateStatus: candidateBefore.status,
+  });
+
+  if (!reviewDecision.allowed) {
+    return err(c, 'Candidate nao pode ser revisado', reviewDecision.code, reviewDecision.status);
+  }
+
+  const now = new Date().toISOString();
+  await db
+    .update(extractionCandidatesTable)
+    .set(buildDocumentExtractionCandidateReviewPatch({
+      status: parsed.data.status,
+      reviewNotes: parsed.data.reviewNotes,
+      now,
+    }))
+    .where(and(
+      eq(extractionCandidatesTable.id, candidateId),
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ));
+
+  const [candidate] = await db
+    .select({
+      id: extractionCandidatesTable.id,
+      tenantId: extractionCandidatesTable.tenantId,
+      propertyId: extractionCandidatesTable.propertyId,
+      documentId: extractionCandidatesTable.documentId,
+      jobId: extractionCandidatesTable.jobId,
+      extractionId: extractionCandidatesTable.extractionId,
+      candidateType: extractionCandidatesTable.candidateType,
+      status: extractionCandidatesTable.status,
+      targetEntityType: extractionCandidatesTable.targetEntityType,
+      targetEntityId: extractionCandidatesTable.targetEntityId,
+      sourcePath: extractionCandidatesTable.sourcePath,
+      payloadJson: extractionCandidatesTable.payloadJson,
+      confidenceScore: extractionCandidatesTable.confidenceScore,
+      reviewNotes: extractionCandidatesTable.reviewNotes,
+      createdAt: extractionCandidatesTable.createdAt,
+      updatedAt: extractionCandidatesTable.updatedAt,
+      appliedAt: extractionCandidatesTable.appliedAt,
+      appliedBy: extractionCandidatesTable.appliedBy,
+    })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.id, candidateId),
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+      eq(extractionCandidatesTable.jobId, jobId),
+      eq(extractionCandidatesTable.extractionId, extractionId),
+    ))
+    .limit(1);
+
+  if (!candidate) return err(c, 'Candidate nao encontrado apos revisao', 'CANDIDATE_REVIEW_WRITE_FAILED', 500);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'document_extraction_candidate',
+    entityId: candidateId,
+    action: 'document_extraction_candidate_reviewed',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: buildDocumentExtractionCandidateReviewAuditData({
+      tenantId,
+      propertyId,
+      documentId,
+      jobId,
+      extractionId,
+      candidateId,
+      status: parsed.data.status,
+    }),
+  });
+
+  return ok(c, { candidate: mapDocumentExtractionCandidateToContract(candidate) });
 });
 
 export default documents;

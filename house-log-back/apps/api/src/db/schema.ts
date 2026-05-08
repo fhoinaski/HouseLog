@@ -393,6 +393,41 @@ export const documentExtractionReviews = sqliteTable('document_extraction_review
   statusIdx: index('idx_document_extraction_reviews_status').on(table.status),
 }));
 
+export const documentExtractionCandidates = sqliteTable('document_extraction_candidates', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
+  propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  documentId: text('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  jobId: text('job_id').notNull().references(() => documentIngestionJobs.id, { onDelete: 'cascade' }),
+  extractionId: text('extraction_id').notNull().references(() => documentExtractions.id, { onDelete: 'cascade' }),
+  candidateType: text('candidate_type', {
+    enum: ['technical_system', 'warranty', 'inventory_item', 'maintenance_recommendation'],
+  }).notNull(),
+  status: text('status', {
+    enum: ['pending', 'approved', 'rejected', 'applied', 'superseded'],
+  }).notNull().default('pending'),
+  targetEntityType: text('target_entity_type', {
+    enum: ['technical_system', 'warranty', 'inventory_item', 'maintenance_schedule', 'none'],
+  }).notNull().default('none'),
+  targetEntityId: text('target_entity_id'),
+  sourcePath: text('source_path').notNull(),
+  payloadJson: text('payload_json', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
+  confidenceScore: real('confidence_score'),
+  reviewNotes: text('review_notes'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+  appliedAt: text('applied_at'),
+  appliedBy: text('applied_by').references(() => users.id, { onDelete: 'set null' }),
+}, (table) => ({
+  tenantIdx: index('idx_document_extraction_candidates_tenant').on(table.tenantId),
+  propertyIdx: index('idx_document_extraction_candidates_property').on(table.propertyId),
+  documentIdx: index('idx_document_extraction_candidates_document').on(table.documentId),
+  jobIdx: index('idx_document_extraction_candidates_job').on(table.jobId),
+  extractionIdx: index('idx_document_extraction_candidates_extraction').on(table.extractionId),
+  candidateTypeIdx: index('idx_document_extraction_candidates_type').on(table.candidateType),
+  statusIdx: index('idx_document_extraction_candidates_status').on(table.status),
+}));
+
 export const warranties = sqliteTable('warranties', {
   id: text('id').primaryKey(),
   tenantId: text('tenant_id').notNull().references(() => tenants.id),
@@ -955,6 +990,33 @@ export const documentExtractionReviewsRelations = relations(documentExtractionRe
   }),
   reviewer: one(users, {
     fields: [documentExtractionReviews.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
+export const documentExtractionCandidatesRelations = relations(documentExtractionCandidates, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [documentExtractionCandidates.tenantId],
+    references: [tenants.id],
+  }),
+  property: one(properties, {
+    fields: [documentExtractionCandidates.propertyId],
+    references: [properties.id],
+  }),
+  document: one(documents, {
+    fields: [documentExtractionCandidates.documentId],
+    references: [documents.id],
+  }),
+  job: one(documentIngestionJobs, {
+    fields: [documentExtractionCandidates.jobId],
+    references: [documentIngestionJobs.id],
+  }),
+  extraction: one(documentExtractions, {
+    fields: [documentExtractionCandidates.extractionId],
+    references: [documentExtractions.id],
+  }),
+  applier: one(users, {
+    fields: [documentExtractionCandidates.appliedBy],
     references: [users.id],
   }),
 }));
