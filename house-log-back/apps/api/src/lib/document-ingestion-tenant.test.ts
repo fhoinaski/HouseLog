@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PropertyDocumentExtractionSchema } from '@houselog/contracts';
+import { ListDocumentExtractionCandidatesQuerySchema, PropertyDocumentExtractionSchema } from '@houselog/contracts';
 import {
   buildDocumentExtractionCandidates,
   buildDocumentExtractionCandidatesAuditData,
@@ -11,6 +11,9 @@ import {
   buildDocumentExtractionReviewJobPatch,
   buildDocumentIngestionQueueFailurePatch,
   buildDocumentIngestionQueueMessage,
+  buildDocumentIngestionSummary,
+  buildInventoryItemFromCandidatePayload,
+  buildMaintenanceScheduleFromCandidatePayload,
   buildTechnicalSystemFromCandidatePayload,
   buildWarrantyFromCandidatePayload,
   canAccessDocumentExtractionCandidate,
@@ -25,18 +28,26 @@ import {
   enqueueDocumentIngestionJob,
   getDocumentExtractionDetail,
   getDocumentIngestionJobDetail,
+  mapRecommendedIntervalMonthsToFrequency,
   mapExtractionToDetail,
   mapExtractionToSummary,
+  mapAppliedInventoryItemToResponse,
+  mapAppliedMaintenanceScheduleToResponse,
   mapAppliedTechnicalSystemToResponse,
   mapAppliedWarrantyToResponse,
   mapDocumentExtractionCandidateToContract,
   mapReviewToContract,
+  listDocumentExtractionCandidatesForExtraction,
   listDocumentIngestionJobsForDocument,
   sanitizeDocumentIngestionQueueError,
   type DocumentExtractionCandidateRow,
   type DocumentExtractionReviewRow,
   type ExtractionDetailInput,
   type DocumentIngestionJobListRow,
+  type DocumentIngestionSummaryCandidateRow,
+  type DocumentIngestionSummaryExtractionRow,
+  type DocumentIngestionSummaryJobRow,
+  type DocumentIngestionSummaryReviewRow,
   type ExtractionSummaryInput,
 } from './document-ingestion-tenant';
 import type { DocumentIngestionQueueMessage } from './types';
@@ -203,6 +214,110 @@ describe('document ingestion Queue producer', () => {
     expect(patch.lastError).toContain('Queue failed');
     expect(patch.lastError).not.toContain('https://storage.example/private.pdf');
     expect(patch.lastError).not.toContain('abcdefghijklmnopqrstuvwxyzABCDEF123456');
+  });
+});
+
+describe('buildDocumentIngestionSummary', () => {
+  const jobs: DocumentIngestionSummaryJobRow[] = [
+    { status: 'queued', createdAt: '2026-05-07T10:00:00.000Z' },
+    { status: 'failed', createdAt: '2026-05-07T11:00:00.000Z' },
+    { status: 'completed', createdAt: '2026-05-08T10:00:00.000Z' },
+  ];
+  const extractions: DocumentIngestionSummaryExtractionRow[] = [
+    { id: 'ext-001' },
+    { id: 'ext-002' },
+  ];
+  const reviews: DocumentIngestionSummaryReviewRow[] = [
+    { status: 'pending' },
+    { status: 'approved' },
+    { status: 'rejected' },
+  ];
+  const candidates: DocumentIngestionSummaryCandidateRow[] = [
+    { status: 'pending' },
+    { status: 'approved' },
+    { status: 'approved' },
+    { status: 'rejected' },
+    { status: 'applied' },
+    { status: 'superseded' },
+  ];
+
+  it('retorna resumo vazio para documento sem ingestao', () => {
+    expect(buildDocumentIngestionSummary({
+      jobs: [],
+      extractions: [],
+      reviews: [],
+      candidates: [],
+    })).toEqual({
+      totalJobs: 0,
+      latestJobStatus: null,
+      totalExtractions: 0,
+      totalReviews: 0,
+      pendingReviews: 0,
+      totalCandidates: 0,
+      pendingCandidates: 0,
+      approvedCandidates: 0,
+      rejectedCandidates: 0,
+      appliedCandidates: 0,
+      failedJobs: 0,
+      lastIngestionAt: null,
+    });
+  });
+
+  it('conta jobs e identifica latestJobStatus', () => {
+    const summary = buildDocumentIngestionSummary({ jobs, extractions: [], reviews: [], candidates: [] });
+
+    expect(summary.totalJobs).toBe(3);
+    expect(summary.latestJobStatus).toBe('completed');
+  });
+
+  it('conta extractions e reviews pendentes', () => {
+    const summary = buildDocumentIngestionSummary({ jobs: [], extractions, reviews, candidates: [] });
+
+    expect(summary.totalExtractions).toBe(2);
+    expect(summary.totalReviews).toBe(3);
+    expect(summary.pendingReviews).toBe(1);
+  });
+
+  it('conta candidates por status', () => {
+    const summary = buildDocumentIngestionSummary({ jobs: [], extractions: [], reviews: [], candidates });
+
+    expect(summary.totalCandidates).toBe(6);
+    expect(summary.pendingCandidates).toBe(1);
+    expect(summary.approvedCandidates).toBe(2);
+    expect(summary.rejectedCandidates).toBe(1);
+    expect(summary.appliedCandidates).toBe(1);
+  });
+
+  it('conta failedJobs e retorna lastIngestionAt', () => {
+    const summary = buildDocumentIngestionSummary({ jobs, extractions: [], reviews: [], candidates: [] });
+
+    expect(summary.failedJobs).toBe(1);
+    expect(summary.lastIngestionAt).toBe('2026-05-08T10:00:00.000Z');
+  });
+
+  it('nao mistura dados de outro documento, property ou tenant quando recebe somente linhas filtradas', () => {
+    const filteredJobs = jobs.filter((job) => job.status !== 'queued');
+    const summary = buildDocumentIngestionSummary({
+      jobs: filteredJobs,
+      extractions: extractions.slice(0, 1),
+      reviews: reviews.slice(0, 2),
+      candidates: candidates.slice(0, 3),
+    });
+
+    expect(summary.totalJobs).toBe(2);
+    expect(summary.totalExtractions).toBe(1);
+    expect(summary.totalReviews).toBe(2);
+    expect(summary.totalCandidates).toBe(3);
+  });
+
+  it('nao expoe tenantId nem payload bruto', () => {
+    const summary = buildDocumentIngestionSummary({ jobs, extractions, reviews, candidates });
+
+    expect(summary).not.toHaveProperty('tenantId');
+    expect(summary).not.toHaveProperty('rawText');
+    expect(summary).not.toHaveProperty('rawJson');
+    expect(summary).not.toHaveProperty('normalizedJson');
+    expect(summary).not.toHaveProperty('payloadJson');
   });
 });
 
@@ -399,6 +514,223 @@ describe('listDocumentIngestionJobsForDocument', () => {
 });
 
 // ── canAccessIngestionJobDetail ───────────────────────────────────────────────
+
+const candidateListBaseRow: DocumentExtractionCandidateRow = {
+  id: 'candidate-new',
+  tenantId: 'tenant-a',
+  propertyId: 'prop-a',
+  documentId: 'doc-a',
+  jobId: 'job-a',
+  extractionId: 'ext-a',
+  candidateType: 'warranty',
+  status: 'approved',
+  targetEntityType: 'warranty',
+  targetEntityId: null,
+  sourcePath: 'warranties[0]',
+  payloadJson: {
+    title: 'Garantia do equipamento',
+    warrantyType: 'equipment',
+    endDate: '2027-05-08',
+    confidenceScore: 0.92,
+    evidence: [],
+  },
+  confidenceScore: 0.92,
+  reviewNotes: null,
+  createdAt: '2026-05-08T12:00:00.000Z',
+  updatedAt: '2026-05-08T12:00:00.000Z',
+  appliedAt: null,
+  appliedBy: null,
+};
+
+const candidateRows = [
+  candidateListBaseRow,
+  {
+    ...candidateListBaseRow,
+    id: 'candidate-old',
+    candidateType: 'technical_system',
+    status: 'pending',
+    targetEntityType: 'technical_system',
+    sourcePath: 'technicalSystems[0]',
+    payloadJson: {
+      type: 'electrical',
+      name: 'Quadro eletrico',
+      confidenceScore: 0.86,
+      evidence: [],
+    },
+    confidenceScore: 0.86,
+    createdAt: '2026-05-07T12:00:00.000Z',
+    updatedAt: '2026-05-07T12:00:00.000Z',
+  },
+  { ...candidateListBaseRow, id: 'candidate-other-extraction', extractionId: 'ext-b' },
+  { ...candidateListBaseRow, id: 'candidate-other-job', jobId: 'job-b' },
+  { ...candidateListBaseRow, id: 'candidate-other-document', documentId: 'doc-b' },
+  { ...candidateListBaseRow, id: 'candidate-other-property', propertyId: 'prop-b' },
+  { ...candidateListBaseRow, id: 'candidate-other-tenant', tenantId: 'tenant-b' },
+] satisfies DocumentExtractionCandidateRow[];
+
+describe('listDocumentExtractionCandidatesForExtraction', () => {
+  it('lista candidates validos ordenados por createdAt desc', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      limit: 20,
+    });
+
+    expect(page.data.map((candidate) => candidate.id)).toEqual(['candidate-new', 'candidate-old']);
+  });
+
+  it('retorna lista vazia quando nao ha candidates', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: [],
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      limit: 20,
+    });
+
+    expect(page).toEqual({ data: [], next_cursor: null, has_more: false });
+  });
+
+  it('filtra por status', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      status: 'approved',
+      limit: 20,
+    });
+
+    expect(page.data.map((candidate) => candidate.id)).toEqual(['candidate-new']);
+  });
+
+  it('filtra por candidateType', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      candidateType: 'technical_system',
+      limit: 20,
+    });
+
+    expect(page.data.map((candidate) => candidate.id)).toEqual(['candidate-old']);
+  });
+
+  it('respeita limit default 20 quando recebido do contract', () => {
+    const query = ListDocumentExtractionCandidatesQuerySchema.parse({});
+    const manyCandidates = Array.from({ length: 25 }, (_, index) => ({
+      ...candidateListBaseRow,
+      id: `candidate-${index}`,
+      createdAt: `2026-05-${String(26 - index).padStart(2, '0')}T12:00:00.000Z`,
+      updatedAt: `2026-05-${String(26 - index).padStart(2, '0')}T12:00:00.000Z`,
+    })) satisfies DocumentExtractionCandidateRow[];
+
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: manyCandidates,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      limit: query.limit,
+    });
+
+    expect(page.data).toHaveLength(20);
+    expect(page.has_more).toBe(true);
+    expect(page.next_cursor).toBe('2026-05-07T12:00:00.000Z');
+  });
+
+  it('respeita limit customizado', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      limit: 1,
+    });
+
+    expect(page.data.map((candidate) => candidate.id)).toEqual(['candidate-new']);
+    expect(page.has_more).toBe(true);
+    expect(page.next_cursor).toBe('2026-05-08T12:00:00.000Z');
+  });
+
+  it('rejeita limit acima de 100 no contract', () => {
+    const query = ListDocumentExtractionCandidatesQuerySchema.safeParse({ limit: '101' });
+
+    expect(query.success).toBe(false);
+  });
+
+  it('aplica cursor por createdAt', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      cursor: '2026-05-08T12:00:00.000Z',
+      limit: 20,
+    });
+
+    expect(page.data.map((candidate) => candidate.id)).toEqual(['candidate-old']);
+  });
+
+  it('nao expoe tenantId na resposta', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      limit: 20,
+    });
+
+    expect(page.data[0]).not.toHaveProperty('tenantId');
+  });
+
+  it('nao mistura candidates de outra extraction, job, document, property ou tenant', () => {
+    const page = listDocumentExtractionCandidatesForExtraction({
+      candidates: candidateRows,
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-a',
+      extractionId: 'ext-a',
+      limit: 20,
+    });
+    const ids = page.data.map((candidate) => candidate.id);
+
+    expect(ids).not.toContain('candidate-other-extraction');
+    expect(ids).not.toContain('candidate-other-job');
+    expect(ids).not.toContain('candidate-other-document');
+    expect(ids).not.toContain('candidate-other-property');
+    expect(ids).not.toContain('candidate-other-tenant');
+  });
+
+  it('mantem 404 para documento soft-deleted antes de listar candidates', () => {
+    expect(canAccessDocumentForIngestion({
+      activeTenantId: 'tenant-a',
+      documentTenantId: 'tenant-a',
+      documentPropertyId: 'prop-a',
+      requestedPropertyId: 'prop-a',
+      documentDeletedAt: '2026-05-08T10:00:00.000Z',
+    })).toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+  });
+});
 
 const validJobAccess = {
   activeTenantId: 'tenant-a',
@@ -1669,6 +2001,28 @@ const approvedWarrantyCandidate: DocumentExtractionCandidateRow = {
   confidenceScore: 0.91,
 };
 
+const approvedInventoryItemCandidate: DocumentExtractionCandidateRow = {
+  ...approvedTechnicalSystemCandidate,
+  id: 'candidate-inventory-001',
+  candidateType: 'inventory_item',
+  targetEntityType: 'inventory_item',
+  sourcePath: 'inventoryItems[0]',
+  payloadJson: {
+    category: 'electrical',
+    name: 'Disjuntor reserva',
+    brand: 'Schneider',
+    model: 'C60',
+    supplier: 'Fornecedor Eletrico',
+    quantity: 2,
+    unit: 'un',
+    purchaseDate: '2025-01-10',
+    warrantyUntil: '2027-01-10',
+    confidenceScore: 0.88,
+    evidence: [],
+  },
+  confidenceScore: 0.88,
+};
+
 describe('canApplyDocumentExtractionCandidate para warranty', () => {
   it('aplica candidate warranty aprovado (test 1)', () => {
     expect(canApplyDocumentExtractionCandidate(approvedWarrantyCandidate)).toEqual({
@@ -1707,15 +2061,7 @@ describe('canApplyDocumentExtractionCandidate para warranty', () => {
       ...approvedWarrantyCandidate,
       candidateType: 'inventory_item',
       targetEntityType: 'inventory_item',
-    })).toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
-  });
-
-  it('bloqueia candidate de tipo maintenance_recommendation (test 25)', () => {
-    expect(canApplyDocumentExtractionCandidate({
-      ...approvedWarrantyCandidate,
-      candidateType: 'maintenance_recommendation',
-      targetEntityType: 'maintenance_schedule',
-    })).toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
+    })).toEqual({ allowed: false, status: 422, code: 'INVALID_INVENTORY_ITEM_PAYLOAD' });
   });
 
   it('retorna 422 para payloadJson invalido (test 33)', () => {
@@ -1735,6 +2081,129 @@ describe('canApplyDocumentExtractionCandidate para warranty', () => {
         evidence: [],
       },
     })).toEqual({ allowed: false, status: 422, code: 'WARRANTY_END_DATE_REQUIRED' });
+  });
+});
+
+describe('canApplyDocumentExtractionCandidate para inventory_item', () => {
+  it('aplica candidate inventory_item aprovado (test 1)', () => {
+    expect(canApplyDocumentExtractionCandidate(approvedInventoryItemCandidate)).toEqual({
+      allowed: true,
+      targetEntityType: 'inventory_item',
+    });
+  });
+
+  it('bloqueia candidate pending (test 18)', () => {
+    expect(canApplyDocumentExtractionCandidate({ ...approvedInventoryItemCandidate, status: 'pending' }))
+      .toEqual({ allowed: false, status: 409, code: 'CANDIDATE_NOT_APPROVED' });
+  });
+
+  it('bloqueia candidate rejected (test 19)', () => {
+    expect(canApplyDocumentExtractionCandidate({ ...approvedInventoryItemCandidate, status: 'rejected' }))
+      .toEqual({ allowed: false, status: 409, code: 'CANDIDATE_NOT_APPROVED' });
+  });
+
+  it('bloqueia candidate superseded (test 20)', () => {
+    expect(canApplyDocumentExtractionCandidate({ ...approvedInventoryItemCandidate, status: 'superseded' }))
+      .toEqual({ allowed: false, status: 409, code: 'CANDIDATE_NOT_APPROVED' });
+  });
+
+  it('bloqueia candidate ja applied (test 21)', () => {
+    expect(canApplyDocumentExtractionCandidate({
+      ...approvedInventoryItemCandidate,
+      status: 'applied',
+      targetEntityId: 'inventory-001',
+      appliedAt: '2026-05-08T10:00:00.000Z',
+      appliedBy: 'user-001',
+    })).toEqual({ allowed: false, status: 409, code: 'CANDIDATE_ALREADY_APPLIED' });
+  });
+
+  it('bloqueia candidate de tipo maintenance_recommendation (test 22)', () => {
+    expect(canApplyDocumentExtractionCandidate({
+      ...approvedInventoryItemCandidate,
+      candidateType: 'maintenance_recommendation',
+      targetEntityType: 'maintenance_schedule',
+    })).toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
+  });
+
+  it('retorna 422 para payloadJson invalido (test 27)', () => {
+    expect(canApplyDocumentExtractionCandidate({
+      ...approvedInventoryItemCandidate,
+      payloadJson: { category: 'electrical' },
+    })).toEqual({ allowed: false, status: 422, code: 'INVALID_INVENTORY_ITEM_PAYLOAD' });
+  });
+});
+
+const approvedMaintenanceCandidate: DocumentExtractionCandidateRow = {
+  ...approvedTechnicalSystemCandidate,
+  id: 'candidate-maintenance-001',
+  candidateType: 'maintenance_recommendation',
+  targetEntityType: 'maintenance_schedule',
+  sourcePath: 'maintenanceRecommendations[0]',
+  payloadJson: {
+    systemType: 'plumbing',
+    title: 'Revisao preventiva do pressurizador',
+    description: 'Verificar pressao, vazamentos e estado geral do sistema.',
+    recommendedIntervalMonths: 6,
+    firstDueDate: '2026-07-15',
+    priority: 'medium',
+    standardReference: 'Manual tecnico pagina 12',
+    confidenceScore: 0.89,
+    evidence: [],
+  },
+  confidenceScore: 0.89,
+};
+
+describe('canApplyDocumentExtractionCandidate para maintenance_recommendation', () => {
+  it('bloqueia candidate maintenance_recommendation porque aplicacao ainda nao e suportada', () => {
+    expect(canApplyDocumentExtractionCandidate(approvedMaintenanceCandidate))
+      .toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
+  });
+
+  it('bloqueia candidate pendente/rejeitado/superseded/aplicado (test 15)', () => {
+    expect(canApplyDocumentExtractionCandidate({ ...approvedMaintenanceCandidate, status: 'pending' }))
+      .toEqual({ allowed: false, status: 409, code: 'CANDIDATE_NOT_APPROVED' });
+    expect(canApplyDocumentExtractionCandidate({ ...approvedMaintenanceCandidate, status: 'rejected' }))
+      .toEqual({ allowed: false, status: 409, code: 'CANDIDATE_NOT_APPROVED' });
+    expect(canApplyDocumentExtractionCandidate({ ...approvedMaintenanceCandidate, status: 'superseded' }))
+      .toEqual({ allowed: false, status: 409, code: 'CANDIDATE_NOT_APPROVED' });
+    expect(canApplyDocumentExtractionCandidate({
+      ...approvedMaintenanceCandidate,
+      status: 'applied',
+      targetEntityId: 'schedule-001',
+      appliedAt: '2026-05-08T10:00:00.000Z',
+      appliedBy: 'user-001',
+    })).toEqual({ allowed: false, status: 409, code: 'CANDIDATE_ALREADY_APPLIED' });
+  });
+
+  it('preserva aplicacao dos tipos anteriores (test 16)', () => {
+    expect(canApplyTechnicalSystemCandidate(approvedTechnicalSystemCandidate)).toEqual({
+      allowed: true,
+      targetEntityType: 'technical_system',
+    });
+    expect(canApplyDocumentExtractionCandidate(approvedWarrantyCandidate)).toEqual({
+      allowed: true,
+      targetEntityType: 'warranty',
+    });
+  });
+
+  it('retorna 404 para outro tenant/property/document/job/extraction (test 17)', () => {
+    expect(canAccessDocumentExtractionCandidate({ ...validCandidateAccess, candidateTenantId: 'tenant-b' }))
+      .toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+    expect(canAccessDocumentExtractionCandidate({ ...validCandidateAccess, candidatePropertyId: 'prop-other' }))
+      .toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+    expect(canAccessDocumentExtractionCandidate({ ...validCandidateAccess, candidateDocumentId: 'doc-other' }))
+      .toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+    expect(canAccessDocumentExtractionCandidate({ ...validCandidateAccess, candidateJobId: 'job-other' }))
+      .toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+    expect(canAccessDocumentExtractionCandidate({ ...validCandidateAccess, candidateExtractionId: 'ext-other' }))
+      .toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('mantem tipo maintenance_recommendation fora do escopo mesmo com payload invalido (test 18)', () => {
+    expect(canApplyDocumentExtractionCandidate({
+      ...approvedMaintenanceCandidate,
+      payloadJson: { systemType: 'plumbing', title: 'Sem campos obrigatorios' },
+    })).toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
   });
 });
 
@@ -1880,6 +2349,168 @@ describe('buildWarrantyFromCandidatePayload', () => {
   });
 });
 
+describe('buildInventoryItemFromCandidatePayload', () => {
+  const now = '2026-05-08T10:00:00.000Z';
+  const inventoryItem = buildInventoryItemFromCandidatePayload({
+    inventoryItemId: 'inventory-001',
+    tenantId: 'tenant-a',
+    propertyId: 'prop-a',
+    payloadJson: approvedInventoryItemCandidate.payloadJson,
+    now,
+  });
+
+  it('cria registro em inventory_items (test 2)', () => {
+    expect(inventoryItem.id).toBe('inventory-001');
+  });
+
+  it('preenche tenantId pelo backend (test 3)', () => {
+    expect(inventoryItem.tenantId).toBe('tenant-a');
+  });
+
+  it('preenche propertyId (test 4)', () => {
+    expect(inventoryItem.propertyId).toBe('prop-a');
+  });
+
+  it('mapeia category (test 5)', () => {
+    expect(inventoryItem.category).toBe('electrical');
+  });
+
+  it('mapeia name (test 6)', () => {
+    expect(inventoryItem.name).toBe('Disjuntor reserva');
+  });
+
+  it('mapeia brand (test 7)', () => {
+    expect(inventoryItem.brand).toBe('Schneider');
+  });
+
+  it('mapeia model (test 8)', () => {
+    expect(inventoryItem.model).toBe('C60');
+  });
+
+  it('mapeia supplier (test 9)', () => {
+    expect(inventoryItem.supplier).toBe('Fornecedor Eletrico');
+  });
+
+  it('mapeia quantity (test 10)', () => {
+    expect(inventoryItem.quantity).toBe(2);
+  });
+
+  it('mapeia unit (test 11)', () => {
+    expect(inventoryItem.unit).toBe('un');
+  });
+
+  it('mapeia purchaseDate (test 12)', () => {
+    expect(inventoryItem.purchaseDate).toBe('2025-01-10');
+  });
+
+  it('mapeia warrantyUntil (test 13)', () => {
+    expect(inventoryItem.warrantyUntil).toBe('2027-01-10');
+  });
+
+  it('nao cria warranty (test 30)', () => {
+    expect(inventoryItem).not.toHaveProperty('warrantyType');
+    expect(inventoryItem).not.toHaveProperty('endDate');
+  });
+
+  it('nao cria technical system (test 31)', () => {
+    expect(inventoryItem).not.toHaveProperty('locationSummary');
+    expect(inventoryItem).not.toHaveProperty('installationDate');
+  });
+
+  it('nao cria maintenance schedule (test 32)', () => {
+    expect(inventoryItem).not.toHaveProperty('frequency');
+    expect(inventoryItem).not.toHaveProperty('nextDue');
+  });
+});
+
+describe('buildMaintenanceScheduleFromCandidatePayload', () => {
+  const now = '2026-05-08T10:00:00.000Z';
+  const maintenanceSchedule = buildMaintenanceScheduleFromCandidatePayload({
+    maintenanceScheduleId: 'schedule-001',
+    tenantId: 'tenant-a',
+    propertyId: 'prop-a',
+    payloadJson: approvedMaintenanceCandidate.payloadJson,
+    now,
+  });
+
+  it('cria registro em maintenance_schedules (test 2)', () => {
+    expect(maintenanceSchedule.id).toBe('schedule-001');
+  });
+
+  it('mapeia systemType (test 3)', () => {
+    expect(maintenanceSchedule.systemType).toBe('plumbing');
+  });
+
+  it('mapeia title (test 4)', () => {
+    expect(maintenanceSchedule.title).toBe('Revisao preventiva do pressurizador');
+  });
+
+  it('mapeia description (test 5)', () => {
+    expect(maintenanceSchedule.description).toBe('Verificar pressao, vazamentos e estado geral do sistema.');
+  });
+
+  it('converte 1 para monthly (test 6)', () => {
+    expect(mapRecommendedIntervalMonthsToFrequency(1)).toEqual({
+      frequency: 'monthly',
+      unsupportedIntervalMonths: null,
+    });
+  });
+
+  it('converte 3 para quarterly (test 7)', () => {
+    expect(mapRecommendedIntervalMonthsToFrequency(3)).toEqual({
+      frequency: 'quarterly',
+      unsupportedIntervalMonths: null,
+    });
+  });
+
+  it('converte 6 para semiannual (test 8)', () => {
+    expect(maintenanceSchedule.frequency).toBe('semiannual');
+  });
+
+  it('converte 12 para annual (test 9)', () => {
+    expect(mapRecommendedIntervalMonthsToFrequency(12)).toEqual({
+      frequency: 'annual',
+      unsupportedIntervalMonths: null,
+    });
+  });
+
+  it('fallback para annual em intervalo nao suportado e preserva observacao (test 10)', () => {
+    const fallback = buildMaintenanceScheduleFromCandidatePayload({
+      maintenanceScheduleId: 'schedule-unsupported',
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      payloadJson: {
+        ...approvedMaintenanceCandidate.payloadJson,
+        recommendedIntervalMonths: 5,
+      },
+      now,
+    });
+
+    expect(fallback.frequency).toBe('annual');
+    expect(fallback.notes).toContain('Intervalo recomendado original: 5 meses.');
+  });
+
+  it('mapeia firstDueDate para nextDue (test 11)', () => {
+    expect(maintenanceSchedule.nextDue).toBe('2026-07-15');
+  });
+
+  it('inclui standardReference em notes (test 12)', () => {
+    expect(maintenanceSchedule.notes).toContain('Referencia tecnica: Manual tecnico pagina 12.');
+    expect(maintenanceSchedule.notes).toContain('Origem: IA/documento.');
+  });
+
+  it('preenche responsible como A definir e autoCreateOs como 0', () => {
+    expect(maintenanceSchedule.responsible).toBe('A definir');
+    expect(maintenanceSchedule.autoCreateOs).toBe(0);
+  });
+
+  it('nao cria technical system/warranty/inventory item (test 20)', () => {
+    expect(maintenanceSchedule).not.toHaveProperty('locationSummary');
+    expect(maintenanceSchedule).not.toHaveProperty('warrantyType');
+    expect(maintenanceSchedule).not.toHaveProperty('quantity');
+  });
+});
+
 describe('buildDocumentExtractionCandidateApplyPatch', () => {
   const now = '2026-05-08T10:00:00.000Z';
   const patch = buildDocumentExtractionCandidateApplyPatch({
@@ -1997,6 +2628,44 @@ describe('candidate apply response and audit safety', () => {
     expect(response).not.toHaveProperty('tenantId');
   });
 
+  it('nao expoe tenantId na response de inventory item (test 28)', () => {
+    const response = mapAppliedInventoryItemToResponse({
+      id: 'inventory-001',
+      propertyId: 'prop-a',
+      category: 'electrical',
+      name: 'Disjuntor reserva',
+      brand: 'Schneider',
+      model: 'C60',
+      supplier: 'Fornecedor Eletrico',
+      quantity: 2,
+      unit: 'un',
+      purchaseDate: '2025-01-10',
+      warrantyUntil: '2027-01-10',
+      createdAt: '2026-05-08T10:00:00.000Z',
+    });
+
+    expect(response).not.toHaveProperty('tenantId');
+  });
+
+  it('nao expoe tenantId na response de maintenance schedule (test 19)', () => {
+    const response = mapAppliedMaintenanceScheduleToResponse({
+      id: 'schedule-001',
+      propertyId: 'prop-a',
+      systemType: 'plumbing',
+      title: 'Revisao preventiva do pressurizador',
+      description: 'Verificar pressao.',
+      frequency: 'semiannual',
+      lastDone: null,
+      nextDue: '2026-07-15',
+      responsible: 'A definir',
+      autoCreateOs: 0,
+      notes: 'Origem: IA/documento.',
+      createdAt: '2026-05-08T10:00:00.000Z',
+    });
+
+    expect(response).not.toHaveProperty('tenantId');
+  });
+
   it('audit log nao contem payloadJson, rawText, rawJson ou normalizedJson (test 30)', () => {
     const auditData = buildDocumentExtractionCandidateAppliedAuditData({
       tenantId: 'tenant-a',
@@ -2040,6 +2709,50 @@ describe('candidate apply response and audit safety', () => {
     expect(auditData).toMatchObject({
       target_entity_type: 'warranty',
       target_entity_id: 'warranty-001',
+    });
+    expect(auditData).not.toHaveProperty('payloadJson');
+    expect(auditData).not.toHaveProperty('rawText');
+    expect(auditData).not.toHaveProperty('rawJson');
+    expect(auditData).not.toHaveProperty('normalizedJson');
+  });
+
+  it('audit log de inventory item nao contem payloadJson, rawText, rawJson ou normalizedJson (test 29)', () => {
+    const auditData = buildDocumentExtractionCandidateAppliedAuditData({
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-001',
+      extractionId: 'ext-001',
+      candidateId: 'candidate-inventory-001',
+      targetEntityType: 'inventory_item',
+      targetEntityId: 'inventory-001',
+    });
+
+    expect(auditData).toMatchObject({
+      target_entity_type: 'inventory_item',
+      target_entity_id: 'inventory-001',
+    });
+    expect(auditData).not.toHaveProperty('payloadJson');
+    expect(auditData).not.toHaveProperty('rawText');
+    expect(auditData).not.toHaveProperty('rawJson');
+    expect(auditData).not.toHaveProperty('normalizedJson');
+  });
+
+  it('audit log de maintenance nao contem payload bruto (test 21)', () => {
+    const auditData = buildDocumentExtractionCandidateAppliedAuditData({
+      tenantId: 'tenant-a',
+      propertyId: 'prop-a',
+      documentId: 'doc-a',
+      jobId: 'job-001',
+      extractionId: 'ext-001',
+      candidateId: 'candidate-maintenance-001',
+      targetEntityType: 'maintenance_schedule',
+      targetEntityId: 'schedule-001',
+    });
+
+    expect(auditData).toMatchObject({
+      target_entity_type: 'maintenance_schedule',
+      target_entity_id: 'schedule-001',
     });
     expect(auditData).not.toHaveProperty('payloadJson');
     expect(auditData).not.toHaveProperty('rawText');

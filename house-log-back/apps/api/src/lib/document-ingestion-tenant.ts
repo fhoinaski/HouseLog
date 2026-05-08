@@ -8,10 +8,14 @@ import type {
   DocumentExtractionReviewStatus,
   DocumentExtractionSummary,
   DocumentIngestionJob,
+  DocumentIngestionSummary,
   DocumentIngestionJobStatus,
   DocumentIngestionProvider,
+  ExtractedInventoryItem,
+  ExtractedMaintenanceRecommendation,
   ExtractedTechnicalSystem,
   ExtractedWarranty,
+  MaintenanceFrequency,
   PropertyDocumentExtraction,
   TechnicalSystemStatus,
   WarrantyStatus,
@@ -22,6 +26,9 @@ import {
   DocumentExtractionReviewSchema,
   DocumentExtractionSummarySchema,
   DocumentIngestionJobSchema,
+  DocumentIngestionSummarySchema,
+  ExtractedInventoryItemSchema,
+  ExtractedMaintenanceRecommendationSchema,
   ExtractedTechnicalSystemSchema,
   ExtractedWarrantySchema,
   PropertyDocumentExtractionSchema,
@@ -58,6 +65,23 @@ export type DocumentIngestionJobListPage = {
   data: DocumentIngestionJobListItem[];
   next_cursor: string | null;
   has_more: boolean;
+};
+
+export type DocumentIngestionSummaryJobRow = {
+  status: DocumentIngestionJobStatus;
+  createdAt: string;
+};
+
+export type DocumentIngestionSummaryExtractionRow = {
+  id: string;
+};
+
+export type DocumentIngestionSummaryReviewRow = {
+  status: DocumentExtractionReviewStatus;
+};
+
+export type DocumentIngestionSummaryCandidateRow = {
+  status: DocumentExtractionCandidateStatus;
 };
 
 // Validates that a document belongs to the active tenant and requested property
@@ -207,6 +231,12 @@ export type DocumentExtractionCandidateRow = {
   appliedBy: string | null;
 };
 
+export type DocumentExtractionCandidateListPage = {
+  data: DocumentExtractionCandidate[];
+  next_cursor: string | null;
+  has_more: boolean;
+};
+
 export type NewDocumentExtractionCandidate = {
   id: string;
   tenantId: string;
@@ -271,7 +301,7 @@ export type DocumentExtractionCandidateReviewAuditData = {
 };
 
 export type CandidateApplyDecision =
-  | { allowed: true; targetEntityType: 'technical_system' | 'warranty' }
+  | { allowed: true; targetEntityType: 'technical_system' | 'warranty' | 'inventory_item' | 'maintenance_schedule' }
   | {
       allowed: false;
       status: 400 | 404 | 409 | 422;
@@ -284,7 +314,9 @@ export type CandidateApplyDecision =
         | 'INVALID_CANDIDATE_TARGET'
         | 'INVALID_TECHNICAL_SYSTEM_PAYLOAD'
         | 'INVALID_WARRANTY_PAYLOAD'
-        | 'WARRANTY_END_DATE_REQUIRED';
+        | 'INVALID_INVENTORY_ITEM_PAYLOAD'
+        | 'WARRANTY_END_DATE_REQUIRED'
+        | 'INVALID_MAINTENANCE_RECOMMENDATION_PAYLOAD';
     };
 
 export type TechnicalSystemFromCandidateInsert = {
@@ -320,6 +352,38 @@ export type WarrantyFromCandidateInsert = {
   updatedAt: string;
 };
 
+export type InventoryItemFromCandidateInsert = {
+  id: string;
+  tenantId: string;
+  propertyId: string;
+  category: ExtractedInventoryItem['category'];
+  name: string;
+  brand: string | null;
+  model: string | null;
+  supplier: string | null;
+  quantity: number;
+  unit: string;
+  purchaseDate: string | null;
+  warrantyUntil: string | null;
+  createdAt: string;
+};
+
+export type MaintenanceScheduleFromCandidateInsert = {
+  id: string;
+  tenantId: string;
+  propertyId: string;
+  systemType: string;
+  title: string;
+  description: string | null;
+  frequency: MaintenanceFrequency;
+  lastDone: null;
+  nextDue: string | null;
+  responsible: string;
+  autoCreateOs: 0;
+  notes: string | null;
+  createdAt: string;
+};
+
 export type AppliedTechnicalSystem = {
   id: string;
   propertyId: string;
@@ -351,6 +415,36 @@ export type AppliedWarranty = {
   updatedAt: string | null;
 };
 
+export type AppliedInventoryItem = {
+  id: string;
+  propertyId: string;
+  category: ExtractedInventoryItem['category'];
+  name: string;
+  brand: string | null;
+  model: string | null;
+  supplier: string | null;
+  quantity: number | null;
+  unit: string | null;
+  purchaseDate: string | null;
+  warrantyUntil: string | null;
+  createdAt: string;
+};
+
+export type AppliedMaintenanceSchedule = {
+  id: string;
+  propertyId: string;
+  systemType: string;
+  title: string;
+  description: string | null;
+  frequency: MaintenanceFrequency;
+  lastDone: string | null;
+  nextDue: string | null;
+  responsible: string | null;
+  autoCreateOs: number | null;
+  notes: string | null;
+  createdAt: string;
+};
+
 export type DocumentExtractionCandidateApplyPatch = {
   status: 'applied';
   targetEntityId: string;
@@ -366,7 +460,7 @@ export type DocumentExtractionCandidateAppliedAuditData = {
   job_id: string;
   extraction_id: string;
   candidate_id: string;
-  target_entity_type: 'technical_system' | 'warranty';
+  target_entity_type: 'technical_system' | 'warranty' | 'inventory_item' | 'maintenance_schedule';
   target_entity_id: string;
 };
 
@@ -775,6 +869,26 @@ export function canApplyDocumentExtractionCandidate(
     return { allowed: true, targetEntityType: 'warranty' };
   }
 
+  if (candidate.candidateType === 'inventory_item') {
+    if (candidate.targetEntityType !== 'inventory_item') {
+      return { allowed: false, status: 422, code: 'INVALID_CANDIDATE_TARGET' };
+    }
+    if (!ExtractedInventoryItemSchema.safeParse(candidate.payloadJson).success) {
+      return { allowed: false, status: 422, code: 'INVALID_INVENTORY_ITEM_PAYLOAD' };
+    }
+    return { allowed: true, targetEntityType: 'inventory_item' };
+  }
+
+  if (candidate.candidateType === 'maintenance_recommendation') {
+    if (candidate.targetEntityType !== 'maintenance_schedule') {
+      return { allowed: false, status: 422, code: 'INVALID_CANDIDATE_TARGET' };
+    }
+    if (!ExtractedMaintenanceRecommendationSchema.safeParse(candidate.payloadJson).success) {
+      return { allowed: false, status: 422, code: 'INVALID_MAINTENANCE_RECOMMENDATION_PAYLOAD' };
+    }
+    return { allowed: true, targetEntityType: 'maintenance_schedule' };
+  }
+
   return { allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' };
 }
 
@@ -840,6 +954,86 @@ export function buildWarrantyFromCandidatePayload(input: {
   };
 }
 
+export function buildInventoryItemFromCandidatePayload(input: {
+  inventoryItemId: string;
+  tenantId: string;
+  propertyId: string;
+  payloadJson: Record<string, unknown>;
+  now: string;
+}): InventoryItemFromCandidateInsert {
+  const payload = ExtractedInventoryItemSchema.parse(input.payloadJson);
+  return {
+    id: input.inventoryItemId,
+    tenantId: input.tenantId,
+    propertyId: input.propertyId,
+    category: payload.category,
+    name: payload.name.trim(),
+    brand: optionalExtractedText(payload.brand),
+    model: optionalExtractedText(payload.model),
+    supplier: optionalExtractedText(payload.supplier),
+    quantity: payload.quantity ?? 0,
+    unit: optionalExtractedText(payload.unit) ?? 'un',
+    purchaseDate: optionalExtractedText(payload.purchaseDate),
+    warrantyUntil: optionalExtractedText(payload.warrantyUntil),
+    createdAt: input.now,
+  };
+}
+
+export function mapRecommendedIntervalMonthsToFrequency(
+  months: number | null | undefined
+): { frequency: MaintenanceFrequency; unsupportedIntervalMonths: number | null } {
+  if (months === 1) return { frequency: 'monthly', unsupportedIntervalMonths: null };
+  if (months === 3) return { frequency: 'quarterly', unsupportedIntervalMonths: null };
+  if (months === 6) return { frequency: 'semiannual', unsupportedIntervalMonths: null };
+  if (months === 12 || months === null || months === undefined) {
+    return { frequency: 'annual', unsupportedIntervalMonths: null };
+  }
+  return { frequency: 'annual', unsupportedIntervalMonths: months };
+}
+
+export function buildMaintenanceScheduleNotes(input: {
+  standardReference?: string;
+  unsupportedIntervalMonths: number | null;
+}): string {
+  const notes = ['Origem: IA/documento.'];
+  const standardReference = optionalExtractedText(input.standardReference);
+  if (standardReference) notes.push(`Referencia tecnica: ${standardReference}.`);
+  if (input.unsupportedIntervalMonths !== null) {
+    notes.push(`Intervalo recomendado original: ${input.unsupportedIntervalMonths} meses.`);
+  }
+  return notes.join(' ');
+}
+
+export function buildMaintenanceScheduleFromCandidatePayload(input: {
+  maintenanceScheduleId: string;
+  tenantId: string;
+  propertyId: string;
+  payloadJson: Record<string, unknown>;
+  now: string;
+}): MaintenanceScheduleFromCandidateInsert {
+  const payload: ExtractedMaintenanceRecommendation = ExtractedMaintenanceRecommendationSchema.parse(input.payloadJson);
+  const interval = mapRecommendedIntervalMonthsToFrequency(payload.recommendedIntervalMonths);
+
+  return {
+    id: input.maintenanceScheduleId,
+    tenantId: input.tenantId,
+    propertyId: input.propertyId,
+    systemType: payload.systemType,
+    title: payload.title,
+    description: payload.description ?? null,
+    frequency: interval.frequency,
+    lastDone: null,
+    nextDue: payload.firstDueDate ?? null,
+    responsible: 'A definir',
+    autoCreateOs: 0,
+    notes: buildMaintenanceScheduleNotes({
+      standardReference: payload.standardReference,
+      unsupportedIntervalMonths: interval.unsupportedIntervalMonths,
+    }),
+    createdAt: input.now,
+  };
+}
+
 export function buildDocumentExtractionCandidateApplyPatch(input: {
   targetEntityId: string;
   appliedBy: string;
@@ -861,7 +1055,7 @@ export function buildDocumentExtractionCandidateAppliedAuditData(input: {
   jobId: string;
   extractionId: string;
   candidateId: string;
-  targetEntityType: 'technical_system' | 'warranty';
+  targetEntityType: 'technical_system' | 'warranty' | 'inventory_item' | 'maintenance_schedule';
   targetEntityId: string;
 }): DocumentExtractionCandidateAppliedAuditData {
   return {
@@ -935,6 +1129,66 @@ export function mapAppliedWarrantyToResponse(row: {
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+export function mapAppliedInventoryItemToResponse(row: {
+  id: string;
+  propertyId: string;
+  category: ExtractedInventoryItem['category'];
+  name: string;
+  brand: string | null;
+  model: string | null;
+  supplier: string | null;
+  quantity: number | null;
+  unit: string | null;
+  purchaseDate: string | null;
+  warrantyUntil: string | null;
+  createdAt: string;
+}): AppliedInventoryItem {
+  return {
+    id: row.id,
+    propertyId: row.propertyId,
+    category: row.category,
+    name: row.name,
+    brand: row.brand,
+    model: row.model,
+    supplier: row.supplier,
+    quantity: row.quantity,
+    unit: row.unit,
+    purchaseDate: row.purchaseDate,
+    warrantyUntil: row.warrantyUntil,
+    createdAt: row.createdAt,
+  };
+}
+
+export function mapAppliedMaintenanceScheduleToResponse(row: {
+  id: string;
+  propertyId: string;
+  systemType: string;
+  title: string;
+  description: string | null;
+  frequency: MaintenanceFrequency;
+  lastDone: string | null;
+  nextDue: string | null;
+  responsible: string | null;
+  autoCreateOs: number | null;
+  notes: string | null;
+  createdAt: string;
+}): AppliedMaintenanceSchedule {
+  return {
+    id: row.id,
+    propertyId: row.propertyId,
+    systemType: row.systemType,
+    title: row.title,
+    description: row.description,
+    frequency: row.frequency,
+    lastDone: row.lastDone,
+    nextDue: row.nextDue,
+    responsible: row.responsible,
+    autoCreateOs: row.autoCreateOs,
+    notes: row.notes,
+    createdAt: row.createdAt,
   };
 }
 
@@ -1176,4 +1430,68 @@ export function listDocumentIngestionJobsForDocument(input: {
     next_cursor: hasMore && last ? last.createdAt : null,
     has_more: hasMore,
   };
+}
+
+export function listDocumentExtractionCandidatesForExtraction(input: {
+  candidates: DocumentExtractionCandidateRow[];
+  tenantId: string;
+  propertyId: string;
+  documentId: string;
+  jobId: string;
+  extractionId: string;
+  status?: DocumentExtractionCandidateStatus;
+  candidateType?: DocumentExtractionCandidateType;
+  cursor?: string;
+  limit: number;
+}): DocumentExtractionCandidateListPage {
+  const filtered = input.candidates
+    .filter((candidate) => candidate.tenantId === input.tenantId)
+    .filter((candidate) => candidate.propertyId === input.propertyId)
+    .filter((candidate) => candidate.documentId === input.documentId)
+    .filter((candidate) => candidate.jobId === input.jobId)
+    .filter((candidate) => candidate.extractionId === input.extractionId)
+    .filter((candidate) => !input.status || candidate.status === input.status)
+    .filter((candidate) => !input.candidateType || candidate.candidateType === input.candidateType)
+    .filter((candidate) => !input.cursor || candidate.createdAt < input.cursor)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+
+  const page = filtered.slice(0, input.limit + 1);
+  const hasMore = page.length > input.limit;
+  const items = hasMore ? page.slice(0, input.limit) : page;
+  const last = items.at(-1);
+
+  return {
+    data: items.map(mapDocumentExtractionCandidateToContract),
+    next_cursor: hasMore && last ? last.createdAt : null,
+    has_more: hasMore,
+  };
+}
+
+export function buildDocumentIngestionSummary(input: {
+  jobs: DocumentIngestionSummaryJobRow[];
+  extractions: DocumentIngestionSummaryExtractionRow[];
+  reviews: DocumentIngestionSummaryReviewRow[];
+  candidates: DocumentIngestionSummaryCandidateRow[];
+}): DocumentIngestionSummary {
+  const latestJob = input.jobs.reduce<DocumentIngestionSummaryJobRow | null>((latest, job) => {
+    if (!latest) return job;
+    return job.createdAt > latest.createdAt ? job : latest;
+  }, null);
+
+  const summary = {
+    totalJobs: input.jobs.length,
+    latestJobStatus: latestJob?.status ?? null,
+    totalExtractions: input.extractions.length,
+    totalReviews: input.reviews.length,
+    pendingReviews: input.reviews.filter((review) => review.status === 'pending').length,
+    totalCandidates: input.candidates.length,
+    pendingCandidates: input.candidates.filter((candidate) => candidate.status === 'pending').length,
+    approvedCandidates: input.candidates.filter((candidate) => candidate.status === 'approved').length,
+    rejectedCandidates: input.candidates.filter((candidate) => candidate.status === 'rejected').length,
+    appliedCandidates: input.candidates.filter((candidate) => candidate.status === 'applied').length,
+    failedJobs: input.jobs.filter((job) => job.status === 'failed').length,
+    lastIngestionAt: latestJob?.createdAt ?? null,
+  };
+
+  return DocumentIngestionSummarySchema.parse(summary);
 }

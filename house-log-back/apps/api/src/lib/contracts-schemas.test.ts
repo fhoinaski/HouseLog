@@ -29,6 +29,7 @@ import {
   ListDocumentExtractionCandidatesQuerySchema,
   DocumentIngestionJobStatusSchema,
   DocumentIngestionProviderSchema,
+  DocumentIngestionSummarySchema,
   DocumentExtractionDetailSchema,
   DocumentExtractionReviewStatusSchema,
 } from '@houselog/contracts';
@@ -939,5 +940,57 @@ describe('DocumentExtractionCandidate contracts', () => {
         [field]: 'server-only',
       }).success).toBe(false);
     }
+  });
+});
+
+describe('DocumentIngestionSummarySchema', () => {
+  const validSummary = {
+    totalJobs: 2,
+    latestJobStatus: 'completed',
+    totalExtractions: 1,
+    totalReviews: 1,
+    pendingReviews: 0,
+    totalCandidates: 4,
+    pendingCandidates: 1,
+    approvedCandidates: 1,
+    rejectedCandidates: 1,
+    appliedCandidates: 1,
+    failedJobs: 1,
+    lastIngestionAt: '2026-05-08T12:00:00.000Z',
+  };
+
+  it('aceita resumo agregado sem dados brutos', () => {
+    const result = DocumentIngestionSummarySchema.safeParse(validSummary);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('tenantId');
+      expect(result.data).not.toHaveProperty('rawText');
+      expect(result.data).not.toHaveProperty('rawJson');
+      expect(result.data).not.toHaveProperty('normalizedJson');
+      expect(result.data).not.toHaveProperty('payloadJson');
+    }
+  });
+
+  it('aceita resumo vazio sem ingestion', () => {
+    expect(DocumentIngestionSummarySchema.safeParse({
+      totalJobs: 0,
+      latestJobStatus: null,
+      totalExtractions: 0,
+      totalReviews: 0,
+      pendingReviews: 0,
+      totalCandidates: 0,
+      pendingCandidates: 0,
+      approvedCandidates: 0,
+      rejectedCandidates: 0,
+      appliedCandidates: 0,
+      failedJobs: 0,
+      lastIngestionAt: null,
+    }).success).toBe(true);
+  });
+
+  it('rejeita campos negativos e status invalido', () => {
+    expect(DocumentIngestionSummarySchema.safeParse({ ...validSummary, totalJobs: -1 }).success).toBe(false);
+    expect(DocumentIngestionSummarySchema.safeParse({ ...validSummary, latestJobStatus: 'pending' }).success).toBe(false);
   });
 });

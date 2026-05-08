@@ -7,7 +7,7 @@ import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
-import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, properties, serviceOrders, technicalSystems, users } from '../db/schema';
+import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, inventoryItems, maintenanceSchedules, properties, serviceOrders, technicalSystems, users, warranties } from '../db/schema';
 import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, GenerateDocumentExtractionCandidatesInputSchema, ListDocumentExtractionCandidatesQuerySchema, ListDocumentIngestionJobsQuerySchema, ReviewDocumentExtractionCandidateInputSchema, ReviewDocumentExtractionInputSchema } from '@houselog/contracts';
 import {
   buildDocumentExtractionCandidates,
@@ -19,15 +19,23 @@ import {
   buildDocumentExtractionReviewAuditData,
   buildDocumentExtractionReviewJobPatch,
   buildDocumentIngestionQueueFailurePatch,
+  buildDocumentIngestionSummary,
+  buildInventoryItemFromCandidatePayload,
+  buildMaintenanceScheduleFromCandidatePayload,
   buildTechnicalSystemFromCandidatePayload,
-  canApplyTechnicalSystemCandidate,
+  buildWarrantyFromCandidatePayload,
+  canApplyDocumentExtractionCandidate,
   canGenerateDocumentExtractionCandidates,
   canReviewDocumentExtractionCandidate,
   enqueueDocumentIngestionJob,
   getDocumentExtractionDetail,
   getDocumentIngestionJobDetail,
+  listDocumentExtractionCandidatesForExtraction,
   listDocumentIngestionJobsForDocument,
+  mapAppliedInventoryItemToResponse,
+  mapAppliedMaintenanceScheduleToResponse,
   mapAppliedTechnicalSystemToResponse,
+  mapAppliedWarrantyToResponse,
   mapDocumentExtractionCandidateToContract,
   mapJobToContract,
   mapReviewToContract,
@@ -492,6 +500,82 @@ documents.post('/:id/ocr', async (c) => {
 });
 
 // ── Document ingestion jobs ──────────────────────────────────────────────────
+
+documents.get('/:id/ingestion-summary', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const jobs = await db
+    .select({
+      status: ingestionJobsTable.status,
+      createdAt: ingestionJobsTable.createdAt,
+    })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ));
+
+  const extractions = await db
+    .select({ id: extractionsTable.id })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+    ));
+
+  const reviews = await db
+    .select({ status: extractionReviewsTable.status })
+    .from(extractionReviewsTable)
+    .where(and(
+      eq(extractionReviewsTable.tenantId, tenantId),
+      eq(extractionReviewsTable.propertyId, propertyId),
+      eq(extractionReviewsTable.documentId, documentId),
+    ));
+
+  const candidates = await db
+    .select({ status: extractionCandidatesTable.status })
+    .from(extractionCandidatesTable)
+    .where(and(
+      eq(extractionCandidatesTable.tenantId, tenantId),
+      eq(extractionCandidatesTable.propertyId, propertyId),
+      eq(extractionCandidatesTable.documentId, documentId),
+    ));
+
+  return ok(c, {
+    summary: buildDocumentIngestionSummary({
+      jobs,
+      extractions,
+      reviews,
+      candidates,
+    }),
+  });
+});
 
 documents.get('/:id/ingestion-jobs', async (c) => {
   const db = getDb(c.env.DB);
@@ -1121,6 +1205,8 @@ documents.get('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates',
     eq(extractionCandidatesTable.extractionId, extractionId),
   ];
   if (query.data.status) filters.push(eq(extractionCandidatesTable.status, query.data.status));
+  if (query.data.candidateType) filters.push(eq(extractionCandidatesTable.candidateType, query.data.candidateType));
+  if (query.data.cursor) filters.push(lt(extractionCandidatesTable.createdAt, query.data.cursor));
 
   const candidates = await db
     .select({
@@ -1145,9 +1231,27 @@ documents.get('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates',
     })
     .from(extractionCandidatesTable)
     .where(and(...filters))
-    .orderBy(extractionCandidatesTable.createdAt);
+    .orderBy(desc(extractionCandidatesTable.createdAt), desc(extractionCandidatesTable.id))
+    .limit(query.data.limit + 1);
 
-  return ok(c, { candidates: candidates.map(mapDocumentExtractionCandidateToContract) });
+  const page = listDocumentExtractionCandidatesForExtraction({
+    candidates,
+    tenantId,
+    propertyId,
+    documentId,
+    jobId,
+    extractionId,
+    status: query.data.status,
+    candidateType: query.data.candidateType,
+    cursor: query.data.cursor,
+    limit: query.data.limit,
+  });
+
+  return ok(c, {
+    candidates: page.data,
+    next_cursor: page.next_cursor,
+    has_more: page.has_more,
+  });
 });
 
 documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/:candidateId/apply', async (c) => {
@@ -1237,7 +1341,7 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
     .limit(1);
   if (!candidateBefore) return err(c, 'Candidate nao encontrado', 'NOT_FOUND', 404);
 
-  const applyDecision = canApplyTechnicalSystemCandidate(candidateBefore);
+  const applyDecision = canApplyDocumentExtractionCandidate(candidateBefore);
   if (!applyDecision.allowed) {
     const messages: Record<typeof applyDecision.code, string> = {
       TENANT_REQUIRED: 'Tenant ativo obrigatorio',
@@ -1248,45 +1352,176 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
       INVALID_CANDIDATE_TARGET: 'Target do candidate incompativel',
       INVALID_TECHNICAL_SYSTEM_PAYLOAD: 'Payload de sistema tecnico invalido',
       INVALID_WARRANTY_PAYLOAD: 'Payload de garantia invalido',
+      INVALID_INVENTORY_ITEM_PAYLOAD: 'Payload de item de inventario invalido',
       WARRANTY_END_DATE_REQUIRED: 'Garantia extraida sem data final',
+      INVALID_MAINTENANCE_RECOMMENDATION_PAYLOAD: 'Payload de recomendacao de manutencao invalido',
     };
     return err(c, messages[applyDecision.code], applyDecision.code, applyDecision.status);
   }
 
   const now = new Date().toISOString();
   const targetEntityId = nanoid();
-  const technicalSystemInsert = buildTechnicalSystemFromCandidatePayload({
-    technicalSystemId: targetEntityId,
-    tenantId,
-    propertyId,
-    payloadJson: candidateBefore.payloadJson,
-    now,
-  });
+  let responseEntity:
+    | { technicalSystem: ReturnType<typeof mapAppliedTechnicalSystemToResponse> }
+    | { warranty: ReturnType<typeof mapAppliedWarrantyToResponse> }
+    | { inventoryItem: ReturnType<typeof mapAppliedInventoryItemToResponse> }
+    | { maintenanceSchedule: ReturnType<typeof mapAppliedMaintenanceScheduleToResponse> };
 
-  await db.insert(technicalSystems).values(technicalSystemInsert);
+  if (applyDecision.targetEntityType === 'technical_system') {
+    const technicalSystemInsert = buildTechnicalSystemFromCandidatePayload({
+      technicalSystemId: targetEntityId,
+      tenantId,
+      propertyId,
+      payloadJson: candidateBefore.payloadJson,
+      now,
+    });
 
-  const [technicalSystem] = await db
-    .select({
-      id: technicalSystems.id,
-      propertyId: technicalSystems.propertyId,
-      name: technicalSystems.name,
-      type: technicalSystems.type,
-      description: technicalSystems.description,
-      locationSummary: technicalSystems.locationSummary,
-      installationDate: technicalSystems.installationDate,
-      status: technicalSystems.status,
-      createdAt: technicalSystems.createdAt,
-      updatedAt: technicalSystems.updatedAt,
-    })
-    .from(technicalSystems)
-    .where(and(
-      eq(technicalSystems.id, targetEntityId),
-      eq(technicalSystems.tenantId, tenantId),
-      eq(technicalSystems.propertyId, propertyId),
-      isNull(technicalSystems.deletedAt),
-    ))
-    .limit(1);
-  if (!technicalSystem) return err(c, 'Sistema tecnico nao encontrado apos aplicacao', 'TECHNICAL_SYSTEM_APPLY_READ_FAILED', 500);
+    await db.insert(technicalSystems).values(technicalSystemInsert);
+
+    const [technicalSystem] = await db
+      .select({
+        id: technicalSystems.id,
+        propertyId: technicalSystems.propertyId,
+        name: technicalSystems.name,
+        type: technicalSystems.type,
+        description: technicalSystems.description,
+        locationSummary: technicalSystems.locationSummary,
+        installationDate: technicalSystems.installationDate,
+        status: technicalSystems.status,
+        createdAt: technicalSystems.createdAt,
+        updatedAt: technicalSystems.updatedAt,
+      })
+      .from(technicalSystems)
+      .where(and(
+        eq(technicalSystems.id, targetEntityId),
+        eq(technicalSystems.tenantId, tenantId),
+        eq(technicalSystems.propertyId, propertyId),
+        isNull(technicalSystems.deletedAt),
+      ))
+      .limit(1);
+    if (!technicalSystem) return err(c, 'Sistema tecnico nao encontrado apos aplicacao', 'TECHNICAL_SYSTEM_APPLY_READ_FAILED', 500);
+
+    responseEntity = { technicalSystem: mapAppliedTechnicalSystemToResponse(technicalSystem) };
+  } else if (applyDecision.targetEntityType === 'warranty') {
+    const warrantyInsert = buildWarrantyFromCandidatePayload({
+      warrantyId: targetEntityId,
+      tenantId,
+      propertyId,
+      documentId,
+      createdBy: userId,
+      payloadJson: candidateBefore.payloadJson,
+      now,
+    });
+
+    await db.insert(warranties).values(warrantyInsert);
+
+    const [warranty] = await db
+      .select({
+        id: warranties.id,
+        propertyId: warranties.propertyId,
+        documentId: warranties.documentId,
+        title: warranties.title,
+        description: warranties.description,
+        providerName: warranties.providerName,
+        warrantyType: warranties.warrantyType,
+        startDate: warranties.startDate,
+        endDate: warranties.endDate,
+        status: warranties.status,
+        coverage: warranties.coverage,
+        exclusions: warranties.exclusions,
+        createdBy: warranties.createdBy,
+        createdAt: warranties.createdAt,
+        updatedAt: warranties.updatedAt,
+      })
+      .from(warranties)
+      .where(and(
+        eq(warranties.id, targetEntityId),
+        eq(warranties.tenantId, tenantId),
+        eq(warranties.propertyId, propertyId),
+        eq(warranties.documentId, documentId),
+        isNull(warranties.deletedAt),
+      ))
+      .limit(1);
+    if (!warranty) return err(c, 'Garantia nao encontrada apos aplicacao', 'WARRANTY_APPLY_READ_FAILED', 500);
+
+    responseEntity = { warranty: mapAppliedWarrantyToResponse(warranty) };
+  } else if (applyDecision.targetEntityType === 'inventory_item') {
+    const inventoryItemInsert = buildInventoryItemFromCandidatePayload({
+      inventoryItemId: targetEntityId,
+      tenantId,
+      propertyId,
+      payloadJson: candidateBefore.payloadJson,
+      now,
+    });
+
+    await db.insert(inventoryItems).values(inventoryItemInsert);
+
+    const [inventoryItem] = await db
+      .select({
+        id: inventoryItems.id,
+        propertyId: inventoryItems.propertyId,
+        category: inventoryItems.category,
+        name: inventoryItems.name,
+        brand: inventoryItems.brand,
+        model: inventoryItems.model,
+        supplier: inventoryItems.supplier,
+        quantity: inventoryItems.quantity,
+        unit: inventoryItems.unit,
+        purchaseDate: inventoryItems.purchaseDate,
+        warrantyUntil: inventoryItems.warrantyUntil,
+        createdAt: inventoryItems.createdAt,
+      })
+      .from(inventoryItems)
+      .where(and(
+        eq(inventoryItems.id, targetEntityId),
+        eq(inventoryItems.tenantId, tenantId),
+        eq(inventoryItems.propertyId, propertyId),
+        isNull(inventoryItems.deletedAt),
+      ))
+      .limit(1);
+    if (!inventoryItem) return err(c, 'Item de inventario nao encontrado apos aplicacao', 'INVENTORY_ITEM_APPLY_READ_FAILED', 500);
+
+    responseEntity = { inventoryItem: mapAppliedInventoryItemToResponse(inventoryItem) };
+  } else if (applyDecision.targetEntityType === 'maintenance_schedule') {
+    const maintenanceScheduleInsert = buildMaintenanceScheduleFromCandidatePayload({
+      maintenanceScheduleId: targetEntityId,
+      tenantId,
+      propertyId,
+      payloadJson: candidateBefore.payloadJson,
+      now,
+    });
+
+    await db.insert(maintenanceSchedules).values(maintenanceScheduleInsert);
+
+    const [maintenanceSchedule] = await db
+      .select({
+        id: maintenanceSchedules.id,
+        propertyId: maintenanceSchedules.propertyId,
+        systemType: maintenanceSchedules.systemType,
+        title: maintenanceSchedules.title,
+        description: maintenanceSchedules.description,
+        frequency: maintenanceSchedules.frequency,
+        lastDone: maintenanceSchedules.lastDone,
+        nextDue: maintenanceSchedules.nextDue,
+        responsible: maintenanceSchedules.responsible,
+        autoCreateOs: maintenanceSchedules.autoCreateOs,
+        notes: maintenanceSchedules.notes,
+        createdAt: maintenanceSchedules.createdAt,
+      })
+      .from(maintenanceSchedules)
+      .where(and(
+        eq(maintenanceSchedules.id, targetEntityId),
+        eq(maintenanceSchedules.tenantId, tenantId),
+        eq(maintenanceSchedules.propertyId, propertyId),
+        isNull(maintenanceSchedules.deletedAt),
+      ))
+      .limit(1);
+    if (!maintenanceSchedule) return err(c, 'Agenda de manutencao nao encontrada apos aplicacao', 'MAINTENANCE_SCHEDULE_APPLY_READ_FAILED', 500);
+
+    responseEntity = { maintenanceSchedule: mapAppliedMaintenanceScheduleToResponse(maintenanceSchedule) };
+  } else {
+    return err(c, 'Tipo de candidate ainda nao suportado para aplicacao', 'UNSUPPORTED_CANDIDATE_TYPE', 422);
+  }
 
   await db
     .update(extractionCandidatesTable)
@@ -1302,8 +1537,8 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
       eq(extractionCandidatesTable.documentId, documentId),
       eq(extractionCandidatesTable.jobId, jobId),
       eq(extractionCandidatesTable.extractionId, extractionId),
-      eq(extractionCandidatesTable.candidateType, 'technical_system'),
-      eq(extractionCandidatesTable.targetEntityType, 'technical_system'),
+      eq(extractionCandidatesTable.candidateType, candidateBefore.candidateType),
+      eq(extractionCandidatesTable.targetEntityType, applyDecision.targetEntityType),
       eq(extractionCandidatesTable.status, 'approved'),
       isNull(extractionCandidatesTable.targetEntityId),
       isNull(extractionCandidatesTable.appliedAt),
@@ -1358,14 +1593,14 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
       jobId,
       extractionId,
       candidateId,
-      targetEntityType: 'technical_system',
+      targetEntityType: applyDecision.targetEntityType,
       targetEntityId,
     }),
   });
 
   return ok(c, {
     candidate: mapDocumentExtractionCandidateToContract(candidate),
-    technicalSystem: mapAppliedTechnicalSystemToResponse(technicalSystem),
+    ...responseEntity,
   }, 201);
 });
 

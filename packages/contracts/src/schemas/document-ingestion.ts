@@ -78,6 +78,21 @@ export const DocumentExtractionReviewSchema = z.object({
 
 // ── Input schemas ──────────────────────────────────────────────────────────────
 
+export const DocumentIngestionSummarySchema = z.object({
+  totalJobs: z.number().int().nonnegative(),
+  latestJobStatus: DocumentIngestionJobStatusSchema.nullable(),
+  totalExtractions: z.number().int().nonnegative(),
+  totalReviews: z.number().int().nonnegative(),
+  pendingReviews: z.number().int().nonnegative(),
+  totalCandidates: z.number().int().nonnegative(),
+  pendingCandidates: z.number().int().nonnegative(),
+  approvedCandidates: z.number().int().nonnegative(),
+  rejectedCandidates: z.number().int().nonnegative(),
+  appliedCandidates: z.number().int().nonnegative(),
+  failedJobs: z.number().int().nonnegative(),
+  lastIngestionAt: z.string().nullable(),
+});
+
 export const CreateDocumentIngestionJobInputSchema = z.object({
   provider: DocumentIngestionProviderSchema.optional(),
   modelName: z.string().optional(),
@@ -103,6 +118,7 @@ export type DocumentIngestionJob = z.infer<typeof DocumentIngestionJobSchema>;
 export type DocumentExtractionSummary = z.infer<typeof DocumentExtractionSummarySchema>;
 export type DocumentExtractionDetail = z.infer<typeof DocumentExtractionDetailSchema>;
 export type DocumentExtractionReview = z.infer<typeof DocumentExtractionReviewSchema>;
+export type DocumentIngestionSummary = z.infer<typeof DocumentIngestionSummarySchema>;
 export type CreateDocumentIngestionJobInput = z.infer<typeof CreateDocumentIngestionJobInputSchema>;
 export type ListDocumentIngestionJobsQuery = z.infer<typeof ListDocumentIngestionJobsQuerySchema>;
 export type ReviewDocumentExtractionInput = z.infer<typeof ReviewDocumentExtractionInputSchema>;
