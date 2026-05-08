@@ -209,6 +209,41 @@ export async function canRequestDocumentOCR(
   return canAccessProperty(db, input);
 }
 
+export function canRequestDocumentIngestionRole(input: {
+  role: Role;
+  tenantId?: string | null;
+  tenantRole?: TenantRole | null;
+}): boolean {
+  if (!input.tenantId) return false;
+  if (input.role === 'provider' || input.role === 'temp_provider') return false;
+  if (input.role === 'admin') return true;
+  if (input.role === 'owner') return true;
+  return input.tenantRole === 'owner' || input.tenantRole === 'manager';
+}
+
+export function canRequestDocumentIngestionDecision(input: {
+  role: Role;
+  tenantId?: string | null;
+  tenantRole?: TenantRole | null;
+  hasPropertyAccess: boolean;
+}): boolean {
+  if (!canRequestDocumentIngestionRole(input)) return false;
+  return input.hasPropertyAccess;
+}
+
+export async function canRequestDocumentIngestion(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<boolean> {
+  const hasPropertyAccess = await canAccessProperty(db, input);
+  return canRequestDocumentIngestionDecision({
+    role: input.role,
+    tenantId: input.tenantId,
+    tenantRole: input.tenantRole,
+    hasPropertyAccess,
+  });
+}
+
 export async function canCreateServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput

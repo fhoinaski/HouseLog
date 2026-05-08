@@ -2,13 +2,14 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
-import { canDeleteDocument, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
+import { canDeleteDocument, canRequestDocumentIngestion, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
-import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, properties, serviceOrders, users } from '../db/schema';
-import { documentCreateSchema, CreateDocumentIngestionJobInputSchema } from '@houselog/contracts';
+import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, properties, serviceOrders, users } from '../db/schema';
+import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, ListDocumentIngestionJobsQuerySchema } from '@houselog/contracts';
+import { getDocumentIngestionJobDetail, listDocumentIngestionJobsForDocument } from '../lib/document-ingestion-tenant';
 import type { Bindings, Variables } from '../lib/types';
 
 type Document = {
@@ -468,9 +469,9 @@ documents.post('/:id/ocr', async (c) => {
   return ok(c, { ocr_data: ocrResult });
 });
 
-// ── POST /properties/:propertyId/documents/:id/ingestion-jobs ────────────────
+// ── Document ingestion jobs ──────────────────────────────────────────────────
 
-documents.post('/:id/ingestion-jobs', async (c) => {
+documents.get('/:id/ingestion-jobs', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const documentId = c.req.param('id')!;
@@ -483,6 +484,79 @@ documents.post('/:id/ingestion-jobs', async (c) => {
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const query = ListDocumentIngestionJobsQuerySchema.safeParse(
+    Object.fromEntries(new URL(c.req.url).searchParams.entries())
+  );
+  if (!query.success) return err(c, 'Query invalida', 'VALIDATION_ERROR', 422, query.error.flatten());
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const filters = [
+    eq(ingestionJobsTable.tenantId, tenantId),
+    eq(ingestionJobsTable.propertyId, propertyId),
+    eq(ingestionJobsTable.documentId, documentId),
+  ];
+
+  if (query.data.status) filters.push(eq(ingestionJobsTable.status, query.data.status));
+  if (query.data.cursor) filters.push(lt(ingestionJobsTable.createdAt, query.data.cursor));
+
+  const jobs = await db
+    .select({
+      id: ingestionJobsTable.id,
+      tenantId: ingestionJobsTable.tenantId,
+      propertyId: ingestionJobsTable.propertyId,
+      documentId: ingestionJobsTable.documentId,
+      status: ingestionJobsTable.status,
+      provider: ingestionJobsTable.provider,
+      modelName: ingestionJobsTable.modelName,
+      attempts: ingestionJobsTable.attempts,
+      lastError: ingestionJobsTable.lastError,
+      startedAt: ingestionJobsTable.startedAt,
+      finishedAt: ingestionJobsTable.finishedAt,
+      createdAt: ingestionJobsTable.createdAt,
+      updatedAt: ingestionJobsTable.updatedAt,
+    })
+    .from(ingestionJobsTable)
+    .where(and(...filters))
+    .orderBy(desc(ingestionJobsTable.createdAt))
+    .limit(query.data.limit + 1);
+
+  return ok(c, listDocumentIngestionJobsForDocument({
+    jobs,
+    tenantId,
+    propertyId,
+    documentId,
+    status: query.data.status,
+    cursor: query.data.cursor,
+    limit: query.data.limit,
+  }));
+});
+
+documents.post('/:id/ingestion-jobs', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const canIngest = await canRequestDocumentIngestion(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  if (!canIngest) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   let rawBody: unknown = {};
   try { rawBody = await c.req.json(); } catch { rawBody = {}; }
@@ -572,6 +646,98 @@ documents.post('/:id/ingestion-jobs', async (c) => {
   });
 
   return ok(c, { job }, 201);
+});
+
+// ── GET /properties/:propertyId/documents/:id/ingestion-jobs/:jobId ──────────
+
+documents.get('/:id/ingestion-jobs/:jobId', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const documentId = c.req.param('id')!;
+  const jobId = c.req.param('jobId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  const [doc] = await db
+    .select({ id: documentsTable.id })
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, documentId),
+      eq(documentsTable.tenantId, tenantId),
+      eq(documentsTable.propertyId, propertyId),
+      isNull(documentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!doc) return err(c, 'Documento nao encontrado', 'NOT_FOUND', 404);
+
+  const [job] = await db
+    .select({
+      id: ingestionJobsTable.id,
+      tenantId: ingestionJobsTable.tenantId,
+      documentId: ingestionJobsTable.documentId,
+      propertyId: ingestionJobsTable.propertyId,
+      status: ingestionJobsTable.status,
+      provider: ingestionJobsTable.provider,
+      modelName: ingestionJobsTable.modelName,
+      attempts: ingestionJobsTable.attempts,
+      lastError: ingestionJobsTable.lastError,
+      startedAt: ingestionJobsTable.startedAt,
+      finishedAt: ingestionJobsTable.finishedAt,
+      createdAt: ingestionJobsTable.createdAt,
+      updatedAt: ingestionJobsTable.updatedAt,
+    })
+    .from(ingestionJobsTable)
+    .where(and(
+      eq(ingestionJobsTable.id, jobId),
+      eq(ingestionJobsTable.tenantId, tenantId),
+      eq(ingestionJobsTable.propertyId, propertyId),
+      eq(ingestionJobsTable.documentId, documentId),
+    ))
+    .limit(1);
+
+  if (!job) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  const rawExtractions = await db
+    .select({
+      id: extractionsTable.id,
+      documentId: extractionsTable.documentId,
+      jobId: extractionsTable.jobId,
+      rawText: extractionsTable.rawText,
+      rawJson: extractionsTable.rawJson,
+      normalizedJson: extractionsTable.normalizedJson,
+      confidenceScore: extractionsTable.confidenceScore,
+      schemaVersion: extractionsTable.schemaVersion,
+      modelName: extractionsTable.modelName,
+      createdAt: extractionsTable.createdAt,
+    })
+    .from(extractionsTable)
+    .where(and(
+      eq(extractionsTable.jobId, jobId),
+      eq(extractionsTable.tenantId, tenantId),
+      eq(extractionsTable.propertyId, propertyId),
+      eq(extractionsTable.documentId, documentId),
+    ))
+    .orderBy(desc(extractionsTable.createdAt));
+
+  const detail = getDocumentIngestionJobDetail({
+    job,
+    extractions: rawExtractions,
+    tenantId,
+    propertyId,
+    documentId,
+  });
+
+  if (!detail) return err(c, 'Job nao encontrado', 'NOT_FOUND', 404);
+
+  return ok(c, detail);
 });
 
 export default documents;
