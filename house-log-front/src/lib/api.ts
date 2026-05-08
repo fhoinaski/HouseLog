@@ -53,6 +53,32 @@ export { propertiesApi } from '@/lib/api/properties';
 // Documents
 export { documentsApi } from '@/lib/api/documents';
 export type { DocumentUploadMeta } from '@/lib/api/documents';
+export { documentIngestionApi } from '@/lib/api/document-ingestion';
+export type {
+  AppliedInventoryItem,
+  AppliedMaintenanceSchedule,
+  AppliedTechnicalSystem,
+  AppliedWarranty,
+  ApplyDocumentExtractionCandidateResponse,
+  CreateDocumentIngestionJobInput,
+  DocumentExtractionCandidate,
+  DocumentExtractionCandidatesPage,
+  DocumentExtractionCandidateStatus,
+  DocumentExtractionCandidateType,
+  DocumentExtractionDetail,
+  DocumentExtractionReview,
+  DocumentExtractionSummary,
+  DocumentIngestionJob,
+  DocumentIngestionJobDetail,
+  DocumentIngestionSummary,
+  GenerateDocumentExtractionCandidatesInput,
+  ListDocumentExtractionCandidatesParams,
+  ListDocumentExtractionCandidatesQuery,
+  ListDocumentIngestionJobsParams,
+  ListDocumentIngestionJobsQuery,
+  ReviewDocumentExtractionCandidateInput,
+  ReviewDocumentExtractionInput,
+} from '@/lib/api/document-ingestion';
 
 // Credentials
 export { credentialsApi } from '@/lib/api/credentials';

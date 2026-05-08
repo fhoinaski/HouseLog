@@ -20,6 +20,9 @@ export const documentsApi = {
   list: (propertyId: string, params?: { type?: string; cursor?: string }) =>
     request<CursorPage<Document>>(`/properties/${propertyId}/documents${qs(params)}`),
 
+  get: (propertyId: string, id: string) =>
+    request<{ document: Document }>(`/properties/${propertyId}/documents/${id}`),
+
   upload: (propertyId: string, file: File, meta: DocumentUploadMeta) => {
     const fd = new FormData();
     fd.append('file', file);

@@ -2,6 +2,7 @@
 
 import type * as React from 'react';
 import { use, useRef, useState } from 'react';
+import Link from 'next/link';
 import useSWR, { useSWRConfig } from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -17,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { documentRowVariants, documentTypeIconVariants } from '@/components/ui/visual-system';
-import { documentsApi, type Document } from '@/lib/api';
+import { documentIngestionApi, documentsApi, type Document, type DocumentIngestionSummary } from '@/lib/api';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -53,6 +54,59 @@ const metaSchema = z.object({
 });
 
 type MetaForm = z.infer<typeof metaSchema>;
+
+type IngestionStatusView = {
+  label: string;
+  variant: React.ComponentProps<typeof Badge>['variant'];
+  actionLabel: string;
+};
+
+function resolveIngestionStatus(summary?: DocumentIngestionSummary): IngestionStatusView {
+  if (!summary || summary.totalJobs === 0) {
+    return { label: 'Sem analise', variant: 'secondary', actionLabel: 'Analise inteligente' };
+  }
+
+  if (summary.latestJobStatus === 'queued' || summary.latestJobStatus === 'processing') {
+    return { label: 'Processando', variant: 'in_progress', actionLabel: 'Analise inteligente' };
+  }
+
+  if (summary.latestJobStatus === 'failed' || summary.latestJobStatus === 'cancelled') {
+    return { label: 'Falhou', variant: 'destructive', actionLabel: 'Analise inteligente' };
+  }
+
+  if (summary.appliedCandidates > 0) {
+    return { label: 'Aplicado', variant: 'success', actionLabel: 'Revisar extracao' };
+  }
+
+  return { label: 'Aguardando revisao', variant: 'warning', actionLabel: 'Revisar extracao' };
+}
+
+function DocumentIngestionEntry({ doc }: { doc: Document }) {
+  const { data } = useSWR(['document-ingestion-summary', doc.property_id, doc.id], () =>
+    documentIngestionApi.summary(doc.property_id, doc.id)
+  );
+  const status = resolveIngestionStatus(data?.summary);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge variant={status.variant} className="text-xs">
+        {status.label}
+      </Badge>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="min-h-8 px-3 py-1.5 text-xs"
+        asChild
+      >
+        <Link href={`/properties/${doc.property_id}/documents/${doc.id}/ingestion`}>
+          <Sparkles className="h-3.5 w-3.5" />
+          {status.actionLabel}
+        </Link>
+      </Button>
+    </div>
+  );
+}
 
 function DocRow({
   doc,
@@ -95,6 +149,7 @@ function DocRow({
                 OCR processado
               </Badge>
             )}
+            <DocumentIngestionEntry doc={doc} />
           </div>
           {doc.vendor_cnpj && <p className="mt-1 text-xs text-text-secondary">CNPJ: {doc.vendor_cnpj}</p>}
         </div>
