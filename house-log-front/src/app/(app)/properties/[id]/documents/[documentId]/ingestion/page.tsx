@@ -128,6 +128,23 @@ function canGenerateCandidatesFromReview(status: CandidateGenerationReviewStatus
   return status === 'approved' || status === 'partially_applied';
 }
 
+function getCandidateGenerationHint({
+  hasExtraction,
+  reviewStatus,
+  hasCandidates,
+}: {
+  hasExtraction: boolean;
+  reviewStatus: CandidateGenerationReviewStatus;
+  hasCandidates: boolean;
+}): string {
+  if (!hasExtraction) return 'Selecione uma extração para gerar candidates a partir dos dados revisados.';
+  if (hasCandidates) return 'Candidates já foram gerados para esta extração. Revise e aplique os itens aprovados.';
+  if (canGenerateCandidatesFromReview(reviewStatus)) {
+    return 'Extração validada. Você pode gerar candidates para preencher o prontuário do imóvel.';
+  }
+  return 'Aprove ou marque a extração como parcialmente aplicada antes de gerar candidates.';
+}
+
 export default function DocumentIngestionPage({
   params,
 }: {
@@ -207,6 +224,11 @@ export default function DocumentIngestionPage({
     candidates.length === 0 &&
     canGenerateCandidatesFromReview(selectedReviewStatus)
   );
+  const candidateGenerationHint = getCandidateGenerationHint({
+    hasExtraction: Boolean(selectedExtraction),
+    reviewStatus: selectedReviewStatus,
+    hasCandidates: candidates.length > 0,
+  });
 
   useEffect(() => {
     if (orderedJobs.length === 0) {
@@ -400,8 +422,8 @@ export default function DocumentIngestionPage({
       <PageHeader
         density="editorial"
         eyebrow={property ? `${property.name} · Analise inteligente` : 'Analise inteligente'}
-        title={document?.title ?? 'Documento'}
-        description="Acompanhe o processamento inteligente deste documento antes de revisar extracoes e aplicar dados ao prontuario tecnico."
+        title="Análise inteligente do documento"
+        description="A IA lê o documento, extrai dados técnicos e prepara informações revisáveis para o prontuário do imóvel."
         actions={
           <>
             <Button variant="ghost" asChild>
@@ -450,6 +472,8 @@ export default function DocumentIngestionPage({
               <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">{stateCopy.description}</p>
               {document && (
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-tertiary">
+                  <span className="font-medium text-text-secondary">{document.title}</span>
+                  <span>Â·</span>
                   <span>{DOC_TYPE_LABELS[document.type] ?? document.type}</span>
                   <span>·</span>
                   <span>Registrado em {formatDate(document.created_at)}</span>
@@ -511,8 +535,8 @@ export default function DocumentIngestionPage({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <PageSection
-          title="Extracoes do job"
-          description="Resumo das extracoes encontradas no job selecionado."
+          title="Extrações do job"
+          description="Escolha a leitura que será validada antes de entrar no prontuário."
           tone="surface"
           density="editorial"
         >
@@ -524,13 +548,22 @@ export default function DocumentIngestionPage({
         </PageSection>
 
         <PageSection
-          title="Detalhe visual"
-          description="Dados normalizados em leitura operacional, sem abrir JSON bruto."
+          title="Revisão da extração"
+          description="Resumo, confiança, avisos e status persistido da validação humana."
           tone="surface"
           density="editorial"
         >
-          <ExtractionDetailPanel extraction={selectedExtraction} />
-          <div className="flex flex-wrap gap-2 rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-3">
+          <ExtractionDetailPanel
+            extraction={selectedExtraction}
+            reviewStatus={selectedReviewStatus}
+            canGenerateCandidates={canGenerateCandidates}
+            candidateGenerationHint={candidateGenerationHint}
+          />
+          <div className="rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-3">
+            <p className="mb-3 text-xs leading-5 text-text-tertiary">
+              Confirme a extração antes de gerar registros sugeridos para o prontuário.
+            </p>
+            <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
@@ -539,7 +572,7 @@ export default function DocumentIngestionPage({
               loading={actionKey === 'review-extraction:approved'}
               onClick={() => handleReviewExtraction('approved')}
             >
-              Aprovar extraction
+              Aprovar extração
             </Button>
             <Button
               type="button"
@@ -559,15 +592,16 @@ export default function DocumentIngestionPage({
               loading={actionKey === 'review-extraction:rejected'}
               onClick={() => handleReviewExtraction('rejected')}
             >
-              Rejeitar extraction
+              Rejeitar extração
             </Button>
+            </div>
           </div>
         </PageSection>
       </div>
 
       <PageSection
-        title="Candidates"
-        description="Revise candidates gerados a partir da extraction selecionada antes de aplicar dados ao prontuario."
+        title="Candidates para o prontuário"
+        description="Revise sugestões por tipo e aplique apenas o que já foi aprovado."
         tone="strong"
         density="editorial"
         actions={
@@ -577,7 +611,7 @@ export default function DocumentIngestionPage({
               variant="outline"
               loading={actionKey === 'generate-candidates'}
               disabled={!canGenerateCandidates}
-              title={!canGenerateCandidates ? 'Aprove ou marque a extracao como parcialmente aplicada antes de gerar candidates.' : undefined}
+              title={!canGenerateCandidates ? candidateGenerationHint : undefined}
               onClick={handleGenerateCandidates}
             >
               <Sparkles className="h-4 w-4" />
@@ -585,7 +619,7 @@ export default function DocumentIngestionPage({
             </Button>
             {!canGenerateCandidates && (
               <p className="text-xs leading-5 text-text-tertiary">
-                Aprove ou marque a extracao como parcialmente aplicada antes de gerar candidates.
+                {candidateGenerationHint}
               </p>
             )}
           </div>

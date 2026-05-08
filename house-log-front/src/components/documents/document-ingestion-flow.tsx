@@ -3,6 +3,7 @@ import type {
   DocumentExtractionCandidateStatus,
   DocumentExtractionCandidateType,
   DocumentExtractionDetail,
+  DocumentExtractionReviewStatus,
   DocumentExtractionSummary,
   DocumentIngestionJob,
   DocumentIngestionSummary,
@@ -10,10 +11,14 @@ import type {
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
+  ClipboardCheck,
   DatabaseZap,
   FileSearch,
+  Info,
   Layers3,
   ListChecks,
   Package,
@@ -85,12 +90,34 @@ const CANDIDATE_STATUS_BADGES: Record<DocumentExtractionCandidateStatus, BadgePr
   superseded: 'secondary',
 };
 
+const REVIEW_STATUS_LABELS: Record<DocumentExtractionReviewStatus, string> = {
+  pending: 'Revisao pendente',
+  approved: 'Revisao aprovada',
+  rejected: 'Revisao rejeitada',
+  partially_applied: 'Parcialmente aplicada',
+};
+
+const REVIEW_STATUS_BADGES: Record<DocumentExtractionReviewStatus, BadgeProps['variant']> = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'destructive',
+  partially_applied: 'success',
+};
+
+const CANDIDATE_TYPE_ORDER: DocumentExtractionCandidateType[] = [
+  'technical_system',
+  'warranty',
+  'inventory_item',
+  'maintenance_recommendation',
+];
+
 type MetricTone = 'default' | 'accent' | 'warning' | 'success' | 'danger';
 
 type Metric = {
   label: string;
   value: number | string;
   tone?: MetricTone;
+  helper?: string;
 };
 
 export function formatIngestionDateTime(value?: string | null): string {
@@ -116,11 +143,16 @@ function metricToneClass(tone: MetricTone = 'default'): string {
 
 function SummaryMetric({ metric }: { metric: Metric }) {
   return (
-    <div className={cn('rounded-[var(--radius-lg)] p-3', metricToneClass(metric.tone))}>
-      <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
-        {metric.label}
-      </p>
-      <p className="mt-2 text-2xl font-light tabular-nums text-text-primary">{metric.value}</p>
+    <div className={cn('min-h-[104px] rounded-[var(--radius-lg)] p-3', metricToneClass(metric.tone))}>
+      <div className="flex h-full flex-col justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
+            {metric.label}
+          </p>
+          <p className="mt-2 text-2xl font-light tabular-nums text-text-primary">{metric.value}</p>
+        </div>
+        {metric.helper && <p className="text-xs leading-5 text-text-tertiary">{metric.helper}</p>}
+      </div>
     </div>
   );
 }
@@ -149,20 +181,88 @@ export function ConfidenceBadge({ score }: { score?: number | null }) {
   return <Badge variant={variant}>{label}: {percent}%</Badge>;
 }
 
+export function ReviewStatusBadge({ status }: { status?: DocumentExtractionReviewStatus | null }) {
+  if (!status) {
+    return <Badge variant="outline">Sem revisao persistida</Badge>;
+  }
+
+  return <Badge variant={REVIEW_STATUS_BADGES[status]}>{REVIEW_STATUS_LABELS[status]}</Badge>;
+}
+
+function primitiveLabel(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() ? value : null;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Nao';
+  return null;
+}
+
+function readPayloadField(payload: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = primitiveLabel(payload[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function candidatePayloadSummary(candidate: DocumentExtractionCandidate): Array<{ label: string; value: string }> {
+  const payload = candidate.payloadJson;
+  const byType: Record<DocumentExtractionCandidateType, Array<{ label: string; keys: string[] }>> = {
+    technical_system: [
+      { label: 'Nome', keys: ['name', 'title'] },
+      { label: 'Tipo', keys: ['type', 'systemType'] },
+      { label: 'Local', keys: ['locationSummary', 'location'] },
+      { label: 'Modelo', keys: ['model', 'brand'] },
+    ],
+    warranty: [
+      { label: 'Garantia', keys: ['title', 'name'] },
+      { label: 'Fornecedor', keys: ['providerName', 'provider'] },
+      { label: 'Validade', keys: ['endDate', 'warrantyUntil'] },
+      { label: 'Cobertura', keys: ['coverage', 'warrantyType'] },
+    ],
+    inventory_item: [
+      { label: 'Item', keys: ['name', 'title'] },
+      { label: 'Categoria', keys: ['category'] },
+      { label: 'Modelo', keys: ['model', 'brand'] },
+      { label: 'Quantidade', keys: ['quantity', 'unit'] },
+    ],
+    maintenance_recommendation: [
+      { label: 'Recomendacao', keys: ['title', 'name'] },
+      { label: 'Sistema', keys: ['systemType', 'type'] },
+      { label: 'Prioridade', keys: ['priority'] },
+      { label: 'Intervalo', keys: ['recommendedIntervalMonths'] },
+    ],
+  };
+
+  const mapped = byType[candidate.candidateType]
+    .map((item) => {
+      const value = readPayloadField(payload, item.keys);
+      return value ? { label: item.label, value } : null;
+    })
+    .filter((item): item is { label: string; value: string } => Boolean(item));
+
+  if (mapped.length > 0) return mapped.slice(0, 4);
+
+  return Object.entries(payload)
+    .map(([key, value]) => {
+      const label = primitiveLabel(value);
+      return label ? { label: key, value: label } : null;
+    })
+    .filter((item): item is { label: string; value: string } => Boolean(item))
+    .slice(0, 4);
+}
+
 export function IngestionSummaryCard({ summary }: { summary: DocumentIngestionSummary }) {
   const metrics: Metric[] = [
-    { label: 'Jobs', value: summary.totalJobs, tone: summary.totalJobs > 0 ? 'accent' : 'default' },
-    { label: 'Extracoes', value: summary.totalExtractions },
-    { label: 'Revisoes pendentes', value: summary.pendingReviews, tone: summary.pendingReviews > 0 ? 'warning' : 'default' },
-    { label: 'Candidates aprovados', value: summary.approvedCandidates, tone: summary.approvedCandidates > 0 ? 'success' : 'default' },
-    { label: 'Candidates pendentes', value: summary.pendingCandidates, tone: summary.pendingCandidates > 0 ? 'warning' : 'default' },
-    { label: 'Candidates aplicados', value: summary.appliedCandidates, tone: summary.appliedCandidates > 0 ? 'success' : 'default' },
-    { label: 'Falhas', value: summary.failedJobs, tone: summary.failedJobs > 0 ? 'danger' : 'default' },
-    { label: 'Ultimo status', value: summary.latestJobStatus ? INGESTION_JOB_STATUS_LABELS[summary.latestJobStatus] : '-' },
+    { label: 'Jobs', value: summary.totalJobs, tone: summary.totalJobs > 0 ? 'accent' : 'default', helper: 'Rodadas de analise' },
+    { label: 'Extracoes', value: summary.totalExtractions, helper: 'Dados tecnicos encontrados' },
+    { label: 'Revisoes pendentes', value: summary.pendingReviews, tone: summary.pendingReviews > 0 ? 'warning' : 'default', helper: 'Precisam de validacao' },
+    { label: 'Candidates pendentes', value: summary.pendingCandidates, tone: summary.pendingCandidates > 0 ? 'warning' : 'default', helper: 'Aguardam decisao' },
+    { label: 'Candidates aplicados', value: summary.appliedCandidates, tone: summary.appliedCandidates > 0 ? 'success' : 'default', helper: 'Ja entraram no prontuario' },
+    { label: 'Falhas', value: summary.failedJobs, tone: summary.failedJobs > 0 ? 'danger' : 'default', helper: 'Execucoes com erro' },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
       {metrics.map((metric) => (
         <SummaryMetric key={metric.label} metric={metric} />
       ))}
@@ -325,7 +425,17 @@ export function ExtractionSummaryList({
   );
 }
 
-export function ExtractionDetailPanel({ extraction }: { extraction?: DocumentExtractionDetail | null }) {
+export function ExtractionDetailPanel({
+  extraction,
+  reviewStatus,
+  canGenerateCandidates,
+  candidateGenerationHint,
+}: {
+  extraction?: DocumentExtractionDetail | null;
+  reviewStatus?: DocumentExtractionReviewStatus | null;
+  canGenerateCandidates?: boolean;
+  candidateGenerationHint?: string;
+}) {
   if (!extraction) {
     return (
       <EmptyState
@@ -339,6 +449,7 @@ export function ExtractionDetailPanel({ extraction }: { extraction?: DocumentExt
   }
 
   const normalized = extraction.normalizedJson;
+  const persistedReviewStatus = reviewStatus ?? extraction.review?.status ?? null;
   const counts = normalized
     ? [
         { label: 'Sistemas', value: normalized.technicalSystems.length },
@@ -347,23 +458,40 @@ export function ExtractionDetailPanel({ extraction }: { extraction?: DocumentExt
         { label: 'Manutencoes', value: normalized.maintenanceRecommendations.length },
       ]
     : [];
+  const warnings = normalized?.warnings ?? [];
 
   return (
     <div className="rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary">Detalhe da extracao</p>
+          <p className="text-sm font-medium text-text-primary">Leitura inteligente</p>
           <p className="mt-1 text-xs leading-5 text-text-secondary">
             Documento tipo {normalized?.documentType ?? 'nao identificado'} · schema {extraction.schemaVersion}
           </p>
         </div>
-        <ConfidenceBadge score={extraction.confidenceScore ?? normalized?.confidenceScore} />
+        <div className="flex flex-wrap gap-2">
+          <ReviewStatusBadge status={persistedReviewStatus} />
+          <ConfidenceBadge score={extraction.confidenceScore ?? normalized?.confidenceScore} />
+        </div>
       </div>
 
       {normalized?.summary && (
-        <p className="mt-4 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3 text-sm leading-6 text-text-secondary">
-          {normalized.summary}
-        </p>
+        <div className="mt-4 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3">
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">Resumo extraido</p>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">{normalized.summary}</p>
+        </div>
+      )}
+
+      {candidateGenerationHint && (
+        <div
+          className={cn(
+            'mt-4 flex items-start gap-3 rounded-[var(--radius-lg)] p-3 text-sm leading-6',
+            canGenerateCandidates ? 'bg-bg-success text-text-success' : 'bg-bg-warning text-text-warning'
+          )}
+        >
+          {canGenerateCandidates ? <ClipboardCheck className="mt-0.5 h-4 w-4 shrink-0" /> : <Info className="mt-0.5 h-4 w-4 shrink-0" />}
+          <p>{candidateGenerationHint}</p>
+        </div>
       )}
 
       {counts.length > 0 ? (
@@ -377,6 +505,20 @@ export function ExtractionDetailPanel({ extraction }: { extraction?: DocumentExt
         </div>
       ) : (
         <p className="mt-4 text-sm text-text-secondary">Sem dados normalizados disponiveis para esta extracao.</p>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="mt-4 rounded-[var(--radius-lg)] bg-bg-warning p-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-text-warning">
+            <AlertTriangle className="h-4 w-4" />
+            Pontos de atencao
+          </div>
+          <ul className="mt-2 space-y-1 text-xs leading-5 text-text-warning">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {(extraction.hasRawJson || extraction.hasRawText) && (
@@ -410,6 +552,7 @@ export function CandidateCard({
 }) {
   const CandidateIcon = CANDIDATE_TYPE_ICONS[candidate.candidateType];
   const payloadKeys = Object.keys(candidate.payloadJson);
+  const summary = candidatePayloadSummary(candidate);
   const canReview = candidate.status === 'pending';
   const canApply = candidate.status === 'approved';
 
@@ -437,6 +580,26 @@ export function CandidateCard({
           <ConfidenceBadge score={candidate.confidenceScore} />
         </div>
       </div>
+      {summary.length > 0 && (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {summary.map((item) => (
+            <div key={`${item.label}-${item.value}`} className="rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">{item.label}</p>
+              <p className="mt-1 line-clamp-2 text-sm leading-5 text-text-primary">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <details className="group mt-4 rounded-[var(--radius-lg)] border border-border-subtle bg-[var(--surface-strong)] p-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium text-text-secondary">
+          <span>Detalhe tecnico do candidate</span>
+          <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+        </summary>
+        <pre className="mt-3 max-h-72 overflow-auto rounded-[var(--radius-md)] bg-[var(--surface-base)] p-3 text-xs leading-5 text-text-secondary">
+          {JSON.stringify(candidate.payloadJson, null, 2)}
+        </pre>
+      </details>
       {actions && (
         <div className="mt-4 flex flex-wrap gap-2 border-t border-border-subtle pt-3">
           <Button
@@ -495,14 +658,34 @@ export function CandidateList({
   }
 
   return (
-    <div className="space-y-3">
-      {candidates.map((candidate) => (
-        <CandidateCard
-          key={candidate.id}
-          candidate={candidate}
-          actions={getCandidateActions?.(candidate)}
-        />
-      ))}
+    <div className="space-y-4">
+      {CANDIDATE_TYPE_ORDER.map((type) => {
+        const groupedCandidates = candidates.filter((candidate) => candidate.candidateType === type);
+        if (groupedCandidates.length === 0) return null;
+
+        const CandidateIcon = CANDIDATE_TYPE_ICONS[type];
+
+        return (
+          <section key={type} className="space-y-3">
+            <div className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                <span className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-bg-accent-subtle text-text-accent">
+                  <CandidateIcon className="h-4 w-4" />
+                </span>
+                {CANDIDATE_TYPE_LABELS[type]}
+              </div>
+              <Badge variant="secondary">{groupedCandidates.length}</Badge>
+            </div>
+            {groupedCandidates.map((candidate) => (
+              <CandidateCard
+                key={candidate.id}
+                candidate={candidate}
+                actions={getCandidateActions?.(candidate)}
+              />
+            ))}
+          </section>
+        );
+      })}
     </div>
   );
 }
