@@ -7,7 +7,7 @@ import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { getDb } from '../db/client';
-import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, inventoryItems, maintenanceSchedules, properties, serviceOrders, technicalSystems, users, warranties } from '../db/schema';
+import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, inventoryItems, properties, serviceOrders, technicalSystems, users, warranties } from '../db/schema';
 import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, GenerateDocumentExtractionCandidatesInputSchema, ListDocumentExtractionCandidatesQuerySchema, ListDocumentIngestionJobsQuerySchema, ReviewDocumentExtractionCandidateInputSchema, ReviewDocumentExtractionInputSchema } from '@houselog/contracts';
 import {
   buildDocumentExtractionCandidates,
@@ -21,7 +21,6 @@ import {
   buildDocumentIngestionQueueFailurePatch,
   buildDocumentIngestionSummary,
   buildInventoryItemFromCandidatePayload,
-  buildMaintenanceScheduleFromCandidatePayload,
   buildTechnicalSystemFromCandidatePayload,
   buildWarrantyFromCandidatePayload,
   canApplyDocumentExtractionCandidate,
@@ -33,7 +32,6 @@ import {
   listDocumentExtractionCandidatesForExtraction,
   listDocumentIngestionJobsForDocument,
   mapAppliedInventoryItemToResponse,
-  mapAppliedMaintenanceScheduleToResponse,
   mapAppliedTechnicalSystemToResponse,
   mapAppliedWarrantyToResponse,
   mapDocumentExtractionCandidateToContract,
@@ -1364,8 +1362,7 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
   let responseEntity:
     | { technicalSystem: ReturnType<typeof mapAppliedTechnicalSystemToResponse> }
     | { warranty: ReturnType<typeof mapAppliedWarrantyToResponse> }
-    | { inventoryItem: ReturnType<typeof mapAppliedInventoryItemToResponse> }
-    | { maintenanceSchedule: ReturnType<typeof mapAppliedMaintenanceScheduleToResponse> };
+    | { inventoryItem: ReturnType<typeof mapAppliedInventoryItemToResponse> };
 
   if (applyDecision.targetEntityType === 'technical_system') {
     const technicalSystemInsert = buildTechnicalSystemFromCandidatePayload({
@@ -1482,43 +1479,6 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
     if (!inventoryItem) return err(c, 'Item de inventario nao encontrado apos aplicacao', 'INVENTORY_ITEM_APPLY_READ_FAILED', 500);
 
     responseEntity = { inventoryItem: mapAppliedInventoryItemToResponse(inventoryItem) };
-  } else if (applyDecision.targetEntityType === 'maintenance_schedule') {
-    const maintenanceScheduleInsert = buildMaintenanceScheduleFromCandidatePayload({
-      maintenanceScheduleId: targetEntityId,
-      tenantId,
-      propertyId,
-      payloadJson: candidateBefore.payloadJson,
-      now,
-    });
-
-    await db.insert(maintenanceSchedules).values(maintenanceScheduleInsert);
-
-    const [maintenanceSchedule] = await db
-      .select({
-        id: maintenanceSchedules.id,
-        propertyId: maintenanceSchedules.propertyId,
-        systemType: maintenanceSchedules.systemType,
-        title: maintenanceSchedules.title,
-        description: maintenanceSchedules.description,
-        frequency: maintenanceSchedules.frequency,
-        lastDone: maintenanceSchedules.lastDone,
-        nextDue: maintenanceSchedules.nextDue,
-        responsible: maintenanceSchedules.responsible,
-        autoCreateOs: maintenanceSchedules.autoCreateOs,
-        notes: maintenanceSchedules.notes,
-        createdAt: maintenanceSchedules.createdAt,
-      })
-      .from(maintenanceSchedules)
-      .where(and(
-        eq(maintenanceSchedules.id, targetEntityId),
-        eq(maintenanceSchedules.tenantId, tenantId),
-        eq(maintenanceSchedules.propertyId, propertyId),
-        isNull(maintenanceSchedules.deletedAt),
-      ))
-      .limit(1);
-    if (!maintenanceSchedule) return err(c, 'Agenda de manutencao nao encontrada apos aplicacao', 'MAINTENANCE_SCHEDULE_APPLY_READ_FAILED', 500);
-
-    responseEntity = { maintenanceSchedule: mapAppliedMaintenanceScheduleToResponse(maintenanceSchedule) };
   } else {
     return err(c, 'Tipo de candidate ainda nao suportado para aplicacao', 'UNSUPPORTED_CANDIDATE_TYPE', 422);
   }

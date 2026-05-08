@@ -2117,12 +2117,12 @@ describe('canApplyDocumentExtractionCandidate para inventory_item', () => {
     })).toEqual({ allowed: false, status: 409, code: 'CANDIDATE_ALREADY_APPLIED' });
   });
 
-  it('bloqueia candidate de tipo maintenance_recommendation (test 22)', () => {
+  it('retorna 422 quando candidate maintenance_recommendation carrega payload de inventory_item (test 22)', () => {
     expect(canApplyDocumentExtractionCandidate({
       ...approvedInventoryItemCandidate,
       candidateType: 'maintenance_recommendation',
       targetEntityType: 'maintenance_schedule',
-    })).toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
+    })).toEqual({ allowed: false, status: 422, code: 'INVALID_MAINTENANCE_RECOMMENDATION_PAYLOAD' });
   });
 
   it('retorna 422 para payloadJson invalido (test 27)', () => {
@@ -2154,9 +2154,9 @@ const approvedMaintenanceCandidate: DocumentExtractionCandidateRow = {
 };
 
 describe('canApplyDocumentExtractionCandidate para maintenance_recommendation', () => {
-  it('bloqueia candidate maintenance_recommendation porque aplicacao ainda nao e suportada', () => {
+  it('mantem decisao existente para candidate maintenance_recommendation aprovado', () => {
     expect(canApplyDocumentExtractionCandidate(approvedMaintenanceCandidate))
-      .toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
+      .toEqual({ allowed: true, targetEntityType: 'maintenance_schedule' });
   });
 
   it('bloqueia candidate pendente/rejeitado/superseded/aplicado (test 15)', () => {
@@ -2199,11 +2199,11 @@ describe('canApplyDocumentExtractionCandidate para maintenance_recommendation', 
       .toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
   });
 
-  it('mantem tipo maintenance_recommendation fora do escopo mesmo com payload invalido (test 18)', () => {
+  it('retorna 422 para payload invalido (test 18)', () => {
     expect(canApplyDocumentExtractionCandidate({
       ...approvedMaintenanceCandidate,
       payloadJson: { systemType: 'plumbing', title: 'Sem campos obrigatorios' },
-    })).toEqual({ allowed: false, status: 422, code: 'UNSUPPORTED_CANDIDATE_TYPE' });
+    })).toEqual({ allowed: false, status: 422, code: 'INVALID_MAINTENANCE_RECOMMENDATION_PAYLOAD' });
   });
 });
 
