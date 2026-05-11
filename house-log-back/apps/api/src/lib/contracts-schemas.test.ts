@@ -30,6 +30,7 @@ import {
   DocumentIngestionJobStatusSchema,
   DocumentIngestionProviderSchema,
   DocumentIngestionSummarySchema,
+  PropertyDocumentIngestionSummarySchema,
   DocumentExtractionDetailSchema,
   DocumentExtractionReviewStatusSchema,
 } from '@houselog/contracts';
@@ -992,5 +993,63 @@ describe('DocumentIngestionSummarySchema', () => {
   it('rejeita campos negativos e status invalido', () => {
     expect(DocumentIngestionSummarySchema.safeParse({ ...validSummary, totalJobs: -1 }).success).toBe(false);
     expect(DocumentIngestionSummarySchema.safeParse({ ...validSummary, latestJobStatus: 'pending' }).success).toBe(false);
+  });
+});
+
+describe('PropertyDocumentIngestionSummarySchema', () => {
+  const validSummary = {
+    totalDocuments: 10,
+    documentsWithIngestion: 6,
+    totalJobs: 8,
+    processingJobs: 2,
+    failedJobs: 1,
+    needsReviewJobs: 1,
+    totalExtractions: 4,
+    pendingExtractionReviews: 1,
+    totalCandidates: 7,
+    pendingCandidates: 2,
+    approvedCandidates: 2,
+    rejectedCandidates: 1,
+    appliedCandidates: 2,
+    lastIngestionAt: '2026-05-08T12:00:00.000Z',
+    latestStatus: 'completed',
+  };
+
+  it('aceita resumo agregado de imovel sem dados brutos', () => {
+    const result = PropertyDocumentIngestionSummarySchema.safeParse(validSummary);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('tenantId');
+      expect(result.data).not.toHaveProperty('rawText');
+      expect(result.data).not.toHaveProperty('rawJson');
+      expect(result.data).not.toHaveProperty('normalizedJson');
+      expect(result.data).not.toHaveProperty('payloadJson');
+    }
+  });
+
+  it('aceita resumo vazio para imovel sem ingestao', () => {
+    expect(PropertyDocumentIngestionSummarySchema.safeParse({
+      totalDocuments: 0,
+      documentsWithIngestion: 0,
+      totalJobs: 0,
+      processingJobs: 0,
+      failedJobs: 0,
+      needsReviewJobs: 0,
+      totalExtractions: 0,
+      pendingExtractionReviews: 0,
+      totalCandidates: 0,
+      pendingCandidates: 0,
+      approvedCandidates: 0,
+      rejectedCandidates: 0,
+      appliedCandidates: 0,
+      lastIngestionAt: null,
+      latestStatus: null,
+    }).success).toBe(true);
+  });
+
+  it('rejeita contagem negativa e status invalido', () => {
+    expect(PropertyDocumentIngestionSummarySchema.safeParse({ ...validSummary, totalDocuments: -1 }).success).toBe(false);
+    expect(PropertyDocumentIngestionSummarySchema.safeParse({ ...validSummary, latestStatus: 'pending' }).success).toBe(false);
   });
 });

@@ -76,6 +76,7 @@ export type {
   ListDocumentExtractionCandidatesQuery,
   ListDocumentIngestionJobsParams,
   ListDocumentIngestionJobsQuery,
+  PropertyDocumentIngestionSummary,
   ReviewDocumentExtractionCandidateInput,
   ReviewDocumentExtractionInput,
 } from '@/lib/api/document-ingestion';

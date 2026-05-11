@@ -48,10 +48,9 @@ import { MetricCard } from '@/components/ui/metric-card';
 import {
   apiFetcher,
   documentIngestionApi,
-  documentsApi,
   maintenanceApi,
   propertiesApi,
-  type DocumentIngestionSummary,
+  type PropertyDocumentIngestionSummary,
   type ServiceOrder,
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate, PROPERTY_TYPE_LABELS, SYSTEM_TYPE_LABELS, scoreBg, scoreColor } from '@/lib/utils';
@@ -108,11 +107,6 @@ const SYSTEM_ACCENT: Record<string, string> = {
 
 type Tab = 'overview' | 'historico';
 
-type SmartRecordDocumentSummary = {
-  documentId: string;
-  summary: DocumentIngestionSummary;
-};
-
 type SmartRecordState = 'empty' | 'pending' | 'ready' | 'error';
 
 type SmartRecordView = {
@@ -124,33 +118,12 @@ type SmartRecordView = {
   reviewHref: string;
 };
 
-function isSmartRecordDocumentSummary(
-  value: SmartRecordDocumentSummary | null
-): value is SmartRecordDocumentSummary {
-  return value !== null;
-}
-
-function hasIngestion(summary: DocumentIngestionSummary): boolean {
-  return summary.totalJobs > 0;
-}
-
 function resolveSmartRecordView(
   propertyId: string,
-  documentCount: number,
-  summaries: SmartRecordDocumentSummary[],
+  summary: PropertyDocumentIngestionSummary | null,
   hasError: boolean
 ): SmartRecordView {
   const documentsHref = `/properties/${propertyId}/documents`;
-  const analyzed = summaries.filter(({ summary }) => hasIngestion(summary));
-  const withPendingCandidates = analyzed.find(({ summary }) => summary.pendingCandidates > 0);
-  const withPendingReview = analyzed.find(({ summary }) => summary.pendingReviews > 0);
-  const withActiveJob = analyzed.find(({ summary }) =>
-    summary.latestJobStatus === 'queued' || summary.latestJobStatus === 'processing'
-  );
-  const withFailedJob = analyzed.find(({ summary }) =>
-    summary.latestJobStatus === 'failed' || summary.latestJobStatus === 'cancelled'
-  );
-  const reviewTarget = withPendingCandidates ?? withPendingReview ?? withActiveJob ?? withFailedJob ?? analyzed[0];
 
   if (hasError) {
     return {
@@ -163,49 +136,51 @@ function resolveSmartRecordView(
     };
   }
 
-  if (withPendingCandidates) {
+  if (summary && summary.pendingCandidates > 0) {
     return {
       state: 'pending',
-      label: 'Candidates aguardando revisão',
+      label: 'Sugestões aguardando revisão',
       helper: 'Há dados extraídos esperando decisão antes de entrar no prontuário.',
       toneClass: 'border-border-warning bg-bg-warning',
       iconClass: 'bg-bg-warning-emphasis text-text-warning',
-      reviewHref: `/properties/${propertyId}/documents/${withPendingCandidates.documentId}/ingestion`,
+      reviewHref: documentsHref,
     };
   }
 
-  if (withPendingReview || withActiveJob || withFailedJob) {
+  if (
+    summary &&
+    (summary.pendingExtractionReviews > 0 ||
+      summary.needsReviewJobs > 0 ||
+      summary.processingJobs > 0 ||
+      summary.failedJobs > 0)
+  ) {
     return {
       state: 'pending',
       label: 'Análises pendentes',
-      helper: withActiveJob
+      helper: summary.processingJobs > 0
         ? 'Uma análise está em andamento. Acompanhe antes de aplicar dados ao imóvel.'
         : 'Existem extrações que precisam de revisão para liberar próximas etapas.',
       toneClass: 'border-border-accent bg-bg-accent-subtle',
       iconClass: 'bg-bg-accent text-text-inverse',
-      reviewHref: reviewTarget
-        ? `/properties/${propertyId}/documents/${reviewTarget.documentId}/ingestion`
-        : documentsHref,
+      reviewHref: documentsHref,
     };
   }
 
-  if (analyzed.length > 0) {
+  if (summary && summary.documentsWithIngestion > 0) {
     return {
       state: 'ready',
       label: 'Tudo em dia',
       helper: 'As análises disponíveis não têm pendências de revisão.',
       toneClass: 'border-border-success bg-bg-success',
       iconClass: 'bg-bg-success-emphasis text-text-success',
-      reviewHref: reviewTarget
-        ? `/properties/${propertyId}/documents/${reviewTarget.documentId}/ingestion`
-        : documentsHref,
+      reviewHref: documentsHref,
     };
   }
 
   return {
     state: 'empty',
-    label: documentCount > 0 ? 'Sem documentos analisados' : 'Sem documentos',
-    helper: documentCount > 0
+    label: summary && summary.totalDocuments > 0 ? 'Sem documentos analisados' : 'Sem documentos',
+    helper: summary && summary.totalDocuments > 0
       ? 'Comece analisando os documentos técnicos já enviados.'
       : 'Envie o primeiro documento técnico para iniciar o prontuário.',
     toneClass: 'border-border-subtle bg-[var(--surface-base)]',
@@ -215,48 +190,17 @@ function resolveSmartRecordView(
 }
 
 function SmartRecordWidget({ propertyId }: { propertyId: string }) {
-  const { data: documentsPage, error: documentsError, isLoading: documentsLoading } = useSWR(
-    ['smart-record-documents', propertyId],
-    () => documentsApi.list(propertyId)
-  );
-
-  const documents = documentsPage?.data ?? [];
-  const sampledDocuments = documents.slice(0, 4);
-  const sampledDocumentIds = sampledDocuments.map((document) => document.id).join('|');
-
-  const { data: summaries, isLoading: summariesLoading } = useSWR(
-    sampledDocumentIds ? ['smart-record-ingestion-summaries', propertyId, sampledDocumentIds] : null,
-    async () => {
-      const results = await Promise.all(
-        sampledDocuments.map(async (document): Promise<SmartRecordDocumentSummary | null> => {
-          try {
-            const response = await documentIngestionApi.summary(propertyId, document.id);
-            return { documentId: document.id, summary: response.summary };
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      return results.filter(isSmartRecordDocumentSummary);
-    }
+  const { data, error, isLoading } = useSWR(
+    ['smart-record-property-ingestion-summary', propertyId],
+    () => documentIngestionApi.propertySummary(propertyId)
   );
 
   const documentsHref = `/properties/${propertyId}/documents`;
-  const availableSummaries = summaries ?? [];
-  const view = resolveSmartRecordView(propertyId, documents.length, availableSummaries, Boolean(documentsError));
-  const analyzedCount = (summaries ?? []).filter(({ summary }) => hasIngestion(summary)).length;
-  const pendingAnalysesCount = availableSummaries.reduce(
-    (total, { summary }) => total + summary.pendingReviews,
-    0
-  );
-  const pendingCandidatesCount = availableSummaries.reduce((total, { summary }) => total + summary.pendingCandidates, 0);
-  const appliedDataCount = availableSummaries.reduce((total, { summary }) => total + summary.appliedCandidates, 0);
-  const isLoading = documentsLoading || (sampledDocumentIds.length > 0 && summariesLoading);
-  const hasSummaryData = availableSummaries.length > 0 || documents.length === 0;
+  const summary = data?.summary ?? null;
+  const view = resolveSmartRecordView(propertyId, summary, Boolean(error));
   const metricValue = (value: number): string => {
     if (isLoading) return '...';
-    if (!hasSummaryData && documents.length > 0) return '-';
+    if (!summary) return '-';
     return String(value);
   };
   const StatusIcon = view.state === 'error' ? AlertTriangle : Sparkles;
@@ -287,25 +231,25 @@ function SmartRecordWidget({ propertyId }: { propertyId: string }) {
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Documentos analisados</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {metricValue(analyzedCount)}
+                    {metricValue(summary?.documentsWithIngestion ?? 0)}
                   </p>
                 </div>
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Análises pendentes</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {metricValue(pendingAnalysesCount)}
+                    {metricValue((summary?.pendingExtractionReviews ?? 0) + (summary?.needsReviewJobs ?? 0))}
                   </p>
                 </div>
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Candidates em revisão</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Sugestões em revisão</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {metricValue(pendingCandidatesCount)}
+                    {metricValue(summary?.pendingCandidates ?? 0)}
                   </p>
                 </div>
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Dados aplicados</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {metricValue(appliedDataCount)}
+                    {metricValue(summary?.appliedCandidates ?? 0)}
                   </p>
                 </div>
               </div>

@@ -17,6 +17,7 @@ import type {
   ListDocumentExtractionCandidatesQuery,
   ListDocumentIngestionJobsQuery,
   MaintenanceFrequency,
+  PropertyDocumentIngestionSummary,
   ReviewDocumentExtractionCandidateInput,
   ReviewDocumentExtractionInput,
   TechnicalSystemStatus,
@@ -33,6 +34,7 @@ export type {
   DocumentExtractionSummary,
   DocumentIngestionJob,
   DocumentIngestionSummary,
+  PropertyDocumentIngestionSummary,
   GenerateDocumentExtractionCandidatesInput,
   ListDocumentExtractionCandidatesQuery,
   ListDocumentIngestionJobsQuery,
@@ -135,6 +137,11 @@ function documentExtractionPath(
 }
 
 export const documentIngestionApi = {
+  propertySummary: (propertyId: string) =>
+    request<{ summary: PropertyDocumentIngestionSummary }>(
+      `/properties/${propertyId}/ingestion-summary`
+    ),
+
   summary: (propertyId: string, documentId: string) =>
     request<{ summary: DocumentIngestionSummary }>(
       `${documentIngestionPath(propertyId, documentId)}/ingestion-summary`
