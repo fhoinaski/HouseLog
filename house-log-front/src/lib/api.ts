@@ -6,6 +6,7 @@ export {
   BASE,
   apiFetcher,
   clearToken,
+  getApiErrorMessage,
   getToken,
   normalizeApiMediaUrls,
   normalizeMediaUrl,

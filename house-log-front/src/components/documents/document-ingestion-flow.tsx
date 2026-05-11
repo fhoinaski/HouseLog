@@ -37,8 +37,8 @@ import { cn, formatDate } from '@/lib/utils';
 export const INGESTION_JOB_STATUS_LABELS: Record<DocumentIngestionJob['status'], string> = {
   queued: 'Na fila',
   processing: 'Processando',
-  needs_review: 'Aguardando revisao',
-  completed: 'Concluido',
+  needs_review: 'Aguardando revisão',
+  completed: 'Concluído',
   failed: 'Falhou',
   cancelled: 'Cancelado',
 };
@@ -62,10 +62,10 @@ const INGESTION_JOB_STATUS_ICONS: Record<DocumentIngestionJob['status'], LucideI
 };
 
 const CANDIDATE_TYPE_LABELS: Record<DocumentExtractionCandidateType, string> = {
-  technical_system: 'Sistema tecnico',
+  technical_system: 'Sistema técnico',
   warranty: 'Garantia',
-  inventory_item: 'Item de inventario',
-  maintenance_recommendation: 'Recomendacao de manutencao',
+  inventory_item: 'Item de inventário',
+  maintenance_recommendation: 'Recomendação de manutenção',
 };
 
 const CANDIDATE_TYPE_ICONS: Record<DocumentExtractionCandidateType, LucideIcon> = {
@@ -80,7 +80,7 @@ const CANDIDATE_STATUS_LABELS: Record<DocumentExtractionCandidateStatus, string>
   approved: 'Aprovado',
   rejected: 'Rejeitado',
   applied: 'Aplicado',
-  superseded: 'Substituido',
+  superseded: 'Substituído',
 };
 
 const CANDIDATE_STATUS_BADGES: Record<DocumentExtractionCandidateStatus, BadgeProps['variant']> = {
@@ -92,9 +92,9 @@ const CANDIDATE_STATUS_BADGES: Record<DocumentExtractionCandidateStatus, BadgePr
 };
 
 const REVIEW_STATUS_LABELS: Record<DocumentExtractionReviewStatus, string> = {
-  pending: 'Revisao pendente',
-  approved: 'Revisao aprovada',
-  rejected: 'Revisao rejeitada',
+  pending: 'Revisão pendente',
+  approved: 'Revisão aprovada',
+  rejected: 'Revisão rejeitada',
   partially_applied: 'Parcialmente aplicada',
 };
 
@@ -258,14 +258,14 @@ export function IngestionPipelineSteps({
     },
     {
       key: 'candidates',
-      label: 'Candidates gerados',
+      label: 'Sugestões geradas',
       description: hasCandidates ? 'Sugestões prontas para decisão.' : 'Gerar após revisar a extração.',
       completed: hasCandidates,
     },
     {
       key: 'candidate-review',
-      label: 'Candidates revisados',
-      description: hasReviewedCandidates ? 'Todos os candidates avaliados.' : 'Aprovar ou rejeitar sugestões.',
+      label: 'Sugestões revisadas',
+      description: hasReviewedCandidates ? 'Todas as sugestões foram avaliadas.' : 'Aprovar ou rejeitar sugestões.',
       completed: hasReviewedCandidates,
     },
     {
@@ -341,19 +341,19 @@ export function IngestionStatusBadge({
 
 export function ConfidenceBadge({ score }: { score?: number | null }) {
   if (score == null) {
-    return <Badge variant="outline">Confianca nao informada</Badge>;
+    return <Badge variant="outline">Confiança não informada</Badge>;
   }
 
   const percent = Math.round(score * 100);
   const variant: BadgeProps['variant'] = percent >= 85 ? 'success' : percent >= 60 ? 'warning' : 'destructive';
-  const label = percent >= 85 ? 'Alta' : percent >= 60 ? 'Media' : 'Baixa';
+  const label = percent >= 85 ? 'Alta' : percent >= 60 ? 'Média' : 'Baixa';
 
   return <Badge variant={variant}>{label}: {percent}%</Badge>;
 }
 
 export function ReviewStatusBadge({ status }: { status?: DocumentExtractionReviewStatus | null }) {
   if (!status) {
-    return <Badge variant="outline">Sem revisao persistida</Badge>;
+    return <Badge variant="outline">Sem revisão registrada</Badge>;
   }
 
   return <Badge variant={REVIEW_STATUS_BADGES[status]}>{REVIEW_STATUS_LABELS[status]}</Badge>;
@@ -423,12 +423,12 @@ function candidatePayloadSummary(candidate: DocumentExtractionCandidate): Array<
 
 export function IngestionSummaryCard({ summary }: { summary: DocumentIngestionSummary }) {
   const metrics: Metric[] = [
-    { label: 'Jobs', value: summary.totalJobs, tone: summary.totalJobs > 0 ? 'accent' : 'default', helper: 'Rodadas de analise' },
-    { label: 'Extracoes', value: summary.totalExtractions, helper: 'Dados tecnicos encontrados' },
-    { label: 'Revisoes pendentes', value: summary.pendingReviews, tone: summary.pendingReviews > 0 ? 'warning' : 'default', helper: 'Precisam de validacao' },
-    { label: 'Candidates pendentes', value: summary.pendingCandidates, tone: summary.pendingCandidates > 0 ? 'warning' : 'default', helper: 'Aguardam decisao' },
-    { label: 'Candidates aplicados', value: summary.appliedCandidates, tone: summary.appliedCandidates > 0 ? 'success' : 'default', helper: 'Ja entraram no prontuario' },
-    { label: 'Falhas', value: summary.failedJobs, tone: summary.failedJobs > 0 ? 'danger' : 'default', helper: 'Execucoes com erro' },
+    { label: 'Processamentos', value: summary.totalJobs, tone: summary.totalJobs > 0 ? 'accent' : 'default', helper: 'Rodadas de análise' },
+    { label: 'Extrações', value: summary.totalExtractions, helper: 'Dados técnicos encontrados' },
+    { label: 'Revisões pendentes', value: summary.pendingReviews, tone: summary.pendingReviews > 0 ? 'warning' : 'default', helper: 'Precisam de validação' },
+    { label: 'Sugestões pendentes', value: summary.pendingCandidates, tone: summary.pendingCandidates > 0 ? 'warning' : 'default', helper: 'Aguardam decisão' },
+    { label: 'Sugestões aplicadas', value: summary.appliedCandidates, tone: summary.appliedCandidates > 0 ? 'success' : 'default', helper: 'Já entraram no prontuário' },
+    { label: 'Falhas', value: summary.failedJobs, tone: summary.failedJobs > 0 ? 'danger' : 'default', helper: 'Execuções com erro' },
   ];
 
   return (
@@ -475,7 +475,7 @@ export function IngestionJobCard({
               <StatusIcon className={cn('h-4 w-4', job.status === 'processing' && 'animate-spin')} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-text-primary">Job {job.id.slice(0, 8)}</p>
+              <p className="text-sm font-medium text-text-primary">Processamento {job.id.slice(0, 8)}</p>
               <p className="mt-1 text-xs leading-5 text-text-secondary">
                 Provedor: {job.provider === 'none' ? 'Pipeline interno' : job.provider}
                 {job.modelName ? ` · Modelo: ${job.modelName}` : ''}
@@ -569,7 +569,7 @@ export function ExtractionSummaryList({
       ? 'O documento está sendo processado. Recarregue em alguns instantes para acompanhar a leitura.'
       : isFailed
         ? (jobError ?? 'A execução falhou antes de produzir uma leitura revisável.')
-        : 'Este job ainda não possui dados extraídos. Se o processamento já terminou, tente iniciar uma nova análise.';
+        : 'Este processamento ainda não possui dados extraídos. Se ele já terminou, tente iniciar uma nova análise.';
 
     return (
       <EmptyState
@@ -598,7 +598,7 @@ export function ExtractionSummaryList({
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-text-primary">Extracao {extraction.id.slice(0, 8)}</p>
+              <p className="text-sm font-medium text-text-primary">Extração {extraction.id.slice(0, 8)}</p>
               <p className="mt-1 text-xs text-text-secondary">
                 Schema {extraction.schemaVersion}
                 {extraction.modelName ? ` · ${extraction.modelName}` : ''}
@@ -607,7 +607,7 @@ export function ExtractionSummaryList({
             <div className="flex flex-wrap gap-2">
               <ConfidenceBadge score={extraction.confidenceScore} />
               {extraction.hasNormalizedJson && <Badge variant="success">Normalizada</Badge>}
-              {extraction.hasRawText && <Badge variant="outline">Texto extraido</Badge>}
+              {extraction.hasRawText && <Badge variant="outline">Texto extraído</Badge>}
             </div>
           </div>
         </button>
@@ -631,8 +631,8 @@ export function ExtractionDetailPanel({
     return (
       <EmptyState
         icon={<DatabaseZap className="h-6 w-6" />}
-        title="Selecione uma extracao"
-        description="O detalhe visual mostrara resumo, confianca e contagens normalizadas sem abrir JSON bruto."
+        title="Selecione uma extração"
+        description="O detalhe visual mostrará resumo, confiança e contagens normalizadas sem abrir dados técnicos brutos."
         tone="subtle"
         density="compact"
       />
@@ -657,7 +657,7 @@ export function ExtractionDetailPanel({
         <div className="min-w-0">
           <p className="text-sm font-medium text-text-primary">Leitura inteligente</p>
           <p className="mt-1 text-xs leading-5 text-text-secondary">
-            Documento tipo {normalized?.documentType ?? 'nao identificado'} · schema {extraction.schemaVersion}
+            Documento tipo {normalized?.documentType ?? 'não identificado'} · schema {extraction.schemaVersion}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -668,7 +668,7 @@ export function ExtractionDetailPanel({
 
       {normalized?.summary && (
         <div className="mt-4 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3">
-          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">Resumo extraido</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">Resumo extraído</p>
           <p className="mt-2 text-sm leading-6 text-text-secondary">{normalized.summary}</p>
         </div>
       )}
@@ -695,14 +695,14 @@ export function ExtractionDetailPanel({
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-text-secondary">Sem dados normalizados disponiveis para esta extracao.</p>
+        <p className="mt-4 text-sm text-text-secondary">Sem dados normalizados disponíveis para esta extração.</p>
       )}
 
       {warnings.length > 0 && (
         <div className="mt-4 rounded-[var(--radius-lg)] bg-bg-warning p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-text-warning">
             <AlertTriangle className="h-4 w-4" />
-            Pontos de atencao
+            Pontos de atenção
           </div>
           <ul className="mt-2 space-y-1 text-xs leading-5 text-text-warning">
             {warnings.map((warning) => (
@@ -714,7 +714,7 @@ export function ExtractionDetailPanel({
 
       {(extraction.hasRawJson || extraction.hasRawText) && (
         <p className="mt-4 text-xs leading-5 text-text-tertiary">
-          Conteudo bruto disponivel no backend, oculto nesta etapa para preservar revisao segura.
+          Dados técnicos brutos disponíveis no backend, ocultos nesta etapa para preservar uma revisão segura.
         </p>
       )}
     </div>
@@ -784,7 +784,7 @@ export function CandidateCard({
 
       <details className="group mt-4 rounded-[var(--radius-lg)] border border-border-subtle bg-[var(--surface-strong)] p-3">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-medium text-text-secondary">
-          <span>Detalhe tecnico do candidate</span>
+          <span>Detalhe técnico da sugestão</span>
           <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
         </summary>
         <pre className="mt-3 max-h-72 overflow-auto rounded-[var(--radius-md)] bg-[var(--surface-base)] p-3 text-xs leading-5 text-text-secondary">
@@ -819,9 +819,9 @@ export function CandidateCard({
             disabled={!canApply}
             loading={actions.state?.applying}
             onClick={() => actions.onApply?.(candidate)}
-            title={!canApply ? 'Aplique apenas candidates aprovados.' : undefined}
+            title={!canApply ? 'Aplique apenas sugestões aprovadas.' : undefined}
           >
-            Aplicar ao prontuario
+            Aplicar ao prontuário
           </Button>
         </div>
       )}
@@ -844,8 +844,8 @@ export function CandidateList({
     return (
       <EmptyState
         icon={<Sparkles className="h-6 w-6" />}
-        title="Nenhum candidate gerado"
-        description={emptyDescription ?? 'A extração pode não ter encontrado dados aplicáveis ou os candidates ainda não foram gerados.'}
+        title="Nenhuma sugestão gerada"
+        description={emptyDescription ?? 'A extração pode não ter encontrado dados aplicáveis ou as sugestões ainda não foram geradas.'}
         tone="subtle"
         density="compact"
         actions={emptyActions}
