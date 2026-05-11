@@ -41,6 +41,7 @@ import {
   PropertyDocumentIngestionSummarySchema,
   DocumentExtractionDetailSchema,
   DocumentExtractionReviewStatusSchema,
+  buildPublicHandoverAcceptancePrintData,
   buildPublicHandoverAcceptanceSummary,
 } from '@houselog/contracts';
 
@@ -754,6 +755,57 @@ describe('handover package emission schemas', () => {
     expect(acceptanceSummary).not.toContain('prop-1');
     expect(acceptanceSummary).not.toContain('token');
     expect(acceptanceSummary).not.toContain('hash');
+
+    const acceptancePrintData = buildPublicHandoverAcceptancePrintData(acceptedPublicPackage);
+    expect(acceptancePrintData).toEqual({
+      title: 'Comprovante de aceite digital',
+      status: 'Recebimento confirmado',
+      propertyName: 'Apartamento Jardim',
+      propertyAddress: 'Rua A, 123',
+      propertyCity: 'Sao Paulo',
+      packageTitle: 'Entrega final',
+      issuedAt: '2026-05-11T00:00:00.000Z',
+      acceptedAt: '2026-05-11T10:00:00.000Z',
+      acceptedByName: 'Maria Silva',
+      acceptedByEmailMasked: 'ma***@exemplo.com',
+      acceptanceNotes: 'Recebido sem ressalvas.',
+      responsibleDisplay: 'Construtora Horizonte - Eng. Maria Silva, Responsavel pela entrega',
+    });
+
+    const acceptancePrintPayload = JSON.stringify(acceptancePrintData);
+    expect(acceptancePrintPayload).toContain('Comprovante de aceite digital');
+    expect(acceptancePrintPayload).toContain('Recebimento confirmado');
+    expect(acceptancePrintPayload).not.toContain('tenantId');
+    expect(acceptancePrintPayload).not.toContain('tenant_id');
+    expect(acceptancePrintPayload).not.toContain('token');
+    expect(acceptancePrintPayload).not.toContain('hash');
+    expect(acceptancePrintPayload).not.toContain('packageHash');
+    expect(acceptancePrintPayload).not.toContain('r2');
+    expect(acceptancePrintPayload).not.toContain('hp-1');
+    expect(acceptancePrintPayload).not.toContain('prop-1');
+    expect(acceptancePrintPayload).not.toContain('property-1');
+
+    const issuedPublicPackage = HandoverPackagePublicDtoSchema.parse({
+      id: 'hp-1',
+      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      issuerName: 'Eng. Maria Silva',
+      issuerRole: 'Responsavel pela entrega',
+      responsibleName: 'Eng. Maria Silva',
+      companyName: 'Construtora Horizonte',
+      type: 'handover',
+      status: 'issued',
+      version: 1,
+      issued_at: '2026-05-11T00:00:00.000Z',
+      accepted_at: null,
+      expires_at: '2026-06-11T00:00:00.000Z',
+      created_at: '2026-05-11T00:00:00.000Z',
+      updated_at: null,
+      snapshot_json: snapshot,
+      acceptanceReceipt: null,
+    });
+    expect(buildPublicHandoverAcceptancePrintData(issuedPublicPackage)).toBeNull();
 
     const privateResult = HandoverPackagePrivateDtoSchema.safeParse({
       id: 'hp-1',
