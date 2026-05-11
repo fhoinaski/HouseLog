@@ -23,6 +23,7 @@ import {
   ExtractionDetailPanel,
   ExtractionSummaryList,
   IngestionJobList,
+  IngestionPipelineSteps,
   IngestionStatusBadge,
   IngestionSummaryCard,
   formatIngestionDateTime,
@@ -216,6 +217,7 @@ export default function DocumentIngestionPage({
     () => [...jobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [jobs]
   );
+  const selectedJob = selectedJobId ? orderedJobs.find((job) => job.id === selectedJobId) ?? null : null;
   const selectedReviewStatus = selectedExtractionId ? reviewStatusByExtraction[selectedExtractionId] : undefined;
   const canGenerateCandidates = Boolean(
     selectedJobId &&
@@ -289,6 +291,16 @@ export default function DocumentIngestionPage({
       mutateSelectedExtraction(),
       mutateCandidates(),
     ]);
+  }
+
+  async function refreshSelectedJobState() {
+    await Promise.all([mutateSelectedJob(), mutateSelectedExtraction(), mutateCandidates(), mutateSummary(), mutateJobs()]);
+  }
+
+  function showSelectedJobError() {
+    toast.error('Erro da análise', {
+      description: selectedJob?.lastError ?? 'A execução não retornou um detalhe de erro.',
+    });
   }
 
   async function handleReviewExtraction(status: ExtractionReviewAction) {
@@ -490,6 +502,20 @@ export default function DocumentIngestionPage({
       </PageSection>
 
       <PageSection
+        title="Pipeline de ingestão"
+        description="Acompanhe o caminho do documento até a aplicação dos dados no prontuário."
+        tone="surface"
+        density="editorial"
+      >
+        <IngestionPipelineSteps
+          summary={summary}
+          selectedJob={selectedJob}
+          selectedExtraction={selectedExtraction}
+          candidates={candidates}
+        />
+      </PageSection>
+
+      <PageSection
         title="Resumo da ingestao"
         description="Leitura consolidada do processamento deste documento."
         tone="surface"
@@ -544,6 +570,28 @@ export default function DocumentIngestionPage({
             extractions={selectedExtractions}
             selectedExtractionId={selectedExtractionId}
             onSelectExtraction={setSelectedExtractionId}
+            jobStatus={selectedJob?.status}
+            jobError={selectedJob?.lastError}
+            emptyActions={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={refreshSelectedJobState}>
+                  <RefreshCw className="h-4 w-4" />
+                  Recarregar
+                </Button>
+                {selectedJob?.lastError && (
+                  <Button type="button" variant="outline" size="sm" onClick={showSelectedJobError}>
+                    <AlertTriangle className="h-4 w-4" />
+                    Ver erro
+                  </Button>
+                )}
+                {selectedJob && ['failed', 'cancelled', 'completed'].includes(selectedJob.status) && canCreateJob && (
+                  <Button type="button" size="sm" onClick={handleCreateJob} loading={creating}>
+                    <Sparkles className="h-4 w-4" />
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
+            }
           />
         </PageSection>
 
@@ -627,6 +675,24 @@ export default function DocumentIngestionPage({
       >
         <CandidateList
           candidates={candidates}
+          emptyDescription={
+            canGenerateCandidates
+              ? 'A extração já foi validada. Gere candidates para transformar a leitura em dados aplicáveis ao prontuário.'
+              : candidateGenerationHint
+          }
+          emptyActions={
+            canGenerateCandidates ? (
+              <Button
+                type="button"
+                variant="outline"
+                loading={actionKey === 'generate-candidates'}
+                onClick={handleGenerateCandidates}
+              >
+                <Sparkles className="h-4 w-4" />
+                Gerar candidates
+              </Button>
+            ) : null
+          }
           getCandidateActions={(candidate) => ({
             onApprove: (target) => handleReviewCandidate(target, 'approved'),
             onReject: (target) => handleReviewCandidate(target, 'rejected'),

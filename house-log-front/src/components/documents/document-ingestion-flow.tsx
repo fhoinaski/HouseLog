@@ -18,6 +18,7 @@ import {
   ClipboardCheck,
   DatabaseZap,
   FileSearch,
+  Hourglass,
   Info,
   Layers3,
   ListChecks,
@@ -120,6 +121,15 @@ type Metric = {
   helper?: string;
 };
 
+type PipelineStepState = 'completed' | 'current' | 'pending' | 'error';
+
+type PipelineStep = {
+  key: string;
+  label: string;
+  description: string;
+  state: PipelineStepState;
+};
+
 export function formatIngestionDateTime(value?: string | null): string {
   if (!value) return 'Sem data';
   const date = new Date(value);
@@ -153,6 +163,166 @@ function SummaryMetric({ metric }: { metric: Metric }) {
         </div>
         {metric.helper && <p className="text-xs leading-5 text-text-tertiary">{metric.helper}</p>}
       </div>
+    </div>
+  );
+}
+
+function pipelineStepClass(state: PipelineStepState): string {
+  if (state === 'completed') return 'bg-bg-success text-text-success';
+  if (state === 'current') return 'bg-bg-accent-subtle text-text-accent shadow-[0_0_0_1px_var(--border-focus)]';
+  if (state === 'error') return 'bg-bg-danger text-text-danger';
+  return 'bg-[var(--surface-base)] text-text-tertiary';
+}
+
+function pipelineStepIconClass(state: PipelineStepState): string {
+  if (state === 'completed') return 'bg-bg-success-emphasis text-text-success';
+  if (state === 'current') return 'bg-bg-accent text-text-inverse';
+  if (state === 'error') return 'bg-bg-danger text-text-danger';
+  return 'bg-bg-subtle text-text-tertiary';
+}
+
+function pipelineStepStatusLabel(state: PipelineStepState): string {
+  if (state === 'completed') return 'Concluído';
+  if (state === 'current') return 'Atual';
+  if (state === 'error') return 'Erro';
+  return 'Pendente';
+}
+
+function resolvePipelineStepStates(
+  rawSteps: Array<Omit<PipelineStep, 'state'> & { completed: boolean; error?: boolean }>
+): PipelineStep[] {
+  const errorIndex = rawSteps.findIndex((step) => Boolean(step.error));
+  const currentIndex = errorIndex >= 0 ? -1 : rawSteps.findIndex((step) => !step.completed);
+
+  return rawSteps.map(({ completed, error, ...step }, index) => {
+    if (error) return { ...step, state: 'error' };
+    if (completed) return { ...step, state: 'completed' };
+    if (index === currentIndex) return { ...step, state: 'current' };
+    return { ...step, state: 'pending' };
+  });
+}
+
+export function IngestionPipelineSteps({
+  summary,
+  selectedJob,
+  selectedExtraction,
+  candidates,
+}: {
+  summary?: DocumentIngestionSummary | null;
+  selectedJob?: DocumentIngestionJob | null;
+  selectedExtraction?: DocumentExtractionDetail | null;
+  candidates: DocumentExtractionCandidate[];
+}) {
+  const latestJobStatus = selectedJob?.status ?? summary?.latestJobStatus ?? null;
+  const jobHasError = latestJobStatus === 'failed' || latestJobStatus === 'cancelled';
+  const hasJob = Boolean(selectedJob) || Boolean(summary && summary.totalJobs > 0);
+  const hasExtraction = Boolean(selectedExtraction) || Boolean(summary && summary.totalExtractions > 0);
+  const reviewStatus = selectedExtraction?.review?.status ?? null;
+  const hasExtractionReview = Boolean(reviewStatus) || Boolean(summary && summary.totalReviews > 0);
+  const hasCandidates = candidates.length > 0 || Boolean(summary && summary.totalCandidates > 0);
+  const reviewedCandidates = candidates.filter((candidate) => candidate.status !== 'pending').length;
+  const summaryReviewedCandidates =
+    (summary?.approvedCandidates ?? 0) + (summary?.rejectedCandidates ?? 0) + (summary?.appliedCandidates ?? 0);
+  const hasReviewedCandidates = hasCandidates && (
+    (candidates.length > 0 && reviewedCandidates === candidates.length) ||
+    (summary?.totalCandidates ?? 0) > 0 && summaryReviewedCandidates >= (summary?.totalCandidates ?? 0)
+  );
+  const hasAppliedData =
+    candidates.some((candidate) => candidate.status === 'applied') || Boolean(summary && summary.appliedCandidates > 0);
+
+  const steps = resolvePipelineStepStates([
+    {
+      key: 'document',
+      label: 'Documento enviado',
+      description: 'Arquivo registrado no acervo.',
+      completed: true,
+    },
+    {
+      key: 'job',
+      label: 'Análise iniciada',
+      description: latestJobStatus ? INGESTION_JOB_STATUS_LABELS[latestJobStatus] : 'Aguardando início.',
+      completed: hasJob && !jobHasError,
+      error: jobHasError,
+    },
+    {
+      key: 'extraction',
+      label: 'Extração criada',
+      description: hasExtraction ? 'Leitura técnica disponível.' : 'Aguardando processamento.',
+      completed: hasExtraction,
+    },
+    {
+      key: 'review',
+      label: 'Revisão da extração',
+      description: reviewStatus ? REVIEW_STATUS_LABELS[reviewStatus] : 'Validação humana pendente.',
+      completed: hasExtractionReview,
+    },
+    {
+      key: 'candidates',
+      label: 'Candidates gerados',
+      description: hasCandidates ? 'Sugestões prontas para decisão.' : 'Gerar após revisar a extração.',
+      completed: hasCandidates,
+    },
+    {
+      key: 'candidate-review',
+      label: 'Candidates revisados',
+      description: hasReviewedCandidates ? 'Todos os candidates avaliados.' : 'Aprovar ou rejeitar sugestões.',
+      completed: hasReviewedCandidates,
+    },
+    {
+      key: 'applied',
+      label: 'Dados aplicados ao imóvel',
+      description: hasAppliedData ? 'Prontuário atualizado.' : 'Aplicação manual dos aprovados.',
+      completed: hasAppliedData,
+    },
+  ]);
+  const currentStep = steps.find((step) => step.state === 'current' || step.state === 'error') ?? steps.at(-1);
+
+  return (
+    <div className="rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4">
+      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-text-primary">Guia do pipeline</p>
+          <p className="mt-1 text-xs leading-5 text-text-secondary">
+            Etapa atual: <span className="font-medium text-text-primary">{currentStep?.label ?? 'Pipeline'}</span>
+          </p>
+        </div>
+        <Badge variant={currentStep?.state === 'error' ? 'destructive' : 'outline'}>
+          {currentStep ? pipelineStepStatusLabel(currentStep.state) : 'Status'}
+        </Badge>
+      </div>
+
+      <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="Etapas da ingestão inteligente">
+        {steps.map((step, index) => {
+          const StepIcon = step.state === 'completed' ? CheckCircle2 : step.state === 'error' ? AlertTriangle : CircleDashed;
+
+          return (
+            <li
+              key={step.key}
+              aria-current={step.state === 'current' ? 'step' : undefined}
+              className={cn('rounded-[var(--radius-lg)] p-3', pipelineStepClass(step.state))}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
+                    pipelineStepIconClass(step.state)
+                  )}
+                  aria-hidden="true"
+                >
+                  <StepIcon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
+                    Etapa {index + 1}
+                  </span>
+                  <span className="mt-1 block text-sm font-medium text-text-primary">{step.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-text-secondary">{step.description}</span>
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -348,8 +518,8 @@ export function IngestionJobList({
     return (
       <EmptyState
         icon={<ListChecks className="h-6 w-6" />}
-        title="Nenhum job de ingestao ainda"
-        description="Inicie a analise inteligente para criar a primeira trilha de processamento deste documento."
+        title="Este documento ainda não foi analisado."
+        description="A IA pode identificar sistemas técnicos, garantias, materiais e recomendações de manutenção."
         tone="subtle"
         density="spacious"
         actions={emptyAction}
@@ -375,19 +545,40 @@ export function ExtractionSummaryList({
   extractions,
   selectedExtractionId,
   onSelectExtraction,
+  jobStatus,
+  jobError,
+  emptyActions,
 }: {
   extractions: DocumentExtractionSummary[];
   selectedExtractionId?: string | null;
   onSelectExtraction?: (extractionId: string) => void;
+  jobStatus?: DocumentIngestionJob['status'] | null;
+  jobError?: string | null;
+  emptyActions?: React.ReactNode;
 }) {
   if (extractions.length === 0) {
+    const isProcessing = jobStatus === 'queued' || jobStatus === 'processing';
+    const isFailed = jobStatus === 'failed' || jobStatus === 'cancelled';
+    const EmptyIcon = isProcessing ? Hourglass : isFailed ? AlertTriangle : FileSearch;
+    const title = isProcessing
+      ? 'Análise em andamento'
+      : isFailed
+        ? 'A análise não gerou extrações'
+        : 'Nenhuma extração encontrada';
+    const description = isProcessing
+      ? 'O documento está sendo processado. Recarregue em alguns instantes para acompanhar a leitura.'
+      : isFailed
+        ? (jobError ?? 'A execução falhou antes de produzir uma leitura revisável.')
+        : 'Este job ainda não possui dados extraídos. Se o processamento já terminou, tente iniciar uma nova análise.';
+
     return (
       <EmptyState
-        icon={<FileSearch className="h-6 w-6" />}
-        title="Nenhuma extracao neste job"
-        description="Quando o processamento concluir, as extracoes resumidas aparecerao aqui."
+        icon={<EmptyIcon className={cn('h-6 w-6', isProcessing && 'animate-spin')} />}
+        title={title}
+        description={description}
         tone="subtle"
         density="compact"
+        actions={emptyActions}
       />
     );
   }
@@ -641,18 +832,23 @@ export function CandidateCard({
 export function CandidateList({
   candidates,
   getCandidateActions,
+  emptyDescription,
+  emptyActions,
 }: {
   candidates: DocumentExtractionCandidate[];
   getCandidateActions?: (candidate: DocumentExtractionCandidate) => CandidateCardActions;
+  emptyDescription?: React.ReactNode;
+  emptyActions?: React.ReactNode;
 }) {
   if (candidates.length === 0) {
     return (
       <EmptyState
         icon={<Sparkles className="h-6 w-6" />}
         title="Nenhum candidate gerado"
-        description="Quando candidates forem gerados para uma extracao, eles aparecerao aqui para revisao e aplicacao controlada."
+        description={emptyDescription ?? 'A extração pode não ter encontrado dados aplicáveis ou os candidates ainda não foram gerados.'}
         tone="subtle"
         density="compact"
+        actions={emptyActions}
       />
     );
   }
