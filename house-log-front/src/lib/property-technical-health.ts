@@ -31,6 +31,25 @@ function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
 }
 
+function hasTechnicalAnalysisSignals(ingestionSummary: PropertyDocumentIngestionSummary | null | undefined): boolean {
+  if (!ingestionSummary) return false;
+
+  return (
+    ingestionSummary.documentsWithIngestion > 0 ||
+    ingestionSummary.totalJobs > 0 ||
+    ingestionSummary.totalExtractions > 0 ||
+    ingestionSummary.needsReviewJobs > 0 ||
+    ingestionSummary.pendingExtractionReviews > 0 ||
+    ingestionSummary.totalCandidates > 0 ||
+    ingestionSummary.pendingCandidates > 0 ||
+    ingestionSummary.approvedCandidates > 0 ||
+    ingestionSummary.rejectedCandidates > 0 ||
+    ingestionSummary.appliedCandidates > 0 ||
+    ingestionSummary.failedJobs > 0 ||
+    ingestionSummary.processingJobs > 0
+  );
+}
+
 export function buildPropertyTechnicalHealthView(
   property: Pick<Property, 'health_score'>,
   ingestionSummary: PropertyDocumentIngestionSummary | null | undefined
@@ -45,6 +64,8 @@ export function buildPropertyTechnicalHealthView(
   const processingJobs = ingestionSummary?.processingJobs ?? 0;
   const hasDocuments = totalDocuments > 0;
   const hasIngestion = documentsWithIngestion > 0 || (ingestionSummary?.totalJobs ?? 0) > 0;
+  const hasAnalysisSignals = hasTechnicalAnalysisSignals(ingestionSummary);
+  const isDefaultPlaceholderScore = baseScore === 50 && hasDocuments && !hasAnalysisSignals;
   const highlights: string[] = [];
   const risks: string[] = [];
   const improvements: string[] = [];
@@ -151,14 +172,16 @@ export function buildPropertyTechnicalHealthView(
   const nextImprovements = improvements.length > 0
     ? [...new Set(improvements)].slice(0, 4)
     : ['Manter documentos técnicos atualizados e revisar novas sugestões quando surgirem.'];
-  const hasReliableScore = baseScore !== null;
+  const hasReliableScore = baseScore !== null && !isDefaultPlaceholderScore;
 
   return {
-    score: baseScore,
+    score: hasReliableScore ? baseScore : null,
     label: hasReliableScore ? labelFromScore(baseScore) : 'Em formação',
     description: hasReliableScore
       ? 'Leitura inicial baseada no indicador técnico cadastrado e nos sinais do prontuário inteligente.'
-      : 'A saúde técnica será formada quando houver um indicador confiável para este imóvel.',
+      : isDefaultPlaceholderScore
+        ? 'O indicador técnico ainda está no valor padrão e não há análise suficiente para tratá-lo como uma avaliação real.'
+        : 'A saúde técnica será formada quando houver um indicador confiável para este imóvel.',
     highlights,
     risks: risks.length > 0 ? risks : ['Nenhum risco relevante identificado nos sinais disponíveis.'],
     improvements: nextImprovements,

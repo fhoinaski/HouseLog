@@ -152,6 +152,7 @@ export type CursorPage<T> = {
 
 export type PropertyDashboard = {
   health_score: number;
+  maintenance: { total: number; overdue: number; due_soon: number };
   expenses: { total: number; this_month: number };
   services: { total: number; requested: number; in_progress: number; done: number; urgent_open: number };
   inventory: { total: number; low_stock: number };

@@ -633,7 +633,7 @@ function TechnicalPendingPanel({ propertyId, summary, isLoading, hasError }: { p
     value: number;
     helper: string;
     priority: PendingPriority;
-    cta: 'Revisar extrações' | 'Aplicar sugestões' | 'Ver falhas' | 'Enviar documento';
+    cta: 'Revisar extrações' | 'Revisar sugestões' | 'Aplicar sugestões' | 'Ver falhas' | 'Enviar documento';
     href: string;
   };
 
@@ -700,7 +700,7 @@ function TechnicalPendingPanel({ propertyId, summary, isLoading, hasError }: { p
       value: summary.pendingCandidates,
       helper: 'Aprove ou rejeite as sugestões antes de aplicar ao prontuário.',
       priority: 'media',
-      cta: 'Revisar extrações',
+      cta: 'Revisar sugestões',
       href: documentsHref,
     });
   }
@@ -941,6 +941,9 @@ function PredictiveTimelineSection({
                         </Link>
                       );
                     })}
+                    {events.length > 3 ? (
+                      <p className="px-1 text-xs font-medium text-text-tertiary">e mais {events.length - 3}</p>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mt-4 rounded-[var(--radius-lg)] border border-dashed border-border-subtle px-3 py-4">
@@ -1218,7 +1221,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   const memoriaEmDias = daysSince(property.created_at);
   const openOrders = (d?.services.requested ?? 0) + (d?.services.in_progress ?? 0);
   const urgentOrders = d?.services.urgent_open ?? 0;
-  const overdueMaintenance = (maintenanceData?.schedules ?? []).filter((schedule) => schedule.is_overdue);
+  const overdueMaintenance = d?.maintenance.overdue ?? (maintenanceData?.schedules ?? []).filter((schedule) => schedule.is_overdue).length;
   const expiringWarranties = d?.warranties_expiring ?? [];
   const predictiveTimeline = buildPredictiveTimeline({
     propertyId: id,
@@ -1234,8 +1237,8 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     ...(openOrders > 0
       ? [{ tone: 'accent' as const, icon: Wrench, title: `${openOrders} OS aberta${openOrders > 1 ? 's' : ''}`, description: 'Acompanhe solicitações e execuções.' }]
       : []),
-    ...(overdueMaintenance.length > 0
-      ? [{ tone: 'warning' as const, icon: RefreshCw, title: `${overdueMaintenance.length} manutenção atrasada${overdueMaintenance.length > 1 ? 's' : ''}`, description: 'Revise o plano preventivo.' }]
+    ...(overdueMaintenance > 0
+      ? [{ tone: 'warning' as const, icon: RefreshCw, title: `${overdueMaintenance} manutenção atrasada${overdueMaintenance > 1 ? 's' : ''}`, description: 'Revise o plano preventivo.' }]
       : []),
     ...(expiringWarranties.length > 0
       ? [{ tone: 'warning' as const, icon: ShieldCheck, title: `${expiringWarranties.length} garantia${expiringWarranties.length > 1 ? 's' : ''} vencendo`, description: 'Verifique itens dentro de 30 dias.' }]
