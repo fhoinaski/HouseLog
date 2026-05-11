@@ -6,6 +6,7 @@ export {
   BASE,
   apiFetcher,
   clearToken,
+  getApiErrorMessage,
   getToken,
   normalizeApiMediaUrls,
   normalizeMediaUrl,
@@ -76,6 +77,7 @@ export type {
   ListDocumentExtractionCandidatesQuery,
   ListDocumentIngestionJobsParams,
   ListDocumentIngestionJobsQuery,
+  PropertyDocumentIngestionSummary,
   ReviewDocumentExtractionCandidateInput,
   ReviewDocumentExtractionInput,
 } from '@/lib/api/document-ingestion';

@@ -9,6 +9,11 @@ import { canCreatePropertyInTenant } from '../lib/property-tenant';
 import { validatePrivateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
 import { getDb } from '../db/client';
 import {
+  documentExtractionCandidates,
+  documentExtractionReviews,
+  documentExtractions,
+  documentIngestionJobs,
+  documents as documentsTable,
   expenses,
   inventoryItems,
   maintenanceSchedules,
@@ -19,7 +24,7 @@ import {
   users,
 } from '../db/schema';
 import type { Bindings, Variables, Property } from '../lib/types';
-import { propertyCreateSchema, propertyUpdateSchema } from '@houselog/contracts';
+import { PropertyDocumentIngestionSummarySchema, propertyCreateSchema, propertyUpdateSchema } from '@houselog/contracts';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -33,6 +38,11 @@ properties.use('*', resolveTenant);
 
 const createSchema = propertyCreateSchema;
 const updateSchema = propertyUpdateSchema;
+
+function countValue(value: number | string | bigint | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
 
 // ── GET /properties ─────────────────────────────────────────────────────────
 // All users (including admin) only see properties they own, manage, or are
@@ -191,6 +201,162 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
 });
 
 // ── GET /properties/:id ──────────────────────────────────────────────────────
+
+properties.get('/:id/ingestion-summary', async (c) => {
+  const db = getDb(c.env.DB);
+  const { id } = c.req.param();
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const [tenantProperty] = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(and(eq(propertiesTable.id, id), eq(propertiesTable.tenantId, tenantId), isNull(propertiesTable.deletedAt)))
+    .limit(1);
+  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const hasAccess = await assertPropertyAccess(c.env.DB, id, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso a este imovel', 'FORBIDDEN', 403);
+
+  const [documentCounts, jobRows, extractionCount, pendingReviewCount, candidateRows, latestJob] = await Promise.all([
+    db
+      .select({
+        totalDocuments: sql<number>`COUNT(DISTINCT ${documentsTable.id})`,
+        documentsWithIngestion: sql<number>`COUNT(DISTINCT CASE WHEN ${documentIngestionJobs.id} IS NOT NULL THEN ${documentsTable.id} END)`,
+      })
+      .from(documentsTable)
+      .leftJoin(
+        documentIngestionJobs,
+        and(
+          eq(documentIngestionJobs.tenantId, tenantId),
+          eq(documentIngestionJobs.propertyId, id),
+          eq(documentIngestionJobs.documentId, documentsTable.id)
+        )
+      )
+      .where(and(
+        eq(documentsTable.tenantId, tenantId),
+        eq(documentsTable.propertyId, id),
+        isNull(documentsTable.deletedAt)
+      ))
+      .then((rows) => rows[0] ?? { totalDocuments: 0, documentsWithIngestion: 0 }),
+    db
+      .select({
+        status: documentIngestionJobs.status,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(documentIngestionJobs)
+      .innerJoin(
+        documentsTable,
+        and(
+          eq(documentsTable.id, documentIngestionJobs.documentId),
+          eq(documentsTable.tenantId, tenantId),
+          eq(documentsTable.propertyId, id),
+          isNull(documentsTable.deletedAt)
+        )
+      )
+      .where(and(eq(documentIngestionJobs.tenantId, tenantId), eq(documentIngestionJobs.propertyId, id)))
+      .groupBy(documentIngestionJobs.status),
+    db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(documentExtractions)
+      .innerJoin(
+        documentsTable,
+        and(
+          eq(documentsTable.id, documentExtractions.documentId),
+          eq(documentsTable.tenantId, tenantId),
+          eq(documentsTable.propertyId, id),
+          isNull(documentsTable.deletedAt)
+        )
+      )
+      .where(and(eq(documentExtractions.tenantId, tenantId), eq(documentExtractions.propertyId, id)))
+      .then((rows) => rows[0] ?? { total: 0 }),
+    db
+      .select({ total: sql<number>`COUNT(*)` })
+      .from(documentExtractionReviews)
+      .innerJoin(
+        documentsTable,
+        and(
+          eq(documentsTable.id, documentExtractionReviews.documentId),
+          eq(documentsTable.tenantId, tenantId),
+          eq(documentsTable.propertyId, id),
+          isNull(documentsTable.deletedAt)
+        )
+      )
+      .where(and(
+        eq(documentExtractionReviews.tenantId, tenantId),
+        eq(documentExtractionReviews.propertyId, id),
+        eq(documentExtractionReviews.status, 'pending')
+      ))
+      .then((rows) => rows[0] ?? { total: 0 }),
+    db
+      .select({
+        status: documentExtractionCandidates.status,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(documentExtractionCandidates)
+      .innerJoin(
+        documentsTable,
+        and(
+          eq(documentsTable.id, documentExtractionCandidates.documentId),
+          eq(documentsTable.tenantId, tenantId),
+          eq(documentsTable.propertyId, id),
+          isNull(documentsTable.deletedAt)
+        )
+      )
+      .where(and(eq(documentExtractionCandidates.tenantId, tenantId), eq(documentExtractionCandidates.propertyId, id)))
+      .groupBy(documentExtractionCandidates.status),
+    db
+      .select({
+        status: documentIngestionJobs.status,
+        createdAt: documentIngestionJobs.createdAt,
+      })
+      .from(documentIngestionJobs)
+      .innerJoin(
+        documentsTable,
+        and(
+          eq(documentsTable.id, documentIngestionJobs.documentId),
+          eq(documentsTable.tenantId, tenantId),
+          eq(documentsTable.propertyId, id),
+          isNull(documentsTable.deletedAt)
+        )
+      )
+      .where(and(eq(documentIngestionJobs.tenantId, tenantId), eq(documentIngestionJobs.propertyId, id)))
+      .orderBy(desc(documentIngestionJobs.createdAt))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+  ]);
+
+  const jobTotals: Partial<Record<string, number>> = {};
+  for (const row of jobRows) {
+    jobTotals[row.status] = countValue(row.total);
+  }
+
+  const candidateTotals: Partial<Record<string, number>> = {};
+  for (const row of candidateRows) {
+    candidateTotals[row.status] = countValue(row.total);
+  }
+  const summary = PropertyDocumentIngestionSummarySchema.parse({
+    totalDocuments: countValue(documentCounts.totalDocuments),
+    documentsWithIngestion: countValue(documentCounts.documentsWithIngestion),
+    totalJobs: jobRows.reduce((total, row) => total + countValue(row.total), 0),
+    processingJobs: countValue(jobTotals.queued) + countValue(jobTotals.processing),
+    failedJobs: countValue(jobTotals.failed),
+    needsReviewJobs: countValue(jobTotals.needs_review),
+    totalExtractions: countValue(extractionCount.total),
+    pendingExtractionReviews: countValue(pendingReviewCount.total),
+    totalCandidates: candidateRows.reduce((total, row) => total + countValue(row.total), 0),
+    pendingCandidates: countValue(candidateTotals.pending),
+    approvedCandidates: countValue(candidateTotals.approved),
+    rejectedCandidates: countValue(candidateTotals.rejected),
+    appliedCandidates: countValue(candidateTotals.applied),
+    lastIngestionAt: latestJob?.createdAt ?? null,
+    latestStatus: latestJob?.status ?? null,
+  });
+
+  return ok(c, { summary });
+});
 
 properties.get('/:id', async (c) => {
   const db = getDb(c.env.DB);

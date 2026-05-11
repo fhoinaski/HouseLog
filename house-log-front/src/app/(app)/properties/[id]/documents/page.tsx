@@ -55,6 +55,14 @@ const metaSchema = z.object({
 
 type MetaForm = z.infer<typeof metaSchema>;
 
+const SMART_DOCUMENT_EXAMPLES = [
+  'Manual técnico',
+  'Nota fiscal',
+  'Planta',
+  'Garantia',
+  'Relatório técnico',
+];
+
 type IngestionStatusView = {
   label: string;
   variant: React.ComponentProps<typeof Badge>['variant'];
@@ -104,6 +112,58 @@ function DocumentIngestionEntry({ doc }: { doc: Document }) {
           {status.actionLabel}
         </Link>
       </Button>
+    </div>
+  );
+}
+
+function SmartDocumentsEmptyState({
+  isFiltered,
+  onUpload,
+}: {
+  isFiltered: boolean;
+  onUpload: () => void;
+}) {
+  if (isFiltered) {
+    return (
+      <EmptyState
+        icon={<FileSearch className="h-6 w-6" />}
+        title="Nenhum documento neste filtro"
+        description="Ajuste o filtro ou envie um documento técnico para ampliar o acervo inteligente do imóvel."
+        tone="subtle"
+        density="spacious"
+        actions={
+          <Button type="button" variant="outline" onClick={onUpload}>
+            <Upload className="h-4 w-4" />
+            Enviar documento
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <EmptyState
+        icon={<Sparkles className="h-6 w-6" />}
+        title="Nenhum arquivo no prontuário documental"
+        description="Envie manuais, notas fiscais, plantas, garantias ou relatórios técnicos para a IA estruturar a memória do imóvel."
+        tone="subtle"
+        density="spacious"
+        actions={
+          <Button type="button" onClick={onUpload}>
+            <Upload className="h-4 w-4" />
+            Enviar documento
+          </Button>
+        }
+      />
+      <div className="grid gap-2 sm:grid-cols-5">
+        {SMART_DOCUMENT_EXAMPLES.map((label) => (
+          <div key={label} className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3 text-center">
+            <FileText className="mx-auto h-4 w-4 text-text-accent" />
+            <p className="mt-2 text-xs font-medium text-text-secondary">{label}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -340,22 +400,9 @@ export default function DocumentsPage({ params }: { params: Promise<{ id: string
             ))}
           </div>
         ) : docs.length === 0 ? (
-          <EmptyState
-            icon={<FileSearch className="h-6 w-6" />}
-            title={typeFilter === 'all' ? 'Nenhum documento no acervo' : 'Nenhum documento neste filtro'}
-            description={
-              typeFilter === 'all'
-                ? 'Envie notas, manuais, projetos e comprovantes para compor o prontuario tecnico do imovel.'
-                : 'Ajuste o filtro ou envie um novo documento para este tipo de registro.'
-            }
-            tone="subtle"
-            density="spacious"
-            actions={
-              <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                <Upload className="h-4 w-4" />
-                Enviar documento
-              </Button>
-            }
+          <SmartDocumentsEmptyState
+            isFiltered={typeFilter !== 'all'}
+            onUpload={() => fileRef.current?.click()}
           />
         ) : (
           <div className="space-y-3">

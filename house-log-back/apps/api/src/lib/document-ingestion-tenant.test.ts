@@ -12,6 +12,7 @@ import {
   buildDocumentIngestionQueueFailurePatch,
   buildDocumentIngestionQueueMessage,
   buildDocumentIngestionSummary,
+  buildPropertyDocumentIngestionSummary,
   buildInventoryItemFromCandidatePayload,
   buildMaintenanceScheduleFromCandidatePayload,
   buildTechnicalSystemFromCandidatePayload,
@@ -49,6 +50,11 @@ import {
   type DocumentIngestionSummaryJobRow,
   type DocumentIngestionSummaryReviewRow,
   type ExtractionSummaryInput,
+  type PropertyDocumentIngestionSummaryCandidateRow,
+  type PropertyDocumentIngestionSummaryDocumentRow,
+  type PropertyDocumentIngestionSummaryExtractionRow,
+  type PropertyDocumentIngestionSummaryJobRow,
+  type PropertyDocumentIngestionSummaryReviewRow,
 } from './document-ingestion-tenant';
 import type { DocumentIngestionQueueMessage } from './types';
 
@@ -312,6 +318,140 @@ describe('buildDocumentIngestionSummary', () => {
 
   it('nao expoe tenantId nem payload bruto', () => {
     const summary = buildDocumentIngestionSummary({ jobs, extractions, reviews, candidates });
+
+    expect(summary).not.toHaveProperty('tenantId');
+    expect(summary).not.toHaveProperty('rawText');
+    expect(summary).not.toHaveProperty('rawJson');
+    expect(summary).not.toHaveProperty('normalizedJson');
+    expect(summary).not.toHaveProperty('payloadJson');
+  });
+});
+
+describe('buildPropertyDocumentIngestionSummary', () => {
+  const documents: PropertyDocumentIngestionSummaryDocumentRow[] = [
+    { id: 'doc-a', tenantId: 'tenant-a', propertyId: 'prop-a', deletedAt: null },
+    { id: 'doc-b', tenantId: 'tenant-a', propertyId: 'prop-a', deletedAt: null },
+    { id: 'doc-c', tenantId: 'tenant-a', propertyId: 'prop-a', deletedAt: null },
+    { id: 'doc-other-property', tenantId: 'tenant-a', propertyId: 'prop-b', deletedAt: null },
+    { id: 'doc-other-tenant', tenantId: 'tenant-b', propertyId: 'prop-a', deletedAt: null },
+    { id: 'doc-deleted', tenantId: 'tenant-a', propertyId: 'prop-a', deletedAt: '2026-05-08T00:00:00.000Z' },
+  ];
+  const jobs: PropertyDocumentIngestionSummaryJobRow[] = [
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-a', status: 'queued', createdAt: '2026-05-07T08:00:00.000Z' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-a', status: 'processing', createdAt: '2026-05-07T09:00:00.000Z' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-b', status: 'needs_review', createdAt: '2026-05-07T10:00:00.000Z' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-b', status: 'failed', createdAt: '2026-05-07T11:00:00.000Z' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-c', status: 'completed', createdAt: '2026-05-08T12:00:00.000Z' },
+    { tenantId: 'tenant-a', propertyId: 'prop-b', documentId: 'doc-other-property', status: 'failed', createdAt: '2026-05-09T12:00:00.000Z' },
+    { tenantId: 'tenant-b', propertyId: 'prop-a', documentId: 'doc-other-tenant', status: 'failed', createdAt: '2026-05-10T12:00:00.000Z' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-deleted', status: 'failed', createdAt: '2026-05-11T12:00:00.000Z' },
+  ];
+  const extractions: PropertyDocumentIngestionSummaryExtractionRow[] = [
+    { id: 'ext-a', tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-a' },
+    { id: 'ext-b', tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-b' },
+    { id: 'ext-other-property', tenantId: 'tenant-a', propertyId: 'prop-b', documentId: 'doc-other-property' },
+    { id: 'ext-other-tenant', tenantId: 'tenant-b', propertyId: 'prop-a', documentId: 'doc-other-tenant' },
+  ];
+  const reviews: PropertyDocumentIngestionSummaryReviewRow[] = [
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-a', status: 'pending' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-b', status: 'approved' },
+    { tenantId: 'tenant-a', propertyId: 'prop-b', documentId: 'doc-other-property', status: 'pending' },
+    { tenantId: 'tenant-b', propertyId: 'prop-a', documentId: 'doc-other-tenant', status: 'pending' },
+  ];
+  const candidates: PropertyDocumentIngestionSummaryCandidateRow[] = [
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-a', status: 'pending' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-a', status: 'approved' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-b', status: 'rejected' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-c', status: 'applied' },
+    { tenantId: 'tenant-a', propertyId: 'prop-a', documentId: 'doc-c', status: 'superseded' },
+    { tenantId: 'tenant-a', propertyId: 'prop-b', documentId: 'doc-other-property', status: 'pending' },
+    { tenantId: 'tenant-b', propertyId: 'prop-a', documentId: 'doc-other-tenant', status: 'approved' },
+  ];
+
+  it('retorna resumo vazio para imovel sem documentos', () => {
+    expect(buildPropertyDocumentIngestionSummary({
+      tenantId: 'tenant-a',
+      propertyId: 'prop-empty',
+      documents,
+      jobs,
+      extractions,
+      reviews,
+      candidates,
+    })).toEqual({
+      totalDocuments: 0,
+      documentsWithIngestion: 0,
+      totalJobs: 0,
+      processingJobs: 0,
+      failedJobs: 0,
+      needsReviewJobs: 0,
+      totalExtractions: 0,
+      pendingExtractionReviews: 0,
+      totalCandidates: 0,
+      pendingCandidates: 0,
+      approvedCandidates: 0,
+      rejectedCandidates: 0,
+      appliedCandidates: 0,
+      lastIngestionAt: null,
+      latestStatus: null,
+    });
+  });
+
+  it('conta documentos com ingestao', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.totalDocuments).toBe(3);
+    expect(summary.documentsWithIngestion).toBe(3);
+  });
+
+  it('conta jobs por status', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.totalJobs).toBe(5);
+    expect(summary.processingJobs).toBe(2);
+    expect(summary.needsReviewJobs).toBe(1);
+    expect(summary.failedJobs).toBe(1);
+  });
+
+  it('conta reviews pendentes', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.totalExtractions).toBe(2);
+    expect(summary.pendingExtractionReviews).toBe(1);
+  });
+
+  it('conta candidates por status', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.totalCandidates).toBe(5);
+    expect(summary.pendingCandidates).toBe(1);
+    expect(summary.approvedCandidates).toBe(1);
+    expect(summary.rejectedCandidates).toBe(1);
+    expect(summary.appliedCandidates).toBe(1);
+  });
+
+  it('calcula lastIngestionAt e latestStatus', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.lastIngestionAt).toBe('2026-05-08T12:00:00.000Z');
+    expect(summary.latestStatus).toBe('completed');
+  });
+
+  it('nao mistura outro property', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.failedJobs).toBe(1);
+    expect(summary.lastIngestionAt).not.toBe('2026-05-09T12:00:00.000Z');
+  });
+
+  it('nao mistura outro tenant', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
+
+    expect(summary.approvedCandidates).toBe(1);
+    expect(summary.lastIngestionAt).not.toBe('2026-05-10T12:00:00.000Z');
+  });
+
+  it('response nao expoe tenantId nem raw payload', () => {
+    const summary = buildPropertyDocumentIngestionSummary({ tenantId: 'tenant-a', propertyId: 'prop-a', documents, jobs, extractions, reviews, candidates });
 
     expect(summary).not.toHaveProperty('tenantId');
     expect(summary).not.toHaveProperty('rawText');

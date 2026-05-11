@@ -23,6 +23,7 @@ import {
   ExtractionDetailPanel,
   ExtractionSummaryList,
   IngestionJobList,
+  IngestionPipelineSteps,
   IngestionStatusBadge,
   IngestionSummaryCard,
   formatIngestionDateTime,
@@ -34,6 +35,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import {
   documentIngestionApi,
   documentsApi,
+  getApiErrorMessage,
   propertiesApi,
   type DocumentExtractionCandidate,
   type DocumentIngestionSummary,
@@ -76,36 +78,36 @@ type StateCopy = {
 
 const STATE_COPY: Record<IngestionState, StateCopy> = {
   empty: {
-    title: 'Sem ingestao inteligente',
-    description: 'Este documento ainda nao passou pela analise inteligente.',
+    title: 'Sem ingestão inteligente',
+    description: 'Este documento ainda não passou pela análise inteligente.',
     icon: CircleDashed,
     toneClass: 'bg-bg-subtle text-text-secondary',
-    badgeLabel: 'Sem analise',
+    badgeLabel: 'Sem análise',
   },
   processing: {
-    title: 'Analise em andamento',
-    description: 'O documento esta na fila ou em processamento tecnico.',
+    title: 'Análise em andamento',
+    description: 'O documento está na fila ou em processamento técnico.',
     icon: Hourglass,
     toneClass: 'bg-bg-accent-subtle text-text-accent',
     badgeLabel: 'Processando',
   },
   review: {
-    title: 'Aguardando revisao',
-    description: 'Ha extracoes prontas para validacao humana antes de aplicar dados ao prontuario.',
+    title: 'Aguardando revisão',
+    description: 'Há extrações prontas para validação humana antes de aplicar dados ao prontuário.',
     icon: ShieldAlert,
     toneClass: 'bg-bg-warning text-text-warning',
     badgeLabel: 'Pendente',
   },
   failed: {
-    title: 'Falha na ingestao',
-    description: 'A ultima analise falhou. Revise o historico e tente iniciar uma nova execucao.',
+    title: 'Falha na ingestão',
+    description: 'A última análise falhou. Revise o histórico e tente iniciar uma nova execução.',
     icon: XCircle,
     toneClass: 'bg-bg-danger text-text-danger',
     badgeLabel: 'Falha',
   },
   completed: {
-    title: 'Ingestao concluida',
-    description: 'A analise terminou e o documento ja possui uma trilha de processamento registrada.',
+    title: 'Ingestão concluída',
+    description: 'A análise terminou e o documento já possui uma trilha de processamento registrada.',
     icon: CheckCircle2,
     toneClass: 'bg-bg-success text-text-success',
     badgeLabel: 'Concluido',
@@ -113,7 +115,7 @@ const STATE_COPY: Record<IngestionState, StateCopy> = {
 };
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Nao foi possivel carregar os dados agora.';
+  return getApiErrorMessage(error);
 }
 
 function resolveState(summary?: DocumentIngestionSummary): IngestionState {
@@ -137,12 +139,12 @@ function getCandidateGenerationHint({
   reviewStatus: CandidateGenerationReviewStatus;
   hasCandidates: boolean;
 }): string {
-  if (!hasExtraction) return 'Selecione uma extração para gerar candidates a partir dos dados revisados.';
-  if (hasCandidates) return 'Candidates já foram gerados para esta extração. Revise e aplique os itens aprovados.';
+  if (!hasExtraction) return 'Selecione uma extração para gerar sugestões a partir dos dados revisados.';
+  if (hasCandidates) return 'Sugestões já foram geradas para esta extração. Revise e aplique os itens aprovados.';
   if (canGenerateCandidatesFromReview(reviewStatus)) {
-    return 'Extração validada. Você pode gerar candidates para preencher o prontuário do imóvel.';
+    return 'Extração validada. Você pode gerar sugestões para preencher o prontuário do imóvel.';
   }
-  return 'Aprove ou marque a extração como parcialmente aplicada antes de gerar candidates.';
+  return 'Aprove ou marque a extração como parcialmente aplicada antes de gerar sugestões.';
 }
 
 export default function DocumentIngestionPage({
@@ -216,6 +218,7 @@ export default function DocumentIngestionPage({
     () => [...jobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [jobs]
   );
+  const selectedJob = selectedJobId ? orderedJobs.find((job) => job.id === selectedJobId) ?? null : null;
   const selectedReviewStatus = selectedExtractionId ? reviewStatusByExtraction[selectedExtractionId] : undefined;
   const canGenerateCandidates = Boolean(
     selectedJobId &&
@@ -270,9 +273,9 @@ export default function DocumentIngestionPage({
       setSelectedJobId(result.job.id);
       setSelectedExtractionId(null);
       await Promise.all([mutateSummary(), mutateJobs()]);
-      toast.success('Analise inteligente iniciada');
+      toast.success('Análise inteligente iniciada');
     } catch (error) {
-      toast.error('Nao foi possivel iniciar a analise', {
+      toast.error('Não foi possível iniciar a análise', {
         description: getErrorMessage(error),
       });
     } finally {
@@ -291,6 +294,16 @@ export default function DocumentIngestionPage({
     ]);
   }
 
+  async function refreshSelectedJobState() {
+    await Promise.all([mutateSelectedJob(), mutateSelectedExtraction(), mutateCandidates(), mutateSummary(), mutateJobs()]);
+  }
+
+  function showSelectedJobError() {
+    toast.error('Erro da análise', {
+      description: selectedJob?.lastError ?? 'A execução não retornou um detalhe de erro.',
+    });
+  }
+
   async function handleReviewExtraction(status: ExtractionReviewAction) {
     if (!selectedJobId || !selectedExtractionId) return;
 
@@ -301,13 +314,13 @@ export default function DocumentIngestionPage({
       await refreshIngestionState();
       const message =
         status === 'approved'
-          ? 'Extraction aprovada'
+          ? 'Extração aprovada'
           : status === 'rejected'
-            ? 'Extraction rejeitada'
-            : 'Extraction marcada como parcialmente aplicada';
+            ? 'Extração rejeitada'
+            : 'Extração marcada como parcialmente aplicada';
       toast.success(message);
     } catch (error) {
-      toast.error('Nao foi possivel revisar a extraction', {
+      toast.error('Não foi possível revisar a extração', {
         description: getErrorMessage(error),
       });
     } finally {
@@ -322,9 +335,9 @@ export default function DocumentIngestionPage({
     try {
       await documentIngestionApi.generateCandidates(propertyId, documentId, selectedJobId, selectedExtractionId);
       await refreshIngestionState();
-      toast.success('Candidates gerados');
+      toast.success('Sugestões geradas');
     } catch (error) {
-      toast.error('Nao foi possivel gerar candidates', {
+      toast.error('Não foi possível gerar sugestões', {
         description: getErrorMessage(error),
       });
     } finally {
@@ -341,9 +354,9 @@ export default function DocumentIngestionPage({
         status,
       });
       await refreshIngestionState();
-      toast.success(status === 'approved' ? 'Candidate aprovado' : 'Candidate rejeitado');
+      toast.success(status === 'approved' ? 'Sugestão aprovada' : 'Sugestão rejeitada');
     } catch (error) {
-      toast.error('Nao foi possivel revisar o candidate', {
+      toast.error('Não foi possível revisar a sugestão', {
         description: getErrorMessage(error),
       });
     } finally {
@@ -358,10 +371,10 @@ export default function DocumentIngestionPage({
     try {
       await documentIngestionApi.applyCandidate(propertyId, documentId, selectedJobId, selectedExtractionId, candidate.id);
       await refreshIngestionState();
-      toast.success('Candidate aplicado ao prontuario');
+      toast.success('Sugestão aplicada ao prontuário');
       setApplyCandidateTarget(null);
     } catch (error) {
-      toast.error('Nao foi possivel aplicar o candidate', {
+      toast.error('Não foi possível aplicar a sugestão ao prontuário', {
         description: getErrorMessage(error),
       });
     } finally {
@@ -388,9 +401,9 @@ export default function DocumentIngestionPage({
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
-          eyebrow="Analise inteligente"
-          title="Nao foi possivel carregar a ingestao"
-          description="A consulta ao documento ou ao historico de processamento falhou."
+          eyebrow="Análise inteligente"
+        title="Não foi possível carregar a ingestão"
+        description="A consulta ao documento ou ao histórico de processamento falhou."
           actions={
             <Button variant="outline" asChild>
               <Link href={`/properties/${propertyId}/documents`}>
@@ -421,7 +434,7 @@ export default function DocumentIngestionPage({
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
       <PageHeader
         density="editorial"
-        eyebrow={property ? `${property.name} · Analise inteligente` : 'Analise inteligente'}
+        eyebrow={property ? `${property.name} · Análise inteligente` : 'Análise inteligente'}
         title="Análise inteligente do documento"
         description="A IA lê o documento, extrai dados técnicos e prepara informações revisáveis para o prontuário do imóvel."
         actions={
@@ -445,10 +458,10 @@ export default function DocumentIngestionPage({
               onClick={handleCreateJob}
               loading={creating}
               disabled={!canCreateJob}
-              title={hasActiveJob ? 'Ja existe uma analise ativa para este documento' : undefined}
+              title={hasActiveJob ? 'Já existe uma análise ativa para este documento' : undefined}
             >
               <Sparkles className="h-4 w-4" />
-              Iniciar analise inteligente
+              Iniciar análise inteligente
             </Button>
           </>
         }
@@ -483,14 +496,28 @@ export default function DocumentIngestionPage({
           </div>
           {summary?.lastIngestionAt && (
             <div className="rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-3 py-2 text-sm text-text-secondary">
-              Ultima analise: <span className="font-medium text-text-primary">{formatIngestionDateTime(summary.lastIngestionAt)}</span>
+              Última análise: <span className="font-medium text-text-primary">{formatIngestionDateTime(summary.lastIngestionAt)}</span>
             </div>
           )}
         </div>
       </PageSection>
 
       <PageSection
-        title="Resumo da ingestao"
+        title="Pipeline de ingestão"
+        description="Acompanhe o caminho do documento até a aplicação dos dados no prontuário."
+        tone="surface"
+        density="editorial"
+      >
+        <IngestionPipelineSteps
+          summary={summary}
+          selectedJob={selectedJob}
+          selectedExtraction={selectedExtraction}
+          candidates={candidates}
+        />
+      </PageSection>
+
+      <PageSection
+        title="Resumo da ingestão"
         description="Leitura consolidada do processamento deste documento."
         tone="surface"
         density="editorial"
@@ -507,15 +534,15 @@ export default function DocumentIngestionPage({
       </PageSection>
 
       <PageSection
-        title="Jobs de analise"
-        description="Historico de execucoes assincronas vinculadas a este documento."
+        title="Histórico de análises"
+        description="Execuções de processamento vinculadas a este documento."
         tone="strong"
         density="editorial"
         actions={
           hasActiveJob ? (
             <span className="inline-flex items-center gap-2 rounded-[var(--radius-md)] bg-bg-accent-subtle px-3 py-2 text-xs font-medium text-text-accent">
               <Clock3 className="h-3.5 w-3.5" />
-              Analise ativa
+              Análise ativa
             </span>
           ) : null
         }
@@ -527,7 +554,7 @@ export default function DocumentIngestionPage({
           emptyAction={
             <Button type="button" onClick={handleCreateJob} loading={creating}>
               <Sparkles className="h-4 w-4" />
-              Iniciar analise inteligente
+              Iniciar análise inteligente
             </Button>
           }
         />
@@ -535,7 +562,7 @@ export default function DocumentIngestionPage({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <PageSection
-          title="Extrações do job"
+          title="Extrações da análise"
           description="Escolha a leitura que será validada antes de entrar no prontuário."
           tone="surface"
           density="editorial"
@@ -544,6 +571,28 @@ export default function DocumentIngestionPage({
             extractions={selectedExtractions}
             selectedExtractionId={selectedExtractionId}
             onSelectExtraction={setSelectedExtractionId}
+            jobStatus={selectedJob?.status}
+            jobError={selectedJob?.lastError}
+            emptyActions={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={refreshSelectedJobState}>
+                  <RefreshCw className="h-4 w-4" />
+                  Recarregar
+                </Button>
+                {selectedJob?.lastError && (
+                  <Button type="button" variant="outline" size="sm" onClick={showSelectedJobError}>
+                    <AlertTriangle className="h-4 w-4" />
+                    Ver erro
+                  </Button>
+                )}
+                {selectedJob && ['failed', 'cancelled', 'completed'].includes(selectedJob.status) && canCreateJob && (
+                  <Button type="button" size="sm" onClick={handleCreateJob} loading={creating}>
+                    <Sparkles className="h-4 w-4" />
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
+            }
           />
         </PageSection>
 
@@ -600,7 +649,7 @@ export default function DocumentIngestionPage({
       </div>
 
       <PageSection
-        title="Candidates para o prontuário"
+        title="Sugestões para o prontuário"
         description="Revise sugestões por tipo e aplique apenas o que já foi aprovado."
         tone="strong"
         density="editorial"
@@ -615,7 +664,7 @@ export default function DocumentIngestionPage({
               onClick={handleGenerateCandidates}
             >
               <Sparkles className="h-4 w-4" />
-              Gerar candidates
+              Gerar sugestões
             </Button>
             {!canGenerateCandidates && (
               <p className="text-xs leading-5 text-text-tertiary">
@@ -627,6 +676,24 @@ export default function DocumentIngestionPage({
       >
         <CandidateList
           candidates={candidates}
+          emptyDescription={
+            canGenerateCandidates
+              ? 'A extração já foi validada. Gere sugestões para transformar a leitura em dados aplicáveis ao prontuário.'
+              : candidateGenerationHint
+          }
+          emptyActions={
+            canGenerateCandidates ? (
+              <Button
+                type="button"
+                variant="outline"
+                loading={actionKey === 'generate-candidates'}
+                onClick={handleGenerateCandidates}
+              >
+                <Sparkles className="h-4 w-4" />
+                Gerar sugestões
+              </Button>
+            ) : null
+          }
           getCandidateActions={(candidate) => ({
             onApprove: (target) => handleReviewCandidate(target, 'approved'),
             onReject: (target) => handleReviewCandidate(target, 'rejected'),
@@ -643,15 +710,15 @@ export default function DocumentIngestionPage({
       <Dialog open={Boolean(applyCandidateTarget)} onOpenChange={(open) => !open && setApplyCandidateTarget(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Aplicar candidate ao prontuario?</DialogTitle>
+            <DialogTitle>Aplicar sugestão ao prontuário?</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm leading-6 text-text-secondary">
-              Esta acao cria ou atualiza o registro de dominio correspondente ao candidate aprovado. O conteudo bruto da extraction permanece oculto nesta tela.
+              Esta ação cria ou atualiza o registro de domínio correspondente à sugestão aprovada. Os dados técnicos brutos permanecem ocultos nesta tela.
             </p>
             {applyCandidateTarget && (
               <div className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3 text-sm text-text-secondary">
-                <span>Candidate {applyCandidateTarget.id.slice(0, 8)}</span>
+                <span>Sugestão {applyCandidateTarget.id.slice(0, 8)}</span>
                 <IngestionStatusBadge status={applyCandidateTarget.status} />
               </div>
             )}

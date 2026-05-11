@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
   BarChart3,
   Building2,
@@ -47,10 +48,9 @@ import { MetricCard } from '@/components/ui/metric-card';
 import {
   apiFetcher,
   documentIngestionApi,
-  documentsApi,
   maintenanceApi,
   propertiesApi,
-  type DocumentIngestionSummary,
+  type PropertyDocumentIngestionSummary,
   type ServiceOrder,
 } from '@/lib/api';
 import { cn, formatCurrency, formatDate, PROPERTY_TYPE_LABELS, SYSTEM_TYPE_LABELS, scoreBg, scoreColor } from '@/lib/utils';
@@ -107,12 +107,7 @@ const SYSTEM_ACCENT: Record<string, string> = {
 
 type Tab = 'overview' | 'historico';
 
-type SmartRecordDocumentSummary = {
-  documentId: string;
-  summary: DocumentIngestionSummary;
-};
-
-type SmartRecordState = 'empty' | 'pending' | 'candidates' | 'applied';
+type SmartRecordState = 'empty' | 'pending' | 'ready' | 'error';
 
 type SmartRecordView = {
   state: SmartRecordState;
@@ -120,133 +115,100 @@ type SmartRecordView = {
   helper: string;
   toneClass: string;
   iconClass: string;
-  primaryLabel: 'Enviar documento' | 'Revisar extracoes' | 'Ver documentos';
-  primaryHref: string;
+  reviewHref: string;
 };
-
-function isSmartRecordDocumentSummary(
-  value: SmartRecordDocumentSummary | null
-): value is SmartRecordDocumentSummary {
-  return value !== null;
-}
-
-function hasIngestion(summary: DocumentIngestionSummary): boolean {
-  return summary.totalJobs > 0;
-}
 
 function resolveSmartRecordView(
   propertyId: string,
-  documentCount: number,
-  summaries: SmartRecordDocumentSummary[]
+  summary: PropertyDocumentIngestionSummary | null,
+  hasError: boolean
 ): SmartRecordView {
   const documentsHref = `/properties/${propertyId}/documents`;
-  const analyzed = summaries.filter(({ summary }) => hasIngestion(summary));
-  const withPendingCandidates = analyzed.find(({ summary }) => summary.pendingCandidates > 0);
-  const withPendingReview = analyzed.find(({ summary }) => summary.pendingReviews > 0);
-  const withActiveJob = analyzed.find(({ summary }) =>
-    summary.latestJobStatus === 'queued' || summary.latestJobStatus === 'processing'
-  );
-  const withFailedJob = analyzed.find(({ summary }) =>
-    summary.latestJobStatus === 'failed' || summary.latestJobStatus === 'cancelled'
-  );
-  const withAppliedData = analyzed.find(({ summary }) => summary.appliedCandidates > 0);
 
-  if (withPendingCandidates) {
+  if (hasError) {
     return {
-      state: 'candidates',
-      label: 'Candidates aguardando revisao',
-      helper: 'Ha dados extraidos esperando uma decisao antes de entrarem no prontuario.',
-      toneClass: 'border-border-warning bg-bg-warning',
-      iconClass: 'bg-bg-warning-emphasis text-text-warning',
-      primaryLabel: 'Revisar extracoes',
-      primaryHref: `/properties/${propertyId}/documents/${withPendingCandidates.documentId}/ingestion`,
+      state: 'error',
+      label: 'Erro ao carregar',
+      helper: 'Nao foi possivel consultar o prontuario inteligente agora.',
+      toneClass: 'border-border-danger bg-bg-danger',
+      iconClass: 'bg-bg-danger text-text-danger',
+      reviewHref: documentsHref,
     };
   }
 
-  if (withPendingReview || withActiveJob || withFailedJob) {
-    const targetDocument = withPendingReview ?? withActiveJob ?? withFailedJob;
-
+  if (summary && summary.pendingCandidates > 0) {
     return {
       state: 'pending',
-      label: 'Analises pendentes',
-      helper: withActiveJob
-        ? 'Uma analise esta em andamento. Acompanhe antes de aplicar dados ao imovel.'
-        : 'Existem extracoes que precisam de revisao para liberar proximas etapas.',
-      toneClass: 'border-border-accent bg-bg-accent-subtle',
-      iconClass: 'bg-bg-accent text-text-inverse',
-      primaryLabel: 'Revisar extracoes',
-      primaryHref: targetDocument
-        ? `/properties/${propertyId}/documents/${targetDocument.documentId}/ingestion`
-        : documentsHref,
+      label: 'Sugestões aguardando revisão',
+      helper: 'Há dados extraídos esperando decisão antes de entrar no prontuário.',
+      toneClass: 'border-border-warning bg-bg-warning',
+      iconClass: 'bg-bg-warning-emphasis text-text-warning',
+      reviewHref: documentsHref,
     };
   }
 
-  if (withAppliedData) {
+  if (
+    summary &&
+    (summary.pendingExtractionReviews > 0 ||
+      summary.needsReviewJobs > 0 ||
+      summary.processingJobs > 0 ||
+      summary.failedJobs > 0)
+  ) {
     return {
-      state: 'applied',
-      label: 'Dados aplicados ao imovel',
-      helper: 'O prontuario ja recebeu informacoes aprovadas a partir dos documentos.',
+      state: 'pending',
+      label: 'Análises pendentes',
+      helper: summary.processingJobs > 0
+        ? 'Uma análise está em andamento. Acompanhe antes de aplicar dados ao imóvel.'
+        : 'Existem extrações que precisam de revisão para liberar próximas etapas.',
+      toneClass: 'border-border-accent bg-bg-accent-subtle',
+      iconClass: 'bg-bg-accent text-text-inverse',
+      reviewHref: documentsHref,
+    };
+  }
+
+  if (summary && summary.documentsWithIngestion > 0) {
+    return {
+      state: 'ready',
+      label: 'Tudo em dia',
+      helper: 'As análises disponíveis não têm pendências de revisão.',
       toneClass: 'border-border-success bg-bg-success',
       iconClass: 'bg-bg-success-emphasis text-text-success',
-      primaryLabel: 'Ver documentos',
-      primaryHref: documentsHref,
+      reviewHref: documentsHref,
     };
   }
 
   return {
     state: 'empty',
-    label: 'Sem documentos analisados',
-    helper: documentCount > 0
-      ? 'Comece analisando manuais, notas fiscais ou relatorios tecnicos ja enviados.'
-      : 'Envie um manual, nota fiscal ou relatorio tecnico para iniciar o prontuario.',
+    label: summary && summary.totalDocuments > 0 ? 'Sem documentos analisados' : 'Sem documentos',
+    helper: summary && summary.totalDocuments > 0
+      ? 'Comece analisando os documentos técnicos já enviados.'
+      : 'Envie o primeiro documento técnico para iniciar o prontuário.',
     toneClass: 'border-border-subtle bg-[var(--surface-base)]',
     iconClass: 'bg-bg-subtle text-text-accent',
-    primaryLabel: 'Enviar documento',
-    primaryHref: documentsHref,
+    reviewHref: documentsHref,
   };
 }
 
 function SmartRecordWidget({ propertyId }: { propertyId: string }) {
-  const { data: documentsPage, isLoading: documentsLoading } = useSWR(
-    ['smart-record-documents', propertyId],
-    () => documentsApi.list(propertyId)
+  const { data, error, isLoading } = useSWR(
+    ['smart-record-property-ingestion-summary', propertyId],
+    () => documentIngestionApi.propertySummary(propertyId)
   );
 
-  const documents = documentsPage?.data ?? [];
-  const sampledDocuments = documents.slice(0, 8);
-  const sampledDocumentIds = sampledDocuments.map((document) => document.id).join('|');
-
-  const { data: summaries, isLoading: summariesLoading } = useSWR(
-    sampledDocumentIds ? ['smart-record-ingestion-summaries', propertyId, sampledDocumentIds] : null,
-    async () => {
-      const results = await Promise.all(
-        sampledDocuments.map(async (document): Promise<SmartRecordDocumentSummary | null> => {
-          try {
-            const response = await documentIngestionApi.summary(propertyId, document.id);
-            return { documentId: document.id, summary: response.summary };
-          } catch {
-            return null;
-          }
-        })
-      );
-
-      return results.filter(isSmartRecordDocumentSummary);
-    }
-  );
-
-  const view = resolveSmartRecordView(propertyId, documents.length, summaries ?? []);
-  const analyzedCount = (summaries ?? []).filter(({ summary }) => hasIngestion(summary)).length;
-  const pendingCount = (summaries ?? []).reduce(
-    (total, { summary }) => total + summary.pendingReviews + summary.pendingCandidates,
-    0
-  );
-  const isLoading = documentsLoading || (sampledDocumentIds.length > 0 && summariesLoading);
-  const showSecondaryDocumentsLink = view.primaryLabel !== 'Ver documentos';
+  const documentsHref = `/properties/${propertyId}/documents`;
+  const summary = data?.summary ?? null;
+  const view = resolveSmartRecordView(propertyId, summary, Boolean(error));
+  const metricValue = (value: number): string => {
+    if (isLoading) return '...';
+    if (!summary) return '-';
+    return String(value);
+  };
+  const StatusIcon = view.state === 'error' ? AlertTriangle : Sparkles;
 
   return (
     <PageSection
-      title="Prontuario inteligente"
-      description="Use manuais, notas fiscais e relatorios tecnicos para preencher automaticamente o historico do imovel."
+      title="Prontuário inteligente"
+      description="Use documentos técnicos para preencher automaticamente o histórico do imóvel."
       tone="strong"
       density="editorial"
       actions={
@@ -259,29 +221,35 @@ function SmartRecordWidget({ propertyId }: { propertyId: string }) {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
           <div className="flex min-w-0 gap-4">
             <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-lg)]', view.iconClass)}>
-              <Sparkles className="h-5 w-5" aria-hidden="true" />
+              <StatusIcon className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-text-primary">{view.label}</p>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">{view.helper}</p>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Documentos</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Documentos analisados</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {isLoading ? '...' : documents.length}
+                    {metricValue(summary?.documentsWithIngestion ?? 0)}
                   </p>
                 </div>
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Analisados</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Análises pendentes</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {isLoading ? '...' : analyzedCount}
+                    {metricValue((summary?.pendingExtractionReviews ?? 0) + (summary?.needsReviewJobs ?? 0))}
                   </p>
                 </div>
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Pendencias</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Sugestões em revisão</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
-                    {isLoading ? '...' : pendingCount}
+                    {metricValue(summary?.pendingCandidates ?? 0)}
+                  </p>
+                </div>
+                <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Dados aplicados</p>
+                  <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
+                    {metricValue(summary?.appliedCandidates ?? 0)}
                   </p>
                 </div>
               </div>
@@ -290,19 +258,23 @@ function SmartRecordWidget({ propertyId }: { propertyId: string }) {
 
           <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
             <Button asChild>
-              <Link href={view.primaryHref}>
-                {view.primaryLabel === 'Enviar documento' && <Upload className="h-4 w-4" aria-hidden="true" />}
-                {view.primaryLabel !== 'Enviar documento' && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
-                {view.primaryLabel}
+              <Link href={documentsHref}>
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Enviar documento
               </Link>
             </Button>
-            {showSecondaryDocumentsLink && (
-              <Button variant="outline" asChild>
-                <Link href={`/properties/${propertyId}/documents`}>
-                  Ver documentos
-                </Link>
-              </Button>
-            )}
+            <Button variant="outline" asChild>
+              <Link href={view.reviewHref}>
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                Revisar análises
+              </Link>
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link href={documentsHref}>
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                Ver documentos
+              </Link>
+            </Button>
           </div>
         </div>
       </div>

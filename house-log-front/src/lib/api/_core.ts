@@ -5,6 +5,7 @@ export {
   clearToken,
   normalizeMediaUrl,
   normalizeApiMediaUrls,
+  getApiErrorMessage,
   qs,
   request,
   apiFetcher,

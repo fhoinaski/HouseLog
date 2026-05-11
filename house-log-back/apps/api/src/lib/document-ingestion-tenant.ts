@@ -17,6 +17,7 @@ import type {
   ExtractedWarranty,
   MaintenanceFrequency,
   PropertyDocumentExtraction,
+  PropertyDocumentIngestionSummary,
   TechnicalSystemStatus,
   WarrantyStatus,
 } from '@houselog/contracts';
@@ -31,6 +32,7 @@ import {
   ExtractedMaintenanceRecommendationSchema,
   ExtractedTechnicalSystemSchema,
   ExtractedWarrantySchema,
+  PropertyDocumentIngestionSummarySchema,
   PropertyDocumentExtractionSchema,
 } from '@houselog/contracts';
 import type { DocumentIngestionQueueMessage } from './types';
@@ -81,6 +83,42 @@ export type DocumentIngestionSummaryReviewRow = {
 };
 
 export type DocumentIngestionSummaryCandidateRow = {
+  status: DocumentExtractionCandidateStatus;
+};
+
+export type PropertyDocumentIngestionSummaryDocumentRow = {
+  id: string;
+  tenantId: string | null;
+  propertyId: string;
+  deletedAt?: string | null;
+};
+
+export type PropertyDocumentIngestionSummaryJobRow = {
+  tenantId: string;
+  propertyId: string;
+  documentId: string;
+  status: DocumentIngestionJobStatus;
+  createdAt: string;
+};
+
+export type PropertyDocumentIngestionSummaryExtractionRow = {
+  tenantId: string;
+  propertyId: string;
+  documentId: string;
+  id: string;
+};
+
+export type PropertyDocumentIngestionSummaryReviewRow = {
+  tenantId: string;
+  propertyId: string;
+  documentId: string;
+  status: DocumentExtractionReviewStatus;
+};
+
+export type PropertyDocumentIngestionSummaryCandidateRow = {
+  tenantId: string;
+  propertyId: string;
+  documentId: string;
   status: DocumentExtractionCandidateStatus;
 };
 
@@ -1499,4 +1537,63 @@ export function buildDocumentIngestionSummary(input: {
   };
 
   return DocumentIngestionSummarySchema.parse(summary);
+}
+
+export function buildPropertyDocumentIngestionSummary(input: {
+  tenantId: string;
+  propertyId: string;
+  documents: PropertyDocumentIngestionSummaryDocumentRow[];
+  jobs: PropertyDocumentIngestionSummaryJobRow[];
+  extractions: PropertyDocumentIngestionSummaryExtractionRow[];
+  reviews: PropertyDocumentIngestionSummaryReviewRow[];
+  candidates: PropertyDocumentIngestionSummaryCandidateRow[];
+}): PropertyDocumentIngestionSummary {
+  const documents = input.documents.filter((document) =>
+    document.tenantId === input.tenantId &&
+    document.propertyId === input.propertyId &&
+    !document.deletedAt
+  );
+  const documentIds = new Set(documents.map((document) => document.id));
+  const jobs = input.jobs.filter((job) =>
+    job.tenantId === input.tenantId &&
+    job.propertyId === input.propertyId &&
+    documentIds.has(job.documentId)
+  );
+  const extractions = input.extractions.filter((extraction) =>
+    extraction.tenantId === input.tenantId &&
+    extraction.propertyId === input.propertyId &&
+    documentIds.has(extraction.documentId)
+  );
+  const reviews = input.reviews.filter((review) =>
+    review.tenantId === input.tenantId &&
+    review.propertyId === input.propertyId &&
+    documentIds.has(review.documentId)
+  );
+  const candidates = input.candidates.filter((candidate) =>
+    candidate.tenantId === input.tenantId &&
+    candidate.propertyId === input.propertyId &&
+    documentIds.has(candidate.documentId)
+  );
+  const latestJob = jobs.reduce<PropertyDocumentIngestionSummaryJobRow | null>((latest, job) => {
+    if (!latest) return job;
+    return job.createdAt > latest.createdAt ? job : latest;
+  }, null);
+
+  return PropertyDocumentIngestionSummarySchema.parse({
+    totalDocuments: documents.length,
+    documentsWithIngestion: new Set(jobs.map((job) => job.documentId)).size,
+    totalJobs: jobs.length,
+    processingJobs: jobs.filter((job) => job.status === 'queued' || job.status === 'processing').length,
+    failedJobs: jobs.filter((job) => job.status === 'failed').length,
+    needsReviewJobs: jobs.filter((job) => job.status === 'needs_review').length,
+    totalExtractions: extractions.length,
+    pendingExtractionReviews: reviews.filter((review) => review.status === 'pending').length,
+    totalCandidates: candidates.length,
+    pendingCandidates: candidates.filter((candidate) => candidate.status === 'pending').length,
+    approvedCandidates: candidates.filter((candidate) => candidate.status === 'approved').length,
+    rejectedCandidates: candidates.filter((candidate) => candidate.status === 'rejected').length,
+    appliedCandidates: candidates.filter((candidate) => candidate.status === 'applied').length,
+    lastIngestionAt: latestJob?.createdAt ?? null,
+    latestStatus: latestJob?.status ?? null,
+  });
 }
