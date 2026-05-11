@@ -50,6 +50,10 @@ const validRow = {
   property_id: 'property-1',
   title: 'Dossie de entrega',
   description: 'Entrega final da unidade',
+  issuer_name: 'Eng. Maria Silva',
+  issuer_role: 'Responsavel pela entrega',
+  responsible_name: 'Eng. Maria Silva',
+  company_name: 'Construtora Horizonte',
   type: 'handover',
   status: 'issued' as const,
   version: 3,
@@ -83,6 +87,9 @@ describe('resolvePublicHandoverPackage', () => {
       expect(result.package.id).toBe('package-1');
       expect(result.package.snapshot_json.property.name).toBe('Apartamento Jardim');
       expect(result.package.status).toBe('issued');
+      expect(result.package.issuerName).toBe('Eng. Maria Silva');
+      expect(result.package.responsibleName).toBe('Eng. Maria Silva');
+      expect(result.package.companyName).toBe('Construtora Horizonte');
     }
   });
 
@@ -96,7 +103,16 @@ describe('resolvePublicHandoverPackage', () => {
         ...validRow,
         expires_at: '2026-01-01T00:00:00.000Z',
       })
-    ).toEqual({ ok: false, status: 404, code: 'NOT_FOUND' });
+    ).toEqual({ ok: false, status: 410, code: 'LINK_EXPIRED' });
+  });
+
+  it('bloqueia pacote marcado como expirado', () => {
+    expect(
+      resolvePublicHandoverPackage({
+        ...validRow,
+        status: 'expired',
+      })
+    ).toEqual({ ok: false, status: 410, code: 'LINK_EXPIRED' });
   });
 
   it('bloqueia pacote revogado', () => {
@@ -105,7 +121,7 @@ describe('resolvePublicHandoverPackage', () => {
         ...validRow,
         revoked_at: '2026-05-10T00:00:00.000Z',
       })
-    ).toEqual({ ok: false, status: 404, code: 'NOT_FOUND' });
+    ).toEqual({ ok: false, status: 410, code: 'PACKAGE_REVOKED' });
   });
 
   it('nao expõe tenantId', () => {
@@ -124,6 +140,20 @@ describe('resolvePublicHandoverPackage', () => {
     if (result.ok) {
       expect(result.package).not.toHaveProperty('publicAccessTokenHash');
       expect(Object.keys(result.package)).not.toContain('publicAccessTokenHash');
+      expect(result.package).not.toHaveProperty('public_access_token_hash');
+      expect(Object.keys(result.package)).not.toContain('public_access_token_hash');
+    }
+  });
+
+  it('nao expoe packageHash', () => {
+    const result = resolvePublicHandoverPackage(validRow);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.package).not.toHaveProperty('packageHash');
+      expect(result.package).not.toHaveProperty('package_hash');
+      expect(Object.keys(result.package)).not.toContain('packageHash');
+      expect(Object.keys(result.package)).not.toContain('package_hash');
     }
   });
 

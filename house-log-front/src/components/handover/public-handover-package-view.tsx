@@ -173,6 +173,11 @@ function StatusPanel({
 export function PublicHandoverPackageView({ handoverPackage }: PublicHandoverPackageViewProps) {
   const snapshot = handoverPackage.snapshot_json;
   const property = snapshot.property;
+  const responsibleDisplay =
+    handoverPackage.companyName && handoverPackage.responsibleName
+      ? `${handoverPackage.companyName} - ${handoverPackage.responsibleName}`
+      : handoverPackage.companyName ?? handoverPackage.responsibleName ?? handoverPackage.issuerName;
+  const responsibleDetail = handoverPackage.issuerRole ? ` (${handoverPackage.issuerRole})` : '';
   const deliveryMessage =
     handoverPackage.description?.trim() ||
     'Este pacote reune as informacoes essenciais da entrega digital do imovel para consulta segura pelo proprietario.';
@@ -218,7 +223,9 @@ export function PublicHandoverPackageView({ handoverPackage }: PublicHandoverPac
               </div>
               <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
                 <p className="text-xs font-medium text-text-tertiary">Construtora ou responsavel</p>
-                <p className="mt-1 text-sm leading-6 text-text-primary">Nao informado neste pacote</p>
+                <p className="mt-1 text-sm leading-6 text-text-primary">
+                  {responsibleDisplay ? `${responsibleDisplay}${responsibleDetail}` : 'Nao informado neste pacote'}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <SummaryMetric label="Documentos" value={snapshot.documents.length} icon={FileText} />

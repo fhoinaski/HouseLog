@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { getDb } from '../db/client';
-import { handoverPackages } from '../db/schema';
+import { handoverPackages, tenants, users } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 import { hashPublicHandoverToken, resolvePublicHandoverPackage } from '../lib/handover-public';
 
@@ -19,6 +19,10 @@ publicHandover.get('/handover/:token', async (c) => {
       property_id: handoverPackages.propertyId,
       title: handoverPackages.title,
       description: handoverPackages.description,
+      issuer_name: users.name,
+      issuer_role: sql<string | null>`case when ${users.id} is not null then 'Responsavel pela entrega' else null end`,
+      responsible_name: users.name,
+      company_name: tenants.name,
       type: handoverPackages.type,
       status: handoverPackages.status,
       version: handoverPackages.version,
@@ -31,15 +35,22 @@ publicHandover.get('/handover/:token', async (c) => {
       snapshot_json: handoverPackages.snapshotJson,
     })
     .from(handoverPackages)
+    .leftJoin(users, eq(users.id, handoverPackages.issuedBy))
+    .leftJoin(tenants, eq(tenants.id, handoverPackages.tenantId))
     .where(and(eq(handoverPackages.publicAccessTokenHash, tokenHash), isNull(handoverPackages.deletedAt)))
     .limit(1);
 
   try {
     const resolved = resolvePublicHandoverPackage(row ?? null);
     if (!resolved.ok) {
-      return resolved.status === 500
-        ? err(c, 'Erro interno', 'INTERNAL_ERROR', 500)
-        : err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
+      if (resolved.status === 500) return err(c, 'Erro interno', 'INTERNAL_ERROR', 500);
+      if (resolved.code === 'LINK_EXPIRED') {
+        return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
+      }
+      if (resolved.code === 'PACKAGE_REVOKED') {
+        return err(c, 'Pacote revogado', 'PACKAGE_REVOKED', 410);
+      }
+      return err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
     }
     return ok(c, { package: resolved.package });
   } catch {

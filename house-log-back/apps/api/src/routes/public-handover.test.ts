@@ -56,6 +56,10 @@ type PublicHandoverRow = {
   property_id: string;
   title: string;
   description: string | null;
+  issuer_name: string | null;
+  issuer_role: string | null;
+  responsible_name: string | null;
+  company_name: string | null;
   type: string;
   status: 'issued' | 'accepted' | 'revoked' | 'expired' | 'draft' | 'in_review' | 'ready_to_issue';
   version: number;
@@ -69,13 +73,16 @@ type PublicHandoverRow = {
 };
 
 function createDb(row: PublicHandoverRow | null) {
+  const query = {
+    leftJoin: vi.fn(() => query),
+    where: vi.fn(() => ({
+      limit: vi.fn(async () => (row ? [row] : [])),
+    })),
+  };
+
   return {
     select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(async () => (row ? [row] : [])),
-        })),
-      })),
+      from: vi.fn(() => query),
     })),
   };
 }
@@ -93,6 +100,10 @@ describe('GET /public/handover/:token', () => {
       property_id: 'property-1',
       title: 'Dossie de entrega',
       description: 'Entrega final da unidade',
+      issuer_name: 'Eng. Maria Silva',
+      issuer_role: 'Responsavel pela entrega',
+      responsible_name: 'Eng. Maria Silva',
+      company_name: 'Construtora Horizonte',
       type: 'handover',
       status: 'issued',
       version: 3,
@@ -117,6 +128,9 @@ describe('GET /public/handover/:token', () => {
       property: { name: 'Apartamento Jardim' },
       package: { status: 'issued' },
     });
+    expect(body.package.issuerName).toBe('Eng. Maria Silva');
+    expect(body.package.responsibleName).toBe('Eng. Maria Silva');
+    expect(body.package.companyName).toBe('Construtora Horizonte');
     expect(body.package).not.toHaveProperty('tenant_id');
     expect(body.package).not.toHaveProperty('public_access_token_hash');
     expect(body.package).not.toHaveProperty('package_hash');
@@ -129,6 +143,10 @@ describe('GET /public/handover/:token', () => {
       property_id: 'property-1',
       title: 'Dossie de entrega',
       description: 'Entrega final da unidade',
+      issuer_name: 'Eng. Maria Silva',
+      issuer_role: 'Responsavel pela entrega',
+      responsible_name: 'Eng. Maria Silva',
+      company_name: 'Construtora Horizonte',
       type: 'handover',
       status: 'accepted',
       version: 3,
@@ -170,6 +188,10 @@ describe('GET /public/handover/:token', () => {
         property_id: 'property-1',
         title: 'Dossie de entrega',
         description: null,
+        issuer_name: null,
+        issuer_role: null,
+        responsible_name: null,
+        company_name: null,
         type: 'handover',
         status: 'issued',
         version: 3,
@@ -184,8 +206,10 @@ describe('GET /public/handover/:token', () => {
     );
 
     const response = await publicHandover.fetch(new Request('http://localhost/handover/token-expirado'), buildEnv());
+    const body = (await response.json()) as { error: string; code: string };
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(410);
+    expect(body).toEqual({ error: 'Link expirado', code: 'LINK_EXPIRED' });
   });
 
   it('bloqueia pacote revogado', async () => {
@@ -195,6 +219,10 @@ describe('GET /public/handover/:token', () => {
         property_id: 'property-1',
         title: 'Dossie de entrega',
         description: null,
+        issuer_name: null,
+        issuer_role: null,
+        responsible_name: null,
+        company_name: null,
         type: 'handover',
         status: 'accepted',
         version: 3,
@@ -209,8 +237,10 @@ describe('GET /public/handover/:token', () => {
     );
 
     const response = await publicHandover.fetch(new Request('http://localhost/handover/token-revogado'), buildEnv());
+    const body = (await response.json()) as { error: string; code: string };
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(410);
+    expect(body).toEqual({ error: 'Pacote revogado', code: 'PACKAGE_REVOKED' });
   });
 
   it('usa snapshot_json e nao dados vivos', async () => {
@@ -228,6 +258,10 @@ describe('GET /public/handover/:token', () => {
         property_id: 'property-1',
         title: 'Dossie de entrega',
         description: null,
+        issuer_name: null,
+        issuer_role: null,
+        responsible_name: null,
+        company_name: null,
         type: 'handover',
         status: 'accepted',
         version: 3,

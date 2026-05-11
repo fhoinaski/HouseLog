@@ -10,6 +10,10 @@ export type PublicHandoverPackageRow = {
   property_id: string;
   title: string;
   description: string | null;
+  issuer_name: string | null;
+  issuer_role: string | null;
+  responsible_name: string | null;
+  company_name: string | null;
   type: string;
   status: HandoverPackageStatus;
   version: number;
@@ -32,16 +36,22 @@ export function resolvePublicHandoverPackage(
 ):
   | { ok: true; package: HandoverPackagePublic }
   | { ok: false; status: 404; code: 'NOT_FOUND' }
+  | { ok: false; status: 410; code: 'LINK_EXPIRED' | 'PACKAGE_REVOKED' }
   | { ok: false; status: 500; code: 'INTERNAL_ERROR' } {
   if (!row) return { ok: false, status: 404, code: 'NOT_FOUND' };
+  if (row.revoked_at || row.status === 'revoked') {
+    return { ok: false, status: 410, code: 'PACKAGE_REVOKED' };
+  }
+  if (row.status === 'expired') {
+    return { ok: false, status: 410, code: 'LINK_EXPIRED' };
+  }
   if (row.status !== 'issued' && row.status !== 'accepted') {
     return { ok: false, status: 404, code: 'NOT_FOUND' };
   }
-  if (row.revoked_at) return { ok: false, status: 404, code: 'NOT_FOUND' };
 
   const expiresAtMs = row.expires_at ? new Date(row.expires_at).getTime() : Number.NaN;
   if (Number.isNaN(expiresAtMs) || expiresAtMs <= now.getTime()) {
-    return { ok: false, status: 404, code: 'NOT_FOUND' };
+    return { ok: false, status: 410, code: 'LINK_EXPIRED' };
   }
 
   const snapshot = HandoverPackageSnapshotSchema.safeParse(row.snapshot_json);
@@ -54,6 +64,10 @@ export function resolvePublicHandoverPackage(
     property_id: row.property_id,
     title: row.title,
     description: row.description,
+    issuerName: row.issuer_name,
+    issuerRole: row.issuer_role,
+    responsibleName: row.responsible_name,
+    companyName: row.company_name,
     type: row.type,
     status: row.status,
     version: row.version,
