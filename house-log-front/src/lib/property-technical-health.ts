@@ -35,6 +35,7 @@ export function buildPropertyTechnicalHealthView(
   property: Pick<Property, 'health_score'>,
   ingestionSummary: PropertyDocumentIngestionSummary | null | undefined
 ): PropertyTechnicalHealthView {
+  const baseScore = Number.isFinite(property.health_score) ? clampScore(property.health_score) : null;
   const totalDocuments = ingestionSummary?.totalDocuments ?? 0;
   const documentsWithIngestion = ingestionSummary?.documentsWithIngestion ?? 0;
   const pendingReviews = ingestionSummary?.pendingExtractionReviews ?? 0;
@@ -44,6 +45,9 @@ export function buildPropertyTechnicalHealthView(
   const processingJobs = ingestionSummary?.processingJobs ?? 0;
   const hasDocuments = totalDocuments > 0;
   const hasIngestion = documentsWithIngestion > 0 || (ingestionSummary?.totalJobs ?? 0) > 0;
+  const highlights: string[] = [];
+  const risks: string[] = [];
+  const improvements: string[] = [];
 
   if (!hasDocuments && !hasIngestion) {
     return {
@@ -60,11 +64,6 @@ export function buildPropertyTechnicalHealthView(
     };
   }
 
-  let score = Number.isFinite(property.health_score) ? property.health_score : 62;
-  const highlights: string[] = [];
-  const risks: string[] = [];
-  const improvements: string[] = [];
-
   if (documentsWithIngestion > 0) {
     highlights.push(
       `${documentsWithIngestion} ${pluralize(
@@ -73,11 +72,9 @@ export function buildPropertyTechnicalHealthView(
         'documentos analisados'
       )} pelo prontuário inteligente.`
     );
-    score += Math.min(6, documentsWithIngestion * 2);
   } else {
     risks.push('Os documentos existentes ainda não foram analisados.');
     improvements.push('Iniciar análise inteligente nos documentos disponíveis.');
-    score -= 8;
   }
 
   if (appliedCandidates > 0) {
@@ -88,7 +85,6 @@ export function buildPropertyTechnicalHealthView(
         'dados aplicados'
       )} ao prontuário técnico.`
     );
-    score += Math.min(10, appliedCandidates * 2);
   } else {
     improvements.push('Aplicar sugestões aprovadas ao prontuário do imóvel.');
   }
@@ -102,7 +98,6 @@ export function buildPropertyTechnicalHealthView(
       )}.`
     );
     improvements.push('Revisar extrações pendentes para qualificar os dados técnicos.');
-    score -= Math.min(18, pendingReviews * 5);
   }
 
   if (pendingCandidates > 0) {
@@ -114,7 +109,6 @@ export function buildPropertyTechnicalHealthView(
       )}.`
     );
     improvements.push('Aprovar ou rejeitar sugestões antes de aplicar ao prontuário.');
-    score -= Math.min(14, pendingCandidates * 4);
   }
 
   if (failedJobs > 0) {
@@ -126,7 +120,6 @@ export function buildPropertyTechnicalHealthView(
       )} e precisa de revisão.`
     );
     improvements.push('Resolver falhas de análise ou tentar novamente com o documento correto.');
-    score -= Math.min(22, failedJobs * 9);
   }
 
   if (processingJobs > 0) {
@@ -137,7 +130,6 @@ export function buildPropertyTechnicalHealthView(
         'análises em andamento'
       )}.`
     );
-    score -= Math.min(5, processingJobs * 2);
   }
 
   if (hasDocuments && documentsWithIngestion < totalDocuments) {
@@ -150,24 +142,23 @@ export function buildPropertyTechnicalHealthView(
       )} na análise inteligente.`
     );
     improvements.push('Completar a análise dos documentos restantes.');
-    score -= Math.min(10, remainingDocuments * 2);
   }
 
   if (risks.length === 0) {
     highlights.push('Não há pendências abertas no prontuário inteligente.');
-    score += 5;
   }
 
-  const finalScore = clampScore(score);
   const nextImprovements = improvements.length > 0
     ? [...new Set(improvements)].slice(0, 4)
     : ['Manter documentos técnicos atualizados e revisar novas sugestões quando surgirem.'];
+  const hasReliableScore = baseScore !== null;
 
   return {
-    score: finalScore,
-    label: labelFromScore(finalScore),
-    description:
-      'Leitura inicial baseada no score cadastrado e nos sinais do prontuário inteligente. O índice orienta priorização, sem substituir uma avaliação técnica completa.',
+    score: baseScore,
+    label: hasReliableScore ? labelFromScore(baseScore) : 'Em formação',
+    description: hasReliableScore
+      ? 'Leitura inicial baseada no indicador técnico cadastrado e nos sinais do prontuário inteligente.'
+      : 'A saúde técnica será formada quando houver um indicador confiável para este imóvel.',
     highlights,
     risks: risks.length > 0 ? risks : ['Nenhum risco relevante identificado nos sinais disponíveis.'],
     improvements: nextImprovements,
