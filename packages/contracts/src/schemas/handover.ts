@@ -7,18 +7,107 @@ export const handoverPackageTypeSchema = z.enum([
   'inspection',
 ]);
 
-export const handoverPackageStatusSchema = z.enum([
+export const HandoverPackageStatusSchema = z.enum([
   'draft',
   'in_review',
-  'approved',
-  'completed',
-  'archived',
+  'ready_to_issue',
+  'issued',
+  'accepted',
+  'revoked',
+  'expired',
 ]);
+export const handoverPackageStatusSchema = HandoverPackageStatusSchema;
 
 const optionalNullableString = z.string().max(2000).optional().nullable();
 const optionalNullableId = z.string().min(1).optional().nullable();
 
-export const handoverPackageSchema = z.object({
+export const HandoverPackageSnapshotSchema = z.object({
+  generatedAt: z.string(),
+  property: z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    address: z.string(),
+    city: z.string(),
+    areaM2: z.number().nullable(),
+    yearBuilt: z.number().nullable(),
+    structure: z.string().nullable(),
+    floors: z.number().nullable(),
+    healthScore: z.number(),
+  }).strict(),
+  package: z.object({
+    id: z.string(),
+    title: z.string(),
+    type: z.string(),
+    version: z.number().int().positive(),
+    status: handoverPackageStatusSchema,
+  }).strict(),
+  rooms: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    floor: z.number().nullable(),
+    areaM2: z.number().nullable(),
+  }).strict()).default([]),
+  documents: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    type: z.string(),
+    issueDate: z.string().nullable(),
+    expiryDate: z.string().nullable(),
+  }).strict()).default([]),
+  technicalSystems: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    status: z.string(),
+    locationSummary: z.string().nullable(),
+    lastInspectionAt: z.string().nullable(),
+  }).strict()).default([]),
+  inventoryItems: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string(),
+    roomId: z.string().nullable(),
+    quantity: z.number().nullable(),
+    unit: z.string().nullable(),
+    warrantyUntil: z.string().nullable(),
+  }).strict()).default([]),
+  warranties: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    warrantyType: z.string(),
+    status: z.string(),
+    startDate: z.string().nullable(),
+    endDate: z.string(),
+    providerName: z.string().nullable(),
+  }).strict()).default([]),
+  maintenanceSchedules: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    systemType: z.string(),
+    responsible: z.string().nullable(),
+    frequency: z.string().nullable(),
+    lastDone: z.string().nullable(),
+    nextDue: z.string().nullable(),
+    autoCreateOs: z.boolean(),
+  }).strict()).default([]),
+  checklistItems: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    category: z.string(),
+    status: z.string(),
+    required: z.boolean(),
+    condition: z.string().nullable(),
+    completedAt: z.string().nullable(),
+    roomId: z.string().nullable(),
+    documentId: z.string().nullable(),
+    inventoryItemId: z.string().nullable(),
+    serviceOrderId: z.string().nullable(),
+  }).strict()).default([]),
+}).strict();
+
+export const HandoverPackagePrivateDtoSchema = z.object({
   id: z.string(),
   tenant_id: z.string(),
   property_id: z.string(),
@@ -34,10 +123,39 @@ export const handoverPackageSchema = z.object({
   completed_at: z.string().nullable(),
   summary_document_id: z.string().nullable(),
   notes: z.string().nullable(),
+  issued_at: z.string().nullable(),
+  issued_by: z.string().nullable(),
+  accepted_at: z.string().nullable(),
+  accepted_by_name: z.string().nullable(),
+  accepted_by_email: z.string().nullable(),
+  revoked_at: z.string().nullable(),
+  revoked_by: z.string().nullable(),
+  revoke_reason: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  snapshot_json: HandoverPackageSnapshotSchema.nullable(),
+  package_hash: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().nullable(),
   deleted_at: z.string().nullable(),
-});
+}).strict();
+
+export const HandoverPackagePublicDtoSchema = z.object({
+  id: z.string(),
+  property_id: z.string(),
+  title: z.string().min(1),
+  description: z.string().nullable(),
+  type: handoverPackageTypeSchema,
+  status: handoverPackageStatusSchema,
+  version: z.number().int().positive(),
+  issued_at: z.string().nullable(),
+  accepted_at: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string().nullable(),
+  snapshot_json: HandoverPackageSnapshotSchema,
+}).strict();
+
+export const handoverPackageSchema = HandoverPackagePrivateDtoSchema;
 
 export const handoverPackageCreateSchema = z.object({
   title: z.string().min(1, 'Informe o titulo do dossie.').max(160),
@@ -51,9 +169,24 @@ export const handoverPackageCreateSchema = z.object({
   completed_at: z.string().optional().nullable(),
   summary_document_id: optionalNullableId,
   notes: optionalNullableString,
-});
+}).strict();
 
 export const handoverPackageUpdateSchema = handoverPackageCreateSchema.partial();
+
+export const HandoverPackageIssueInputSchema = z.object({
+  expires_at: z.string().optional().nullable(),
+  snapshot_json: HandoverPackageSnapshotSchema,
+  notes: optionalNullableString,
+}).strict();
+
+export const HandoverPackageRevokeInputSchema = z.object({
+  revoke_reason: z.string().min(1, 'Informe o motivo da revogacao.').max(500),
+}).strict();
+
+export const HandoverPackageAcceptInputSchema = z.object({
+  accepted_by_name: z.string().min(1, 'Informe o nome de quem recebeu.').max(120),
+  accepted_by_email: z.string().email().optional().nullable(),
+}).strict();
 
 export const handoverPackageFilterSchema = z.object({
   status: handoverPackageStatusSchema.optional(),
@@ -65,14 +198,20 @@ export const handoverPackageFilterSchema = z.object({
   createdTo: z.string().optional(),
   completedFrom: z.string().optional(),
   completedTo: z.string().optional(),
-});
+}).strict();
 
 export type HandoverPackageType = z.infer<typeof handoverPackageTypeSchema>;
 export type HandoverPackageStatus = z.infer<typeof handoverPackageStatusSchema>;
 export type HandoverPackage = z.infer<typeof handoverPackageSchema>;
+export type HandoverPackagePublic = z.infer<typeof HandoverPackagePublicDtoSchema>;
+export type HandoverPackagePrivate = z.infer<typeof HandoverPackagePrivateDtoSchema>;
+export type HandoverPackageSnapshot = z.infer<typeof HandoverPackageSnapshotSchema>;
 export type HandoverPackageCreateInput = z.infer<typeof handoverPackageCreateSchema>;
 export type HandoverPackageUpdateInput = z.infer<typeof handoverPackageUpdateSchema>;
 export type HandoverPackageFilterInput = z.infer<typeof handoverPackageFilterSchema>;
+export type HandoverPackageIssueInput = z.infer<typeof HandoverPackageIssueInputSchema>;
+export type HandoverPackageRevokeInput = z.infer<typeof HandoverPackageRevokeInputSchema>;
+export type HandoverPackageAcceptInput = z.infer<typeof HandoverPackageAcceptInputSchema>;
 
 export const handoverChecklistItemCategorySchema = z.enum([
   'keys',

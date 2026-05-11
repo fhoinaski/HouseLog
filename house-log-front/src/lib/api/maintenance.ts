@@ -13,6 +13,7 @@ export type MaintenanceSchedule = {
   last_done: string | null;
   next_due: string | null;
   responsible: string | null;
+  auto_create_os: number;
   is_overdue: boolean;
   days_until_due: number | null;
   created_at: string;

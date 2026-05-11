@@ -136,6 +136,8 @@ export type {
   HandoverChecklistItemFilters,
   HandoverChecklistItemStatusInput,
   HandoverChecklistItemUpdateInput,
+  HandoverPackageIssueInput,
+  HandoverPackageIssueResponse,
   HandoverPackage,
   HandoverPackageCreateInput,
   HandoverPackageFilters,

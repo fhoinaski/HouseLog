@@ -22,9 +22,11 @@ const PACKAGE_TYPES: Array<{ value: HandoverPackageCreateInput['type']; label: s
 const PACKAGE_STATUSES: Array<{ value: HandoverPackageCreateInput['status']; label: string }> = [
   { value: 'draft', label: 'Rascunho' },
   { value: 'in_review', label: 'Em revisão' },
-  { value: 'approved', label: 'Aprovado' },
-  { value: 'completed', label: 'Concluído' },
-  { value: 'archived', label: 'Arquivado' },
+  { value: 'ready_to_issue', label: 'Pronto para emissão' },
+  { value: 'issued', label: 'Emitido' },
+  { value: 'accepted', label: 'Aceito' },
+  { value: 'revoked', label: 'Revogado' },
+  { value: 'expired', label: 'Expirado' },
 ];
 
 const DEFAULT_VALUES: HandoverPackageCreateInput = {

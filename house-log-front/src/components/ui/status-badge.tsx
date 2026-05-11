@@ -18,6 +18,10 @@ export const STATUS_TONE: Record<string, string> = {
   // Handover package
   draft:          'bg-bg-subtle text-text-secondary',
   in_review:      'bg-bg-warning text-text-warning',
+  ready_to_issue: 'bg-bg-accent-subtle text-text-accent',
+  issued:         'bg-bg-warning text-text-warning',
+  accepted:       'bg-bg-success text-text-success',
+  revoked:        'bg-bg-danger text-text-danger',
   approved:       'bg-bg-success text-text-success',
   archived:       'bg-bg-subtle text-text-tertiary',
   // Checklist item
@@ -34,7 +38,6 @@ export const STATUS_TONE: Record<string, string> = {
   warranty_expired: 'bg-bg-danger text-text-danger',
   // Commercial requests and proposals
   submitted:      'bg-bg-accent-subtle text-text-accent',
-  accepted:       'bg-bg-success text-text-success',
   rejected:       'bg-bg-danger text-text-danger',
   converted:      'bg-bg-success text-text-success',
   commercial_cancelled: 'bg-bg-subtle text-text-tertiary',

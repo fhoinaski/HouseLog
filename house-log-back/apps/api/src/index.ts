@@ -32,6 +32,7 @@ import warranties from './routes/warranties';
 import renovations from './routes/renovations';
 import handoverPackages from './routes/handover-packages';
 import handoverChecklistItems from './routes/handover-checklist-items';
+import publicHandover from './routes/public-handover';
 import { requestLogger, reportError, log } from './lib/logger';
 import { generateThumbnails } from './lib/image';
 import { pushToUser } from './lib/webpush';
@@ -152,6 +153,9 @@ api.route('/', invites);
 
 // Public audit endpoints (no auth required — handled inside the route)
 api.route('/audit', auditLinks);
+
+// Public handover package view (tokenized)
+api.route('/public', publicHandover);
 
 // Full-text search (services, documents/OCR, inventory, maintenance)
 api.route('/search', search);

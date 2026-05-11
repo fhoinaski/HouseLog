@@ -37,6 +37,15 @@ export type HandoverPackageFilters = {
 
 export type HandoverChecklistItemStatusInput = HandoverChecklistItemStatusUpdateInput;
 
+export type HandoverPackageIssueInput = {
+  expires_at?: string | null;
+};
+
+export type HandoverPackageIssueResponse = {
+  package: HandoverPackage;
+  publicAccessUrl: string;
+};
+
 export type HandoverChecklistItemFilters = {
   status?: HandoverChecklistItemStatus;
   category?: HandoverChecklistItemCategory;
@@ -67,6 +76,12 @@ export const handoverPackagesApi = {
     request<{ package: HandoverPackage }>(`/properties/${propertyId}/handover-packages/${packageId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+
+  issue: (propertyId: string, packageId: string, data?: HandoverPackageIssueInput) =>
+    request<HandoverPackageIssueResponse>(`/properties/${propertyId}/handover-packages/${packageId}/issue`, {
+      method: 'POST',
+      body: JSON.stringify(data ?? {}),
     }),
 
   delete: (propertyId: string, packageId: string) =>

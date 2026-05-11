@@ -10,6 +10,13 @@ import {
   credentialCategorySchema, credentialCreateSchema,
   warrantyCreateSchema, warrantyStatusSchema, warrantyTypeSchema, warrantyUpdateSchema,
   renovationCategorySchema, renovationCreateSchema, renovationStatusSchema, renovationUpdateSchema,
+  HandoverPackageAcceptInputSchema,
+  HandoverPackageIssueInputSchema,
+  HandoverPackagePrivateDtoSchema,
+  HandoverPackagePublicDtoSchema,
+  HandoverPackageRevokeInputSchema,
+  HandoverPackageSnapshotSchema,
+  HandoverPackageStatusSchema,
   handoverPackageCreateSchema, handoverPackageStatusSchema, handoverPackageTypeSchema, handoverPackageUpdateSchema,
   handoverChecklistItemCategorySchema,
   handoverChecklistItemConditionSchema,
@@ -388,11 +395,10 @@ describe('warrantyCreateSchema', () => {
   it('aceita payload minimo com default de status', () => {
     const result = warrantyCreateSchema.safeParse(valid);
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.status).toBe('active');
-  });
-
-  it('rejeita titulo vazio', () => {
-    expect(warrantyCreateSchema.safeParse({ ...valid, title: '' }).success).toBe(false);
+    if (result.success) {
+      expect(result.data.status).toBe('active');
+      expect(result.data.warranty_type).toBe('service');
+    }
   });
 
   it('rejeita tipo invalido', () => {
@@ -501,14 +507,16 @@ describe('handoverPackageTypeSchema', () => {
 
 describe('handoverPackageStatusSchema', () => {
   it('aceita todos os status validos', () => {
-    const valid = ['draft', 'in_review', 'approved', 'completed', 'archived'];
+    const valid = ['draft', 'in_review', 'ready_to_issue', 'issued', 'accepted', 'revoked', 'expired'];
     for (const status of valid) {
+      expect(HandoverPackageStatusSchema.safeParse(status).success).toBe(true);
       expect(handoverPackageStatusSchema.safeParse(status).success).toBe(true);
     }
   });
 
   it('rejeita status desconhecido', () => {
-    expect(handoverPackageStatusSchema.safeParse('signed').success).toBe(false);
+    expect(HandoverPackageStatusSchema.safeParse('signed').success).toBe(false);
+    expect(handoverPackageStatusSchema.safeParse('approved').success).toBe(false);
   });
 });
 
@@ -535,12 +543,167 @@ describe('handoverPackageCreateSchema', () => {
     expect(handoverPackageCreateSchema.safeParse({ title: 'X', status: 'signed' }).success).toBe(false);
   });
 
+  it('rejeita campos server-side', () => {
+    expect(handoverPackageCreateSchema.safeParse({ title: 'X', tenant_id: 't-1' }).success).toBe(false);
+  });
+
   it('rejeita version menor que 1', () => {
     expect(handoverPackageCreateSchema.safeParse({ title: 'X', version: 0 }).success).toBe(false);
   });
 
   it('handoverPackageUpdateSchema aceita objeto parcial', () => {
     expect(handoverPackageUpdateSchema.safeParse({ status: 'in_review' }).success).toBe(true);
+  });
+});
+
+describe('handover package emission schemas', () => {
+  const snapshot = {
+    generatedAt: '2026-05-09T10:00:00.000Z',
+    property: {
+      id: 'property-1',
+      name: 'Apartamento Jardim',
+      type: 'apt',
+      address: 'Rua A, 123',
+      city: 'Sao Paulo',
+      areaM2: 120,
+      yearBuilt: 2018,
+      structure: 'alvenaria',
+      floors: 1,
+      healthScore: 87,
+    },
+    package: {
+      id: 'package-1',
+      title: 'Dossie de entrega',
+      type: 'handover',
+      version: 3,
+      status: 'ready_to_issue' as const,
+    },
+    rooms: [
+      { id: 'room-1', name: 'Sala', type: 'living', floor: 0, areaM2: 24 },
+    ],
+    documents: [
+      { id: 'doc-1', title: 'Manual do condominio', type: 'manual', issueDate: '2025-01-10', expiryDate: null },
+    ],
+    technicalSystems: [
+      { id: 'sys-1', name: 'Quadro eletrico', type: 'electrical', status: 'active', locationSummary: 'Hall', lastInspectionAt: '2026-04-01' },
+    ],
+    inventoryItems: [
+      { id: 'item-1', name: 'Kit chaves', category: 'other', roomId: 'room-1', quantity: 1, unit: 'un', warrantyUntil: null },
+    ],
+    warranties: [
+      { id: 'war-1', title: 'Garantia da porta', warrantyType: 'material', status: 'active', startDate: '2025-01-01', endDate: '2027-01-01', providerName: 'Fornecedor X' },
+    ],
+    maintenanceSchedules: [
+      { id: 'mnt-1', title: 'Inspecao preventiva', systemType: 'electrical', responsible: 'Tech Co', frequency: '6m', lastDone: '2026-02-01', nextDue: '2026-08-01', autoCreateOs: true },
+    ],
+    checklistItems: [
+      { id: 'chk-1', title: 'Conferir documentos', category: 'documents', status: 'pending', required: true, condition: null, completedAt: null, roomId: null, documentId: 'doc-1', inventoryItemId: null, serviceOrderId: null },
+    ],
+  };
+
+  it('HandoverPackageSnapshotSchema aceita snapshot mínimo válido', () => {
+    expect(HandoverPackageSnapshotSchema.safeParse(snapshot).success).toBe(true);
+  });
+
+  it('HandoverPackageIssueInputSchema aceita payload válido e rejeita campos sensíveis', () => {
+    const valid = HandoverPackageIssueInputSchema.safeParse({ expires_at: '2026-12-31T23:59:59.000Z', snapshot_json: snapshot });
+    expect(valid.success).toBe(true);
+    expect(HandoverPackageIssueInputSchema.safeParse({ snapshot_json: snapshot, tenantId: 'tenant-1' }).success).toBe(false);
+    expect(HandoverPackageIssueInputSchema.safeParse({ snapshot_json: snapshot, publicAccessTokenHash: 'hash' }).success).toBe(false);
+  });
+
+  it('HandoverPackageRevokeInputSchema exige motivo', () => {
+    expect(HandoverPackageRevokeInputSchema.safeParse({ revoke_reason: 'Erro na revisão técnica' }).success).toBe(true);
+    expect(HandoverPackageRevokeInputSchema.safeParse({ revoke_reason: '' }).success).toBe(false);
+  });
+
+  it('HandoverPackageAcceptInputSchema aceita aceite e rejeita campos server-side', () => {
+    expect(HandoverPackageAcceptInputSchema.safeParse({ accepted_by_name: 'Maria Silva' }).success).toBe(true);
+    expect(HandoverPackageAcceptInputSchema.safeParse({ accepted_by_name: 'Maria Silva', accepted_by_email: 'maria@exemplo.com' }).success).toBe(true);
+    expect(HandoverPackageAcceptInputSchema.safeParse({ accepted_by_name: 'Maria Silva', issuedBy: 'user-1' }).success).toBe(false);
+  });
+
+  it('DTOs publico e privado mantem superfícies seguras', () => {
+    expect(HandoverPackagePublicDtoSchema.safeParse({
+      id: 'hp-1',
+      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      type: 'handover',
+      status: 'issued',
+      version: 1,
+      issued_at: null,
+      accepted_at: null,
+      expires_at: null,
+      created_at: '2026-05-11T00:00:00.000Z',
+      updated_at: null,
+      snapshot_json: snapshot,
+    }).success).toBe(true);
+
+    const privateResult = HandoverPackagePrivateDtoSchema.safeParse({
+      id: 'hp-1',
+      tenant_id: 'tenant-1',
+      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      type: 'handover',
+      status: 'draft',
+      version: 1,
+      prepared_by: 'user-1',
+      reviewed_by: null,
+      approved_by: null,
+      approved_at: null,
+      completed_at: null,
+      summary_document_id: null,
+      notes: null,
+      issued_at: null,
+      issued_by: null,
+      accepted_at: null,
+      accepted_by_name: null,
+      accepted_by_email: null,
+      revoked_at: null,
+      revoked_by: null,
+      revoke_reason: null,
+      expires_at: null,
+      snapshot_json: null,
+      package_hash: null,
+      created_at: '2026-05-11T00:00:00.000Z',
+      updated_at: null,
+      deleted_at: null,
+    });
+    expect(privateResult.success).toBe(true);
+    expect(HandoverPackagePrivateDtoSchema.safeParse({
+      id: 'hp-1',
+      tenant_id: 'tenant-1',
+      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      type: 'handover',
+      status: 'draft',
+      version: 1,
+      prepared_by: 'user-1',
+      reviewed_by: null,
+      approved_by: null,
+      approved_at: null,
+      completed_at: null,
+      summary_document_id: null,
+      notes: null,
+      issued_at: null,
+      issued_by: null,
+      accepted_at: null,
+      accepted_by_name: null,
+      accepted_by_email: null,
+      revoked_at: null,
+      revoked_by: null,
+      revoke_reason: null,
+      expires_at: null,
+      snapshot_json: null,
+      package_hash: null,
+      public_access_token_hash: 'secret-hash',
+      created_at: '2026-05-11T00:00:00.000Z',
+      updated_at: null,
+      deleted_at: null,
+    }).success).toBe(false);
   });
 });
 

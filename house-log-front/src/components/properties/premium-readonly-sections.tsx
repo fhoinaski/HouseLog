@@ -91,9 +91,11 @@ const HANDOVER_TYPE_LABELS: Record<string, string> = {
 const HANDOVER_STATUS_LABELS: Record<string, string> = {
   draft:     'Rascunho',
   in_review: 'Em revisão',
-  approved:  'Aprovado',
-  completed: 'Concluído',
-  archived:  'Arquivado',
+  ready_to_issue: 'Pronto para emissão',
+  issued: 'Emitido',
+  accepted: 'Aceito',
+  revoked: 'Revogado',
+  expired: 'Expirado',
 };
 
 const CHECKLIST_CATEGORY_LABELS: Record<string, string> = {
