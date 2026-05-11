@@ -50,9 +50,15 @@ import {
   documentIngestionApi,
   maintenanceApi,
   propertiesApi,
+  type MaintenanceSchedule,
+  type PropertyDashboard,
   type PropertyDocumentIngestionSummary,
   type ServiceOrder,
 } from '@/lib/api';
+import {
+  buildPropertyTechnicalHealthView,
+  type PropertyTechnicalHealthView,
+} from '@/lib/property-technical-health';
 import { cn, formatCurrency, formatDate, PROPERTY_TYPE_LABELS, SYSTEM_TYPE_LABELS, scoreBg, scoreColor } from '@/lib/utils';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -118,6 +124,215 @@ type SmartRecordView = {
   reviewHref: string;
 };
 
+type IngestionSummaryStatus = {
+  summary: PropertyDocumentIngestionSummary | null;
+  isLoading: boolean;
+  hasError: boolean;
+};
+
+type PredictiveTimelineBucket = 'now' | 'next30' | 'next90' | 'recent';
+type PredictiveTimelinePriority = 'high' | 'medium' | 'low';
+
+type PredictiveTimelineEvent = {
+  id: string;
+  bucket: PredictiveTimelineBucket;
+  title: string;
+  description: string;
+  href: string;
+  icon: ComponentType<{ className?: string }>;
+  priority: PredictiveTimelinePriority;
+  date: string | null;
+  dateLabel: string | null;
+};
+
+type PredictiveTimelineInput = {
+  propertyId: string;
+  summary: PropertyDocumentIngestionSummary | null;
+  maintenanceSchedules: MaintenanceSchedule[];
+  expiringWarranties: PropertyDashboard['warranties_expiring'];
+};
+
+const PREDICTIVE_TIMELINE_BUCKETS: {
+  id: PredictiveTimelineBucket;
+  label: string;
+  helper: string;
+}[] = [
+  { id: 'now', label: 'Agora', helper: 'Pendências e prazos que pedem decisão imediata.' },
+  { id: 'next30', label: 'Próximos 30 dias', helper: 'Cuidados e vencimentos de curto prazo.' },
+  { id: 'next90', label: 'Próximos 90 dias', helper: 'Sinais para planejamento preventivo.' },
+  { id: 'recent', label: 'Histórico recente', helper: 'Movimentos técnicos já registrados no prontuário.' },
+];
+
+function summaryMetric(value: number, summary: PropertyDocumentIngestionSummary | null, isLoading: boolean): string {
+  if (isLoading) return '...';
+  if (!summary) return '-';
+  return String(value);
+}
+
+function getPendingCount(summary: PropertyDocumentIngestionSummary | null): number {
+  if (!summary) return 0;
+  return summary.pendingExtractionReviews + summary.pendingCandidates + summary.failedJobs;
+}
+
+function plural(count: number, singular: string, pluralLabel: string): string {
+  return count === 1 ? singular : pluralLabel;
+}
+
+function daysUntil(dateStr: string): number | null {
+  const target = new Date(dateStr).getTime();
+  if (Number.isNaN(target)) return null;
+  return Math.ceil((target - Date.now()) / 86_400_000);
+}
+
+function timelineBucketFromDays(days: number): PredictiveTimelineBucket | null {
+  if (days <= 0) return 'now';
+  if (days <= 30) return 'next30';
+  if (days <= 90) return 'next90';
+  return null;
+}
+
+function priorityFromDays(days: number): PredictiveTimelinePriority {
+  if (days <= 7) return 'high';
+  if (days <= 30) return 'medium';
+  return 'low';
+}
+
+function dueDateLabel(date: string | null, days: number | null): string | null {
+  if (!date) return null;
+  if (days !== null && days <= 0) return 'Hoje';
+  return formatDate(date);
+}
+
+function buildPredictiveTimeline(input: PredictiveTimelineInput): Record<PredictiveTimelineBucket, PredictiveTimelineEvent[]> {
+  const documentsHref = `/properties/${input.propertyId}/documents`;
+  const maintenanceHref = `/properties/${input.propertyId}/maintenance`;
+  const inventoryHref = `/properties/${input.propertyId}/inventory`;
+  const timeline: Record<PredictiveTimelineBucket, PredictiveTimelineEvent[]> = {
+    now: [],
+    next30: [],
+    next90: [],
+    recent: [],
+  };
+
+  const addEvent = (event: PredictiveTimelineEvent) => {
+    timeline[event.bucket].push(event);
+  };
+
+  const summary = input.summary;
+  if (summary) {
+    if (summary.pendingExtractionReviews > 0 || summary.needsReviewJobs > 0) {
+      const count = summary.pendingExtractionReviews + summary.needsReviewJobs;
+      addEvent({
+        id: 'ingestion-review-pending',
+        bucket: 'now',
+        title: `${count} ${plural(count, 'revisão de extração pendente', 'revisões de extração pendentes')}`,
+        description: 'Validar documentos analisados antes de aplicar dados ao prontuário.',
+        href: documentsHref,
+        icon: FileText,
+        priority: 'high',
+        date: null,
+        dateLabel: null,
+      });
+    }
+
+    if (summary.approvedCandidates > 0) {
+      addEvent({
+        id: 'approved-suggestions-pending-apply',
+        bucket: 'now',
+        title: `${summary.approvedCandidates} ${plural(summary.approvedCandidates, 'sugestão aguardando aplicação', 'sugestões aguardando aplicação')}`,
+        description: 'Dados aprovados ainda não entraram no prontuário final do imóvel.',
+        href: documentsHref,
+        icon: Sparkles,
+        priority: 'high',
+        date: null,
+        dateLabel: null,
+      });
+    }
+
+    if (summary.pendingCandidates > 0) {
+      addEvent({
+        id: 'suggestions-pending-review',
+        bucket: 'now',
+        title: `${summary.pendingCandidates} ${plural(summary.pendingCandidates, 'sugestão aguardando decisão', 'sugestões aguardando decisão')}`,
+        description: 'Aprovar ou rejeitar sugestões antes de aplicar ao prontuário.',
+        href: documentsHref,
+        icon: ClipboardCheck,
+        priority: 'medium',
+        date: null,
+        dateLabel: null,
+      });
+    }
+
+    if (summary.documentsWithIngestion > 0 && summary.lastIngestionAt) {
+      addEvent({
+        id: 'documents-analyzed-recently',
+        bucket: 'recent',
+        title: `${summary.documentsWithIngestion} ${plural(summary.documentsWithIngestion, 'documento analisado', 'documentos analisados')}`,
+        description: `${summary.appliedCandidates} ${plural(summary.appliedCandidates, 'dado aplicado', 'dados aplicados')} ao prontuário até agora.`,
+        href: documentsHref,
+        icon: CheckCircle2,
+        priority: 'low',
+        date: summary.lastIngestionAt,
+        dateLabel: formatDate(summary.lastIngestionAt),
+      });
+    }
+  }
+
+  input.maintenanceSchedules.forEach((schedule) => {
+    if (!schedule.next_due) return;
+    const dueInDays = schedule.days_until_due ?? daysUntil(schedule.next_due);
+    if (dueInDays === null) return;
+    const bucket = schedule.is_overdue ? 'now' : timelineBucketFromDays(dueInDays);
+    if (!bucket) return;
+
+    addEvent({
+      id: `maintenance-${schedule.id}`,
+      bucket,
+      title: schedule.is_overdue ? `Manutenção atrasada: ${schedule.title}` : schedule.title,
+      description: schedule.responsible
+        ? `Responsável: ${schedule.responsible}. Frequência: ${schedule.frequency}.`
+        : `Frequência: ${schedule.frequency}.`,
+      href: maintenanceHref,
+      icon: RefreshCw,
+      priority: schedule.is_overdue ? 'high' : priorityFromDays(dueInDays),
+      date: schedule.next_due,
+      dateLabel: dueDateLabel(schedule.next_due, dueInDays),
+    });
+  });
+
+  input.expiringWarranties.forEach((warranty) => {
+    const bucket = timelineBucketFromDays(warranty.days_left);
+    if (!bucket) return;
+
+    addEvent({
+      id: `warranty-${warranty.id}`,
+      bucket,
+      title: `Garantia a vencer: ${warranty.name}`,
+      description: warranty.days_left <= 0
+        ? 'Verificar cobertura hoje antes de perder o prazo.'
+        : `Vence em ${warranty.days_left} dia${warranty.days_left === 1 ? '' : 's'}.`,
+      href: inventoryHref,
+      icon: ShieldCheck,
+      priority: priorityFromDays(warranty.days_left),
+      date: warranty.warranty_until,
+      dateLabel: dueDateLabel(warranty.warranty_until, warranty.days_left),
+    });
+  });
+
+  PREDICTIVE_TIMELINE_BUCKETS.forEach((bucket) => {
+    timeline[bucket.id].sort((a, b) => {
+      const priorityOrder: Record<PredictiveTimelinePriority, number> = { high: 0, medium: 1, low: 2 };
+      const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+      if (priorityDiff !== 0) return priorityDiff;
+      const aTime = a.date ? new Date(a.date).getTime() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.date ? new Date(b.date).getTime() : Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    });
+  });
+
+  return timeline;
+}
+
 function resolveSmartRecordView(
   propertyId: string,
   summary: PropertyDocumentIngestionSummary | null,
@@ -129,7 +344,7 @@ function resolveSmartRecordView(
     return {
       state: 'error',
       label: 'Erro ao carregar',
-      helper: 'Nao foi possivel consultar o prontuario inteligente agora.',
+      helper: 'Não foi possível consultar o prontuário inteligente agora.',
       toneClass: 'border-border-danger bg-bg-danger',
       iconClass: 'bg-bg-danger text-text-danger',
       reviewHref: documentsHref,
@@ -189,19 +404,147 @@ function resolveSmartRecordView(
   };
 }
 
-function SmartRecordWidget({ propertyId }: { propertyId: string }) {
-  const { data, error, isLoading } = useSWR(
-    ['smart-record-property-ingestion-summary', propertyId],
-    () => documentIngestionApi.propertySummary(propertyId)
-  );
+function TechnicalHealthPanel({
+  propertyId,
+  healthScore,
+  technicalHealth,
+  summary,
+  isLoading,
+  hasError,
+}: IngestionSummaryStatus & {
+  propertyId: string;
+  healthScore: number | null;
+  technicalHealth: PropertyTechnicalHealthView;
+}) {
+  const hasHealthScore = typeof healthScore === 'number' && Number.isFinite(healthScore);
+  const pendingCount = getPendingCount(summary);
+  const score = hasHealthScore ? healthScore : 0;
 
+  return (
+    <section className="rounded-[var(--radius-2xl)] bg-[var(--surface-base)] p-4 sm:p-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-bg-accent-subtle text-text-accent">
+              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-tertiary">Saúde técnica do imóvel</p>
+              <h2 className="mt-1 text-xl font-light leading-tight text-text-primary sm:text-2xl">
+                {hasHealthScore ? `${score}/100` : 'Em formação'}
+              </h2>
+            </div>
+          </div>
+
+          <p className="mt-4 max-w-xl text-sm leading-6 text-text-secondary">
+            {hasHealthScore
+              ? `${technicalHealth.label}. ${technicalHealth.description}`
+              : technicalHealth.description}
+          </p>
+
+          {hasHealthScore ? (
+            <div className="mt-4">
+              <ScoreBar score={score} />
+            </div>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button asChild>
+              <Link href={`/properties/${propertyId}/documents`}>
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                Abrir documentos
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/properties/${propertyId}/maintenance`}>
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                Ver manutenção
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <MetricCard
+            label="Documentos analisados"
+            value={summaryMetric(summary?.documentsWithIngestion ?? 0, summary, isLoading)}
+            helper={hasError ? 'Não foi possível atualizar agora' : 'Base técnica lida pelo prontuário'}
+            icon={FileText}
+            density="compact"
+          />
+          <MetricCard
+            label="Sugestões pendentes"
+            value={summaryMetric(summary?.pendingCandidates ?? 0, summary, isLoading)}
+            helper="Aguardam revisão humana"
+            icon={Sparkles}
+            tone={summary && summary.pendingCandidates > 0 ? 'warning' : 'default'}
+            density="compact"
+          />
+          <MetricCard
+            label="Dados aplicados"
+            value={summaryMetric(summary?.appliedCandidates ?? 0, summary, isLoading)}
+            helper="Entraram no prontuário"
+            icon={CheckCircle2}
+            tone="success"
+            density="compact"
+          />
+          <MetricCard
+            label="Falhas de análise"
+            value={summaryMetric(summary?.failedJobs ?? 0, summary, isLoading)}
+            helper={pendingCount > 0 ? 'Requer atenção' : 'Sem bloqueios'}
+            icon={AlertTriangle}
+            tone={summary && summary.failedJobs > 0 ? 'danger' : 'default'}
+            density="compact"
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-[var(--radius-xl)] bg-bg-success p-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-text-success" aria-hidden="true" />
+            <p className="text-sm font-semibold text-text-primary">Sinais positivos</p>
+          </div>
+          <ul className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
+            {technicalHealth.highlights.map((highlight) => (
+              <li key={highlight}>{highlight}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-[var(--radius-xl)] bg-bg-warning p-4">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-text-warning" aria-hidden="true" />
+            <p className="text-sm font-semibold text-text-primary">Pontos de atenção</p>
+          </div>
+          <ul className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
+            {technicalHealth.risks.map((risk) => (
+              <li key={risk}>{risk}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-[var(--radius-xl)] bg-bg-accent-subtle p-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-text-accent" aria-hidden="true" />
+            <p className="text-sm font-semibold text-text-primary">Como melhorar</p>
+          </div>
+          <ul className="mt-3 space-y-2 text-xs leading-5 text-text-secondary">
+            {technicalHealth.improvements.map((improvement) => (
+              <li key={improvement}>{improvement}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SmartRecordWidget({ propertyId, summary, isLoading, hasError }: { propertyId: string } & IngestionSummaryStatus) {
   const documentsHref = `/properties/${propertyId}/documents`;
-  const summary = data?.summary ?? null;
-  const view = resolveSmartRecordView(propertyId, summary, Boolean(error));
+  const view = resolveSmartRecordView(propertyId, summary, hasError);
   const metricValue = (value: number): string => {
-    if (isLoading) return '...';
-    if (!summary) return '-';
-    return String(value);
+    return summaryMetric(value, summary, isLoading);
   };
   const StatusIcon = view.state === 'error' ? AlertTriangle : Sparkles;
 
@@ -282,7 +625,351 @@ function SmartRecordWidget({ propertyId }: { propertyId: string }) {
   );
 }
 
+function TechnicalPendingPanel({ propertyId, summary, isLoading, hasError }: { propertyId: string } & IngestionSummaryStatus) {
+  type PendingPriority = 'critica' | 'alta' | 'media' | 'baixa';
+  type PendingItem = {
+    id: string;
+    label: string;
+    value: number;
+    helper: string;
+    priority: PendingPriority;
+    cta: 'Revisar extrações' | 'Aplicar sugestões' | 'Ver falhas' | 'Enviar documento';
+    href: string;
+  };
+
+  const documentsHref = `/properties/${propertyId}/documents`;
+  const priorityOrder: Record<PendingPriority, number> = { critica: 0, alta: 1, media: 2, baixa: 3 };
+  const priorityLabels: Record<PendingPriority, string> = {
+    critica: 'Crítica',
+    alta: 'Alta',
+    media: 'Média',
+    baixa: 'Baixa',
+  };
+  const priorityStyles: Record<PendingPriority, string> = {
+    critica: 'border-border-danger bg-bg-danger text-text-danger',
+    alta: 'border-border-warning bg-bg-warning text-text-warning',
+    media: 'border-border-accent bg-bg-accent-subtle text-text-accent',
+    baixa: 'border-border-subtle bg-bg-subtle text-text-secondary',
+  };
+
+  const pendingItems: PendingItem[] = [];
+
+  if (!summary || summary.documentsWithIngestion === 0) {
+    pendingItems.push({
+      id: 'documents-without-analysis',
+      label: summary && summary.totalDocuments > 0 ? 'Documentos sem análise registrada' : 'Nenhum documento analisado',
+      value: 1,
+      helper: summary && summary.totalDocuments > 0
+        ? 'Há documentos no acervo que ainda não entraram na trilha de análise.'
+        : 'O prontuário técnico ainda precisa do primeiro documento analisado.',
+      priority: 'baixa',
+      cta: 'Enviar documento',
+      href: documentsHref,
+    });
+  }
+
+  if (summary?.failedJobs) {
+    pendingItems.push({
+      id: 'failed-jobs',
+      label: 'Análises com falha',
+      value: summary.failedJobs,
+      helper: 'Revise as falhas antes de confiar nos dados extraídos.',
+      priority: 'critica',
+      cta: 'Ver falhas',
+      href: documentsHref,
+    });
+  }
+
+  const reviewCount = (summary?.pendingExtractionReviews ?? 0) + (summary?.needsReviewJobs ?? 0);
+  if (reviewCount > 0) {
+    pendingItems.push({
+      id: 'pending-reviews',
+      label: 'Extrações aguardando revisão',
+      value: reviewCount,
+      helper: 'Confirme ou rejeite os dados extraídos antes de avançar.',
+      priority: 'alta',
+      cta: 'Revisar extrações',
+      href: documentsHref,
+    });
+  }
+
+  if (summary?.pendingCandidates) {
+    pendingItems.push({
+      id: 'pending-candidates',
+      label: 'Sugestões aguardando decisão',
+      value: summary.pendingCandidates,
+      helper: 'Aprove ou rejeite as sugestões antes de aplicar ao prontuário.',
+      priority: 'media',
+      cta: 'Revisar extrações',
+      href: documentsHref,
+    });
+  }
+
+  if (summary?.approvedCandidates) {
+    pendingItems.push({
+      id: 'approved-candidates',
+      label: 'Sugestões aprovadas ainda não aplicadas',
+      value: summary.approvedCandidates,
+      helper: 'Finalize a aplicação para criar registros reais do imóvel.',
+      priority: 'media',
+      cta: 'Aplicar sugestões',
+      href: documentsHref,
+    });
+  }
+
+  const visibleItems = pendingItems
+    .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+    .slice(0, 4);
+  const pendingTotal = pendingItems.reduce((sum, item) => sum + item.value, 0);
+  const hasCriticalPending = pendingItems.some((item) => item.priority === 'critica' || item.priority === 'alta');
+  const shellTone = hasError
+    ? 'border-border-danger bg-bg-danger'
+    : hasCriticalPending
+      ? 'border-border-warning bg-bg-warning'
+      : pendingTotal > 0
+        ? 'border-border-accent bg-bg-accent-subtle'
+        : 'border-border-success bg-bg-success';
+
+  return (
+    <PageSection
+      title="Pendências técnicas"
+      description="O que precisa de ação para manter a análise documental do imóvel confiável."
+      tone="strong"
+      density="editorial"
+      actions={
+        <Badge className={cn('border', shellTone)}>
+          {isLoading ? 'Atualizando' : `${pendingTotal} pendência${pendingTotal === 1 ? '' : 's'}`}
+        </Badge>
+      }
+    >
+      {hasError ? (
+        <div className="flex min-h-20 items-start gap-3 rounded-[var(--radius-xl)] border border-border-danger bg-bg-danger px-4 py-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-text-danger" aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-text-primary">Não foi possível carregar as pendências</span>
+            <span className="mt-0.5 block text-xs leading-5 text-text-secondary">Tente novamente em instantes ou acesse documentos.</span>
+          </span>
+        </div>
+      ) : isLoading ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[...Array(4)].map((_, index) => (
+            <div key={index} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
+          ))}
+        </div>
+      ) : visibleItems.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {visibleItems.map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="group flex min-h-28 flex-col justify-between gap-4 rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-4 transition-colors hover:bg-bg-subtle focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+            >
+              <span className="flex items-start justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-text-primary">{item.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-text-secondary">{item.helper}</span>
+                </span>
+                <span className="shrink-0 text-2xl font-light tabular-nums text-text-primary">{item.value}</span>
+              </span>
+              <span className="flex flex-wrap items-center justify-between gap-2">
+                <span className={cn('rounded-full border px-2.5 py-1 text-[11px] font-medium', priorityStyles[item.priority])}>
+                  Prioridade {priorityLabels[item.priority]}
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-text-accent group-hover:underline">
+                  {item.cta}
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="flex min-h-20 items-start gap-3 rounded-[var(--radius-xl)] border border-border-success bg-bg-success px-4 py-4">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-text-success" aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-text-primary">Nenhuma ação técnica pendente</span>
+            <span className="mt-0.5 block text-xs leading-5 text-text-secondary">
+              As análises disponíveis estão revisadas e sem sugestões aguardando aplicação.
+            </span>
+          </span>
+        </div>
+      )}
+    </PageSection>
+  );
+}
+
+function SmartRecordEmptyPrompt({ propertyId, summary, isLoading }: { propertyId: string } & Pick<IngestionSummaryStatus, 'summary' | 'isLoading'>) {
+  if (isLoading || !summary || (summary.totalDocuments > 0 && summary.documentsWithIngestion > 0)) return null;
+
+  const suggestions = ['Manual do proprietário', 'Nota fiscal', 'Planta', 'Relatório técnico'];
+
+  return (
+    <PageSection
+      title="Comece pelo acervo técnico"
+      description="Poucos documentos bem escolhidos reduzem digitação manual e aceleram a formação do prontuário."
+      tone="surface"
+      density="editorial"
+      actions={
+        <Button asChild>
+          <Link href={`/properties/${propertyId}/documents`}>
+            <Upload className="h-4 w-4" aria-hidden="true" />
+            Enviar documento
+          </Link>
+        </Button>
+      }
+    >
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {suggestions.map((suggestion) => (
+          <div key={suggestion} className="flex min-h-16 items-center gap-3 rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3">
+            <FileText className="h-4 w-4 shrink-0 text-text-accent" aria-hidden="true" />
+            <span className="text-sm font-medium text-text-primary">{suggestion}</span>
+          </div>
+        ))}
+      </div>
+    </PageSection>
+  );
+}
+
 // ─── systems tab ─────────────────────────────────────────────────────────────
+
+function priorityLabel(priority: PredictiveTimelinePriority): string {
+  switch (priority) {
+    case 'high':
+      return 'Alta';
+    case 'medium':
+      return 'Média';
+    case 'low':
+      return 'Baixa';
+    default:
+      return 'Baixa';
+  }
+}
+
+function priorityClass(priority: PredictiveTimelinePriority): string {
+  switch (priority) {
+    case 'high':
+      return 'border-border-danger bg-bg-danger text-text-danger';
+    case 'medium':
+      return 'border-border-warning bg-bg-warning text-text-warning';
+    case 'low':
+      return 'border-border-subtle bg-bg-subtle text-text-secondary';
+    default:
+      return 'border-border-subtle bg-bg-subtle text-text-secondary';
+  }
+}
+
+function PredictiveTimelineSection({
+  propertyId,
+  timeline,
+  isLoading,
+  hasError,
+}: {
+  propertyId: string;
+  timeline: Record<PredictiveTimelineBucket, PredictiveTimelineEvent[]>;
+  isLoading: boolean;
+  hasError: boolean;
+}) {
+  const totalEvents = PREDICTIVE_TIMELINE_BUCKETS.reduce((total, bucket) => total + timeline[bucket.id].length, 0);
+
+  return (
+    <PageSection
+      title="Linha do tempo preditiva"
+      description="Próximos cuidados, pendências e eventos técnicos derivados dos sinais já disponíveis."
+      tone="strong"
+      density="editorial"
+      actions={
+        <Badge className={cn('border', totalEvents > 0 ? 'border-border-accent bg-bg-accent-subtle text-text-accent' : 'border-border-subtle bg-bg-subtle text-text-secondary')}>
+          {isLoading ? 'Atualizando' : totalEvents > 0 ? `${totalEvents} sinal${totalEvents > 1 ? 's' : ''}` : 'Sem sinais'}
+        </Badge>
+      }
+    >
+      {hasError ? (
+        <div className="flex min-h-20 items-start gap-3 rounded-[var(--radius-xl)] bg-bg-danger px-4 py-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-text-danger" aria-hidden="true" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-text-primary">Não foi possível atualizar a linha do tempo</span>
+            <span className="mt-0.5 block text-xs leading-5 text-text-secondary">Os dados existentes continuam preservados nos módulos de origem.</span>
+          </span>
+        </div>
+      ) : isLoading ? (
+        <div className="grid gap-3 lg:grid-cols-4">
+          {[...Array(4)].map((_, index) => (
+            <div key={index} className="hl-skeleton h-44 rounded-[var(--radius-xl)]" />
+          ))}
+        </div>
+      ) : totalEvents > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-4">
+          {PREDICTIVE_TIMELINE_BUCKETS.map((bucket) => {
+            const events = timeline[bucket.id];
+
+            return (
+              <section key={bucket.id} className="min-h-44 rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-text-primary">{bucket.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-text-tertiary">{bucket.helper}</span>
+                  </span>
+                  <span className="shrink-0 text-lg font-light tabular-nums text-text-secondary">{events.length}</span>
+                </div>
+
+                {events.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    {events.slice(0, 3).map((event) => {
+                      const Icon = event.icon;
+
+                      return (
+                        <Link
+                          key={event.id}
+                          href={event.href}
+                          className="block rounded-[var(--radius-lg)] border border-border-subtle bg-bg-subtle px-3 py-3 transition-colors hover:bg-[var(--surface-muted)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-text-accent" aria-hidden="true" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium leading-5 text-text-primary">{event.title}</span>
+                              <span className="mt-1 block text-xs leading-5 text-text-secondary">{event.description}</span>
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]', priorityClass(event.priority))}>
+                              {priorityLabel(event.priority)}
+                            </span>
+                            {event.dateLabel ? (
+                              <span className="text-[11px] font-medium text-text-tertiary">{event.dateLabel}</span>
+                            ) : null}
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-[var(--radius-lg)] border border-dashed border-border-subtle px-3 py-4">
+                    <p className="text-xs leading-5 text-text-tertiary">Sem eventos para este período com os dados atuais.</p>
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text-primary">Ainda não há sinais suficientes para montar a linha do tempo</p>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">
+              Envie e analise documentos técnicos para revelar revisões pendentes, sugestões aplicáveis e dados recentes do prontuário.
+            </p>
+          </div>
+          <Button asChild>
+            <Link href={`/properties/${propertyId}/documents`}>
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              Abrir documentos
+            </Link>
+          </Button>
+        </div>
+      )}
+    </PageSection>
+  );
+}
 
 type SystemSummary = {
   type: string;
@@ -472,7 +1159,12 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
 
   const { data: propData, isLoading: propLoading } = useSWR(['property', id], () => propertiesApi.get(id));
   const { data: dash, isLoading: dashLoading } = useSWR(['dashboard', id], () => propertiesApi.dashboard(id));
-  const { data: maintenanceData } = useSWR(['maintenance', id], () => maintenanceApi.list(id));
+  const { data: maintenanceData, isLoading: maintenanceLoading } = useSWR(['maintenance', id], () => maintenanceApi.list(id));
+  const {
+    data: propertySummaryData,
+    error: propertySummaryError,
+    isLoading: propertySummaryLoading,
+  } = useSWR(['property-ingestion-summary', id], () => documentIngestionApi.propertySummary(id));
 
   if (propLoading) {
     return (
@@ -510,30 +1202,46 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   }
 
   const d = dash;
-  const healthScore = d?.health_score ?? property.health_score;
-  const healthLabel = healthScore >= 80 ? 'Excelente' : healthScore >= 60 ? 'Bom' : healthScore >= 30 ? 'Atenção' : 'Crítico';
+  const propertySummary = propertySummaryData?.summary ?? null;
+  const technicalHealth = buildPropertyTechnicalHealthView(
+    { health_score: d?.health_score ?? property.health_score },
+    propertySummary
+  );
+  const healthScore = technicalHealth.score;
+  const healthScoreClass = healthScore === null ? 'text-text-secondary' : scoreColor(healthScore);
+  const ingestionStatus: IngestionSummaryStatus = {
+    summary: propertySummary,
+    isLoading: propertySummaryLoading,
+    hasError: Boolean(propertySummaryError),
+  };
   const totalEvents = (d?.services.total ?? 0);
   const memoriaEmDias = daysSince(property.created_at);
   const openOrders = (d?.services.requested ?? 0) + (d?.services.in_progress ?? 0);
   const urgentOrders = d?.services.urgent_open ?? 0;
   const overdueMaintenance = (maintenanceData?.schedules ?? []).filter((schedule) => schedule.is_overdue);
   const expiringWarranties = d?.warranties_expiring ?? [];
+  const predictiveTimeline = buildPredictiveTimeline({
+    propertyId: id,
+    summary: propertySummary,
+    maintenanceSchedules: maintenanceData?.schedules ?? [],
+    expiringWarranties,
+  });
   const currentMonthExpenses = d?.expenses.this_month ?? 0;
   const attentionItems = [
     ...(urgentOrders > 0
-      ? [{ tone: 'danger' as const, icon: ShieldAlert, title: `${urgentOrders} OS urgente${urgentOrders > 1 ? 's' : ''}`, description: 'Priorize a triagem e a execucao.' }]
+      ? [{ tone: 'danger' as const, icon: ShieldAlert, title: `${urgentOrders} OS urgente${urgentOrders > 1 ? 's' : ''}`, description: 'Priorize a triagem e a execução.' }]
       : []),
     ...(openOrders > 0
-      ? [{ tone: 'accent' as const, icon: Wrench, title: `${openOrders} OS aberta${openOrders > 1 ? 's' : ''}`, description: 'Acompanhe solicitacoes e execucoes.' }]
+      ? [{ tone: 'accent' as const, icon: Wrench, title: `${openOrders} OS aberta${openOrders > 1 ? 's' : ''}`, description: 'Acompanhe solicitações e execuções.' }]
       : []),
     ...(overdueMaintenance.length > 0
-      ? [{ tone: 'warning' as const, icon: RefreshCw, title: `${overdueMaintenance.length} manutencao atrasada${overdueMaintenance.length > 1 ? 's' : ''}`, description: 'Revise o plano preventivo.' }]
+      ? [{ tone: 'warning' as const, icon: RefreshCw, title: `${overdueMaintenance.length} manutenção atrasada${overdueMaintenance.length > 1 ? 's' : ''}`, description: 'Revise o plano preventivo.' }]
       : []),
     ...(expiringWarranties.length > 0
       ? [{ tone: 'warning' as const, icon: ShieldCheck, title: `${expiringWarranties.length} garantia${expiringWarranties.length > 1 ? 's' : ''} vencendo`, description: 'Verifique itens dentro de 30 dias.' }]
       : []),
     ...(currentMonthExpenses > 0
-      ? [{ tone: 'success' as const, icon: BarChart3, title: formatCurrency(currentMonthExpenses), description: 'Despesa registrada neste mes.' }]
+      ? [{ tone: 'success' as const, icon: BarChart3, title: formatCurrency(currentMonthExpenses), description: 'Despesa registrada neste mês.' }]
       : []),
   ];
 
@@ -616,12 +1324,12 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             <div className="flex flex-col gap-1 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Saúde</p>
               <div className="flex items-baseline gap-1">
-                <span className={cn('text-xl font-light tabular-nums sm:text-2xl', scoreColor(healthScore))}>
-                  {healthScore}
+                <span className={cn('text-xl font-light tabular-nums sm:text-2xl', healthScoreClass)}>
+                  {healthScore ?? 'Em formação'}
                 </span>
-                <span className="text-xs text-text-tertiary">/100</span>
+                {healthScore !== null && <span className="text-xs text-text-tertiary">/100</span>}
               </div>
-              <p className="text-[10px] text-text-tertiary">{healthLabel}</p>
+              <p className="text-[10px] text-text-tertiary">{technicalHealth.label}</p>
             </div>
 
             {/* Dias de memória */}
@@ -645,7 +1353,11 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             {/* Health bar visual */}
             <div className="flex flex-col justify-between gap-1.5 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Estado técnico</p>
-              <ScoreBar score={healthScore} />
+              {healthScore === null ? (
+                <p className="text-xs leading-5 text-text-tertiary">Aguardando documentos técnicos.</p>
+              ) : (
+                <ScoreBar score={healthScore} />
+              )}
             </div>
           </div>
 
@@ -672,11 +1384,32 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       {/* ── TAB: VISÃO GERAL ─────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          <TechnicalHealthPanel
+            propertyId={id}
+            healthScore={healthScore}
+            technicalHealth={technicalHealth}
+            {...ingestionStatus}
+          />
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.12fr)_minmax(340px,0.88fr)]">
+            <SmartRecordWidget propertyId={id} {...ingestionStatus} />
+            <TechnicalPendingPanel propertyId={id} {...ingestionStatus} />
+          </div>
+
+          <SmartRecordEmptyPrompt propertyId={id} summary={propertySummary} isLoading={propertySummaryLoading} />
+
+          <PredictiveTimelineSection
+            propertyId={id}
+            timeline={predictiveTimeline}
+            isLoading={propertySummaryLoading || dashLoading || maintenanceLoading}
+            hasError={Boolean(propertySummaryError)}
+          />
+
           {/* Metrics */}
           <PageSection
-            title="Centro operacional"
+            title="Operação atual"
             description="Leitura rápida do estado técnico e financeiro do ativo."
-            tone="strong"
+            tone="surface"
             density="editorial"
           >
             {dashLoading ? (
@@ -783,8 +1516,6 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               </div>
             )}
           </PageSection>
-
-          <SmartRecordWidget propertyId={id} />
 
           {/* Warranties expiring */}
           {d?.warranties_expiring && d.warranties_expiring.length > 0 && (
