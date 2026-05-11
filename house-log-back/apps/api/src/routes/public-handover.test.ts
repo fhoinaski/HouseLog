@@ -71,6 +71,9 @@ type PublicHandoverRow = {
   version: number;
   issued_at: string | null;
   accepted_at: string | null;
+  accepted_by_name?: string | null;
+  accepted_by_email?: string | null;
+  acceptance_notes?: string | null;
   revoked_at: string | null;
   expires_at: string | null;
   created_at: string;
@@ -126,6 +129,9 @@ function buildIssuedRow(overrides: Partial<PublicHandoverRow> = {}): PublicHando
     version: 3,
     issued_at: '2026-05-09T10:05:00.000Z',
     accepted_at: null,
+    accepted_by_name: null,
+    accepted_by_email: null,
+    acceptance_notes: null,
     revoked_at: null,
     expires_at: '2026-06-09T10:05:00.000Z',
     created_at: '2026-05-09T10:05:00.000Z',
@@ -177,6 +183,7 @@ describe('GET /public/handover/:token', () => {
     expect(body.package.issuerName).toBe('Eng. Maria Silva');
     expect(body.package.responsibleName).toBe('Eng. Maria Silva');
     expect(body.package.companyName).toBe('Construtora Horizonte');
+    expect(body.package.acceptanceReceipt).toBeNull();
     expect(body.package).not.toHaveProperty('tenant_id');
     expect(body.package).not.toHaveProperty('public_access_token_hash');
     expect(body.package).not.toHaveProperty('package_hash');
@@ -198,6 +205,9 @@ describe('GET /public/handover/:token', () => {
       version: 3,
       issued_at: '2026-05-09T10:05:00.000Z',
       accepted_at: '2026-05-10T09:00:00.000Z',
+      accepted_by_name: 'Maria Silva',
+      accepted_by_email: 'maria.silva@exemplo.com',
+      acceptance_notes: 'Recebido sem ressalvas.',
       revoked_at: null,
       expires_at: '2026-06-09T10:05:00.000Z',
       created_at: '2026-05-09T10:05:00.000Z',
@@ -212,6 +222,21 @@ describe('GET /public/handover/:token', () => {
 
     expect(response.status).toBe(200);
     expect(body.package.status).toBe('accepted');
+    expect(body.package.acceptanceReceipt).toMatchObject({
+      acceptedAt: '2026-05-10T09:00:00.000Z',
+      acceptedByName: 'Maria Silva',
+      acceptedByEmailMasked: 'ma*********@exemplo.com',
+      acceptanceNotes: 'Recebido sem ressalvas.',
+      packageStatus: 'accepted',
+      issuedAt: '2026-05-09T10:05:00.000Z',
+      expiresAt: '2026-06-09T10:05:00.000Z',
+      packageTitle: 'Dossie de entrega',
+      propertySummary: {
+        name: 'Apartamento Jardim',
+        type: 'apt',
+        city: 'Sao Paulo',
+      },
+    });
     expect(body.package.snapshot_json).toMatchObject({
       package: { status: 'issued' },
     });
@@ -358,6 +383,18 @@ describe('POST /public/handover/:token/accept', () => {
     expect(response.status).toBe(200);
     expect(body.package.status).toBe('accepted');
     expect(body.package.accepted_at).toEqual(expect.any(String));
+    expect(body.package.acceptanceReceipt).toMatchObject({
+      acceptedByName: 'Maria Silva',
+      acceptedByEmailMasked: 'ma***@exemplo.com',
+      acceptanceNotes: 'Recebido em boas condicoes.',
+      packageStatus: 'accepted',
+      packageTitle: 'Dossie de entrega',
+      propertySummary: {
+        name: 'Apartamento Jardim',
+        type: 'apt',
+        city: 'Sao Paulo',
+      },
+    });
     expect(body.package).not.toHaveProperty('tenant_id');
     expect(body.package).not.toHaveProperty('public_access_token_hash');
     expect(body.package).not.toHaveProperty('package_hash');
@@ -377,6 +414,7 @@ describe('POST /public/handover/:token/accept', () => {
       actorId: null,
       actorIp: '203.0.113.10',
     }));
+    expect(JSON.stringify(vi.mocked(writeAuditLog).mock.calls)).not.toContain('token-publico');
   });
 
   it('exige acceptedTerms verdadeiro', async () => {

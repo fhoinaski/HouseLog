@@ -19,12 +19,23 @@ export type PublicHandoverPackageRow = {
   version: number;
   issued_at: string | null;
   accepted_at: string | null;
+  accepted_by_name: string | null;
+  accepted_by_email: string | null;
+  acceptance_notes: string | null;
   revoked_at: string | null;
   expires_at: string | null;
   created_at: string;
   updated_at: string | null;
   snapshot_json: unknown;
 };
+
+export function maskPublicHandoverEmail(email: string | null): string {
+  if (!email) return 'Nao informado';
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return 'Email informado';
+  const visiblePrefix = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visiblePrefix}${'*'.repeat(Math.max(2, localPart.length - visiblePrefix.length))}@${domain}`;
+}
 
 export async function hashPublicHandoverToken(token: string): Promise<string> {
   return sha256Hex(token);
@@ -59,6 +70,24 @@ export function resolvePublicHandoverPackage(
     return { ok: false, status: 500, code: 'INTERNAL_ERROR' };
   }
 
+  const acceptanceReceipt = row.status === 'accepted' && row.accepted_at && row.accepted_by_name
+    ? {
+        acceptedAt: row.accepted_at,
+        acceptedByName: row.accepted_by_name,
+        acceptedByEmailMasked: maskPublicHandoverEmail(row.accepted_by_email),
+        acceptanceNotes: row.acceptance_notes,
+        packageStatus: 'accepted' as const,
+        issuedAt: row.issued_at,
+        expiresAt: row.expires_at,
+        packageTitle: row.title,
+        propertySummary: {
+          name: snapshot.data.property.name,
+          type: snapshot.data.property.type,
+          city: snapshot.data.property.city,
+        },
+      }
+    : null;
+
   const dto = HandoverPackagePublicDtoSchema.safeParse({
     id: row.id,
     property_id: row.property_id,
@@ -77,6 +106,7 @@ export function resolvePublicHandoverPackage(
     created_at: row.created_at,
     updated_at: row.updated_at,
     snapshot_json: snapshot.data,
+    acceptanceReceipt,
   });
 
   if (!dto.success) {

@@ -128,6 +128,7 @@ export const HandoverPackagePrivateDtoSchema = z.object({
   accepted_at: z.string().nullable(),
   accepted_by_name: z.string().nullable(),
   accepted_by_email: z.string().nullable(),
+  acceptance_notes: z.string().nullable().optional(),
   revoked_at: z.string().nullable(),
   revoked_by: z.string().nullable(),
   revoke_reason: z.string().nullable(),
@@ -137,6 +138,22 @@ export const HandoverPackagePrivateDtoSchema = z.object({
   created_at: z.string(),
   updated_at: z.string().nullable(),
   deleted_at: z.string().nullable(),
+}).strict();
+
+export const HandoverAcceptanceReceiptPublicSchema = z.object({
+  acceptedAt: z.string(),
+  acceptedByName: z.string().max(120),
+  acceptedByEmailMasked: z.string().max(160),
+  acceptanceNotes: z.string().max(1000).nullable(),
+  packageStatus: z.literal('accepted'),
+  issuedAt: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  packageTitle: z.string().max(160),
+  propertySummary: z.object({
+    name: z.string(),
+    type: z.string(),
+    city: z.string(),
+  }).strict(),
 }).strict();
 
 export const HandoverPackagePublicDtoSchema = z.object({
@@ -157,6 +174,7 @@ export const HandoverPackagePublicDtoSchema = z.object({
   created_at: z.string(),
   updated_at: z.string().nullable(),
   snapshot_json: HandoverPackageSnapshotSchema,
+  acceptanceReceipt: HandoverAcceptanceReceiptPublicSchema.nullable(),
 }).strict();
 
 export const handoverPackageSchema = HandoverPackagePrivateDtoSchema;
@@ -216,6 +234,7 @@ export const handoverPackageFilterSchema = z.object({
 export type HandoverPackageType = z.infer<typeof handoverPackageTypeSchema>;
 export type HandoverPackageStatus = z.infer<typeof handoverPackageStatusSchema>;
 export type HandoverPackage = z.infer<typeof handoverPackageSchema>;
+export type HandoverAcceptanceReceiptPublic = z.infer<typeof HandoverAcceptanceReceiptPublicSchema>;
 export type HandoverPackagePublic = z.infer<typeof HandoverPackagePublicDtoSchema>;
 export type HandoverPackagePrivate = z.infer<typeof HandoverPackagePrivateDtoSchema>;
 export type HandoverPackageSnapshot = z.infer<typeof HandoverPackageSnapshotSchema>;

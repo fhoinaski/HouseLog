@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { CheckCircle2, ClipboardCheck, ShieldCheck } from 'lucide-react';
-import type { HandoverPackagePublic } from '@houselog/contracts';
+import { CheckCircle2, ClipboardCheck, Copy, ShieldCheck } from 'lucide-react';
+import { buildPublicHandoverAcceptanceSummary, type HandoverPackagePublic } from '@houselog/contracts';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,10 +40,27 @@ export function PublicHandoverAcceptance({
   const [acceptanceNotes, setAcceptanceNotes] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isAccepted = handoverPackage.status === 'accepted';
+  const receipt = handoverPackage.acceptanceReceipt;
+
+  async function copyAcceptanceSummary() {
+    setIsCopying(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      await navigator.clipboard.writeText(buildPublicHandoverAcceptanceSummary(handoverPackage));
+      setSuccessMessage('Resumo do aceite copiado.');
+    } catch {
+      setErrorMessage('Nao foi possivel copiar o resumo agora.');
+    } finally {
+      setIsCopying(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -72,7 +89,7 @@ export function PublicHandoverAcceptance({
     }
   }
 
-  if (isAccepted) {
+  if (isAccepted && !receipt) {
     return (
       <Card variant="raised" density="comfortable">
         <CardHeader className="pb-3">
@@ -93,6 +110,77 @@ export function PublicHandoverAcceptance({
             <p className="text-xs font-medium text-text-success">Data do aceite</p>
             <p className="mt-1 text-sm leading-6 text-text-primary">{formatDateTime(handoverPackage.accepted_at)}</p>
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isAccepted && receipt) {
+    return (
+      <Card variant="raised" density="comfortable">
+        <CardHeader className="pb-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-bg-success text-text-success">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Comprovante de aceite digital</CardTitle>
+              <p className="mt-1 text-sm leading-6 text-text-secondary">
+                Recebimento confirmado com trilha operacional do pacote emitido.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3">
+              <p className="text-xs font-medium text-text-success">Status</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">Recebimento confirmado</p>
+            </div>
+            <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
+              <p className="text-xs font-medium text-text-tertiary">Data do aceite</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">{formatDateTime(receipt.acceptedAt)}</p>
+            </div>
+            <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
+              <p className="text-xs font-medium text-text-tertiary">Aceito por</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">{receipt.acceptedByName}</p>
+            </div>
+            <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
+              <p className="text-xs font-medium text-text-tertiary">Email</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">{receipt.acceptedByEmailMasked}</p>
+            </div>
+            <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
+              <p className="text-xs font-medium text-text-tertiary">Data de emissao</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">{formatDateTime(receipt.issuedAt)}</p>
+            </div>
+            <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
+              <p className="text-xs font-medium text-text-tertiary">Validade</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">{formatDateTime(receipt.expiresAt)}</p>
+            </div>
+          </div>
+
+          {receipt.acceptanceNotes && (
+            <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
+              <p className="text-xs font-medium text-text-tertiary">Observacoes</p>
+              <p className="mt-1 text-sm leading-6 text-text-primary">{receipt.acceptanceNotes}</p>
+            </div>
+          )}
+
+          {errorMessage && (
+            <p className="rounded-[var(--radius-lg)] bg-bg-danger px-4 py-3 text-sm leading-6 text-text-danger">
+              {errorMessage}
+            </p>
+          )}
+          {successMessage && (
+            <p className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3 text-sm leading-6 text-text-success">
+              {successMessage}
+            </p>
+          )}
+
+          <Button type="button" variant="outline" loading={isCopying} onClick={() => void copyAcceptanceSummary()}>
+            <Copy className="h-4 w-4" aria-hidden="true" />
+            Copiar resumo do aceite
+          </Button>
         </CardContent>
       </Card>
     );

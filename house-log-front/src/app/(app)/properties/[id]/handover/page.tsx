@@ -708,6 +708,12 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
                     <InfoRow label="Criado em" value={cardDate(selectedPackage.created_at)} />
                     <InfoRow label="Emitido em" value={cardDate(selectedPackage.issued_at)} />
                     <InfoRow label="Expira em" value={cardDate(selectedPackage.expires_at)} />
+                    {selectedPackage.status === 'accepted' && (
+                      <>
+                        <InfoRow label="Aceito em" value={formatDateTime(selectedPackage.accepted_at)} />
+                        <InfoRow label="Aceito por" value={selectedPackage.accepted_by_name ?? 'Nao informado'} />
+                      </>
+                    )}
 
                     <div className="mt-4 rounded-lg bg-bg-subtle p-3">
                       <div className="flex items-center gap-2 text-xs font-medium text-text-tertiary">
@@ -926,9 +932,19 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
                     <InfoRow label="Snapshot" value={latestSnapshot ? 'Disponível' : 'Em montagem'} />
                     <InfoRow label="Emitido em" value={cardDate(selectedPackage.issued_at)} />
                     <InfoRow label="Expira em" value={cardDate(selectedPackage.expires_at)} />
+                    {selectedPackage.status === 'accepted' && (
+                      <>
+                        <InfoRow label="Aceito em" value={formatDateTime(selectedPackage.accepted_at)} />
+                        <InfoRow label="Aceito por" value={selectedPackage.accepted_by_name ?? 'Nao informado'} />
+                      </>
+                    )}
                   </div>
 
-                  {packageIsReady ? (
+                  {selectedPackage.status === 'accepted' ? (
+                    <div className="mt-4 rounded-lg bg-bg-success p-3 text-sm text-text-success">
+                      Pacote aceito pelo proprietario. O comprovante publico permanece consultavel enquanto o link estiver valido e nao revogado.
+                    </div>
+                  ) : packageIsReady ? (
                     <div className="mt-4 rounded-lg bg-bg-success p-3 text-sm text-text-success">
                       {canPrepareIssue
                         ? 'O pacote está pronto para emissão. Revise as pendências acima antes de confirmar.'

@@ -41,6 +41,7 @@ import {
   PropertyDocumentIngestionSummarySchema,
   DocumentExtractionDetailSchema,
   DocumentExtractionReviewStatusSchema,
+  buildPublicHandoverAcceptanceSummary,
 } from '@houselog/contracts';
 
 // ── room ─────────────────────────────────────────────────────────────────────
@@ -673,7 +674,86 @@ describe('handover package emission schemas', () => {
       created_at: '2026-05-11T00:00:00.000Z',
       updated_at: null,
       snapshot_json: snapshot,
+      acceptanceReceipt: null,
     }).success).toBe(true);
+
+    expect(HandoverPackagePublicDtoSchema.safeParse({
+      id: 'hp-1',
+      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      issuerName: 'Eng. Maria Silva',
+      issuerRole: 'Responsavel pela entrega',
+      responsibleName: 'Eng. Maria Silva',
+      companyName: 'Construtora Horizonte',
+      type: 'handover',
+      status: 'accepted',
+      version: 1,
+      issued_at: '2026-05-11T00:00:00.000Z',
+      accepted_at: '2026-05-11T10:00:00.000Z',
+      expires_at: '2026-06-11T00:00:00.000Z',
+      created_at: '2026-05-11T00:00:00.000Z',
+      updated_at: '2026-05-11T10:00:00.000Z',
+      snapshot_json: snapshot,
+      acceptanceReceipt: {
+        acceptedAt: '2026-05-11T10:00:00.000Z',
+        acceptedByName: 'Maria Silva',
+        acceptedByEmailMasked: 'ma***@exemplo.com',
+        acceptanceNotes: 'Recebido sem ressalvas.',
+        packageStatus: 'accepted',
+        issuedAt: '2026-05-11T00:00:00.000Z',
+        expiresAt: '2026-06-11T00:00:00.000Z',
+        packageTitle: 'Entrega final',
+        propertySummary: {
+          name: 'Apartamento Jardim',
+          type: 'apt',
+          city: 'Sao Paulo',
+        },
+      },
+    }).success).toBe(true);
+
+    const acceptedPublicPackage = HandoverPackagePublicDtoSchema.parse({
+      id: 'hp-1',
+      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      issuerName: 'Eng. Maria Silva',
+      issuerRole: 'Responsavel pela entrega',
+      responsibleName: 'Eng. Maria Silva',
+      companyName: 'Construtora Horizonte',
+      type: 'handover',
+      status: 'accepted',
+      version: 1,
+      issued_at: '2026-05-11T00:00:00.000Z',
+      accepted_at: '2026-05-11T10:00:00.000Z',
+      expires_at: '2026-06-11T00:00:00.000Z',
+      created_at: '2026-05-11T00:00:00.000Z',
+      updated_at: '2026-05-11T10:00:00.000Z',
+      snapshot_json: snapshot,
+      acceptanceReceipt: {
+        acceptedAt: '2026-05-11T10:00:00.000Z',
+        acceptedByName: 'Maria Silva',
+        acceptedByEmailMasked: 'ma***@exemplo.com',
+        acceptanceNotes: 'Recebido sem ressalvas.',
+        packageStatus: 'accepted',
+        issuedAt: '2026-05-11T00:00:00.000Z',
+        expiresAt: '2026-06-11T00:00:00.000Z',
+        packageTitle: 'Entrega final',
+        propertySummary: {
+          name: 'Apartamento Jardim',
+          type: 'apt',
+          city: 'Sao Paulo',
+        },
+      },
+    });
+    const acceptanceSummary = buildPublicHandoverAcceptanceSummary(acceptedPublicPackage);
+    expect(acceptanceSummary).toContain('Comprovante de aceite digital - HouseLog');
+    expect(acceptanceSummary).toContain('Recebimento confirmado');
+    expect(acceptanceSummary).toContain('Maria Silva');
+    expect(acceptanceSummary).not.toContain('hp-1');
+    expect(acceptanceSummary).not.toContain('prop-1');
+    expect(acceptanceSummary).not.toContain('token');
+    expect(acceptanceSummary).not.toContain('hash');
 
     const privateResult = HandoverPackagePrivateDtoSchema.safeParse({
       id: 'hp-1',
@@ -696,6 +776,7 @@ describe('handover package emission schemas', () => {
       accepted_at: null,
       accepted_by_name: null,
       accepted_by_email: null,
+      acceptance_notes: null,
       revoked_at: null,
       revoked_by: null,
       revoke_reason: null,
@@ -728,6 +809,7 @@ describe('handover package emission schemas', () => {
       accepted_at: null,
       accepted_by_name: null,
       accepted_by_email: null,
+      acceptance_notes: null,
       revoked_at: null,
       revoked_by: null,
       revoke_reason: null,

@@ -19,3 +19,4 @@ export * from './schemas/technical-point';
 export * from './schemas/warranty';
 export * from './schemas/renovation';
 export * from './schemas/handover';
+export * from './handover-receipt';

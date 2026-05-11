@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hashPublicHandoverToken, resolvePublicHandoverPackage } from './handover-public';
+import { hashPublicHandoverToken, maskPublicHandoverEmail, resolvePublicHandoverPackage } from './handover-public';
 
 const snapshot = {
   generatedAt: '2026-05-09T10:00:00.000Z',
@@ -59,6 +59,9 @@ const validRow = {
   version: 3,
   issued_at: '2026-05-09T10:05:00.000Z',
   accepted_at: null,
+  accepted_by_name: null,
+  accepted_by_email: null,
+  acceptance_notes: null,
   revoked_at: null,
   expires_at: '2026-06-09T10:05:00.000Z',
   created_at: '2026-05-09T10:05:00.000Z',
@@ -78,6 +81,13 @@ describe('hashPublicHandoverToken', () => {
   });
 });
 
+describe('maskPublicHandoverEmail', () => {
+  it('mascara parcialmente o email do comprovante publico', () => {
+    expect(maskPublicHandoverEmail('maria.silva@exemplo.com')).toBe('ma*********@exemplo.com');
+    expect(maskPublicHandoverEmail(null)).toBe('Nao informado');
+  });
+});
+
 describe('resolvePublicHandoverPackage', () => {
   it('retorna pacote público válido', () => {
     const result = resolvePublicHandoverPackage(validRow);
@@ -90,6 +100,37 @@ describe('resolvePublicHandoverPackage', () => {
       expect(result.package.issuerName).toBe('Eng. Maria Silva');
       expect(result.package.responsibleName).toBe('Eng. Maria Silva');
       expect(result.package.companyName).toBe('Construtora Horizonte');
+      expect(result.package.acceptanceReceipt).toBeNull();
+    }
+  });
+
+  it('retorna comprovante publico para pacote aceito', () => {
+    const result = resolvePublicHandoverPackage({
+      ...validRow,
+      status: 'accepted',
+      accepted_at: '2026-05-10T09:00:00.000Z',
+      accepted_by_name: 'Maria Silva',
+      accepted_by_email: 'maria.silva@exemplo.com',
+      acceptance_notes: 'Recebido sem ressalvas.',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.package.acceptanceReceipt).toEqual({
+        acceptedAt: '2026-05-10T09:00:00.000Z',
+        acceptedByName: 'Maria Silva',
+        acceptedByEmailMasked: 'ma*********@exemplo.com',
+        acceptanceNotes: 'Recebido sem ressalvas.',
+        packageStatus: 'accepted',
+        issuedAt: '2026-05-09T10:05:00.000Z',
+        expiresAt: '2026-06-09T10:05:00.000Z',
+        packageTitle: 'Dossie de entrega',
+        propertySummary: {
+          name: 'Apartamento Jardim',
+          type: 'apt',
+          city: 'Sao Paulo',
+        },
+      });
     }
   });
 
