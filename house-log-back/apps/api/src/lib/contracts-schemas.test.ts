@@ -14,6 +14,7 @@ import {
   HandoverPackageIssueInputSchema,
   HandoverPackagePrivateDtoSchema,
   HandoverPackagePublicDtoSchema,
+  PublicHandoverPackageAcceptInputSchema,
   HandoverPackageRevokeInputSchema,
   HandoverPackageSnapshotSchema,
   HandoverPackageStatusSchema,
@@ -621,6 +622,36 @@ describe('handover package emission schemas', () => {
     expect(HandoverPackageAcceptInputSchema.safeParse({ accepted_by_name: 'Maria Silva' }).success).toBe(true);
     expect(HandoverPackageAcceptInputSchema.safeParse({ accepted_by_name: 'Maria Silva', accepted_by_email: 'maria@exemplo.com' }).success).toBe(true);
     expect(HandoverPackageAcceptInputSchema.safeParse({ accepted_by_name: 'Maria Silva', issuedBy: 'user-1' }).success).toBe(false);
+  });
+
+  it('PublicHandoverPackageAcceptInputSchema valida aceite publico estrito', () => {
+    expect(PublicHandoverPackageAcceptInputSchema.safeParse({
+      acceptedByName: 'Maria Silva',
+      acceptedByEmail: 'maria@exemplo.com',
+      acceptedTerms: true,
+    }).success).toBe(true);
+    expect(PublicHandoverPackageAcceptInputSchema.safeParse({
+      acceptedByName: 'Maria Silva',
+      acceptedByEmail: 'email-invalido',
+      acceptedTerms: true,
+    }).success).toBe(false);
+    expect(PublicHandoverPackageAcceptInputSchema.safeParse({
+      acceptedByName: 'Maria Silva',
+      acceptedByEmail: 'maria@exemplo.com',
+      acceptedTerms: false,
+    }).success).toBe(false);
+    expect(PublicHandoverPackageAcceptInputSchema.safeParse({
+      acceptedByName: 'Maria Silva',
+      acceptedByEmail: 'maria@exemplo.com',
+      acceptedTerms: true,
+      tenantId: 'tenant-1',
+    }).success).toBe(false);
+    expect(PublicHandoverPackageAcceptInputSchema.safeParse({
+      acceptedByName: 'Maria Silva',
+      acceptedByEmail: 'maria@exemplo.com',
+      acceptedTerms: true,
+      acceptedAt: '2026-05-11T00:00:00.000Z',
+    }).success).toBe(false);
   });
 
   it('DTOs publico e privado mantem superfícies seguras', () => {

@@ -38,5 +38,5 @@ export default async function PublicHandoverAccessPage({
   const result = await getPublicHandoverState(publicToken);
 
   if (!result.ok) return <PublicHandoverState state={result.state} />;
-  return <PublicHandoverPackageView handoverPackage={result.handoverPackage} />;
+  return <PublicHandoverPackageView token={publicToken} handoverPackage={result.handoverPackage} />;
 }

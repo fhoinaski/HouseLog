@@ -27,5 +27,5 @@ export default async function PublicHandoverPage({ params }: { params: Promise<{
   const result = await getPublicHandoverState(token);
 
   if (!result.ok) return <PublicHandoverState state={result.state} />;
-  return <PublicHandoverPackageView handoverPackage={result.handoverPackage} />;
+  return <PublicHandoverPackageView token={token} handoverPackage={result.handoverPackage} />;
 }

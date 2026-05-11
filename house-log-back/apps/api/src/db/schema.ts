@@ -537,6 +537,7 @@ export const handoverPackages = sqliteTable('handover_packages', {
   acceptedAt: text('accepted_at'),
   acceptedByName: text('accepted_by_name'),
   acceptedByEmail: text('accepted_by_email'),
+  acceptanceNotes: text('acceptance_notes'),
   revokedAt: text('revoked_at'),
   revokedBy: text('revoked_by').references(() => users.id, { onDelete: 'set null' }),
   revokeReason: text('revoke_reason'),

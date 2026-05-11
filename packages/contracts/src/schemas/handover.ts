@@ -192,6 +192,15 @@ export const HandoverPackageAcceptInputSchema = z.object({
   accepted_by_email: z.string().email().optional().nullable(),
 }).strict();
 
+export const PublicHandoverPackageAcceptInputSchema = z.object({
+  acceptedByName: z.string().trim().min(1, 'Informe seu nome.').max(120),
+  acceptedByEmail: z.string().trim().email('Informe um email valido.').max(160),
+  acceptanceNotes: z.string().trim().max(1000).optional().nullable(),
+  acceptedTerms: z.literal(true, {
+    errorMap: () => ({ message: 'Confirme a ciencia para registrar o aceite.' }),
+  }),
+}).strict();
+
 export const handoverPackageFilterSchema = z.object({
   status: handoverPackageStatusSchema.optional(),
   type: handoverPackageTypeSchema.optional(),
@@ -216,6 +225,7 @@ export type HandoverPackageFilterInput = z.infer<typeof handoverPackageFilterSch
 export type HandoverPackageIssueInput = z.infer<typeof HandoverPackageIssueInputSchema>;
 export type HandoverPackageRevokeInput = z.infer<typeof HandoverPackageRevokeInputSchema>;
 export type HandoverPackageAcceptInput = z.infer<typeof HandoverPackageAcceptInputSchema>;
+export type PublicHandoverPackageAcceptInput = z.infer<typeof PublicHandoverPackageAcceptInputSchema>;
 
 export const handoverChecklistItemCategorySchema = z.enum([
   'keys',

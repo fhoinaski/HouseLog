@@ -1,4 +1,9 @@
-import { HandoverPackagePublicDtoSchema, type HandoverPackagePublic } from '@houselog/contracts';
+import {
+  HandoverPackagePublicDtoSchema,
+  PublicHandoverPackageAcceptInputSchema,
+  type HandoverPackagePublic,
+  type PublicHandoverPackageAcceptInput,
+} from '@houselog/contracts';
 import { z } from 'zod';
 
 import { normalizeApiMediaUrls } from '@/lib/api/_core';
@@ -12,6 +17,8 @@ export type PublicHandoverErrorCode =
   | 'NOT_FOUND'
   | 'LINK_EXPIRED'
   | 'PACKAGE_REVOKED'
+  | 'PACKAGE_ALREADY_ACCEPTED'
+  | 'VALIDATION_ERROR'
   | 'INTERNAL_ERROR'
   | 'UNKNOWN';
 
@@ -33,17 +40,24 @@ type ApiErrorBody = {
 };
 
 function normalizePublicErrorCode(value: string | undefined, status: number): PublicHandoverErrorCode {
-  if (value === 'LINK_EXPIRED' || value === 'PACKAGE_REVOKED' || value === 'INTERNAL_ERROR') return value;
+  if (
+    value === 'LINK_EXPIRED' ||
+    value === 'PACKAGE_REVOKED' ||
+    value === 'PACKAGE_ALREADY_ACCEPTED' ||
+    value === 'VALIDATION_ERROR' ||
+    value === 'INTERNAL_ERROR'
+  ) return value;
   if (value === 'NOT_FOUND') return 'NOT_FOUND';
   if (status === 404) return 'NOT_FOUND';
   if (status >= 500) return 'INTERNAL_ERROR';
   return 'UNKNOWN';
 }
 
-async function publicRequest<T>(path: string): Promise<T> {
+async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${PUBLIC_BASE}${path}`, {
-    method: 'GET',
+    method: init?.method ?? 'GET',
     headers: { 'Content-Type': 'application/json' },
+    body: init?.body,
     cache: 'no-store',
   });
 
@@ -64,4 +78,11 @@ export const publicHandoverApi = {
     publicRequest<{ package: HandoverPackagePublic }>(`/api/v1/public/handover/${encodeURIComponent(token)}`).then((data) =>
       PublicHandoverResponseSchema.parse(data)
     ),
+  accept: (token: string, input: PublicHandoverPackageAcceptInput) => {
+    const body = PublicHandoverPackageAcceptInputSchema.parse(input);
+    return publicRequest<{ package: HandoverPackagePublic }>(`/api/v1/public/handover/${encodeURIComponent(token)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }).then((data) => PublicHandoverResponseSchema.parse(data));
+  },
 };

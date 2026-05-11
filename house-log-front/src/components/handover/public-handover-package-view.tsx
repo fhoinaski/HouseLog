@@ -1,4 +1,6 @@
-import type { ComponentType, ReactNode } from 'react';
+'use client';
+
+import { useState, type ComponentType, type ReactNode } from 'react';
 import {
   CalendarClock,
   CheckCircle2,
@@ -16,9 +18,11 @@ import type { HandoverPackagePublic, HandoverPackageSnapshot } from '@houselog/c
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PublicHandoverAcceptance } from '@/components/handover/public-handover-acceptance';
 import { formatDate, INVENTORY_CATEGORY_LABELS, SYSTEM_TYPE_LABELS } from '@/lib/utils';
 
 type PublicHandoverPackageViewProps = {
+  token: string;
   handoverPackage: HandoverPackagePublic;
 };
 
@@ -143,10 +147,12 @@ function StatusPanel({
         <div className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-medium text-text-success">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            Pacote emitido
+            {handoverPackage.status === 'accepted' ? 'Entrega aceita' : 'Pacote emitido'}
           </div>
           <p className="mt-1 text-xs leading-5 text-text-secondary">
-            Esta versao esta disponivel para consulta pelo proprietario.
+            {handoverPackage.status === 'accepted'
+              ? 'O recebimento digital deste pacote foi confirmado.'
+              : 'Esta versao esta disponivel para consulta pelo proprietario.'}
           </p>
         </div>
         <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
@@ -170,16 +176,18 @@ function StatusPanel({
   );
 }
 
-export function PublicHandoverPackageView({ handoverPackage }: PublicHandoverPackageViewProps) {
-  const snapshot = handoverPackage.snapshot_json;
+export function PublicHandoverPackageView({ token, handoverPackage }: PublicHandoverPackageViewProps) {
+  const [currentPackage, setCurrentPackage] = useState(handoverPackage);
+  const accepted = currentPackage.status === 'accepted';
+  const snapshot = currentPackage.snapshot_json;
   const property = snapshot.property;
   const responsibleDisplay =
-    handoverPackage.companyName && handoverPackage.responsibleName
-      ? `${handoverPackage.companyName} - ${handoverPackage.responsibleName}`
-      : handoverPackage.companyName ?? handoverPackage.responsibleName ?? handoverPackage.issuerName;
-  const responsibleDetail = handoverPackage.issuerRole ? ` (${handoverPackage.issuerRole})` : '';
+    currentPackage.companyName && currentPackage.responsibleName
+      ? `${currentPackage.companyName} - ${currentPackage.responsibleName}`
+      : currentPackage.companyName ?? currentPackage.responsibleName ?? currentPackage.issuerName;
+  const responsibleDetail = currentPackage.issuerRole ? ` (${currentPackage.issuerRole})` : '';
   const deliveryMessage =
-    handoverPackage.description?.trim() ||
+    currentPackage.description?.trim() ||
     'Este pacote reune as informacoes essenciais da entrega digital do imovel para consulta segura pelo proprietario.';
 
   return (
@@ -201,9 +209,9 @@ export function PublicHandoverPackageView({ handoverPackage }: PublicHandoverPac
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Badge variant="success">Entrega digital emitida</Badge>
+              <Badge variant="success">{accepted ? 'Entrega digital aceita' : 'Entrega digital emitida'}</Badge>
               <Badge variant="outline">{formatOptional(property.city)}</Badge>
-              <Badge variant="outline">Versao {handoverPackage.version}</Badge>
+              <Badge variant="outline">Versao {currentPackage.version}</Badge>
             </div>
           </div>
 
@@ -235,7 +243,14 @@ export function PublicHandoverPackageView({ handoverPackage }: PublicHandoverPac
           </Card>
         </header>
 
-        <StatusPanel snapshot={snapshot} handoverPackage={handoverPackage} />
+        <StatusPanel snapshot={snapshot} handoverPackage={currentPackage} />
+
+        <PublicHandoverAcceptance
+          token={token}
+          handoverPackage={currentPackage}
+          onAccepted={setCurrentPackage}
+          formatDateTime={formatDateTime}
+        />
 
         <section className="grid gap-4 lg:grid-cols-2" aria-label="Conteudo do pacote de handover">
           <SnapshotListCard
@@ -339,9 +354,9 @@ export function PublicHandoverPackageView({ handoverPackage }: PublicHandoverPac
             </CardHeader>
             <CardContent className="space-y-3">
               <DetailItem
-                title="Sem aceite nesta etapa"
+                title="Aceite protegido"
                 meta={<span className="inline-flex items-center gap-1"><ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" /> Consulta</span>}
-                detail="Esta tela e apenas para visualizar a entrega digital. O aceite formal sera tratado em uma etapa separada."
+                detail="O aceite registra somente o recebimento deste pacote emitido, sem alterar dados tecnicos do imovel."
               />
               <DetailItem
                 title="Compartilhamento controlado"
