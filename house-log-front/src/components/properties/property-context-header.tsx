@@ -24,6 +24,8 @@ export function PropertyContextHeader({ propertyId }: PropertyContextHeaderProps
 
   const property = propData?.property;
   const score = dashboard?.health_score ?? property?.health_score ?? 0;
+  const isPlaceholderScore = score === 50;
+  const scoreLabel = isPlaceholderScore ? 'Em formação' : `${score}`;
   const openOrders = (dashboard?.services.requested ?? 0) + (dashboard?.services.in_progress ?? 0);
 
   return (
@@ -51,7 +53,12 @@ export function PropertyContextHeader({ propertyId }: PropertyContextHeaderProps
           </div>
 
           <div className="hidden shrink-0 items-center gap-2 sm:flex">
-            <MetricPill icon={Activity} label="Saude" value={`${score}`} valueClassName={scoreColor(score)} />
+            <MetricPill
+              icon={Activity}
+              label="Saúde técnica"
+              value={scoreLabel}
+              valueClassName={isPlaceholderScore ? 'text-text-secondary' : scoreColor(score)}
+            />
             <MetricPill icon={Wrench} label="OS abertas" value={`${openOrders}`} />
             <PropertyContextSearch propertyId={propertyId} />
             <PropertySwitcher propertyId={propertyId} compact />
@@ -59,7 +66,9 @@ export function PropertyContextHeader({ propertyId }: PropertyContextHeaderProps
 
           <div className="flex shrink-0 items-center gap-1 sm:hidden">
             <div className="flex flex-col items-end gap-1">
-              <span className={cn('text-sm font-medium tabular-nums', scoreColor(score))}>{score}</span>
+              <span className={cn('text-sm font-medium tabular-nums', isPlaceholderScore ? 'text-text-secondary' : scoreColor(score))}>
+                {scoreLabel}
+              </span>
               <span className="text-[10px] text-text-tertiary">{openOrders} OS</span>
             </div>
             <PropertyContextSearch propertyId={propertyId} />
