@@ -39,6 +39,7 @@ export function PublicHandoverAcceptance({
   onAccepted,
   formatDateTime,
 }: PublicHandoverAcceptanceProps) {
+  const printInstructionsId = 'public-handover-print-instructions';
   const [acceptedByName, setAcceptedByName] = useState('');
   const [acceptedByEmail, setAcceptedByEmail] = useState('');
   const [acceptanceNotes, setAcceptanceNotes] = useState('');
@@ -157,7 +158,7 @@ export function PublicHandoverAcceptance({
               <div>
                 <CardTitle className="text-base">Comprovante de aceite digital</CardTitle>
                 <p className="mt-1 text-sm leading-6 text-text-secondary">
-                  Recebimento confirmado com trilha operacional do pacote emitido.
+                  Recebimento confirmado com o registro da entrega digital.
                 </p>
               </div>
             </div>
@@ -198,12 +199,12 @@ export function PublicHandoverAcceptance({
             )}
 
             {errorMessage && (
-              <p className="rounded-[var(--radius-lg)] bg-bg-danger px-4 py-3 text-sm leading-6 text-text-danger">
+              <p role="alert" className="rounded-[var(--radius-lg)] bg-bg-danger px-4 py-3 text-sm leading-6 text-text-danger">
                 {errorMessage}
               </p>
             )}
             {successMessage && (
-              <p className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3 text-sm leading-6 text-text-success">
+              <p aria-live="polite" className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3 text-sm leading-6 text-text-success">
                 {successMessage}
               </p>
             )}
@@ -214,12 +215,21 @@ export function PublicHandoverAcceptance({
                 Copiar resumo do aceite
               </Button>
               {printData && (
-                <Button type="button" variant="outline" onClick={printAcceptanceReceipt}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={printAcceptanceReceipt}
+                  aria-describedby={printInstructionsId}
+                >
                   <Printer className="h-4 w-4" aria-hidden="true" />
-                  Baixar comprovante em PDF
+                  Imprimir ou salvar em PDF
                 </Button>
               )}
             </div>
+
+            <p id={printInstructionsId} className="text-sm leading-6 text-text-secondary">
+              O navegador abrirá a janela de impressão. Para guardar o arquivo, escolha a opção &quot;Salvar como PDF&quot;.
+            </p>
           </CardContent>
         </Card>
 
@@ -348,13 +358,13 @@ export function PublicHandoverAcceptance({
             </span>
           </label>
 
-          {errorMessage && (
-            <p className="rounded-[var(--radius-lg)] bg-bg-danger px-4 py-3 text-sm leading-6 text-text-danger">
+            {errorMessage && (
+              <p role="alert" className="rounded-[var(--radius-lg)] bg-bg-danger px-4 py-3 text-sm leading-6 text-text-danger">
               {errorMessage}
             </p>
           )}
           {successMessage && (
-            <p className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3 text-sm leading-6 text-text-success">
+              <p aria-live="polite" className="rounded-[var(--radius-lg)] bg-bg-success px-4 py-3 text-sm leading-6 text-text-success">
               {successMessage}
             </p>
           )}
