@@ -17,10 +17,10 @@ export const credentialsApi = {
       body: JSON.stringify(data),
     }),
 
-  revealSecret: (propertyId: string, id: string) =>
+  revealSecret: (propertyId: string, id: string, reason: string) =>
     request<{ credential: RevealedAccessCredential }>(
-      `/properties/${propertyId}/credentials/${id}/secret/reveal`,
-      { method: 'POST' }
+      `/properties/${propertyId}/credentials/${id}/reveal`,
+      { method: 'POST', body: JSON.stringify({ reason }) }
     ),
 
   delete: (propertyId: string, id: string) =>

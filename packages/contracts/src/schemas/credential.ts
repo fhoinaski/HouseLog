@@ -24,7 +24,12 @@ export const credentialCreateSchema = z.object({
 
 export const credentialUpdateSchema = credentialCreateSchema.partial();
 
+export const credentialRevealSchema = z.object({
+  reason: z.string().trim().min(10),
+});
+
 export type CredentialCategory = z.infer<typeof credentialCategorySchema>;
 export type CredentialIntegrationType = z.infer<typeof credentialIntegrationTypeSchema>;
 export type CredentialCreateInput = z.infer<typeof credentialCreateSchema>;
 export type CredentialUpdateInput = z.infer<typeof credentialUpdateSchema>;
+export type CredentialRevealInput = z.infer<typeof credentialRevealSchema>;

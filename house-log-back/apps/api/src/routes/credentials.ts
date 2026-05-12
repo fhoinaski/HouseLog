@@ -5,11 +5,11 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { writeAuditLog } from '../lib/audit';
 import {
+  canRevealCredential,
   canCreateCredential,
   canDeleteCredential,
   canGenerateTemporaryCredentialAccess,
   canListCredentials,
-  canRevealCredentialSecret,
   canUpdateCredential,
 } from '../lib/authorization';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
@@ -17,7 +17,7 @@ import { applyRateLimit } from '../middleware/rateLimit';
 import { encryptSecret, decryptSecret, getCredentialKey, isEncrypted } from '../lib/credential-crypto';
 import { getDb } from '../db/client';
 import { propertyAccessCredentials } from '../db/schema';
-import { credentialCreateSchema } from '@houselog/contracts';
+import { credentialCreateSchema, credentialRevealSchema } from '@houselog/contracts';
 import type { Bindings, Variables } from '../lib/types';
 
 const credentials = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -103,6 +103,13 @@ async function revealCredentialSecret(c: CredentialsContext) {
   const userId = c.get('userId');
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
+  const revealBody = credentialRevealSchema.safeParse(await c.req.json().catch(() => null));
+
+  if (!revealBody.success) {
+    return err(c, 'Motivo obrigatório para revelar credencial', 'VALIDATION_ERROR', 422, revealBody.error.flatten());
+  }
+
+  const reason = revealBody.data.reason;
 
   // Rate-limit reveals per user to prevent bulk extraction
   const rlKey = `rl:reveal:${userId}`;
@@ -121,8 +128,8 @@ async function revealCredentialSecret(c: CredentialsContext) {
     return err(c, 'Limite de revelações atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
   }
 
-  const hasAccess = await canRevealCredentialSecret(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
-  if (!hasAccess) {
+  const decision = await canRevealCredential(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  if (!decision.allowed) {
     await writeAuditLog(c.env.DB, {
       tenantId,
       propertyId,
@@ -133,7 +140,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
       actorIp: c.req.header('CF-Connecting-IP'),
       newData: { reason: 'FORBIDDEN', property_id: propertyId, tenant_id: tenantId },
     });
-    return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+    return err(c, 'Sem acesso', decision.code, decision.status);
   }
 
   const [cred] = await db
@@ -170,7 +177,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
     propertyId,
     entityType: 'property_access_credential',
     entityId: cred.id,
-    action: 'secret_reveal',
+    action: 'credential_secret_revealed',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
     newData: {
@@ -178,6 +185,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
       tenant_id: tenantId,
       category: cred.category,
       label: cred.label,
+      reason,
       user_agent: c.req.header('User-Agent') ?? null,
     },
   });
@@ -279,20 +287,18 @@ credentials.post('/', async (c) => {
 });
 
 // ── GET /properties/:propertyId/credentials/:credId/secret ───────────────────
-// Legacy reveal path kept temporarily for compatibility.
-// New consumers must use POST /properties/:propertyId/credentials/:credId/secret/reveal.
+// Blocked to prevent cache/log/preload exposure of credential secrets.
 
 credentials.get('/:credId/secret', async (c) => {
-  c.header('Deprecation', 'true');
-  const propertyId = c.req.param('propertyId')!;
-  const credId = c.req.param('credId')!;
-  c.header('Warning', '299 - "Deprecated credential reveal endpoint; use POST /secret/reveal"');
-  c.header('Link', `</properties/${propertyId}/credentials/${credId}/secret/reveal>; rel="successor-version"`);
-  return revealCredentialSecret(c);
+  c.header('Allow', 'POST');
+  return c.json({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
 });
 
-// ── POST /properties/:propertyId/credentials/:credId/secret/reveal ───────────
+// ── POST /properties/:propertyId/credentials/:credId/reveal ────────────────
 
+credentials.post('/:credId/reveal', revealCredentialSecret);
+
+// Backward-compatible alias while consumers migrate to /reveal.
 credentials.post('/:credId/secret/reveal', revealCredentialSecret);
 
 // ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────

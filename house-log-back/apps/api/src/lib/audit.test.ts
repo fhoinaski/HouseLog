@@ -7,7 +7,9 @@ describe('audit log tenant scope and minimization', () => {
       sanitizeAuditData({
         label: 'Wi-Fi',
         secret: 'plain-secret',
+        credentialSecret: 'plain-secret-2',
         ciphertext: 'encrypted',
+        encryptedSecret: 'encrypted-secret',
         fileUrl: 'documents/property-a/manual.pdf',
         nested: {
           refreshTokenHash: 'hash',
@@ -17,7 +19,9 @@ describe('audit log tenant scope and minimization', () => {
     ).toEqual({
       label: 'Wi-Fi',
       secret: '[REDACTED]',
+        credentialSecret: '[REDACTED]',
       ciphertext: '[REDACTED]',
+        encryptedSecret: '[REDACTED]',
       fileUrl: '[REDACTED]',
       nested: {
         refreshTokenHash: '[REDACTED]',

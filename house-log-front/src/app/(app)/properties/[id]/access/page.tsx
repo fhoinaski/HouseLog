@@ -345,7 +345,13 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                           hideLabel={`Ocultar credencial ${cred.label}`}
                           copyLabel={`Copiar credencial ${cred.label}`}
                           onReveal={async () => {
-                            const res = await credentialsApi.revealSecret(propertyId, cred.id);
+                            const reason = window.prompt('Informe o motivo da revelacao da credencial (min. 10 caracteres):');
+                            const normalizedReason = reason?.trim();
+                            if (!normalizedReason || normalizedReason.length < 10) {
+                              throw new Error('Motivo obrigatorio com no minimo 10 caracteres');
+                            }
+
+                            const res = await credentialsApi.revealSecret(propertyId, cred.id, normalizedReason);
                             return res.credential.secret;
                           }}
                           onCopy={() => {

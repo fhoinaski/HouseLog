@@ -5,6 +5,8 @@ import { auditLog } from '../db/schema';
 
 const SENSITIVE_KEYS = new Set([
   'secret',
+  'credentialSecret',
+  'credential_secret',
   'ciphertext',
   'encryptedSecret',
   'encrypted_secret',
