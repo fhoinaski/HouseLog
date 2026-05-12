@@ -3,29 +3,32 @@ main = "src/index.ts"
 compatibility_date = "2024-04-15"
 compatibility_flags = ["nodejs_compat"]
 
-# Secrets — configure via: wrangler secret put <NAME>
-# - JWT_SECRET                   (required — HS256 signing key)
-# - CREDENTIALS_ENCRYPTION_KEY   (required in production — AES-GCM key, min 32 chars)
-#                                  generate: openssl rand -base64 32
+# Secrets must be configured with wrangler secret put <NAME>.
+# Required:
+# - JWT_SECRET
+# - CREDENTIALS_ENCRYPTION_KEY
+# - RESEND_API_KEY
+# - R2_ACCOUNT_ID
+# - R2_ACCESS_KEY_ID
+# - R2_SECRET_ACCESS_KEY
 
-# --- CONFIGURAÇÃO GLOBAL / PRODUÇÃO ---
+# --- CONFIGURACAO GLOBAL / PRODUCAO ---
+# Production intentionally uses invalid placeholder resource IDs until the
+# Cloudflare resources are created manually. Do not deploy production before:
+#   npm run check:deploy-config:prod
 [vars]
 ENVIRONMENT = "production"
 # CORS em production deve ser uma allowlist explicita. Nunca use "*"
 # porque a API envia credentials no middleware CORS.
 CORS_ORIGINS = "https://house-log.vercel.app"
 R2_PUBLIC_URL = "https://assets.houselog.app"
-R2_ACCOUNT_ID = ""
 R2_BUCKET_NAME = "houselog-assets"
-R2_ACCESS_KEY_ID = ""
-R2_SECRET_ACCESS_KEY = ""
-RESEND_API_KEY = ""
 APP_URL = "https://house-log.vercel.app"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "houselog-db"
-database_id = "62bd81c4-77da-4867-a996-22fff5e0d258"
+database_id = "00000000-0000-0000-0000-000000000001"
 migrations_dir = "src/db/migrations"
 
 [[r2_buckets]]
@@ -34,7 +37,7 @@ bucket_name = "houselog-assets"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "COLE_AQUI_O_ID_DO_KV_PRODUCAO"
+id = "00000000000000000000000000000001"
 
 [[queues.producers]]
 binding = "QUEUE"
@@ -45,7 +48,7 @@ binding = "DOCUMENT_INGESTION_QUEUE"
 queue = "houselog-document-ingestion"
 
 [[queues.consumers]]
-queue = "houselog-queue"
+queue = "houselog-jobs"
 max_batch_size = 10
 max_retries = 3
 
@@ -71,11 +74,7 @@ ENVIRONMENT = "development"
 # a testar previews e evita wildcard inseguro.
 CORS_ORIGINS = "https://house-log.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
 R2_PUBLIC_URL = "https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev"
-R2_ACCOUNT_ID = ""
 R2_BUCKET_NAME = "houselog-assets-dev"
-R2_ACCESS_KEY_ID = ""
-R2_SECRET_ACCESS_KEY = ""
-RESEND_API_KEY = ""
 APP_URL = "http://localhost:3000"
 
 [[env.dev.d1_databases]]
@@ -94,11 +93,16 @@ id = "30d1ccabab2349e79151d3dec9eb11de"
 
 [[env.dev.queues.producers]]
 binding = "QUEUE"
-queue = "houselog-jobs"
+queue = "houselog-jobs-dev"
 
 [[env.dev.queues.producers]]
 binding = "DOCUMENT_INGESTION_QUEUE"
 queue = "houselog-document-ingestion-dev"
+
+[[env.dev.queues.consumers]]
+queue = "houselog-jobs-dev"
+max_batch_size = 10
+max_retries = 3
 
 [[env.dev.queues.consumers]]
 queue = "houselog-document-ingestion-dev"

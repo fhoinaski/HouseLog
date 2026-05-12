@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            house-log-front/package-lock.json
+            house-log-back/apps/api/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix house-log-front ci
+
+      - name: Install API dependencies
+        run: npm --prefix house-log-back/apps/api ci
+
+      - name: Check deploy configuration
+        run: npm run check:deploy-config
+
+      - name: Check encoding
+        run: npm run check:encoding
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: API tests
+        run: npm run test:api
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build API dry-run
+        run: npm --prefix house-log-back/apps/api run build
+
+      - name: Diff whitespace check
+        run: git diff --check

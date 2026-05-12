@@ -486,7 +486,7 @@ export default function DocumentIngestionPage({
               {document && (
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-text-tertiary">
                   <span className="font-medium text-text-secondary">{document.title}</span>
-                  <span>Â·</span>
+                  <span>·</span>
                   <span>{DOC_TYPE_LABELS[document.type] ?? document.type}</span>
                   <span>·</span>
                   <span>Registrado em {formatDate(document.created_at)}</span>

@@ -45,10 +45,10 @@ ENVIRONMENT=development
 R2_PUBLIC_URL=https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev
 
 # Necessarios apenas para fluxos com URL preassinada.
-# R2_ACCOUNT_ID=
+# R2_ACCOUNT_ID=replace-with-cloudflare-account-id
 # R2_BUCKET_NAME=houselog-assets-dev
-# R2_ACCESS_KEY_ID=
-# R2_SECRET_ACCESS_KEY=
+# R2_ACCESS_KEY_ID=replace-with-dev-r2-access-key-id
+# R2_SECRET_ACCESS_KEY=replace-with-dev-r2-secret-access-key
 
 # -----------------------------------------------------------------------------
 # Observabilidade
@@ -71,3 +71,14 @@ R2_PUBLIC_URL=https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev
 # -----------------------------------------------------------------------------
 # Dias até o refresh token expirar. Default: 30.
 # REFRESH_TOKEN_TTL_DAYS=30
+
+# -----------------------------------------------------------------------------
+# Email transacional
+# -----------------------------------------------------------------------------
+# RESEND_API_KEY=replace-with-dev-resend-api-key
+
+# -----------------------------------------------------------------------------
+# Credenciais criptografadas
+# -----------------------------------------------------------------------------
+# Obrigatorio em production. Em dev, tambem prefira usar chave propria.
+# CREDENTIALS_ENCRYPTION_KEY=replace-with-32-char-minimum-key

@@ -32,6 +32,7 @@ Este registro deve ser lido em conjunto com:
 
 - **Aberto**: ainda precisa de correcao.
 - **Mitigado parcialmente**: existe contencao ou refatoracao inicial, mas o debito permanece.
+- **Mitigado**: correcao aplicada no escopo auditado, com protecao para reduzir regressao.
 - **Monitorar**: nao exige acao imediata, mas pode voltar a crescer.
 
 ---
@@ -42,14 +43,14 @@ Este registro deve ser lido em conjunto com:
 
 - **Severidade**: Media
 - **Area**: Frontend / Manutencao
-- **Status**: Mitigado parcialmente
-- **Evidencia**: varias telas e documentos historicos apresentaram textos corrompidos, especialmente em pt-BR, exigindo correcoes pontuais e uso temporario de ASCII em refatoracoes anteriores.
-- **Impacto**: dificulta revisao, quebra copy de produto, aumenta risco de regressao visual e reduz confianca em alteracoes de texto.
+- **Status**: Mitigado
+- **Evidencia**: auditoria em `house-log-front/src`, documentacao critica e `packages/contracts` encontrou e corrigiu mojibake em `house-log-front/src/app/(app)/properties/[id]/documents/[documentId]/ingestion/page.tsx`; foi adicionado `npm run check:encoding` para alertar sobre sequencias criticas de encoding em arquivos de texto.
+- **Impacto**: a ocorrencia critica encontrada foi corrigida e a verificacao reduz risco de regressao em copy de produto, documentacao e revisao tecnica.
 - **Recomendacao**:
-  - padronizar arquivos criticos em UTF-8 limpo;
-  - adicionar verificacao automatizada de encoding em CI;
+  - rodar `npm run check:encoding` em revisoes com alteracao de copy ou documentacao;
+  - adicionar `npm run check:encoding` ao CI quando o pipeline for criado;
   - evitar novas alteracoes com texto corrompido;
-  - priorizar telas com copy de produto e documentacao operacional.
+  - manter monitoramento de textos ASCII herdados e revisar apenas quando houver melhoria editorial planejada.
 - **Relacionamento com roadmap/ADRs**: Fase 1 e Fase 5 do roadmap; suporte ao The Architectural Lens e consistencia editorial.
 
 ---
@@ -215,15 +216,33 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
+### TD-012 - Deploy Cloudflare e CI ainda dependem de configuracao final de producao
+
+- **Severidade**: Critica
+- **Area**: Deploy / Operacao / Cloudflare
+- **Status**: Mitigado parcialmente
+- **Evidencia**: `wrangler.toml` foi separado para usar D1, KV, R2 e queues distintos entre dev e production; o bug de filas foi corrigido; secrets sensiveis sairam do arquivo versionado; arquivos `.wrangler/` foram removidos do indice do git; `.github/workflows/ci.yml` e `npm run check:deploy-config` foram adicionados. Production ainda usa placeholders invalidos intencionais para D1/KV ate os recursos reais serem criados manualmente.
+- **Impacto**: a configuracao perigosa que misturava dev/prod foi bloqueada, mas production ainda nao deve receber deploy ate substituir placeholders por IDs reais e cadastrar secrets via `wrangler secret put`.
+- **Recomendacao**:
+  - criar D1/KV/R2/queues reais de production;
+  - substituir placeholders invalidos no `wrangler.toml`;
+  - cadastrar secrets por ambiente com `wrangler secret put`;
+  - rodar `npm run check:deploy-config:prod` antes de qualquer deploy;
+  - manter `.wrangler/`, `.wrangler/cache/` e `wrangler.log` fora do git.
+- **Relacionamento com roadmap/ADRs**: Sprint 1 e Sprint 2 do masterplan; seguranca operacional para MVP privado premium.
+
+---
+
 ## 4. Priorizacao recomendada
 
 ### Curto prazo
 
-1. TD-004 - concluir migracao e remover consumidores legados de `GET /secret`.
-2. TD-005 - iniciar policy granular para credenciais.
-3. TD-010 - desenhar e iniciar Authorization Core.
-4. TD-003 - adicionar confirmacao de exclusao documental.
-5. TD-002 - padronizar erro de upload multipart.
+1. TD-012 - concluir IDs reais/secrets de producao e validar `check:deploy-config:prod`.
+2. TD-004 - concluir migracao e remover consumidores legados de `GET /secret`.
+3. TD-005 - iniciar policy granular para credenciais.
+4. TD-010 - desenhar e iniciar Authorization Core.
+5. TD-003 - adicionar confirmacao de exclusao documental.
+6. TD-002 - padronizar erro de upload multipart.
 
 ### Medio prazo
 

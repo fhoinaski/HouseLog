@@ -2,9 +2,14 @@
 
 Backend roda em Cloudflare Workers com D1, R2, KV, Queues, Workers AI e Resend.
 
+Antes de qualquer deploy de producao, siga tambem o checklist seguro em
+`docs/deploy/CLOUDFLARE_DEPLOY_CHECKLIST.md`.
+
 Comandos principais:
 
 ```bash
+npm run check:deploy-config
+npm run check:deploy-config:prod
 npm --prefix house-log-back/apps/api run build
 npm --prefix house-log-back/apps/api run deploy
 npm --prefix house-log-back/apps/api run db:migrate
@@ -20,12 +25,19 @@ npm --prefix house-log-back/apps/api run db:migrate:dev
 Variaveis importantes:
 
 - `JWT_SECRET`
+- `CREDENTIALS_ENCRYPTION_KEY`
 - `CORS_ORIGINS` ou `CORS_ORIGIN`
 - `ENVIRONMENT`
 - `APP_URL`
 - `R2_PUBLIC_URL`
+- `R2_ACCOUNT_ID`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
 - `RESEND_API_KEY`
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+
+Secrets devem ser cadastrados por `wrangler secret put` e nunca gravados no
+`wrangler.toml`.
 
 Regra de CORS:
 

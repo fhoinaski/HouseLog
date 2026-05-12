@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev --env dev",
     "build": "wrangler deploy --dry-run",
-    "deploy": "wrangler deploy",
+    "deploy": "npm --prefix ../../.. run check:deploy-config:prod && wrangler deploy",
     "deploy:dev": "wrangler deploy --env dev",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
