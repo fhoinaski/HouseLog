@@ -56,6 +56,30 @@ Objetivo: transformar operacao em memoria tecnica rastreavel.
 
 Objetivo: estruturar fluxo comercial e aprovacao de servicos com registros formais.
 
+### Handover Digital concluido
+
+O módulo de Handover Digital já foi concluído como base documental e operacional do prontuário do imóvel.
+
+Entregas já consolidadas:
+
+- emissão privada de pacote;
+- snapshot fechado do pacote emitido;
+- token público seguro;
+- URL pública `/handover/:token`;
+- endpoint público seguro;
+- estados inválido, expirado, revogado, emitido e aceito;
+- aceite digital do proprietário;
+- comprovante de aceite digital;
+- impressão/salvar PDF via navegador;
+- DTO público sanitizado;
+- revogação privada segura.
+
+Pendências de evolução:
+
+- PDF completo do pacote de entrega;
+- envio do link por WhatsApp/e-mail;
+- área do cliente mais avançada para consultar a entrega e seu histórico.
+
 ### Fase 4: inteligencia operacional
 
 - Dashboard.
@@ -88,6 +112,7 @@ O projeto ja possui base relevante de seguranca e multi-tenant:
 - contracts Zod compartilhados;
 - frontend API client modularizado;
 - entidades premium recentes para garantias, reformas, handover packages e checklist de handover.
+- Handover Digital consolidado como módulo base concluído, com fluxo público e privado funcionando.
 
 O status deve ser tratado como evolucao incremental. Antes de assumir que uma etapa esta completa, verificar migrations, schema, rotas, contracts, testes e frontend consumidor.
 
@@ -108,6 +133,14 @@ Criar telas focadas em prontuario tecnico, garantias, reformas, handover, invent
 ### PDF/dossie tecnico
 
 Gerar dossies tecnicos por imovel, handover, reforma ou garantia, respeitando midia privada, auditoria e autorizacao.
+
+### Handover Digital
+
+Evoluir o módulo já concluído com:
+
+- envio do link por WhatsApp/e-mail;
+- PDF completo do pacote de entrega;
+- área do cliente avançada para consulta do aceite e histórico.
 
 ### Dashboard executivo
 

@@ -46,6 +46,7 @@ O HouseLog já possui uma base forte:
 - Pipeline de ingestão de documentos com candidates (4 tipos), reviews e jobs.
 - Regras para agentes em `AGENTS.md` e `SYSTEM_CONTEXT.md`.
 - Scripts de type-check, lint, test e build.
+- Handover Digital já concluído como módulo base: emissão privada, snapshot do pacote, token público seguro, endpoint público, aceite digital, comprovante e revogação segura.
 
 Mas ainda não está pronto para produção premium porque existem riscos em:
 
@@ -60,6 +61,8 @@ Mas ainda não está pronto para produção premium porque existem riscos em:
 - IA de documentos ainda simulada (`FAKE_DOCUMENT_INGESTION_MODEL_NAME`).
 - Sem CI configurado (`.github/workflows` não existe).
 - Sem políticas LGPD, observabilidade, billing.
+
+Os módulos já concluídos que servem como base operacional devem ser tratados como estabilizados e documentados, não como backlog aberto.
 
 ---
 
@@ -123,6 +126,8 @@ Linguagem correta:
 ## 4. Roadmap técnico de consolidação
 
 A sequência foi reorganizada para colocar **LGPD e Observabilidade antes de IA real**, e **Performance/A11y/Billing antes do go-live**. A ordem final está em § 8.
+
+O Handover Digital já entrou na camada de base consolidada do produto e deixa de ser tratado como fase experimental.
 
 ---
 
@@ -316,6 +321,36 @@ Saída:
 ### Objetivo
 
 Remover refresh token do `localStorage` e do body, blindar contra CSRF.
+
+---
+
+## 5. Marcos de produto já consolidados
+
+### Handover Digital
+
+Consolidado como módulo de entrega técnica do imóvel, com:
+
+- pacote privado emitido no contexto do tenant e property;
+- snapshot fechado no momento da emissão;
+- token público seguro e hash interno;
+- endpoint público para leitura e aceite;
+- revogação privada com invalidacao imediata;
+- comprovante público de aceite;
+- impressão/salvar PDF via navegador.
+
+### Riscos residuais do módulo
+
+- PDF completo do pacote ainda não existe como exportação dedicada;
+- envio automatizado por WhatsApp/e-mail ainda não foi implementado;
+- área do cliente para consulta avançada ainda pode evoluir;
+- o comprovante atual depende do diálogo de impressão do navegador.
+
+### Próximos marcos de produto
+
+1. Envio do link por WhatsApp/e-mail.
+2. PDF completo do pacote de entrega.
+3. Área do cliente avançada para entrega e histórico.
+4. Refinamento de métricas e relatórios do handover.
 
 ### Prompt para agente
 

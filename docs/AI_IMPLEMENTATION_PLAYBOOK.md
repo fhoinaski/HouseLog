@@ -361,6 +361,45 @@ Depois implemente.
 
 ---
 
+## 11. Status consolidado da Fase P3-HANDOVER
+
+### P3-HANDOVER — Handover Digital / Chave Digital do Imóvel
+
+Status: **concluída**.
+
+Checklist consolidado da fase:
+
+| Issue | Objetivo | Status |
+|---|---|---|
+| P3-HANDOVER-01 | Modelagem conceitual do pacote de handover e estados | Concluída |
+| P3-HANDOVER-02 | Checklist de entrega e critérios de revisão | Concluída |
+| P3-HANDOVER-03 | Emissão da chave digital com expiração e revogação | Concluída |
+| P3-HANDOVER-04 | Experiência interna da construtora | Concluída |
+| P3-HANDOVER-05 | Experiência do proprietário para aceite digital | Concluída |
+| P3-HANDOVER-06 | Integração com documentos, garantias, sistemas e inventário | Concluída |
+| P3-HANDOVER-07 | Revogação, expiração e histórico do pacote | Concluída |
+| P3-HANDOVER-08 | Contratos e endpoints mínimos para implementação | Concluída |
+| P3-HANDOVER-UX-01 | Ajuste de copy e acessibilidade do comprovante público | Concluída |
+
+### Resultado operacional
+
+- pacote privado emitido com snapshot fechado;
+- token público seguro com hash interno;
+- endpoint público `/handover/:token` operacional;
+- aceite digital público com comprovante;
+- estados inválido, expirado, revogado, emitido e aceito tratados na UI;
+- audit log sanitizado e sem exposição de token puro, token hash, packageHash ou R2 key.
+
+### Próxima fase recomendada
+
+Escolher um destes caminhos:
+
+1. `P3-COMMERCIAL-01` — Envio do link por WhatsApp/e-mail.
+2. `P3-PDF-01` — PDF completo do pacote de entrega.
+3. `P3-HANDOVER-CLIENT-01` — área do cliente avançada para consulta e histórico.
+
+---
+
 ## 11. Como atualizar este documento
 
 Sempre que uma etapa for concluída, atualizar:

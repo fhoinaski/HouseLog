@@ -49,6 +49,40 @@ Pode participar quando houver inspeções, garantias, ajustes, assistência de e
 9. Notificar o proprietário e permitir acesso com escopo restrito.
 10. Registrar aceite, revogação ou expiração do acesso.
 
+## Fluxo implementado
+
+O fluxo de Handover Digital já está implementado de ponta a ponta no produto atual:
+
+- emissão privada do pacote no contexto do tenant e do imóvel;
+- snapshot fechado do pacote no momento da emissão;
+- token público seguro com hash armazenado no backend;
+- URL pública `/handover/:token` para acesso do proprietário;
+- endpoint público seguro para leitura e aceite;
+- estados públicos para link inválido, expirado, revogado, pacote emitido e pacote aceito;
+- aceite digital com nome, email e confirmação explícita de ciência;
+- comprovante de aceite digital com dados mascarados;
+- impressão/salvar PDF via janela de impressão do navegador;
+- revogação privada segura com invalidacao imediata do acesso;
+- audit log sanitizado sem token puro, token hash, packageHash ou R2 key.
+
+## Endpoints
+
+### Privados
+
+- `GET /api/v1/properties/:propertyId/handover-packages`
+- `POST /api/v1/properties/:propertyId/handover-packages`
+- `GET /api/v1/properties/:propertyId/handover-packages/:id`
+- `PUT /api/v1/properties/:propertyId/handover-packages/:id`
+- `POST /api/v1/properties/:propertyId/handover-packages/:id/issue`
+- `POST /api/v1/properties/:propertyId/handover-packages/:id/revoke`
+- `DELETE /api/v1/properties/:propertyId/handover-packages/:id`
+- `GET /api/v1/properties/:propertyId/handover-packages/:id/items`
+
+### Públicos
+
+- `GET /api/v1/public/handover/:token`
+- `POST /api/v1/public/handover/:token/accept`
+
 ## Estados do pacote
 
 O pacote de handover deve evoluir de forma explícita entre estados operacionais:
@@ -60,6 +94,14 @@ O pacote de handover deve evoluir de forma explícita entre estados operacionais
 - `accepted` - proprietário confirmou o recebimento;
 - `revoked` - emissão cancelada ou invalidada;
 - `expired` - validade encerrada.
+
+Estados observados na implementação pública:
+
+- link inválido;
+- link expirado;
+- pacote revogado;
+- pacote emitido;
+- pacote aceito.
 
 Regras de transição:
 
@@ -108,6 +150,9 @@ Regras obrigatórias:
 - não expor URL privada de storage;
 - o proprietário só deve ver o pacote que foi realmente emitido para ele;
 - qualquer acesso cross-tenant deve falhar de forma segura e sem vazamento de existência.
+- o DTO público é sanitizado e não expõe `tenantId`, `packageHash`, token puro, R2 key ou IDs internos desnecessários;
+- o snapshot público é derivado do snapshot emitido, não de dados vivos do imóvel;
+- o aceite digital não altera `snapshotJson`.
 
 Checklist de segurança:
 
@@ -117,6 +162,7 @@ Checklist de segurança:
 - o acesso público não revela metadados sensíveis?
 - os documentos privados continuam protegidos por autorização?
 - o audit log registra emissão, aceite, revogação e expiração?
+- o comprovante público mostra apenas dados permitidos e usa email mascarado?
 
 ## UX
 
@@ -149,6 +195,15 @@ A experiência do proprietário deve ser simples e objetiva:
 - visualizar os itens incluídos;
 - aceitar o recebimento;
 - acessar o histórico técnico inicial.
+
+### Comprovante de aceite
+
+O comprovante público deve ser explícito e fiel ao comportamento real do navegador:
+
+- o botão abre a janela de impressão do navegador;
+- o usuário pode escolher a opção de salvar como PDF;
+- o CTA deve falar em imprimir ou salvar em PDF, não em download direto;
+- o texto auxiliar deve orientar o usuário sobre a ação esperada.
 
 ### Aceite digital
 
@@ -229,6 +284,14 @@ Se documentos, garantias ou recomendações mudarem depois da emissão, a versã
 
 O aceite do proprietário deve ser auditável e vinculável à versão exata do pacote recebido.
 
+### Evolução futura do PDF
+
+O comprovante atual depende da impressão do navegador. Um PDF completo do pacote pode exigir uma issue própria, sem reutilizar essa experiência como se já fosse exportação server-side.
+
+### Envio do link
+
+O envio automatizado por WhatsApp ou e-mail ainda não faz parte desta fase e precisa de issue própria para não misturar canal de distribuição com emissão/aceite.
+
 ## Sequência incremental de issues
 
 Sugestão de desdobramento progressivo:
@@ -241,6 +304,15 @@ Sugestão de desdobramento progressivo:
 - `P3-HANDOVER-06` - integrar handover com documentos, garantias, sistemas e inventário;
 - `P3-HANDOVER-07` - auditar revogação, expiração e histórico do pacote;
 - `P3-HANDOVER-08` - preparar contratos e endpoints mínimos para implementação futura.
+
+## Próximas evoluções
+
+Após a conclusão do handover digital, as evoluções mais prováveis são:
+
+- `P3-COMMERCIAL-01` - envio do link por WhatsApp/e-mail;
+- `P3-PDF-01` - PDF completo do pacote de entrega;
+- `P3-HANDOVER-CLIENT-01` - área do cliente mais rica para consulta da entrega;
+- `P3-HANDOVER-AUDIT-01` - reforço de relatórios e trilha de auditoria operacional.
 
 ## Diretriz de produto
 
