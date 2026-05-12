@@ -101,13 +101,15 @@ async function ensureTenantProperty(
 async function readReference(
   db: DbClient,
   table: ReferenceTable,
-  id: string
+  id: string,
+  tenantId: string,
+  propertyId: string
 ): Promise<{ tenantId: string | null; propertyId: string } | null> {
   if (table === 'room') {
     const [row] = await db
       .select({ tenantId: rooms.tenantId, propertyId: rooms.propertyId })
       .from(rooms)
-      .where(and(eq(rooms.id, id), isNull(rooms.deletedAt)))
+      .where(and(eq(rooms.id, id), eq(rooms.tenantId, tenantId), eq(rooms.propertyId, propertyId), isNull(rooms.deletedAt)))
       .limit(1);
     return row ?? null;
   }
@@ -115,7 +117,7 @@ async function readReference(
     const [row] = await db
       .select({ tenantId: serviceOrders.tenantId, propertyId: serviceOrders.propertyId })
       .from(serviceOrders)
-      .where(and(eq(serviceOrders.id, id), isNull(serviceOrders.deletedAt)))
+      .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId), isNull(serviceOrders.deletedAt)))
       .limit(1);
     return row ?? null;
   }
@@ -123,14 +125,14 @@ async function readReference(
     const [row] = await db
       .select({ tenantId: documents.tenantId, propertyId: documents.propertyId })
       .from(documents)
-      .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
+      .where(and(eq(documents.id, id), eq(documents.tenantId, tenantId), eq(documents.propertyId, propertyId), isNull(documents.deletedAt)))
       .limit(1);
     return row ?? null;
   }
   const [row] = await db
     .select({ tenantId: inventoryItems.tenantId, propertyId: inventoryItems.propertyId })
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.id, id), isNull(inventoryItems.deletedAt)))
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.propertyId, propertyId), isNull(inventoryItems.deletedAt)))
     .limit(1);
   return row ?? null;
 }
@@ -145,7 +147,7 @@ async function validateOptionalReference(
   }
 ): Promise<ReturnType<typeof canLinkWarrantyReference>> {
   if (!input.id) return { allowed: true };
-  const reference = await readReference(db, input.table, input.id);
+  const reference = await readReference(db, input.table, input.id, input.tenantId, input.propertyId);
   if (!reference) return { allowed: false, status: 422, code: 'REFERENCE_NOT_IN_PROPERTY' };
   return canLinkWarrantyReference({
     activeTenantId: input.tenantId,

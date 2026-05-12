@@ -76,6 +76,7 @@ serviceRequestsRoute.get('/', async (c) => {
   const filters = [
     eq(serviceRequests.propertyId, propertyId),
     eq(serviceRequests.tenantId, tenantId),
+    eq(properties.tenantId, tenantId),
     isNull(properties.deletedAt),
   ];
 
@@ -100,8 +101,8 @@ serviceRequestsRoute.get('/', async (c) => {
       best_amount: sql<number | null>`min(${bids.amount})`,
     })
     .from(serviceRequests)
-    .innerJoin(properties, eq(properties.id, serviceRequests.propertyId))
-    .leftJoin(bids, eq(bids.serviceRequestId, serviceRequests.id))
+    .innerJoin(properties, and(eq(properties.id, serviceRequests.propertyId), eq(properties.tenantId, tenantId)))
+    .leftJoin(bids, and(eq(bids.serviceRequestId, serviceRequests.id), eq(bids.tenantId, tenantId)))
     .where(and(...filters))
     .groupBy(serviceRequests.id)
     .orderBy(desc(serviceRequests.createdAt))
@@ -163,7 +164,7 @@ serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
       updated_at: serviceRequests.updatedAt,
     })
     .from(serviceRequests)
-    .innerJoin(properties, eq(properties.id, serviceRequests.propertyId))
+    .innerJoin(properties, and(eq(properties.id, serviceRequests.propertyId), eq(properties.tenantId, tenantId)))
     .where(
       and(
         eq(serviceRequests.id, serviceRequestId),
@@ -194,7 +195,7 @@ serviceRequestsRoute.get('/:serviceRequestId', async (c) => {
     })
     .from(bids)
     .innerJoin(users, eq(users.id, bids.providerId))
-    .where(eq(bids.serviceRequestId, serviceRequestId))
+    .where(and(eq(bids.serviceRequestId, serviceRequestId), eq(bids.tenantId, tenantId)))
     .orderBy(sql`CASE ${bids.status} WHEN 'ACCEPTED' THEN 0 WHEN 'PENDING' THEN 1 ELSE 2 END`, bids.amount);
 
   return ok(c, {
@@ -282,6 +283,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
   try {
     await db.insert(serviceOrders).values({
       id: serviceId,
+      tenantId,
       propertyId,
       roomId: input.room_id ?? null,
       systemType: input.system_type,
@@ -300,7 +302,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
     await db
       .update(serviceRequests)
       .set({ status: 'CLOSED', updatedAt: new Date().toISOString() })
-      .where(eq(serviceRequests.id, serviceRequestId));
+      .where(and(eq(serviceRequests.id, serviceRequestId), eq(serviceRequests.tenantId, tenantId), eq(serviceRequests.propertyId, propertyId)));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('FOREIGN KEY')) {
@@ -334,7 +336,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
       deleted_at: serviceOrders.deletedAt,
     })
     .from(serviceOrders)
-    .where(eq(serviceOrders.id, serviceId))
+    .where(and(eq(serviceOrders.id, serviceId), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, propertyId)))
     .limit(1);
 
   return ok(c, { order }, 201);

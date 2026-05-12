@@ -160,7 +160,14 @@ inventory.post('/', async (c) => {
     const [room] = await db
       .select({ tenantId: rooms.tenantId, propertyId: rooms.propertyId })
       .from(rooms)
-      .where(and(eq(rooms.id, d.room_id), isNull(rooms.deletedAt)))
+      .where(
+        and(
+          eq(rooms.id, d.room_id),
+          eq(rooms.tenantId, tenantId),
+          eq(rooms.propertyId, propertyId),
+          isNull(rooms.deletedAt)
+        )
+      )
       .limit(1);
     if (!room) return err(c, 'Ambiente não encontrado', 'NOT_FOUND', 404);
     const decision = canAssignRoomToInventory({
@@ -198,7 +205,7 @@ inventory.post('/', async (c) => {
   const [item] = await db
     .select(inventorySelect)
     .from(inventoryItems)
-    .where(eq(inventoryItems.id, id))
+    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.propertyId, propertyId)))
     .limit(1) as InventoryItem[];
 
   if (!item) return err(c, 'Erro ao criar item', 'CREATE_ERROR', 500);
@@ -329,7 +336,14 @@ inventory.put('/:id', async (c) => {
     const [room] = await db
       .select({ tenantId: rooms.tenantId, propertyId: rooms.propertyId })
       .from(rooms)
-      .where(and(eq(rooms.id, d.room_id), isNull(rooms.deletedAt)))
+      .where(
+        and(
+          eq(rooms.id, d.room_id),
+          eq(rooms.tenantId, tenantId),
+          eq(rooms.propertyId, propertyId),
+          isNull(rooms.deletedAt)
+        )
+      )
       .limit(1);
     if (!room) return err(c, 'Ambiente não encontrado', 'NOT_FOUND', 404);
     const decision = canAssignRoomToInventory({

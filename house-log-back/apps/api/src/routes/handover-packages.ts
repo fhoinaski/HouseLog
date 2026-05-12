@@ -142,7 +142,7 @@ async function validateSummaryDocument(
   const [document] = await db
     .select({ tenantId: documents.tenantId, propertyId: documents.propertyId })
     .from(documents)
-    .where(and(eq(documents.id, summaryDocumentId), isNull(documents.deletedAt)))
+    .where(and(eq(documents.id, summaryDocumentId), eq(documents.tenantId, input.tenantId), eq(documents.propertyId, input.propertyId), isNull(documents.deletedAt)))
     .limit(1);
 
   const decision = document

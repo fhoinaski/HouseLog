@@ -15,6 +15,7 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
   const serviceRequestId = c.req.param('serviceRequestId');
   const bidId = c.req.param('bidId');
   const ownerId = c.get('userId');
+  const tenantId = c.get('tenantId') as string;
 
   if (!propertyId || !serviceRequestId || !bidId) {
     return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
@@ -26,12 +27,13 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
     const [property] = await db
       .select({
         id: properties.id,
+        tenantId: properties.tenantId,
         ownerId: properties.ownerId,
         propertyName: properties.name,
         propertyAddress: properties.address,
       })
       .from(properties)
-      .where(and(eq(properties.id, propertyId), eq(properties.ownerId, ownerId)))
+      .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), eq(properties.ownerId, ownerId)))
       .limit(1);
 
     if (!property) {
@@ -47,7 +49,8 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
       .where(
         and(
           eq(serviceRequests.id, serviceRequestId),
-          eq(serviceRequests.propertyId, propertyId)
+          eq(serviceRequests.propertyId, propertyId),
+          eq(serviceRequests.tenantId, tenantId)
         )
       )
       .limit(1);
@@ -75,7 +78,7 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
       })
       .from(bids)
       .innerJoin(users, eq(users.id, bids.providerId))
-      .where(and(eq(bids.id, bidId), eq(bids.serviceRequestId, serviceRequestId)))
+      .where(and(eq(bids.id, bidId), eq(bids.serviceRequestId, serviceRequestId), eq(bids.tenantId, tenantId)))
       .limit(1);
 
     if (!targetBid) {
@@ -91,7 +94,7 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
     await db
       .update(bids)
       .set({ status: 'ACCEPTED', updatedAt: now })
-      .where(and(eq(bids.id, bidId), eq(bids.serviceRequestId, serviceRequestId)));
+      .where(and(eq(bids.id, bidId), eq(bids.serviceRequestId, serviceRequestId), eq(bids.tenantId, tenantId)));
 
     await db
       .update(bids)
@@ -99,6 +102,7 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
       .where(
         and(
           eq(bids.serviceRequestId, serviceRequestId),
+          eq(bids.tenantId, tenantId),
           ne(bids.id, bidId)
         )
       );
@@ -114,7 +118,7 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
         updatedAt: bids.updatedAt,
       })
       .from(bids)
-      .where(eq(bids.id, bidId))
+      .where(and(eq(bids.id, bidId), eq(bids.serviceRequestId, serviceRequestId), eq(bids.tenantId, tenantId)))
       .limit(1);
 
     const [rejectedSummary] = await db
@@ -125,6 +129,7 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
       .where(
         and(
           eq(bids.serviceRequestId, serviceRequestId),
+          eq(bids.tenantId, tenantId),
           eq(bids.status, 'REJECTED')
         )
       );

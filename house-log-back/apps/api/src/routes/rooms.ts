@@ -86,7 +86,7 @@ rooms.post('/', async (c) => {
   const [room] = await db
     .select(roomSelect)
     .from(roomsTable)
-    .where(eq(roomsTable.id, id))
+    .where(and(eq(roomsTable.id, id), eq(roomsTable.propertyId, propertyId), eq(roomsTable.tenantId, tenantId), isNull(roomsTable.deletedAt)))
     .limit(1) as Room[];
 
   await writeAuditLog(c.env.DB, {
@@ -189,7 +189,7 @@ rooms.put('/:id', async (c) => {
   const [updated] = await db
     .select(roomSelect)
     .from(roomsTable)
-    .where(eq(roomsTable.id, id))
+    .where(and(eq(roomsTable.id, id), eq(roomsTable.propertyId, propertyId), eq(roomsTable.tenantId, tenantId), isNull(roomsTable.deletedAt)))
     .limit(1) as Room[];
 
   await writeAuditLog(c.env.DB, {

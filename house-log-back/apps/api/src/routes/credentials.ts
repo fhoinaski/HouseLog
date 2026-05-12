@@ -259,7 +259,7 @@ credentials.post('/', async (c) => {
   const [row] = await db
     .select(credentialSelect)
     .from(propertyAccessCredentials)
-    .where(eq(propertyAccessCredentials.id, id))
+    .where(and(eq(propertyAccessCredentials.id, id), eq(propertyAccessCredentials.tenantId, tenantId), eq(propertyAccessCredentials.propertyId, propertyId), isNull(propertyAccessCredentials.deletedAt)))
     .limit(1) as CredentialRecord[];
 
   if (!row) return err(c, 'Erro ao carregar credencial', 'SERVER_ERROR', 500);
@@ -346,12 +346,12 @@ credentials.put('/:credId', async (c) => {
   await db
     .update(propertyAccessCredentials)
     .set(patch)
-    .where(eq(propertyAccessCredentials.id, credId));
+    .where(and(eq(propertyAccessCredentials.id, credId), eq(propertyAccessCredentials.tenantId, tenantId), eq(propertyAccessCredentials.propertyId, propertyId), isNull(propertyAccessCredentials.deletedAt)));
 
   const [row] = await db
     .select(credentialSelect)
     .from(propertyAccessCredentials)
-    .where(eq(propertyAccessCredentials.id, credId))
+    .where(and(eq(propertyAccessCredentials.id, credId), eq(propertyAccessCredentials.tenantId, tenantId), eq(propertyAccessCredentials.propertyId, propertyId), isNull(propertyAccessCredentials.deletedAt)))
     .limit(1) as CredentialRecord[];
 
   if (!row) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
