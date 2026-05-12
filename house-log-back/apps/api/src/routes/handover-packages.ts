@@ -27,12 +27,14 @@ import {
   buildHandoverPackageSnapshot,
   buildPublicAccessUrl,
   canIssueHandoverPackage,
+  canRevokeHandoverPackage,
   generatePublicAccessToken,
 } from '../lib/handover-issue';
 import type { Bindings, Variables } from '../lib/types';
 import {
   handoverPackageCreateSchema,
   handoverPackageFilterSchema,
+  HandoverPackageRevokeInputSchema,
   handoverPackageUpdateSchema,
   type HandoverPackageStatus,
   type HandoverPackageType,
@@ -835,7 +837,7 @@ handoverPackagesRoute.post('/:id/issue', async (c) => {
 
   if (!issuedPackage) return err(c, 'Erro ao emitir dossie', 'INTERNAL_ERROR', 500);
 
-  const publicAccessUrl = buildPublicAccessUrl(c.env.APP_URL, packageId, token);
+  const publicAccessUrl = buildPublicAccessUrl(c.env.APP_URL, token);
 
   await writeAuditLog(c.env.DB, {
     tenantId,
@@ -850,6 +852,132 @@ handoverPackagesRoute.post('/:id/issue', async (c) => {
   });
 
   return ok(c, { package: issuedPackage, publicAccessUrl });
+});
+
+handoverPackagesRoute.post('/:id/revoke', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const packageId = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  const userId = c.get('userId');
+  const userRole = c.get('userRole');
+  const tenantRole = c.get('tenantRole');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const body = await c.req.json().catch((): unknown => ({}));
+  const parsedBody = HandoverPackageRevokeInputSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return err(c, 'Dados de revogacao invalidos.', 'VALIDATION_ERROR', 422);
+  }
+
+  const context = await getTenantPropertyOrResponse(c, db, propertyId, tenantId);
+  if (!context.ok) return context.response;
+
+  const [property] = await db
+    .select({
+      id: properties.id,
+      ownerId: properties.ownerId,
+      managerId: properties.managerId,
+    })
+    .from(properties)
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .limit(1);
+
+  if (!property) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  const [handoverPackage] = await db
+    .select(handoverPackageSelect)
+    .from(handoverPackages)
+    .where(
+      and(
+        eq(handoverPackages.id, packageId),
+        eq(handoverPackages.tenantId, tenantId),
+        eq(handoverPackages.propertyId, propertyId),
+        isNull(handoverPackages.deletedAt)
+      )
+    )
+    .limit(1) as HandoverPackageRow[];
+
+  if (!handoverPackage) return err(c, 'Dossie nao encontrado', 'NOT_FOUND', 404);
+
+  const permission = canRevokeHandoverPackage({
+    tenantId,
+    tenantRole,
+    userId,
+    userRole,
+    propertyOwnerId: property.ownerId,
+    propertyManagerId: property.managerId,
+    packageStatus: handoverPackage.status,
+    issuedAt: handoverPackage.issued_at,
+    revokedAt: handoverPackage.revoked_at,
+    publicAccessTokenHash: handoverPackage.public_access_token_hash,
+  });
+  if (!permission.allowed) {
+    const message = permission.code === 'CONFLICT'
+      ? 'Dossie nao pode ser revogado neste estado.'
+      : 'Sem permissao para revogar o dossie.';
+    return err(c, message, permission.code, permission.status);
+  }
+
+  const now = new Date().toISOString();
+  await db
+    .update(handoverPackages)
+    .set({
+      status: 'revoked',
+      revokedAt: now,
+      revokedBy: userId,
+      revokeReason: parsedBody.data.revokeReason,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(handoverPackages.id, packageId),
+        eq(handoverPackages.tenantId, tenantId),
+        eq(handoverPackages.propertyId, propertyId),
+        isNull(handoverPackages.deletedAt)
+      )
+    );
+
+  const [revokedPackage] = await db
+    .select(handoverPackageSelect)
+    .from(handoverPackages)
+    .where(
+      and(
+        eq(handoverPackages.id, packageId),
+        eq(handoverPackages.tenantId, tenantId),
+        eq(handoverPackages.propertyId, propertyId),
+        isNull(handoverPackages.deletedAt)
+      )
+    )
+    .limit(1) as HandoverPackageRow[];
+
+  if (!revokedPackage) return err(c, 'Erro ao revogar dossie', 'INTERNAL_ERROR', 500);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'handover_package',
+    entityId: packageId,
+    action: 'handover_package_revoked',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    oldData: {
+      id: handoverPackage.id,
+      property_id: handoverPackage.property_id,
+      status: handoverPackage.status,
+      revoked_at: handoverPackage.revoked_at,
+    },
+    newData: {
+      id: revokedPackage.id,
+      property_id: revokedPackage.property_id,
+      status: revokedPackage.status,
+      revoked_at: revokedPackage.revoked_at,
+      revoked_by: revokedPackage.revoked_by,
+      revoke_reason: revokedPackage.revoke_reason,
+    },
+  });
+
+  return ok(c, { package: revokedPackage });
 });
 
 handoverPackagesRoute.delete('/:id', async (c) => {

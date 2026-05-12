@@ -1,6 +1,7 @@
-import type { HandoverPackageStatus, HandoverPackagePublic } from '@houselog/contracts';
+import type { HandoverPackageStatus, HandoverPackagePublic, HandoverPackagePublicSnapshot } from '@houselog/contracts';
 import {
   HandoverPackagePublicDtoSchema,
+  HandoverPackagePublicSnapshotSchema,
   HandoverPackageSnapshotSchema,
 } from '@houselog/contracts';
 import { sha256Hex } from './handover-issue';
@@ -28,6 +29,86 @@ export type PublicHandoverPackageRow = {
   updated_at: string | null;
   snapshot_json: unknown;
 };
+
+export function sanitizePublicHandoverSnapshot(snapshot: unknown): HandoverPackagePublicSnapshot | null {
+  const parsed = HandoverPackageSnapshotSchema.safeParse(snapshot);
+  if (!parsed.success) return null;
+
+  const source = parsed.data;
+  const publicSnapshot = HandoverPackagePublicSnapshotSchema.safeParse({
+    generatedAt: source.generatedAt,
+    property: {
+      name: source.property.name,
+      type: source.property.type,
+      address: source.property.address,
+      city: source.property.city,
+      areaM2: source.property.areaM2,
+      yearBuilt: source.property.yearBuilt,
+      structure: source.property.structure,
+      floors: source.property.floors,
+      healthScore: source.property.healthScore,
+    },
+    package: {
+      title: source.package.title,
+      type: source.package.type,
+      version: source.package.version,
+      status: source.package.status,
+    },
+    rooms: source.rooms.map((room) => ({
+      name: room.name,
+      type: room.type,
+      floor: room.floor,
+      areaM2: room.areaM2,
+    })),
+    documents: source.documents.map((document) => ({
+      title: document.title,
+      type: document.type,
+      issueDate: document.issueDate,
+      expiryDate: document.expiryDate,
+    })),
+    technicalSystems: source.technicalSystems.map((system) => ({
+      name: system.name,
+      type: system.type,
+      status: system.status,
+      locationSummary: system.locationSummary,
+      lastInspectionAt: system.lastInspectionAt,
+    })),
+    inventoryItems: source.inventoryItems.map((item) => ({
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      unit: item.unit,
+      warrantyUntil: item.warrantyUntil,
+    })),
+    warranties: source.warranties.map((warranty) => ({
+      title: warranty.title,
+      warrantyType: warranty.warrantyType,
+      status: warranty.status,
+      startDate: warranty.startDate,
+      endDate: warranty.endDate,
+      providerName: warranty.providerName,
+    })),
+    maintenanceSchedules: source.maintenanceSchedules.map((schedule) => ({
+      title: schedule.title,
+      systemType: schedule.systemType,
+      responsible: schedule.responsible,
+      frequency: schedule.frequency,
+      lastDone: schedule.lastDone,
+      nextDue: schedule.nextDue,
+      autoCreateOs: schedule.autoCreateOs,
+    })),
+    checklistItems: source.checklistItems.map((item) => ({
+      title: item.title,
+      category: item.category,
+      status: item.status,
+      required: item.required,
+      condition: item.condition,
+      completedAt: item.completedAt,
+    })),
+  });
+
+  return publicSnapshot.success ? publicSnapshot.data : null;
+}
 
 export function maskPublicHandoverEmail(email: string | null): string {
   if (!email) return 'Nao informado';
@@ -65,8 +146,8 @@ export function resolvePublicHandoverPackage(
     return { ok: false, status: 410, code: 'LINK_EXPIRED' };
   }
 
-  const snapshot = HandoverPackageSnapshotSchema.safeParse(row.snapshot_json);
-  if (!snapshot.success) {
+  const snapshot = sanitizePublicHandoverSnapshot(row.snapshot_json);
+  if (!snapshot) {
     return { ok: false, status: 500, code: 'INTERNAL_ERROR' };
   }
 
@@ -81,16 +162,14 @@ export function resolvePublicHandoverPackage(
         expiresAt: row.expires_at,
         packageTitle: row.title,
         propertySummary: {
-          name: snapshot.data.property.name,
-          type: snapshot.data.property.type,
-          city: snapshot.data.property.city,
+          name: snapshot.property.name,
+          type: snapshot.property.type,
+          city: snapshot.property.city,
         },
       }
     : null;
 
   const dto = HandoverPackagePublicDtoSchema.safeParse({
-    id: row.id,
-    property_id: row.property_id,
     title: row.title,
     description: row.description,
     issuerName: row.issuer_name,
@@ -103,9 +182,7 @@ export function resolvePublicHandoverPackage(
     issued_at: row.issued_at,
     accepted_at: row.accepted_at,
     expires_at: row.expires_at,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    snapshot_json: snapshot.data,
+    snapshot_json: snapshot,
     acceptanceReceipt,
   });
 

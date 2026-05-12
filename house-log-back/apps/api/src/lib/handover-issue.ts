@@ -156,9 +156,9 @@ export async function generatePublicAccessToken(): Promise<{ token: string; toke
   return { token, tokenHash };
 }
 
-export function buildPublicAccessUrl(appUrl: string, packageId: string, token: string): string {
+export function buildPublicAccessUrl(appUrl: string, token: string): string {
   const baseUrl = appUrl.replace(/\/$/, '');
-  return `${baseUrl}/handover-packages/${packageId}/access?token=${encodeURIComponent(token)}`;
+  return `${baseUrl}/handover/${encodeURIComponent(token)}`;
 }
 
 export function canIssueHandoverPackage(input: {
@@ -201,4 +201,50 @@ export function canIssueHandoverPackage(input: {
   }
 
   return { allowed: false, status: 403, code: 'FORBIDDEN' };
+}
+
+export function canRevokeHandoverPackage(input: {
+  tenantId?: string | null;
+  tenantRole?: TenantRole | null;
+  userId: string;
+  userRole: Role;
+  propertyOwnerId: string;
+  propertyManagerId: string | null;
+  packageStatus: HandoverPackageStatus;
+  issuedAt: string | null;
+  revokedAt: string | null;
+  publicAccessTokenHash: string | null;
+}):
+  | { allowed: true }
+  | { allowed: false; status: 400 | 403 | 409; code: 'TENANT_REQUIRED' | 'FORBIDDEN' | 'CONFLICT' } {
+  if (!input.tenantId || !input.tenantRole) {
+    return { allowed: false, status: 400, code: 'TENANT_REQUIRED' };
+  }
+
+  if (input.userRole === 'provider' || input.userRole === 'temp_provider') {
+    return { allowed: false, status: 403, code: 'FORBIDDEN' };
+  }
+
+  const canManage =
+    input.userRole === 'admin' ||
+    input.tenantRole === 'owner' ||
+    input.tenantRole === 'manager' ||
+    input.propertyOwnerId === input.userId ||
+    input.propertyManagerId === input.userId;
+
+  if (!canManage) {
+    return { allowed: false, status: 403, code: 'FORBIDDEN' };
+  }
+
+  if (
+    input.revokedAt !== null ||
+    input.packageStatus === 'revoked' ||
+    (input.packageStatus !== 'issued' && input.packageStatus !== 'accepted') ||
+    input.issuedAt === null ||
+    input.publicAccessTokenHash === null
+  ) {
+    return { allowed: false, status: 409, code: 'CONFLICT' };
+  }
+
+  return { allowed: true };
 }

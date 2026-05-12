@@ -14,7 +14,7 @@ import {
   Sparkles,
   Wrench,
 } from 'lucide-react';
-import type { HandoverPackagePublic, HandoverPackageSnapshot } from '@houselog/contracts';
+import type { HandoverPackagePublic, HandoverPackagePublicSnapshot } from '@houselog/contracts';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,7 +138,7 @@ function StatusPanel({
   snapshot,
   handoverPackage,
 }: {
-  snapshot: HandoverPackageSnapshot;
+  snapshot: HandoverPackagePublicSnapshot;
   handoverPackage: HandoverPackagePublic;
 }) {
   return (
@@ -260,9 +260,9 @@ export function PublicHandoverPackageView({ token, handoverPackage }: PublicHand
             icon={FileText}
             emptyText="Nenhum documento foi incluido neste pacote."
           >
-            {snapshot.documents.map((document) => (
+            {snapshot.documents.map((document, index) => (
               <DetailItem
-                key={document.id}
+                key={`${document.title}-${index}`}
                 title={document.title}
                 meta={document.type}
                 detail={`Emitido em ${formatDate(document.issueDate)}. Validade: ${formatDate(document.expiryDate)}.`}
@@ -277,9 +277,9 @@ export function PublicHandoverPackageView({ token, handoverPackage }: PublicHand
             icon={ShieldCheck}
             emptyText="Nenhuma garantia foi incluida neste pacote."
           >
-            {snapshot.warranties.map((warranty) => (
+            {snapshot.warranties.map((warranty, index) => (
               <DetailItem
-                key={warranty.id}
+                key={`${warranty.title}-${index}`}
                 title={warranty.title}
                 meta={warranty.warrantyType}
                 detail={`Valida ate ${formatDate(warranty.endDate)}.${warranty.providerName ? ` Responsavel: ${warranty.providerName}.` : ''}`}
@@ -294,9 +294,9 @@ export function PublicHandoverPackageView({ token, handoverPackage }: PublicHand
             icon={Wrench}
             emptyText="Nenhum sistema tecnico foi incluido neste pacote."
           >
-            {snapshot.technicalSystems.map((system) => (
+            {snapshot.technicalSystems.map((system, index) => (
               <DetailItem
-                key={system.id}
+                key={`${system.name}-${index}`}
                 title={system.name}
                 meta={formatSystemType(system.type)}
                 detail={`Local: ${formatOptional(system.locationSummary)}. Ultima revisao: ${formatDate(system.lastInspectionAt)}.`}
@@ -311,9 +311,9 @@ export function PublicHandoverPackageView({ token, handoverPackage }: PublicHand
             icon={Package}
             emptyText="Nenhum item de inventario foi incluido neste pacote."
           >
-            {snapshot.inventoryItems.map((item) => (
+            {snapshot.inventoryItems.map((item, index) => (
               <DetailItem
-                key={item.id}
+                key={`${item.name}-${index}`}
                 title={item.name}
                 meta={formatInventoryCategory(item.category)}
                 detail={`${formatQuantity(item.quantity, item.unit)}.${item.warrantyUntil ? ` Garantia ate ${formatDate(item.warrantyUntil)}.` : ''}`}
@@ -328,9 +328,9 @@ export function PublicHandoverPackageView({ token, handoverPackage }: PublicHand
             icon={CalendarClock}
             emptyText="Nenhuma manutencao recomendada foi incluida neste pacote."
           >
-            {snapshot.maintenanceSchedules.map((schedule) => (
+            {snapshot.maintenanceSchedules.map((schedule, index) => (
               <DetailItem
-                key={schedule.id}
+                key={`${schedule.title}-${index}`}
                 title={schedule.title}
                 meta={formatSystemType(schedule.systemType)}
                 detail={`Frequencia: ${formatOptional(schedule.frequency)}. Proxima referencia: ${formatDate(schedule.nextDue)}.${schedule.responsible ? ` Responsavel: ${schedule.responsible}.` : ''}`}

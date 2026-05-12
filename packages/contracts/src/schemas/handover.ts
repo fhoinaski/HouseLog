@@ -107,6 +107,78 @@ export const HandoverPackageSnapshotSchema = z.object({
   }).strict()).default([]),
 }).strict();
 
+export const HandoverPackagePublicSnapshotSchema = z.object({
+  generatedAt: z.string(),
+  property: z.object({
+    name: z.string(),
+    type: z.string(),
+    address: z.string(),
+    city: z.string(),
+    areaM2: z.number().nullable(),
+    yearBuilt: z.number().nullable(),
+    structure: z.string().nullable(),
+    floors: z.number().nullable(),
+    healthScore: z.number(),
+  }).strict(),
+  package: z.object({
+    title: z.string(),
+    type: z.string(),
+    version: z.number().int().positive(),
+    status: handoverPackageStatusSchema,
+  }).strict(),
+  rooms: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    floor: z.number().nullable(),
+    areaM2: z.number().nullable(),
+  }).strict()).default([]),
+  documents: z.array(z.object({
+    title: z.string(),
+    type: z.string(),
+    issueDate: z.string().nullable(),
+    expiryDate: z.string().nullable(),
+  }).strict()).default([]),
+  technicalSystems: z.array(z.object({
+    name: z.string(),
+    type: z.string(),
+    status: z.string(),
+    locationSummary: z.string().nullable(),
+    lastInspectionAt: z.string().nullable(),
+  }).strict()).default([]),
+  inventoryItems: z.array(z.object({
+    name: z.string(),
+    category: z.string(),
+    quantity: z.number().nullable(),
+    unit: z.string().nullable(),
+    warrantyUntil: z.string().nullable(),
+  }).strict()).default([]),
+  warranties: z.array(z.object({
+    title: z.string(),
+    warrantyType: z.string(),
+    status: z.string(),
+    startDate: z.string().nullable(),
+    endDate: z.string(),
+    providerName: z.string().nullable(),
+  }).strict()).default([]),
+  maintenanceSchedules: z.array(z.object({
+    title: z.string(),
+    systemType: z.string(),
+    responsible: z.string().nullable(),
+    frequency: z.string().nullable(),
+    lastDone: z.string().nullable(),
+    nextDue: z.string().nullable(),
+    autoCreateOs: z.boolean(),
+  }).strict()).default([]),
+  checklistItems: z.array(z.object({
+    title: z.string(),
+    category: z.string(),
+    status: z.string(),
+    required: z.boolean(),
+    condition: z.string().nullable(),
+    completedAt: z.string().nullable(),
+  }).strict()).default([]),
+}).strict();
+
 export const HandoverPackagePrivateDtoSchema = z.object({
   id: z.string(),
   tenant_id: z.string(),
@@ -157,8 +229,6 @@ export const HandoverAcceptanceReceiptPublicSchema = z.object({
 }).strict();
 
 export const HandoverPackagePublicDtoSchema = z.object({
-  id: z.string(),
-  property_id: z.string(),
   title: z.string().min(1),
   description: z.string().nullable(),
   issuerName: z.string().max(160).nullable(),
@@ -171,9 +241,7 @@ export const HandoverPackagePublicDtoSchema = z.object({
   issued_at: z.string().nullable(),
   accepted_at: z.string().nullable(),
   expires_at: z.string().nullable(),
-  created_at: z.string(),
-  updated_at: z.string().nullable(),
-  snapshot_json: HandoverPackageSnapshotSchema,
+  snapshot_json: HandoverPackagePublicSnapshotSchema,
   acceptanceReceipt: HandoverAcceptanceReceiptPublicSchema.nullable(),
 }).strict();
 
@@ -202,7 +270,7 @@ export const HandoverPackageIssueInputSchema = z.object({
 }).strict();
 
 export const HandoverPackageRevokeInputSchema = z.object({
-  revoke_reason: z.string().min(1, 'Informe o motivo da revogacao.').max(500),
+  revokeReason: z.string().trim().min(5, 'Informe o motivo da revogacao.').max(500),
 }).strict();
 
 export const HandoverPackageAcceptInputSchema = z.object({
@@ -238,6 +306,7 @@ export type HandoverAcceptanceReceiptPublic = z.infer<typeof HandoverAcceptanceR
 export type HandoverPackagePublic = z.infer<typeof HandoverPackagePublicDtoSchema>;
 export type HandoverPackagePrivate = z.infer<typeof HandoverPackagePrivateDtoSchema>;
 export type HandoverPackageSnapshot = z.infer<typeof HandoverPackageSnapshotSchema>;
+export type HandoverPackagePublicSnapshot = z.infer<typeof HandoverPackagePublicSnapshotSchema>;
 export type HandoverPackageCreateInput = z.infer<typeof handoverPackageCreateSchema>;
 export type HandoverPackageUpdateInput = z.infer<typeof handoverPackageUpdateSchema>;
 export type HandoverPackageFilterInput = z.infer<typeof handoverPackageFilterSchema>;

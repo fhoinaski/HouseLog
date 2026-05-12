@@ -4,6 +4,7 @@ import {
   buildHandoverPackageSnapshot,
   buildPublicAccessUrl,
   canIssueHandoverPackage,
+  canRevokeHandoverPackage,
   generatePublicAccessToken,
 } from './handover-issue';
 
@@ -215,6 +216,66 @@ describe('canIssueHandoverPackage', () => {
   });
 });
 
+describe('canRevokeHandoverPackage', () => {
+  const baseInput = {
+    tenantId: 'tenant-1',
+    tenantRole: 'owner' as const,
+    userId: 'user-1',
+    userRole: 'owner' as const,
+    propertyOwnerId: 'user-1',
+    propertyManagerId: null,
+    packageStatus: 'issued' as const,
+    issuedAt: '2026-05-09T10:05:00.000Z',
+    revokedAt: null,
+    publicAccessTokenHash: 'token-hash',
+  };
+
+  it('permite revogar pacote issued', () => {
+    expect(canRevokeHandoverPackage(baseInput)).toEqual({ allowed: true });
+  });
+
+  it('permite revogar pacote accepted', () => {
+    expect(canRevokeHandoverPackage({ ...baseInput, packageStatus: 'accepted' })).toEqual({ allowed: true });
+  });
+
+  it('bloqueia provider', () => {
+    expect(canRevokeHandoverPackage({
+      ...baseInput,
+      tenantRole: 'provider',
+      userRole: 'provider',
+      userId: 'provider-1',
+      propertyOwnerId: 'owner-1',
+    })).toEqual({ allowed: false, status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('bloqueia usuario sem permissao de gestao', () => {
+    expect(canRevokeHandoverPackage({
+      ...baseInput,
+      tenantRole: 'provider',
+      userRole: 'owner',
+      userId: 'other-user',
+      propertyOwnerId: 'owner-1',
+      propertyManagerId: 'manager-1',
+    })).toEqual({ allowed: false, status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('bloqueia pacote draft', () => {
+    expect(canRevokeHandoverPackage({ ...baseInput, packageStatus: 'draft', issuedAt: null, publicAccessTokenHash: null })).toEqual({
+      allowed: false,
+      status: 409,
+      code: 'CONFLICT',
+    });
+  });
+
+  it('bloqueia pacote ja revogado', () => {
+    expect(canRevokeHandoverPackage({
+      ...baseInput,
+      packageStatus: 'revoked',
+      revokedAt: '2026-05-10T00:00:00.000Z',
+    })).toEqual({ allowed: false, status: 409, code: 'CONFLICT' });
+  });
+});
+
 describe('snapshot and token helpers', () => {
   it('monta snapshot rico e estável com as seções esperadas', () => {
     const snapshot = buildHandoverPackageSnapshot(baseSnapshotInput);
@@ -236,9 +297,11 @@ describe('snapshot and token helpers', () => {
   });
 
   it('gera URL publica de uso unico com o token embutido', () => {
-    const url = buildPublicAccessUrl('https://app.houselog.local', 'package-1', 'token-abc');
+    const url = buildPublicAccessUrl('https://app.houselog.local', 'token-abc');
 
-    expect(url).toBe('https://app.houselog.local/handover-packages/package-1/access?token=token-abc');
+    expect(url).toBe('https://app.houselog.local/handover/token-abc');
+    expect(url).not.toContain('package-1');
+    expect(url).not.toContain('hash');
   });
 
   it('gera hash deterministico do pacote para o mesmo snapshot', async () => {

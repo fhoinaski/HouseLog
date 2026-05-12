@@ -174,8 +174,6 @@ describe('GET /public/handover/:token', () => {
     const body = (await response.json()) as { package: Record<string, unknown> };
 
     expect(response.status).toBe(200);
-    expect(body.package.id).toBe('package-1');
-    expect(body.package.property_id).toBe('property-1');
     expect(body.package.snapshot_json).toMatchObject({
       property: { name: 'Apartamento Jardim' },
       package: { status: 'issued' },
@@ -188,6 +186,10 @@ describe('GET /public/handover/:token', () => {
     expect(body.package).not.toHaveProperty('public_access_token_hash');
     expect(body.package).not.toHaveProperty('package_hash');
     expect(body.package).not.toHaveProperty('r2_key');
+    expect(body.package).not.toHaveProperty('id');
+    expect(body.package).not.toHaveProperty('property_id');
+    expect(JSON.stringify(body.package)).not.toContain('property-1');
+    expect(JSON.stringify(body.package)).not.toContain('doc-1');
   });
 
   it('retorna pacote aceito com o mesmo DTO público', async () => {
@@ -527,6 +529,11 @@ describe('POST /public/handover/:token/accept', () => {
       acceptanceNotes: 'Recebido em boas condicoes.',
     });
     expect(db.updateValues[0]).not.toHaveProperty('snapshotJson');
-    expect(body.package.snapshot_json).toMatchObject(snapshot);
+    expect(body.package.snapshot_json).toMatchObject({
+      property: { name: 'Apartamento Jardim' },
+      package: { title: 'Dossie de entrega' },
+    });
+    expect(JSON.stringify(body.package.snapshot_json)).not.toContain('property-1');
+    expect(JSON.stringify(body.package.snapshot_json)).not.toContain('doc-1');
   });
 });

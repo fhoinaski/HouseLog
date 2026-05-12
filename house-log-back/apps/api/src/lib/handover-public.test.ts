@@ -94,13 +94,15 @@ describe('resolvePublicHandoverPackage', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.package.id).toBe('package-1');
       expect(result.package.snapshot_json.property.name).toBe('Apartamento Jardim');
       expect(result.package.status).toBe('issued');
       expect(result.package.issuerName).toBe('Eng. Maria Silva');
       expect(result.package.responsibleName).toBe('Eng. Maria Silva');
       expect(result.package.companyName).toBe('Construtora Horizonte');
       expect(result.package.acceptanceReceipt).toBeNull();
+      expect(result.package).not.toHaveProperty('id');
+      expect(result.package).not.toHaveProperty('property_id');
+      expect(result.package.snapshot_json.property).not.toHaveProperty('id');
     }
   });
 
@@ -207,6 +209,35 @@ describe('resolvePublicHandoverPackage', () => {
       expect(result.package).not.toHaveProperty('file_url');
       expect(Object.keys(result.package)).not.toContain('r2_key');
       expect(Object.keys(result.package)).not.toContain('file_url');
+    }
+  });
+
+  it('nao expoe IDs internos no DTO nem no snapshot publico', () => {
+    const result = resolvePublicHandoverPackage(validRow);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const payload = JSON.stringify(result.package);
+      expect(result.package).not.toHaveProperty('id');
+      expect(result.package).not.toHaveProperty('property_id');
+      expect(result.package.snapshot_json.property).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.package).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.documents[0]).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.warranties[0]).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.technicalSystems[0]).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.inventoryItems[0]).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.inventoryItems[0]).not.toHaveProperty('roomId');
+      expect(result.package.snapshot_json.maintenanceSchedules[0]).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.checklistItems[0]).not.toHaveProperty('id');
+      expect(result.package.snapshot_json.checklistItems[0]).not.toHaveProperty('documentId');
+      expect(payload).not.toContain('property-1');
+      expect(payload).not.toContain('package-1');
+      expect(payload).not.toContain('doc-1');
+      expect(payload).not.toContain('war-1');
+      expect(payload).not.toContain('sys-1');
+      expect(payload).not.toContain('item-1');
+      expect(payload).not.toContain('mnt-1');
+      expect(payload).not.toContain('chk-1');
     }
   });
 

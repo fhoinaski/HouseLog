@@ -80,6 +80,53 @@ describe('sanitizeAuditData — redação de campos sensíveis adicionais', () =
     });
   });
 
+  it('redige hashes sensiveis do Handover Digital em camelCase e snake_case', () => {
+    expect(
+      sanitizeAuditData({
+        publicAccessTokenHash: 'token-hash-camel',
+        public_access_token_hash: 'token-hash-snake',
+        packageHash: 'package-hash-camel',
+        package_hash: 'package-hash-snake',
+        tokenHash: 'generic-token-hash-camel',
+        token_hash: 'generic-token-hash-snake',
+      })
+    ).toEqual({
+      publicAccessTokenHash: '[REDACTED]',
+      public_access_token_hash: '[REDACTED]',
+      packageHash: '[REDACTED]',
+      package_hash: '[REDACTED]',
+      tokenHash: '[REDACTED]',
+      token_hash: '[REDACTED]',
+    });
+  });
+
+  it('nao deixa audit log de emissao com hash de token ou pacote em claro', () => {
+    const sanitized = sanitizeAuditData({
+      action: 'handover_package_issued',
+      newData: {
+        id: 'package-1',
+        public_access_token_hash: 'raw-token-hash',
+        publicAccessTokenHash: 'raw-token-hash-camel',
+        package_hash: 'raw-package-hash',
+        packageHash: 'raw-package-hash-camel',
+      },
+    });
+    const serialized = JSON.stringify(sanitized);
+
+    expect(serialized).not.toContain('raw-token-hash');
+    expect(serialized).not.toContain('raw-token-hash-camel');
+    expect(serialized).not.toContain('raw-package-hash');
+    expect(serialized).not.toContain('raw-package-hash-camel');
+    expect(sanitized).toMatchObject({
+      newData: {
+        public_access_token_hash: '[REDACTED]',
+        publicAccessTokenHash: '[REDACTED]',
+        package_hash: '[REDACTED]',
+        packageHash: '[REDACTED]',
+      },
+    });
+  });
+
   it('retorna null para entrada null', () => {
     expect(sanitizeAuditData(null)).toBeNull();
   });

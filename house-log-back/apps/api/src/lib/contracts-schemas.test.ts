@@ -16,6 +16,7 @@ import {
   HandoverPackagePublicDtoSchema,
   PublicHandoverPackageAcceptInputSchema,
   HandoverPackageRevokeInputSchema,
+  HandoverPackagePublicSnapshotSchema,
   HandoverPackageSnapshotSchema,
   HandoverPackageStatusSchema,
   handoverPackageCreateSchema, handoverPackageStatusSchema, handoverPackageTypeSchema, handoverPackageUpdateSchema,
@@ -608,6 +609,73 @@ describe('handover package emission schemas', () => {
     expect(HandoverPackageSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
 
+  const publicSnapshot = {
+    generatedAt: snapshot.generatedAt,
+    property: {
+      name: snapshot.property.name,
+      type: snapshot.property.type,
+      address: snapshot.property.address,
+      city: snapshot.property.city,
+      areaM2: snapshot.property.areaM2,
+      yearBuilt: snapshot.property.yearBuilt,
+      structure: snapshot.property.structure,
+      floors: snapshot.property.floors,
+      healthScore: snapshot.property.healthScore,
+    },
+    package: {
+      title: snapshot.package.title,
+      type: snapshot.package.type,
+      version: snapshot.package.version,
+      status: snapshot.package.status,
+    },
+    rooms: snapshot.rooms.map(({ name, type, floor, areaM2 }) => ({ name, type, floor, areaM2 })),
+    documents: snapshot.documents.map(({ title, type, issueDate, expiryDate }) => ({ title, type, issueDate, expiryDate })),
+    technicalSystems: snapshot.technicalSystems.map(({ name, type, status, locationSummary, lastInspectionAt }) => ({
+      name,
+      type,
+      status,
+      locationSummary,
+      lastInspectionAt,
+    })),
+    inventoryItems: snapshot.inventoryItems.map(({ name, category, quantity, unit, warrantyUntil }) => ({
+      name,
+      category,
+      quantity,
+      unit,
+      warrantyUntil,
+    })),
+    warranties: snapshot.warranties.map(({ title, warrantyType, status, startDate, endDate, providerName }) => ({
+      title,
+      warrantyType,
+      status,
+      startDate,
+      endDate,
+      providerName,
+    })),
+    maintenanceSchedules: snapshot.maintenanceSchedules.map(({ title, systemType, responsible, frequency, lastDone, nextDue, autoCreateOs }) => ({
+      title,
+      systemType,
+      responsible,
+      frequency,
+      lastDone,
+      nextDue,
+      autoCreateOs,
+    })),
+    checklistItems: snapshot.checklistItems.map(({ title, category, status, required, condition, completedAt }) => ({
+      title,
+      category,
+      status,
+      required,
+      condition,
+      completedAt,
+    })),
+  };
+
+  it('HandoverPackagePublicSnapshotSchema rejeita identificadores internos', () => {
+    expect(HandoverPackagePublicSnapshotSchema.safeParse(publicSnapshot).success).toBe(true);
+    expect(HandoverPackagePublicSnapshotSchema.safeParse(snapshot).success).toBe(false);
+  });
+
   it('HandoverPackageIssueInputSchema aceita payload válido e rejeita campos sensíveis', () => {
     const valid = HandoverPackageIssueInputSchema.safeParse({ expires_at: '2026-12-31T23:59:59.000Z', snapshot_json: snapshot });
     expect(valid.success).toBe(true);
@@ -616,8 +684,9 @@ describe('handover package emission schemas', () => {
   });
 
   it('HandoverPackageRevokeInputSchema exige motivo', () => {
-    expect(HandoverPackageRevokeInputSchema.safeParse({ revoke_reason: 'Erro na revisão técnica' }).success).toBe(true);
-    expect(HandoverPackageRevokeInputSchema.safeParse({ revoke_reason: '' }).success).toBe(false);
+    expect(HandoverPackageRevokeInputSchema.safeParse({ revokeReason: 'Erro na revisao tecnica' }).success).toBe(true);
+    expect(HandoverPackageRevokeInputSchema.safeParse({ revokeReason: '' }).success).toBe(false);
+    expect(HandoverPackageRevokeInputSchema.safeParse({ revoke_reason: 'Campo legado' }).success).toBe(false);
   });
 
   it('HandoverPackageAcceptInputSchema aceita aceite e rejeita campos server-side', () => {
@@ -658,8 +727,6 @@ describe('handover package emission schemas', () => {
 
   it('DTOs publico e privado mantem superfícies seguras', () => {
     expect(HandoverPackagePublicDtoSchema.safeParse({
-      id: 'hp-1',
-      property_id: 'prop-1',
       title: 'Entrega final',
       description: null,
       issuerName: 'Eng. Maria Silva',
@@ -672,15 +739,29 @@ describe('handover package emission schemas', () => {
       issued_at: null,
       accepted_at: null,
       expires_at: null,
-      created_at: '2026-05-11T00:00:00.000Z',
-      updated_at: null,
-      snapshot_json: snapshot,
+      snapshot_json: publicSnapshot,
       acceptanceReceipt: null,
     }).success).toBe(true);
 
     expect(HandoverPackagePublicDtoSchema.safeParse({
       id: 'hp-1',
-      property_id: 'prop-1',
+      title: 'Entrega final',
+      description: null,
+      issuerName: null,
+      issuerRole: null,
+      responsibleName: null,
+      companyName: null,
+      type: 'handover',
+      status: 'issued',
+      version: 1,
+      issued_at: null,
+      accepted_at: null,
+      expires_at: null,
+      snapshot_json: publicSnapshot,
+      acceptanceReceipt: null,
+    }).success).toBe(false);
+
+    expect(HandoverPackagePublicDtoSchema.safeParse({
       title: 'Entrega final',
       description: null,
       issuerName: 'Eng. Maria Silva',
@@ -693,9 +774,7 @@ describe('handover package emission schemas', () => {
       issued_at: '2026-05-11T00:00:00.000Z',
       accepted_at: '2026-05-11T10:00:00.000Z',
       expires_at: '2026-06-11T00:00:00.000Z',
-      created_at: '2026-05-11T00:00:00.000Z',
-      updated_at: '2026-05-11T10:00:00.000Z',
-      snapshot_json: snapshot,
+      snapshot_json: publicSnapshot,
       acceptanceReceipt: {
         acceptedAt: '2026-05-11T10:00:00.000Z',
         acceptedByName: 'Maria Silva',
@@ -714,8 +793,6 @@ describe('handover package emission schemas', () => {
     }).success).toBe(true);
 
     const acceptedPublicPackage = HandoverPackagePublicDtoSchema.parse({
-      id: 'hp-1',
-      property_id: 'prop-1',
       title: 'Entrega final',
       description: null,
       issuerName: 'Eng. Maria Silva',
@@ -728,9 +805,7 @@ describe('handover package emission schemas', () => {
       issued_at: '2026-05-11T00:00:00.000Z',
       accepted_at: '2026-05-11T10:00:00.000Z',
       expires_at: '2026-06-11T00:00:00.000Z',
-      created_at: '2026-05-11T00:00:00.000Z',
-      updated_at: '2026-05-11T10:00:00.000Z',
-      snapshot_json: snapshot,
+      snapshot_json: publicSnapshot,
       acceptanceReceipt: {
         acceptedAt: '2026-05-11T10:00:00.000Z',
         acceptedByName: 'Maria Silva',
@@ -786,8 +861,6 @@ describe('handover package emission schemas', () => {
     expect(acceptancePrintPayload).not.toContain('property-1');
 
     const issuedPublicPackage = HandoverPackagePublicDtoSchema.parse({
-      id: 'hp-1',
-      property_id: 'prop-1',
       title: 'Entrega final',
       description: null,
       issuerName: 'Eng. Maria Silva',
@@ -800,9 +873,7 @@ describe('handover package emission schemas', () => {
       issued_at: '2026-05-11T00:00:00.000Z',
       accepted_at: null,
       expires_at: '2026-06-11T00:00:00.000Z',
-      created_at: '2026-05-11T00:00:00.000Z',
-      updated_at: null,
-      snapshot_json: snapshot,
+      snapshot_json: publicSnapshot,
       acceptanceReceipt: null,
     });
     expect(buildPublicHandoverAcceptancePrintData(issuedPublicPackage)).toBeNull();
