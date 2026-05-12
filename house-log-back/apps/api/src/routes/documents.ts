@@ -343,8 +343,11 @@ documents.delete('/:id', async (c) => {
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
-  const hasAccess = await canDeleteDocument(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const permission = await canDeleteDocument(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  if (!permission.allowed) {
+    const message = permission.code === 'NOT_FOUND' ? 'Documento não encontrado' : 'Sem acesso';
+    return err(c, message, permission.code, permission.status);
+  }
 
   const [doc] = await db
     .select({

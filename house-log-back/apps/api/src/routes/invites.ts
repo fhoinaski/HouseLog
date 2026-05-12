@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { properties, propertyCollaborators, propertyInvites, serviceOrders, serviceShareLinks, users } from '../db/schema';
+import { canManageTenantUsers } from '../lib/authorization';
 import type { Bindings, Variables } from '../lib/types';
 
 const invites = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -69,47 +70,38 @@ function parseSpecialties(value: unknown): string[] {
   return Array.from(new Set(mapped));
 }
 
-async function canManagePropertyTeam(db: D1Database, propertyId: string, userId: string): Promise<boolean> {
-  const drizzle = getDb(db);
-  const direct = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, propertyId),
-        isNull(properties.deletedAt),
-        or(eq(properties.ownerId, userId), eq(properties.managerId, userId))
-      )
-    )
-    .limit(1);
-  if (direct[0]) return true;
-
-  const collab = await drizzle
-    .select({ id: propertyCollaborators.id })
-    .from(propertyCollaborators)
-    .innerJoin(properties, eq(properties.id, propertyCollaborators.propertyId))
-    .where(
-      and(
-        eq(propertyCollaborators.propertyId, propertyId),
-        eq(propertyCollaborators.userId, userId),
-        eq(propertyCollaborators.role, 'manager'),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-
-  return Boolean(collab[0]);
+async function canManagePropertyTeam(
+  db: D1Database,
+  propertyId: string,
+  userId: string,
+  tenantId: string | null | undefined,
+  tenantRole: string | null | undefined,
+  role: string
+) {
+  return canManageTenantUsers(db, {
+    propertyId,
+    userId,
+    role: role as any,
+    tenantId,
+    tenantRole: tenantRole as any,
+  });
 }
 
 // ── Protected: create invite ──────────────────────────────────────────────────
 
-invites.post('/properties/:propertyId/invites', authMiddleware, async (c) => {
+invites.use('*', authMiddleware);
+invites.use('*', resolveTenant);
+
+invites.post('/properties/:propertyId/invites', async (c) => {
   const db = getDb(c.env.DB);
   const { propertyId } = c.req.param();
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  const tenantRole = c.get('tenantRole');
+  const userRole = c.get('userRole');
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
-  if (!canManage) return err(c, 'Imóvel não encontrado ou sem permissão', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, tenantId, tenantRole, userRole);
+  if (!canManage.allowed) return err(c, 'Imóvel não encontrado ou sem permissão', canManage.code, canManage.status);
 
   const [property] = await db
     .select({ id: properties.id, name: properties.name, owner_id: properties.ownerId })
@@ -230,13 +222,16 @@ invites.post('/properties/:propertyId/invites', authMiddleware, async (c) => {
   }, 201);
 });
 
-invites.post('/properties/:propertyId/collaborators', authMiddleware, async (c) => {
+invites.post('/properties/:propertyId/collaborators', async (c) => {
   const db = getDb(c.env.DB);
   const { propertyId } = c.req.param();
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  const tenantRole = c.get('tenantRole');
+  const userRole = c.get('userRole');
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
-  if (!canManage) return err(c, 'Imovel nao encontrado ou sem permissao', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, tenantId, tenantRole, userRole);
+  if (!canManage.allowed) return err(c, 'Imovel nao encontrado ou sem permissao', canManage.code, canManage.status);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body invalido', 'INVALID_BODY');
@@ -337,8 +332,8 @@ invites.post('/properties/:propertyId/invites/extract-card', authMiddleware, asy
   const { propertyId } = c.req.param();
   const userId = c.get('userId');
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
-  if (!canManage) return err(c, 'Imóvel não encontrado ou sem permissão', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  if (!canManage.allowed) return err(c, 'Imóvel não encontrado ou sem permissão', canManage.code, canManage.status);
 
   const formData = await c.req.formData().catch(() => null);
   if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
@@ -410,8 +405,8 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
   const userId = c.get('userId');
 
   // Owner, manager_id, or collaborator with role='manager' can view team
-  const property = await canManagePropertyTeam(c.env.DB, propertyId, userId);
-  if (!property) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const property = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  if (!property.allowed) return err(c, 'Sem acesso', property.code, property.status);
 
   const results = await db
     .select({
@@ -525,8 +520,8 @@ invites.delete('/properties/:propertyId/invites/:inviteId', authMiddleware, asyn
   const { propertyId, inviteId } = c.req.param();
   const userId = c.get('userId');
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
-  if (!canManage) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  if (!canManage.allowed) return err(c, 'Sem acesso', canManage.code, canManage.status);
 
   await db.delete(propertyInvites).where(and(eq(propertyInvites.id, inviteId), eq(propertyInvites.propertyId, propertyId)));
   return ok(c, { success: true });
@@ -675,8 +670,8 @@ invites.patch('/properties/:propertyId/collaborators/:collabId', authMiddleware,
   const { propertyId, collabId } = c.req.param();
   const userId = c.get('userId');
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId);
-  if (!canManage) return err(c, 'Sem permissão para alterar permissões', 'FORBIDDEN', 403);
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  if (!canManage.allowed) return err(c, 'Sem permissão para alterar permissões', canManage.code, canManage.status);
 
   const body = await c.req.json().catch(() => null);
   if (!body || typeof body !== 'object') return err(c, 'Body inválido', 'INVALID_BODY');
@@ -702,11 +697,14 @@ invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware
   const db = getDb(c.env.DB);
   const { propertyId, collabId } = c.req.param();
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   const [property] = await db
     .select({ owner_id: properties.ownerId, manager_id: properties.managerId })
     .from(properties)
-    .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
     .limit(1) as Array<{ owner_id: string; manager_id: string | null }>;
   if (!property) return err(c, 'Imóvel não encontrado', 'NOT_FOUND', 404);
 

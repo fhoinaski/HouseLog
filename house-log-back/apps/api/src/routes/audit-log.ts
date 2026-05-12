@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, gte, isNotNull, lt, lte } from 'drizzle-orm';
-import { canQueryAuditLog, isValidAuditDateParam, sanitizeAuditData } from '../lib/audit';
+import { isValidAuditDateParam, sanitizeAuditData } from '../lib/audit';
+import { canViewAuditLog } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
@@ -18,8 +19,11 @@ auditLogRoute.get('/', async (c) => {
   const tenantId = c.get('tenantId') as string;
   const tenantRole = c.get('tenantRole');
 
-  const decision = canQueryAuditLog({ tenantRole });
-  if (!decision.allowed) return err(c, 'Acesso negado', decision.code, decision.status);
+  const decision = canViewAuditLog({ tenantId, tenantRole });
+  if (!decision.allowed) {
+    const message = decision.code === 'TENANT_REQUIRED' ? 'Tenant ativo obrigatorio' : 'Acesso negado';
+    return err(c, message, decision.code, decision.status);
+  }
 
   const db = getDb(c.env.DB);
 

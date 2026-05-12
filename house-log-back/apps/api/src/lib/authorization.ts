@@ -3,6 +3,7 @@ import { getDb } from '../db/client';
 import { properties, propertyCollaborators } from '../db/schema';
 import {
   canAccessTenantProperty,
+  type TenantPropertyAccessDecision,
   listAccessibleTenantPropertyIds,
   type TenantPropertyAccessLevel,
 } from './tenant-authorization';
@@ -18,7 +19,14 @@ export type PropertyAuthorizationInput = AuthorizationSubject & {
   tenantId?: string | null;
   tenantRole?: TenantRole | null;
   accessLevel?: TenantPropertyAccessLevel;
+  assignedProviderId?: string | null;
 };
+
+export type TenantScopedDecision = TenantPropertyAccessDecision;
+
+export type AuditLogDecision =
+  | { allowed: true }
+  | { allowed: false; status: 400 | 403; code: 'TENANT_REQUIRED' | 'FORBIDDEN' };
 
 export type ProviderProposalAuthorizationInput = AuthorizationSubject & {
   propertyId: string;
@@ -53,6 +61,105 @@ export type ServiceMessageAuthorizationInput = AuthorizationSubject & {
 
 function isPropertyDashboardRole(role: Role): boolean {
   return role !== 'provider' && role !== 'temp_provider';
+}
+
+async function resolvePropertyDecision(
+  db: D1Database,
+  input: PropertyAuthorizationInput,
+  accessLevel: TenantPropertyAccessLevel
+): Promise<TenantScopedDecision> {
+  return canAccessTenantProperty(db, {
+    tenantId: input.tenantId,
+    tenantRole: input.tenantRole,
+    propertyId: input.propertyId,
+    userId: input.userId,
+    userRole: input.role,
+    accessLevel,
+    assignedProviderId: input.assignedProviderId,
+  });
+}
+
+export async function canViewProperty(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return resolvePropertyDecision(db, input, input.accessLevel ?? 'view');
+}
+
+export async function canManageProperty(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return resolvePropertyDecision(db, input, 'manage');
+}
+
+export async function canDeleteDocument(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageProperty(db, input);
+}
+
+export async function canRevealCredential(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return resolvePropertyDecision(db, input, 'secret');
+}
+
+export async function canManageServiceOrder(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageProperty(db, input);
+}
+
+export async function canApproveBudget(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageProperty(db, input);
+}
+
+export async function canManageHandoverPackage(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageProperty(db, input);
+}
+
+export async function canRevokeHandoverPackage(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageProperty(db, input);
+}
+
+export async function canManageTenantUsers(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageProperty(db, input);
+}
+
+export async function canInviteUser(
+  db: D1Database,
+  input: PropertyAuthorizationInput
+): Promise<TenantScopedDecision> {
+  return canManageTenantUsers(db, input);
+}
+
+export function canViewAuditLog(input: {
+  tenantId?: string | null;
+  tenantRole?: TenantRole | null;
+}): AuditLogDecision {
+  if (!input.tenantId || !input.tenantRole) {
+    return { allowed: false, status: 400, code: 'TENANT_REQUIRED' };
+  }
+  if (input.tenantRole === 'owner' || input.tenantRole === 'manager') {
+    return { allowed: true };
+  }
+  return { allowed: false, status: 403, code: 'FORBIDDEN' };
 }
 
 export async function canAccessProperty(
@@ -109,104 +216,70 @@ export async function canRevealCredentialSecret(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  if (input.tenantId && input.tenantRole) {
-    const decision = await canAccessTenantProperty(db, {
-      tenantId: input.tenantId,
-      tenantRole: input.tenantRole,
-      propertyId: input.propertyId,
-      userId: input.userId,
-      userRole: input.role,
-      accessLevel: 'secret',
-    });
-    return decision.allowed;
-  }
-
-  if (!isPropertyDashboardRole(input.role)) return false;
-
-  const drizzle = getDb(db);
-  const [property] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, input.propertyId),
-        or(eq(properties.ownerId, input.userId), eq(properties.managerId, input.userId)),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-
-  return !!property;
+  return (await canRevealCredential(db, input)).allowed;
 }
 
 export async function canListCredentials(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canViewProperty(db, input)).allowed;
 }
 
 export async function canCreateCredential(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageProperty(db, input)).allowed;
 }
 
 export async function canUpdateCredential(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageProperty(db, input)).allowed;
 }
 
 export async function canDeleteCredential(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageProperty(db, input)).allowed;
 }
 
 export async function canGenerateTemporaryCredentialAccess(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canRevealCredentialSecret(db, input);
+  return (await canRevealCredential(db, input)).allowed;
 }
 
 export async function canCreateAuditLink(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canMarkMaintenanceDone(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canUploadDocument(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
-}
-
-export async function canDeleteDocument(
-  db: D1Database,
-  input: PropertyAuthorizationInput
-): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageProperty(db, input)).allowed;
 }
 
 export async function canRequestDocumentOCR(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canViewProperty(db, input)).allowed;
 }
 
 export function canRequestDocumentIngestionRole(input: {
@@ -337,63 +410,63 @@ export async function canViewServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canViewProperty(db, input)).allowed;
 }
 
 export async function canMutateServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canUpdateServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canMutateServiceOrder(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canChangeServiceOrderStatus(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canMutateServiceOrder(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canUploadServiceEvidence(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canMutateServiceOrder(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canUpdateServiceOrderChecklist(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canMutateServiceOrder(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canDeleteServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canMutateServiceOrder(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canCloseServiceOrderWithEvidence(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canMutateServiceOrder(db, input);
+  return (await canManageServiceOrder(db, input)).allowed;
 }
 
 export async function canSearchProperty(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  return canAccessProperty(db, input);
+  return (await canViewProperty(db, input)).allowed;
 }
 
 export async function canSearchServiceOrders(

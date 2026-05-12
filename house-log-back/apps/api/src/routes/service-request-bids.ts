@@ -1,14 +1,15 @@
 import { Hono } from 'hono';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { authMiddleware, requireRole } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
+import { canApproveBudget } from '../lib/authorization';
 import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
 import { bids, properties, serviceRequests, users } from '../db/schema';
 
 const serviceRequestBids = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-serviceRequestBids.use('*', authMiddleware, requireRole('owner'));
+serviceRequestBids.use('*', authMiddleware, resolveTenant);
 
 serviceRequestBids.patch('/:bidId/accept', async (c) => {
   const propertyId = c.req.param('propertyId');
@@ -16,10 +17,21 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
   const bidId = c.req.param('bidId');
   const ownerId = c.get('userId');
   const tenantId = c.get('tenantId') as string;
+  const tenantRole = c.get('tenantRole');
+  const userRole = c.get('userRole');
 
   if (!propertyId || !serviceRequestId || !bidId) {
     return err(c, 'Parametros obrigatorios ausentes', 'INVALID_PARAMS', 422);
   }
+
+  const permission = await canApproveBudget(c.env.DB, {
+    propertyId,
+    userId: ownerId,
+    role: userRole,
+    tenantId,
+    tenantRole,
+  });
+  if (!permission.allowed) return err(c, 'Sem permissao para aceitar orcamentos deste imovel', permission.code, permission.status);
 
   const db = getDb(c.env.DB);
 
@@ -33,11 +45,11 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
         propertyAddress: properties.address,
       })
       .from(properties)
-      .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), eq(properties.ownerId, ownerId)))
+      .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId)))
       .limit(1);
 
     if (!property) {
-      return err(c, 'Sem permissao para aceitar orcamentos deste imovel', 'FORBIDDEN', 403);
+      return err(c, 'Solicitacao de servico nao encontrada', 'NOT_FOUND', 404);
     }
 
     const [requestRow] = await db

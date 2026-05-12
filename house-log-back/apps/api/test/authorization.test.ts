@@ -1,12 +1,32 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  canApproveBudget,
+  canDeleteDocument,
+  canInviteUser,
+  canManageProperty,
+  canManageServiceOrder,
+  canManageTenantUsers,
   canRequestDocumentIngestionDecision,
   canRequestDocumentIngestionRole,
   canSendInternalServiceMessage,
+  canViewAuditLog,
+  canRevealCredential,
   canViewServiceMessages,
   canViewInternalServiceMessages,
   canViewProviderOpportunity,
 } from '../src/lib/authorization';
+
+vi.mock('../src/db/client', () => ({
+  getDb: vi.fn((db: unknown) => db),
+}));
+
+function createDb(responses: Array<Array<Record<string, unknown>>>) {
+  const queue = [...responses];
+  const limit = vi.fn(async () => queue.shift() ?? []);
+  const where = vi.fn(() => ({ limit }));
+  const from = vi.fn(() => ({ where }));
+  return { select: vi.fn(() => ({ from })) };
+}
 
 const baseMessageInput = {
   userId: 'provider-a',
@@ -168,5 +188,113 @@ describe('provider opportunity authorization', () => {
         providerCategories: ['plumbing'],
       })
     ).toBe(true);
+  });
+});
+
+describe('granular tenant authorization helpers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('blocks audit log access without an active tenant', () => {
+    expect(canViewAuditLog({ tenantId: null, tenantRole: 'owner' })).toEqual({
+      allowed: false,
+      status: 400,
+      code: 'TENANT_REQUIRED',
+    });
+  });
+
+  it('allows owners to view the audit log', () => {
+    expect(canViewAuditLog({ tenantId: 'tenant-a', tenantRole: 'owner' })).toEqual({ allowed: true });
+  });
+
+  it('rejects delete document when the property is outside the active tenant', async () => {
+    const db = createDb([[]]);
+
+    await expect(
+      canDeleteDocument(db as never, {
+        propertyId: 'property-a',
+        userId: 'user-a',
+        role: 'owner',
+        tenantId: 'tenant-a',
+        tenantRole: 'owner',
+      })
+    ).resolves.toEqual({ allowed: false, status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('allows property managers to manage service orders and budgets', async () => {
+    await expect(
+      canManageServiceOrder(createDb([
+        [{ tenantId: 'tenant-a', ownerId: 'owner-a', managerId: 'manager-a' }],
+        [{ tenantId: 'tenant-a', role: 'manager', canOpenOs: 1 }],
+      ]) as never, {
+        propertyId: 'property-a',
+        userId: 'manager-a',
+        role: 'owner',
+        tenantId: 'tenant-a',
+        tenantRole: 'manager',
+      })
+    ).resolves.toEqual({ allowed: true, reason: 'tenant_manager' });
+
+    await expect(
+      canApproveBudget(createDb([
+        [{ tenantId: 'tenant-a', ownerId: 'owner-a', managerId: 'manager-a' }],
+        [{ tenantId: 'tenant-a', role: 'manager', canOpenOs: 1 }],
+      ]) as never, {
+        propertyId: 'property-a',
+        userId: 'manager-a',
+        role: 'owner',
+        tenantId: 'tenant-a',
+        tenantRole: 'manager',
+      })
+    ).resolves.toEqual({ allowed: true, reason: 'tenant_manager' });
+  });
+
+  it('allows revealing credentials only when the property relation is direct', async () => {
+    const db = createDb([[{ tenantId: 'tenant-a', ownerId: 'owner-a', managerId: 'manager-a' }], []]);
+
+    await expect(
+      canRevealCredential(db as never, {
+        propertyId: 'property-a',
+        userId: 'manager-a',
+        role: 'owner',
+        tenantId: 'tenant-a',
+        tenantRole: 'manager',
+      })
+    ).resolves.toEqual({ allowed: true, reason: 'direct_property_secret' });
+  });
+
+  it('allows tenant owners to manage collaborators and invites', async () => {
+    await expect(
+      canManageTenantUsers(createDb([[{ tenantId: 'tenant-a', ownerId: 'owner-a', managerId: null }], []]) as never, {
+        propertyId: 'property-a',
+        userId: 'owner-a',
+        role: 'owner',
+        tenantId: 'tenant-a',
+        tenantRole: 'owner',
+      })
+    ).resolves.toEqual({ allowed: true, reason: 'tenant_owner' });
+
+    await expect(
+      canInviteUser(createDb([[{ tenantId: 'tenant-a', ownerId: 'owner-a', managerId: null }], []]) as never, {
+        propertyId: 'property-a',
+        userId: 'owner-a',
+        role: 'owner',
+        tenantId: 'tenant-a',
+        tenantRole: 'owner',
+      })
+    ).resolves.toEqual({ allowed: true, reason: 'tenant_owner' });
+  });
+
+  it('blocks tenant-less inputs in property helpers', async () => {
+    await expect(
+      canManageProperty(createDb([]) as never, {
+        propertyId: 'property-a',
+        userId: 'user-a',
+        role: 'owner',
+        tenantId: null,
+        tenantRole: 'owner',
+      })
+    ).resolves.toEqual({ allowed: false, status: 400, code: 'TENANT_REQUIRED' });
   });
 });
