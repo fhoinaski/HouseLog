@@ -1,17 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { properties, propertyAccessCredentials, rooms, serviceOrders, serviceShareLinks, users } from '../db/schema';
+import { writeAuditLog } from '../lib/audit';
+import { sha256TokenHash } from '../lib/token-hash';
 import type { Bindings, Variables } from '../lib/types';
 
 const share = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ── POST /properties/:propertyId/services/:serviceId/share-link ──────────────
-// Creates (or returns existing valid) share link for a service order.
+// Always creates a fresh link, revoking any active link first.
+// Token puro is emitted once in the response — never stored in the DB.
 // Requires auth — only owners/managers can share.
 
 share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddleware, resolveTenant, async (c) => {
@@ -55,57 +58,61 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
     .limit(1);
   if (!service) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
-  // Reuse existing valid token if one exists
+  // Revoke any existing active link so only one is active at a time
   const [existing] = await db
-    .select({ token: serviceShareLinks.token })
+    .select({ id: serviceShareLinks.id })
     .from(serviceShareLinks)
     .where(
       and(
         eq(serviceShareLinks.serviceId, serviceId),
         eq(serviceShareLinks.tenantId, tenantId),
-        gt(serviceShareLinks.expiresAt, sql`datetime('now')`),
         isNull(serviceShareLinks.deletedAt)
       )
     )
     .orderBy(desc(serviceShareLinks.createdAt))
-    .limit(1) as Array<{ token: string }>;
+    .limit(1) as Array<{ id: string }>;
 
-  let token: string;
   if (existing) {
-    token = existing.token;
-    // Update provider info if provided
-    if (body.provider_name || body.provider_email) {
-      await db
-        .update(serviceShareLinks)
-        .set({
-          providerName: body.provider_name ?? null,
-          providerEmail: body.provider_email ?? null,
-          providerPhone: body.provider_phone ?? null,
-          shareCredentials: body.share_credentials ? 1 : 0,
-          expiresAt,
-        })
-        .where(and(eq(serviceShareLinks.token, token), eq(serviceShareLinks.tenantId, tenantId), eq(serviceShareLinks.serviceId, serviceId)));
-    }
-  } else {
-    token = nanoid(32);
-    await db.insert(serviceShareLinks).values({
-      id: nanoid(),
-      tenantId,
-      serviceId,
-      token,
-      createdBy: userId,
-      expiresAt,
-      providerName: body.provider_name ?? null,
-      providerEmail: body.provider_email ?? null,
-      providerPhone: body.provider_phone ?? null,
-      shareCredentials: body.share_credentials ? 1 : 0,
-    });
+    await db
+      .update(serviceShareLinks)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(and(eq(serviceShareLinks.id, existing.id), eq(serviceShareLinks.tenantId, tenantId)));
   }
+
+  // Always create a fresh token — never stored in DB
+  const linkId = nanoid();
+  const token = nanoid(32);
+  const tokenHash = await sha256TokenHash(token);
+  await db.insert(serviceShareLinks).values({
+    id: linkId,
+    tenantId,
+    serviceId,
+    token: `hash-only:${linkId}`,
+    tokenHash,
+    createdBy: userId,
+    expiresAt,
+    providerName: body.provider_name ?? null,
+    providerEmail: body.provider_email ?? null,
+    providerPhone: body.provider_phone ?? null,
+    shareCredentials: body.share_credentials ? 1 : 0,
+  });
 
   const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
 
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'service_share_link', entityId: linkId,
+    action: 'share_link_created',
+    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      service_id: serviceId,
+      property_id: propertyId,
+      expires_at: expiresAt,
+    },
+  });
+
   return ok(c, {
-    token,
     url: `${appUrl}/share/service/${token}`,
     expires_at: expiresAt,
   }, 201);
@@ -116,7 +123,10 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
 
 share.get('/public/share/service/:token', async (c) => {
   const db = getDb(c.env.DB);
-  const token = c.req.param('token');
+  const rawToken = c.req.param('token');
+  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
+
+  const tokenHash = await sha256TokenHash(rawToken);
 
   const [link] = await db
     .select({
@@ -124,6 +134,7 @@ share.get('/public/share/service/:token', async (c) => {
       tenant_id: serviceShareLinks.tenantId,
       service_id: serviceShareLinks.serviceId,
       expires_at: serviceShareLinks.expiresAt,
+      deleted_at: serviceShareLinks.deletedAt,
       provider_name: serviceShareLinks.providerName,
       provider_accepted_at: serviceShareLinks.providerAcceptedAt,
       provider_started_at: serviceShareLinks.providerStartedAt,
@@ -156,17 +167,18 @@ share.get('/public/share/service/:token', async (c) => {
     .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
     .where(
       and(
-        eq(serviceShareLinks.token, token),
+        // Hash lookup for new records; fallback to plaintext for legacy records without hash
+        sql`(${serviceShareLinks.tokenHash} = ${tokenHash} OR (${serviceShareLinks.tokenHash} IS NULL AND ${serviceShareLinks.token} = ${rawToken}))`,
         eq(serviceShareLinks.tenantId, serviceOrders.tenantId),
         eq(serviceShareLinks.tenantId, properties.tenantId),
-        gt(serviceShareLinks.expiresAt, sql`datetime('now')`),
-        isNull(serviceShareLinks.deletedAt),
         isNull(serviceOrders.deletedAt)
       )
     )
     .limit(1) as Array<Record<string, unknown>>;
 
-  if (!link) return err(c, 'Link inválido ou expirado', 'NOT_FOUND', 404);
+  if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
+  if (link.deleted_at) return err(c, 'Link revogado', 'GONE', 410);
+  if (new Date(String(link.expires_at)) < new Date()) return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
 
   // Optionally include credentials marked for sharing
   let sharedCredentials: unknown[] = [];
@@ -200,7 +212,6 @@ share.get('/public/share/service/:token', async (c) => {
 
   return ok(c, {
     service: {
-      id: link.service_id,
       title: link.title,
       description: link.description,
       status: link.status,
@@ -223,7 +234,6 @@ share.get('/public/share/service/:token', async (c) => {
       type: link.property_type,
     },
     link: {
-      token,
       expires_at: link.expires_at,
       provider_name: link.provider_name,
       provider_accepted_at: link.provider_accepted_at,
@@ -260,7 +270,10 @@ function parseStringArray(value: unknown): string[] {
 
 share.patch('/public/share/service/:token/status', async (c) => {
   const db = getDb(c.env.DB);
-  const token = c.req.param('token');
+  const rawToken = c.req.param('token');
+  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
+
+  const tokenHash = await sha256TokenHash(rawToken);
 
   const [link] = await db
     .select({
@@ -268,24 +281,26 @@ share.patch('/public/share/service/:token/status', async (c) => {
       tenant_id: serviceShareLinks.tenantId,
       service_id: serviceShareLinks.serviceId,
       provider_accepted_at: serviceShareLinks.providerAcceptedAt,
+      expires_at: serviceShareLinks.expiresAt,
+      deleted_at: serviceShareLinks.deletedAt,
     })
     .from(serviceShareLinks)
     .innerJoin(serviceOrders, eq(serviceOrders.id, serviceShareLinks.serviceId))
     .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
     .where(
       and(
-        eq(serviceShareLinks.token, token),
+        sql`(${serviceShareLinks.tokenHash} = ${tokenHash} OR (${serviceShareLinks.tokenHash} IS NULL AND ${serviceShareLinks.token} = ${rawToken}))`,
         eq(serviceShareLinks.tenantId, serviceOrders.tenantId),
         eq(serviceShareLinks.tenantId, properties.tenantId),
-        gt(serviceShareLinks.expiresAt, sql`datetime('now')`),
-        isNull(serviceShareLinks.deletedAt),
         isNull(serviceOrders.deletedAt),
         isNull(properties.deletedAt)
       )
     )
-    .limit(1) as Array<{ id: string; tenant_id: string; service_id: string; provider_accepted_at: string | null }>;
+    .limit(1) as Array<{ id: string; tenant_id: string; service_id: string; provider_accepted_at: string | null; expires_at: string; deleted_at: string | null }>;
 
-  if (!link) return err(c, 'Link inválido ou expirado', 'NOT_FOUND', 404);
+  if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
+  if (link.deleted_at) return err(c, 'Link revogado', 'GONE', 410);
+  if (new Date(link.expires_at) < new Date()) return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');

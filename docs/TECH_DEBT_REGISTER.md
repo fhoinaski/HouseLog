@@ -311,6 +311,40 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
+### TD-015 - Tokens de links públicos em plaintext (mitigado)
+
+- **Severidade**: Critica
+- **Area**: Backend / Segurança / Links Públicos
+- **Status**: Mitigado
+- **Evidencia**: `audit_links`, `service_share_links` e `property_invites` armazenavam o token puro (`nanoid`) em `TEXT` legível e faziam lookup direto por valor plaintext. Qualquer leitura do banco (dump, log, acesso indevido a D1) expunha tokens válidos.
+- **Mitigação aplicada (P0-PUBLIC-LINKS-HASH-01, 2026-05-12)**:
+  - Migration `0027_public_link_token_hash.sql`: adiciona `token_hash TEXT` e índices nas três tabelas.
+  - Schema Drizzle: `tokenHash` adicionado em `auditLinks`, `serviceShareLinks`, `propertyInvites`.
+  - `apps/api/src/lib/token-hash.ts`: helper `sha256TokenHash(token)` compartilhado.
+  - Novos registros: `token = 'hash-only:<id>'` (satisfaz NOT NULL UNIQUE, não é utilizável para lookup direto); somente `tokenHash` é o segredo persistido.
+  - Lookup público: `WHERE (token_hash = ? OR (token_hash IS NULL AND token = ?))` — hash-first, fallback plaintext somente para registros legados sem hash (desativado automaticamente após migration 0028).
+  - Token puro gerado em memória, emitido uma única vez na response de criação, nunca persistido nem retornado em listagens.
+  - Share link `POST`: sempre cria link novo (revoga o anterior via `deletedAt`); token anterior não é relido do banco.
+  - `writeAuditLog` em `share_link_created` e `invite_created` — sem URL completa nem token hash no payload.
+  - `sanitizeAuditData` expandido: 14+ campos novos redactados — `inviteToken`, `shareToken`, `auditToken`, `signedUrl`, `privateUrl` e variantes.
+  - DTOs públicos: `service_id`, `tenant_id`, `token` removidos dos responses; invite create retorna `invite_url` sem campo `token`.
+  - HTTP corretos: 400 (malformado), 404 (não encontrado), 410 (expirado ou revogado) em todos os três domínios.
+  - 39 testes: `lib/public-links-hash.test.ts` — sha256, sanitize, audit GET/submit, share GET/PATCH/create, invite GET/listing/create, redaction INSERT, 410 expiry/revoke, invariante hash-only.
+  - Migration `0028_redact_token_plaintext.sql`: idempotente, redige plaintext legado após backfill.
+  - Script `db/backfill/phase_a_token_hash_backfill.ts`: TypeScript, calcula sha256 em lote por tabela; `verifyNoPlaintextRemaining()` confirma zero pendentes antes de aplicar 0028.
+- **Risco restante**:
+  - Coluna `token TEXT` legada ainda presente nas três tabelas (NOT NULL UNIQUE mantida com valor `hash-only:<id>` ou plaintext para registros pré-existentes sem hash).
+  - Backfill (`phase_a_token_hash_backfill.ts`) e migration `0028_redact_token_plaintext.sql` ainda não executados em produção.
+  - Enquanto o fallback de lookup plaintext estiver ativo, registros sem `token_hash` ainda são acessíveis por token puro (protegido por expiração e soft delete).
+- **Próxima etapa (produção)**:
+  1. Executar `phase_a_token_hash_backfill.ts` em produção.
+  2. Confirmar `verifyNoPlaintextRemaining()` retorna `{ clean: true }` nas três tabelas.
+  3. Aplicar `0028_redact_token_plaintext.sql` via `wrangler d1 execute`.
+  4. Após 0028, o fallback de lookup plaintext é automaticamente inerte (registros têm `token_hash IS NOT NULL`).
+- **Relacionamento com roadmap/ADRs**: Sprint 3; SECURITY.md seção "Tokens de links publicos"; ADR-004.
+
+---
+
 ## 5. Regras para manter este registro
 
 - Nao registrar debito especulativo sem evidencia no codigo, docs ou refatoracao realizada.

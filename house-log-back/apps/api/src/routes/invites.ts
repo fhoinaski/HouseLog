@@ -5,6 +5,8 @@ import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
+import { writeAuditLog } from '../lib/audit';
+import { sha256TokenHash } from '../lib/token-hash';
 import { properties, propertyCollaborators, propertyInvites, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import { canManageTenantUsers } from '../lib/authorization';
 import type { Bindings, Variables } from '../lib/types';
@@ -167,9 +169,10 @@ invites.post('/properties/:propertyId/invites', async (c) => {
     if (existingByWhatsapp) return err(c, 'Já existe um convite pendente para este WhatsApp', 'DUPLICATE_INVITE', 409);
   }
 
-  const token = nanoid(32);
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const id = nanoid();
+  const token = nanoid(32);
+  const tokenHash = await sha256TokenHash(token);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const appUrl = c.env.APP_URL ?? 'https://house-log.vercel.app';
 
   await db.insert(propertyInvites).values({
@@ -178,11 +181,27 @@ invites.post('/properties/:propertyId/invites', async (c) => {
     invitedBy: userId,
     email: inviteEmail,
     role,
-    token,
+    token: `hash-only:${id}`,
+    tokenHash,
     expiresAt,
     specialties: JSON.parse(specialtiesJson) as string[],
     whatsapp: normalizedWhatsapp,
     inviteName,
+  });
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'property_invite', entityId: id,
+    action: 'invite_created',
+    actorId: userId, actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      role,
+      expires_at: expiresAt,
+      has_email: !!normalizedEmail,
+      has_whatsapp: !!normalizedWhatsapp,
+    },
   });
 
   // Send invite email (non-blocking)
@@ -215,7 +234,6 @@ invites.post('/properties/:propertyId/invites', async (c) => {
 
   return ok(c, {
     id,
-    token,
     expires_at: expiresAt,
     invite_url: `${appUrl}/invite/${token}`,
     delivery: normalizedEmail ? 'email' : 'whatsapp_link',
@@ -415,7 +433,6 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
       invited_by: propertyInvites.invitedBy,
       email: propertyInvites.email,
       role: propertyInvites.role,
-      token: propertyInvites.token,
       invite_name: propertyInvites.inviteName,
       specialties: propertyInvites.specialties,
       whatsapp: propertyInvites.whatsapp,
@@ -531,7 +548,10 @@ invites.delete('/properties/:propertyId/invites/:inviteId', authMiddleware, asyn
 
 invites.get('/invite/:token', async (c) => {
   const db = getDb(c.env.DB);
-  const { token } = c.req.param();
+  const { token: rawToken } = c.req.param();
+  if (!rawToken || rawToken.length < 8) return err(c, 'Convite inválido', 'INVALID_TOKEN', 400);
+
+  const tokenHash = await sha256TokenHash(rawToken);
 
   const [invite] = await db
     .select({
@@ -539,6 +559,7 @@ invites.get('/invite/:token', async (c) => {
       email: propertyInvites.email,
       role: propertyInvites.role,
       expires_at: propertyInvites.expiresAt,
+      accepted_at: propertyInvites.acceptedAt,
       invite_name: propertyInvites.inviteName,
       whatsapp: propertyInvites.whatsapp,
       property_name: properties.name,
@@ -552,20 +573,20 @@ invites.get('/invite/:token', async (c) => {
     .innerJoin(users, eq(users.id, propertyInvites.invitedBy))
     .where(
       and(
-        eq(propertyInvites.token, token),
-        isNull(propertyInvites.acceptedAt),
-        gt(propertyInvites.expiresAt, sql`datetime('now')`)
+        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`
       )
     )
     .limit(1) as Array<{
-    id: string; email: string; role: string; expires_at: string;
+    id: string; email: string; role: string; expires_at: string; accepted_at: string | null;
     invite_name: string | null;
     whatsapp: string | null;
     property_name: string; property_address: string; property_city: string;
     invited_by_name: string; property_id: string;
   }>;
 
-  if (!invite) return err(c, 'Convite inválido ou expirado', 'INVALID_TOKEN', 404);
+  if (!invite) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
+  if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
 
   const email = invite.email.endsWith('@pending.houselog.local') ? null : invite.email;
 
@@ -586,8 +607,11 @@ invites.get('/invite/:token', async (c) => {
 
 invites.post('/invite/:token/accept', authMiddleware, async (c) => {
   const db = getDb(c.env.DB);
-  const { token } = c.req.param();
+  const { token: rawToken } = c.req.param();
+  if (!rawToken || rawToken.length < 8) return err(c, 'Convite inválido', 'INVALID_TOKEN', 400);
   const userId = c.get('userId');
+
+  const tokenHash = await sha256TokenHash(rawToken);
 
   const [invite] = await db
     .select({
@@ -598,14 +622,12 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
       specialties: propertyInvites.specialties,
       whatsapp: propertyInvites.whatsapp,
       invited_by: propertyInvites.invitedBy,
+      accepted_at: propertyInvites.acceptedAt,
+      expires_at: propertyInvites.expiresAt,
     })
     .from(propertyInvites)
     .where(
-      and(
-        eq(propertyInvites.token, token),
-        isNull(propertyInvites.acceptedAt),
-        gt(propertyInvites.expiresAt, sql`datetime('now')`)
-      )
+      sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`
     )
     .limit(1) as Array<{
     id: string;
@@ -615,9 +637,13 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     specialties: string[] | null;
     whatsapp: string | null;
     invited_by: string;
+    accepted_at: string | null;
+    expires_at: string;
   }>;
 
-  if (!invite) return err(c, 'Convite inválido ou expirado', 'INVALID_TOKEN', 404);
+  if (!invite) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
+  if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
 
   // Managers get can_open_os = 1 by default; providers/viewers start at 0
   const defaultCanOpenOs = invite.role === 'manager' ? 1 : 0;
@@ -658,7 +684,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     }
   }
 
-  await db.update(propertyInvites).set({ acceptedAt: sql`datetime('now')` }).where(eq(propertyInvites.token, token));
+  await db.update(propertyInvites).set({ acceptedAt: sql`datetime('now')` }).where(eq(propertyInvites.id, invite.id));
 
   return ok(c, { success: true, property_id: invite.property_id, role: invite.role });
 });

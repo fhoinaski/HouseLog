@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { and, eq, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
+import { sha256TokenHash } from '../lib/token-hash';
 import { ok, err } from '../lib/response';
 import { canCreateAuditLink } from '../lib/authorization';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
@@ -66,8 +67,9 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
     requiredFields: body.scope?.requiredFields ?? [],
   };
 
-  const token = nanoid(32);
   const id = nanoid();
+  const token = nanoid(32);
+  const tokenHash = await sha256TokenHash(token);
 
   await db.insert(auditLinksTable).values({
     id,
@@ -75,7 +77,8 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
     serviceOrderId: serviceId,
     propertyId,
     createdBy: userId,
-    token,
+    token: `hash-only:${id}`,
+    tokenHash,
     scope,
     expiresAt,
     status: 'active',
@@ -91,22 +94,23 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
       service_order_id: serviceId,
       scope,
       expires_at: expiresAt,
-      actor_id: userId,
     },
   });
 
-  // Build the public URL for sharing
   const publicUrl = `${c.env.APP_URL}/audit/${token}`;
 
-  return ok(c, { token, url: publicUrl, expires_at: expiresAt, scope }, 201);
+  return ok(c, { url: publicUrl, expires_at: expiresAt, scope }, 201);
 });
 
 // ── GET /audit/:token — public, no auth ──────────────────────────────────────
 
 auditLinks.get('/public/:token', async (c) => {
   const db = getDb(c.env.DB);
-  const token = c.req.param('token')!;
+  const rawToken = c.req.param('token')!;
+  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+
+  const tokenHash = await sha256TokenHash(rawToken);
 
   const [link] = await db
     .select({
@@ -114,7 +118,6 @@ auditLinks.get('/public/:token', async (c) => {
       service_order_id: auditLinksTable.serviceOrderId,
       property_id: auditLinksTable.propertyId,
       created_by: auditLinksTable.createdBy,
-      token: auditLinksTable.token,
       scope: auditLinksTable.scope,
       expires_at: auditLinksTable.expiresAt,
       accessed_at: auditLinksTable.accessedAt,
@@ -138,7 +141,7 @@ auditLinks.get('/public/:token', async (c) => {
     .innerJoin(properties, eq(properties.id, auditLinksTable.propertyId))
     .where(
       and(
-        eq(auditLinksTable.token, token),
+        eq(auditLinksTable.tokenHash, tokenHash),
         eq(auditLinksTable.tenantId, serviceOrders.tenantId),
         eq(auditLinksTable.tenantId, properties.tenantId),
         eq(auditLinksTable.propertyId, serviceOrders.propertyId),
@@ -148,16 +151,15 @@ auditLinks.get('/public/:token', async (c) => {
     )
     .limit(1);
 
-  if (!link) return err(c, 'Link inválido', 'NOT_FOUND', 404);
+  if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
 
-  // Auto-expire check
   if (new Date(link.expires_at) < new Date()) {
     await db.update(auditLinksTable).set({ status: 'expired' }).where(eq(auditLinksTable.id, link.id));
-    return err(c, 'Este link expirou', 'LINK_EXPIRED', 409);
+    return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
   }
 
-  if (link.status === 'expired') return err(c, 'Este link expirou', 'LINK_EXPIRED', 409);
-  if (link.status === 'used')    return err(c, 'Este link já foi utilizado', 'LINK_USED', 409);
+  if (link.status === 'expired') return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
+  if (link.status === 'used')    return err(c, 'Este link já foi utilizado', 'LINK_USED', 410);
 
   // Record access
   await db
@@ -166,7 +168,6 @@ auditLinks.get('/public/:token', async (c) => {
     .where(eq(auditLinksTable.id, link.id));
 
   return ok(c, {
-    token,
     order_title: link.order_title,
     order_description: link.order_description,
     system_type: link.system_type,
@@ -182,8 +183,11 @@ auditLinks.get('/public/:token', async (c) => {
 
 auditLinks.post('/public/:token/submit', async (c) => {
   const db = getDb(c.env.DB);
-  const token = c.req.param('token')!;
+  const rawToken = c.req.param('token')!;
+  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+
+  const tokenHash = await sha256TokenHash(rawToken);
 
   const [link] = await db
     .select({
@@ -191,7 +195,6 @@ auditLinks.post('/public/:token/submit', async (c) => {
       service_order_id: auditLinksTable.serviceOrderId,
       property_id: auditLinksTable.propertyId,
       created_by: auditLinksTable.createdBy,
-      token: auditLinksTable.token,
       scope: auditLinksTable.scope,
       expires_at: auditLinksTable.expiresAt,
       accessed_at: auditLinksTable.accessedAt,
@@ -208,8 +211,7 @@ auditLinks.post('/public/:token/submit', async (c) => {
     .innerJoin(properties, eq(properties.id, auditLinksTable.propertyId))
     .where(
       and(
-        eq(auditLinksTable.token, token),
-        eq(auditLinksTable.status, 'active'),
+        eq(auditLinksTable.tokenHash, tokenHash),
         eq(auditLinksTable.tenantId, serviceOrders.tenantId),
         eq(auditLinksTable.tenantId, properties.tenantId),
         eq(auditLinksTable.propertyId, serviceOrders.propertyId),
@@ -219,11 +221,13 @@ auditLinks.post('/public/:token/submit', async (c) => {
     )
     .limit(1);
 
-  if (!link?.tenant_id) return err(c, 'Link invalido ou expirado', 'INVALID_LINK', 409);
+  if (!link?.tenant_id) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
   const linkTenantId = link.tenant_id;
+  if (link.status === 'used')   return err(c, 'Este link já foi utilizado', 'LINK_USED', 410);
+  if (link.status === 'expired') return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
   if (new Date(link.expires_at) < new Date()) {
     await db.update(auditLinksTable).set({ status: 'expired' }).where(eq(auditLinksTable.id, link.id));
-    return err(c, 'Link expirado', 'LINK_EXPIRED', 409);
+    return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
   }
 
   const scope = (link.scope ?? { canUploadPhotos: true, canUploadVideo: false, requiredFields: [] }) as AuditScope;

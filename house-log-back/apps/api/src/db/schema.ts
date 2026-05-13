@@ -289,6 +289,7 @@ export const auditLinks = sqliteTable('audit_links', {
   propertyId: text('property_id').notNull().references(() => properties.id),
   createdBy: text('created_by').notNull().references(() => users.id),
   token: text('token').notNull(),
+  tokenHash: text('token_hash'),
   scope: text('scope', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default(sql`'{}'`),
   expiresAt: text('expires_at').notNull(),
   accessedAt: text('accessed_at'),
@@ -301,6 +302,7 @@ export const auditLinks = sqliteTable('audit_links', {
   tenantIdx: index('idx_audit_links_tenant').on(table.tenantId),
   tokenUnique: uniqueIndex('audit_links_token_unique').on(table.token),
   tokenIdx: index('idx_audit_links_token').on(table.token),
+  tokenHashIdx: index('idx_audit_links_token_hash').on(table.tokenHash),
   serviceIdx: index('idx_audit_links_service').on(table.serviceOrderId),
 }));
 
@@ -693,6 +695,7 @@ export const propertyInvites = sqliteTable('property_invites', {
   email: text('email').notNull(),
   role: text('role', { enum: ['viewer', 'provider', 'manager'] }).notNull().default('viewer'),
   token: text('token').notNull(),
+  tokenHash: text('token_hash'),
   inviteName: text('invite_name'),
   specialties: text('specialties', { mode: 'json' }).$type<string[]>().default(sql`'[]'`),
   whatsapp: text('whatsapp'),
@@ -703,6 +706,7 @@ export const propertyInvites = sqliteTable('property_invites', {
   tenantIdx: index('idx_invites_tenant').on(table.tenantId),
   tokenUnique: uniqueIndex('property_invites_token_unique').on(table.token),
   tokenIdx: index('idx_invites_token').on(table.token),
+  tokenHashIdx: index('idx_invites_token_hash').on(table.tokenHash),
   propertyIdx: index('idx_invites_property').on(table.propertyId),
 }));
 
@@ -711,6 +715,7 @@ export const serviceShareLinks = sqliteTable('service_share_links', {
   tenantId: text('tenant_id').references(() => tenants.id),
   serviceId: text('service_id').notNull().references(() => serviceOrders.id),
   token: text('token').notNull(),
+  tokenHash: text('token_hash'),
   createdBy: text('created_by').notNull().references(() => users.id),
   expiresAt: text('expires_at').notNull(),
   providerName: text('provider_name'),
@@ -725,6 +730,7 @@ export const serviceShareLinks = sqliteTable('service_share_links', {
   deletedAt: text('deleted_at'),
 }, (table) => ({
   tokenUnique: uniqueIndex('service_share_links_token_unique').on(table.token),
+  tokenHashIdx: index('idx_service_share_links_token_hash').on(table.tokenHash),
 }));
 
 export const propertyAccessCredentials = sqliteTable('property_access_credentials', {

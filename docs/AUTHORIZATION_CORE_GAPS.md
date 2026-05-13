@@ -230,7 +230,8 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 
 - **Coberto hoje**:
   - `canCreateAuditLink` para criacao autenticada;
-  - rota publica com token, expiracao e status.
+  - rota publica com token, expiracao e status;
+  - **P0-PUBLIC-LINKS-HASH-01 (2026-05-12)**: token hash SHA-256 em `audit_links`, `service_share_links` e `property_invites`; lookup por hash com fallback para legados; token puro nunca relido do banco; `writeAuditLog` em `share_link_created` e `invite_created`; `sanitizeAuditData` expandido com 14 campos novos; DTOs publicos sem `service_id`, `tenant_id` e `token`; HTTP 410 para expirados/revogados; 28 testes cobrindo os tres dominios de link publico.
 - **Ainda depende de helper generico**:
   - criacao delega para `canAccessProperty`.
 - **Ainda espalhado em rota**:
@@ -239,6 +240,10 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
   - expiracao;
   - uso publico sem identidade autenticada;
   - submissao publica de evidencia ainda depende da rota.
+- **Risco restante de token**:
+  - backfill de `token_hash` para registros pre-existentes ainda pendente em producao;
+  - fallback de lookup por token plaintext permanece ativo ate backfill concluido;
+  - coluna `token TEXT` legada presente nas tres tabelas ate migration `0028_drop_plaintext_tokens.sql`.
 - **Policy futura mais granular**:
   - `canCreateAuditLinkForServiceOrder`;
   - `canUseAuditLink`;
@@ -307,7 +312,7 @@ Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a re
 | Service orders ja alinham criacao, status, edicao, exclusao, checklist, mensagens e uploads de evidencia a helpers/actions nomeados; status, edicao, evidencia, checklist, mensagens e exclusao ainda precisam regras granulares | Service Orders | P0/P1 |
 | Provider proposal submit ja usa contexto minimo da OS/oportunidade no helper, mas ainda nao valida elegibilidade completa da rede homologada | Provider Proposals | P1 |
 | Provider portal tem helpers formais para acesso, oportunidade, OS atribuida e upload de invoice com auditoria documental; mensagens ficam no modulo geral de OS; evidencia/status provider-specific ainda nao tem fluxo proprio e deve aguardar contrato real | Provider Opportunities / Portal | P1 |
-| Audit links ja usam helper e evento canonico na criacao, mas ainda precisam policy por uso publico, envio de evidencia e revogacao | Public Links / Audit Links | P0 |
+| Audit links, share links e invites agora usam hash SHA-256 (P0-PUBLIC-LINKS-HASH-01), helper canônico de criacao e auditoria; backfill de token_hash pendente em producao; policy granular de uso publico, envio de evidencia e revogacao ainda necessaria | Public Links / Audit Links | P0 |
 | Search tem helpers nomeados por tipo, usa propriedades acessiveis e possui allowlist local de campos; OCR e descricao livre de OS foram retirados da busca ampla, mas ainda falta policy formal por campo sensivel e indice multi-tenant | Search | P1/P2 |
 | Falta tenant/organization como raiz formal de autorizacao | Multi-tenant | P0 |
 

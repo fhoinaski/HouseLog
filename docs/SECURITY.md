@@ -138,6 +138,25 @@ Rotas publicas ou baseadas em token devem:
 
 Token publico nao substitui tenant, propriedade e escopo de entidade.
 
+## Tokens de links publicos (audit links, share links, invites)
+
+Aplicado a partir de P0-PUBLIC-LINKS-HASH-01 (2026-05-12):
+
+- O banco de dados armazena apenas o hash SHA-256 do token (`token_hash TEXT`).
+- O token puro (nanoid) e emitido apenas uma vez na criacao e nunca mais relido do banco.
+- Lookup publico e feito por hash: `WHERE token_hash = sha256(token_apresentado)`.
+- Registros legados sem `token_hash` usam fallback de lookup por `token` ate que o script de backfill seja executado.
+- `sanitizeAuditData` redacta automaticamente todos os campos de token:
+  `token`, `accessToken`, `refreshToken`, `publicAccessToken`, `inviteToken`, `shareToken`, `auditToken` e suas variantes `_hash` e snake_case.
+- Links expirados ou revogados retornam `410 Gone` (nao `409`).
+- Tokens malformados (< 8 chars) retornam `400 Bad Request`.
+- DTOs publicos nao expem `tenant_id`, `service_id` interno, `token`, nem IDs de entidade interna.
+- Criacao de share link e invite registra `writeAuditLog` com `action: share_link_created / invite_created`.
+
+Migration: `0027_public_link_token_hash.sql` — adiciona `token_hash TEXT` e indices nas tabelas `audit_links`, `service_share_links`, `property_invites`.
+
+Backfill pendente: executar `UPDATE ... SET token_hash = sha256(token) WHERE token_hash IS NULL` para registros pre-existentes antes de remover fallback de token plaintext.
+
 ## O que nunca fazer
 
 - Nunca aceitar `tenantId` do cliente como fonte de verdade.
