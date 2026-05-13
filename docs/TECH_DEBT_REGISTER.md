@@ -258,6 +258,59 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
+---
+
+### TD-013 - Refresh token em localStorage (mitigado)
+
+- **Severidade**: Critica
+- **Area**: Backend / Frontend / Segurança / Sessão
+- **Status**: Mitigado
+- **Evidencia**: refresh token era retornado no body de login/register/mfa e salvo em `localStorage` (`hl_refresh`). `/auth/refresh` e `/auth/logout` aceitavam `refresh_token` pelo body. Qualquer XSS podia roubar a sessão.
+- **Mitigação aplicada (P0-AUTH-SESSION-01)**:
+  - Backend agora seta `houselog_refresh` em cookie `HttpOnly; SameSite=Lax; Path=/api/v1/auth; Secure (prod)`.
+  - Refresh token nunca retorna no JSON body.
+  - `/auth/refresh` lê exclusivamente do cookie via `getCookie()` (Hono).
+  - `/auth/logout` revoga pelo cookie e limpa com `Set-Cookie: Max-Age=0`.
+  - Frontend removeu `hl_refresh` do localStorage em `storage.ts` e `auth-context.tsx`.
+  - `credentials: 'include'` adicionado ao fetch global para envio automático do cookie.
+  - Testes: `routes/auth-session.test.ts` cobre login/register/refresh/logout.
+- **Risco restante**:
+  - Access token ainda persiste em `localStorage` (`hl_token`). XSS ainda pode roubar o access token (TTL 1h). Mitigação futura: manter access token apenas em memória.
+  - Em deployment cross-origin (workers.dev ≠ vercel.app, domínios distintos), `SameSite=Lax` não envia o cookie em POSTs cross-site. Solução: custom domain same-site (ex: api.houselog.app + app.houselog.app) OU `SameSite=None; Secure`.
+- **Próxima etapa recomendada**:
+  - P0-AUTH-SESSION-02: mover access token de localStorage para memória (variável de estado React).
+  - Configurar custom domain same-site para eliminar necessidade de `SameSite=None`.
+- **Relacionamento com roadmap**: Sprint 3 do HOUSELOG_EXECUTION_MASTERPLAN.md.
+
+---
+
+### TD-014 - tenant_id nullable nas tabelas principais (mitigado parcialmente)
+
+- **Severidade**: Critica
+- **Area**: Backend / Multi-tenant / Isolamento de Dados
+- **Status**: Mitigado parcialmente
+- **Evidencia**: migration `0014_tenant_foundation.sql` adicionou `tenant_id` nullable em 20 tabelas e fez backfill dos dados legados via `owner_id → tenant_members`. Novas tabelas criadas após 0014 (`technical_systems`, `technical_points`, `warranties`, `renovations`, `handover_packages`, `handover_checklist_items`, `document_ingestion_jobs`, etc.) já usam `NOT NULL`. As 20 tabelas originais permanecem `nullable` enquanto o backfill de dados legados não for validado.
+- **Mitigação aplicada (P0-TENANT-BACKFILL-01)**:
+  - Todas as rotas autenticadas usam `resolveTenant` middleware — rejeita com 400 `TENANT_REQUIRED` se não houver membership ativo.
+  - Todos os handlers de criação (rooms, services, expenses, credentials, documents, audit-links, invites, maintenance, service-requests, bids, renovations, warranties, handover) injetam `tenantId` do contexto no INSERT.
+  - Scripts de diagnóstico e backfill criados em `apps/api/src/db/backfill/`:
+    - `phase_a_diagnostic.sql` — relatório de `tenant_id IS NULL` por tabela (somente-leitura, compatível com `wrangler d1 execute`).
+    - `phase_b_safe_backfill.sql` — backfill idempotente: preenche apenas registros `NULL` a partir do parent; nunca sobrescreve valor existente.
+    - `phase_c_orphan_report.sql` — relatório de órfãos pós-backfill (registros sem parent resolvível).
+  - Helpers puros para decisão de backfill: `lib/backfill-diagnostics.ts` (`resolveChildTenant`, `resolvePropertyTenant`, `BACKFILL_STRATEGIES`).
+  - Testes: `lib/backfill-diagnostics.test.ts`, `lib/tenant-authorization.test.ts`, `lib/room-tenant.test.ts`, `lib/service-tenant.test.ts`, `lib/expense-tenant.test.ts` e outros por domínio. Testes de rota em `routes/tenant-isolation.test.ts` cobrem `resolveTenant`, insert com tenantId e cross-tenant read → 404.
+- **Risco restante**:
+  - As 20 tabelas originais ainda têm `tenant_id TEXT` sem `NOT NULL`. Registros legados não resolvíveis pelo backfill permanecem com `tenant_id IS NULL` — serão excluídos das listagens por filtragem de tenant ativo, mas podem criar débito de limpeza.
+  - Sem a constraint `NOT NULL`, um bug de código poderia criar um registro sem `tenant_id` sem falha de banco.
+- **Próxima etapa (Fase D — não implementar sem validação)**:
+  - Executar `phase_a_diagnostic.sql` no banco de produção. Se `null_tenant = 0` em todas as tabelas, prosseguir.
+  - Executar `phase_b_safe_backfill.sql`. Reexecutar `phase_a`. Se `null_tenant > 0` ainda, executar `phase_c_orphan_report.sql` para triagem manual.
+  - Quando `orphaned = 0` em todas as tabelas e validação em dev por ≥ 24h: criar migration `0026_tenant_not_null.sql` usando recriação de tabela (D1/SQLite não suporta `ALTER COLUMN`). Padrão: `CREATE TABLE ... NOT NULL → INSERT FROM old → DROP old → RENAME`.
+  - Executar somente com backup completo confirmado.
+- **Relacionamento com roadmap/ADRs**: Sprint 4; ADR-005 (multi-tenant incremental); TD-009.
+
+---
+
 ## 5. Regras para manter este registro
 
 - Nao registrar debito especulativo sem evidencia no codigo, docs ou refatoracao realizada.

@@ -19,16 +19,14 @@ export const authApi = {
 
   me: () => request<{ user: User & { mfa_enabled?: boolean } }>('/auth/me'),
 
-  refresh: (refresh_token: string) =>
-    request<AuthPairResponse>('/auth/refresh', {
+  refresh: () =>
+    request<{ token: string; access_token: string; expires_in: number }>('/auth/refresh', {
       method: 'POST',
-      body: JSON.stringify({ refresh_token }),
     }),
 
-  logout: (refresh_token?: string) =>
+  logout: () =>
     request<{ ok: true }>('/auth/logout', {
       method: 'POST',
-      body: JSON.stringify(refresh_token ? { refresh_token } : {}),
     }),
 
   mfaSetup: () => request<{ secret: string; otpauth_uri: string }>('/auth/mfa/setup', { method: 'POST' }),

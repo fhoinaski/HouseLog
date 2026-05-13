@@ -46,6 +46,31 @@ Regras:
 
 Novas features sem upload devem aceitar somente referencias permitidas pelo padrao atual, como endpoints autenticados internos ou URLs explicitamente validas e nao privadas.
 
+## Sessao e refresh token
+
+O refresh token é armazenado exclusivamente em cookie `HttpOnly` com as seguintes propriedades:
+
+- `HttpOnly`: inacessível a JavaScript — protege contra XSS.
+- `Secure`: enviado apenas por HTTPS em ambiente `production`.
+- `SameSite=Lax`: protege contra CSRF em POSTs cross-site.
+- `Path=/api/v1/auth`: limita o escopo do cookie aos endpoints de autenticação.
+- `Max-Age`: coerente com o TTL do refresh token (padrão 30 dias).
+
+Nome do cookie: `houselog_refresh`.
+
+Regras:
+
+- Nunca retornar refresh token no JSON body.
+- Nunca aceitar refresh token via body — apenas via cookie.
+- Nunca logar o valor cru do refresh token.
+- O hash SHA-256 é o único valor persistido no banco.
+- O access token (JWT, TTL 1h) permanece no body/memória — não deve ser persistido de forma insegura.
+- O frontend usa `credentials: 'include'` em todas as chamadas à API para enviar o cookie automaticamente.
+
+Risco residual documentado: access token ainda está em `localStorage` (TD-013). Próximo passo: mover para memória React.
+
+Nota de compatibilidade de deployment: em ambientes onde frontend e API estão em domínios distintos (ex: vercel.app e workers.dev), `SameSite=Lax` não envia o cookie em POSTs cross-site. A solução definitiva é custom domain same-site (ex: api.houselog.app + app.houselog.app).
+
 ## CORS seguro em producao
 
 Em producao, CORS deve usar origins explicitas. Nao usar `*` com credenciais.
