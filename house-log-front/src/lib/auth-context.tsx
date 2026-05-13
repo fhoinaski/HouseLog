@@ -51,7 +51,6 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-const REFRESH_KEY = 'hl_refresh';
 const USER_KEY = 'hl_user';
 const TOKEN_KEY = 'hl_token';
 
@@ -64,23 +63,13 @@ function getTokenExpiry(token: string): number | null {
   }
 }
 
-function storePair(access: string, refresh: string, user?: User) {
+function storeSession(access: string, user?: User) {
   setToken(access);
-  localStorage.setItem(REFRESH_KEY, refresh);
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
-}
-
-function getRefresh(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(REFRESH_KEY);
 }
 
 function clearAll() {
   clearToken();
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-  localStorage.removeItem(USER_KEY);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -89,16 +78,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const doRefresh = useCallback(async () => {
-    const refresh = getRefresh();
-    if (!refresh) {
-      clearAll();
-      setUser(null);
-      return;
-    }
     try {
-      const { access_token, refresh_token, user: refreshedUser } = await authApi.refresh(refresh);
-      storePair(access_token, refresh_token, refreshedUser);
-      setUser(refreshedUser);
+      const { access_token } = await authApi.refresh();
+      setToken(access_token);
+      const stored = localStorage.getItem(USER_KEY);
+      if (stored) {
+        const parsedUser = JSON.parse(stored) as User;
+        setUser(parsedUser);
+      }
       scheduleRefresh(access_token);
     } catch {
       clearAll();
@@ -126,21 +113,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const stored = localStorage.getItem(USER_KEY);
     const token = localStorage.getItem(TOKEN_KEY);
-    const refresh = getRefresh();
+
     if (stored && token) {
       const expiry = getTokenExpiry(token);
-      if (expiry && expiry < Date.now()) {
-        if (refresh) {
-          void doRefresh().finally(() => setLoading(false));
-          return cleanup;
-        }
-        clearAll();
-      } else {
+      if (expiry && expiry > Date.now()) {
         setUser(JSON.parse(stored) as User);
         scheduleRefresh(token);
+        setLoading(false);
+        return cleanup;
       }
     }
-    setLoading(false);
+
+    // Token ausente ou expirado — tenta renovar via cookie HttpOnly
+    void doRefresh().finally(() => setLoading(false));
     return cleanup;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -150,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isMfaChallenge(resp)) {
       throw new MfaRequiredError(resp.challenge_token);
     }
-    storePair(resp.access_token, resp.refresh_token, resp.user);
+    storeSession(resp.access_token, resp.user);
     setUser(resp.user);
     scheduleRefresh(resp.access_token);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -158,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const completeMfa = useCallback(async (challengeToken: string, code: string) => {
     const resp = await authApi.mfaChallenge(challengeToken, code);
-    storePair(resp.access_token, resp.refresh_token, resp.user);
+    storeSession(resp.access_token, resp.user);
     setUser(resp.user);
     scheduleRefresh(resp.access_token);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider_categories?: string[];
     }) => {
       const resp = await authApi.register(data);
-      storePair(resp.access_token, resp.refresh_token, resp.user);
+      storeSession(resp.access_token, resp.user);
       setUser(resp.user);
       scheduleRefresh(resp.access_token);
     },
@@ -205,9 +190,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    const refresh = getRefresh();
-    // Fire-and-forget server-side revocation
-    if (refresh) void authApi.logout(refresh).catch(() => {});
+    // Cookie revogado server-side; fire-and-forget
+    void authApi.logout().catch(() => {});
     clearAll();
     setUser(null);
   }, []);

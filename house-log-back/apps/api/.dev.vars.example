@@ -67,8 +67,13 @@ R2_PUBLIC_URL=https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev
 # VAPID_SUBJECT=mailto:ops@houselog.app
 
 # -----------------------------------------------------------------------------
-# Refresh tokens
+# Refresh tokens (P0-AUTH-SESSION-01)
 # -----------------------------------------------------------------------------
+# O refresh token é armazenado em cookie HttpOnly 'houselog_refresh'.
+# Em produção: Secure=true, SameSite=Lax, Path=/api/v1/auth.
+# Em desenvolvimento: Secure=false (localhost não requer HTTPS).
+# Compatibilidade cross-origin: se frontend e API estiverem em domínios distintos,
+# configure custom domain same-site OU mude para SameSite=None no ENVIRONMENT=production.
 # Dias até o refresh token expirar. Default: 30.
 # REFRESH_TOKEN_TTL_DAYS=30
 

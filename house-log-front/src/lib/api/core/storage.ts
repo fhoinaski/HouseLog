@@ -1,5 +1,4 @@
 const TOKEN_KEY = 'hl_token';
-const REFRESH_KEY = 'hl_refresh';
 const USER_KEY = 'hl_user';
 
 export function getToken(): string | null {
@@ -14,6 +13,7 @@ export function setToken(token: string) {
 export function clearToken() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_KEY);
   localStorage.removeItem(USER_KEY);
+  // Remove legacy key from older sessions (migration cleanup)
+  localStorage.removeItem('hl_refresh');
 }

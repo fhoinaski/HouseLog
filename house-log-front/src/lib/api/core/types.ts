@@ -42,7 +42,8 @@ export type User = {
 export type AuthPairResponse = {
   token: string;           // alias de access_token para compat
   access_token: string;
-  refresh_token: string;
+  /** @deprecated refresh_token is now stored in HttpOnly cookie only */
+  refresh_token?: string;
   expires_in: number;
   user: User;
 };

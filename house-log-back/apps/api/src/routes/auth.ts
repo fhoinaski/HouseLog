@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
+import { setCookie, getCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { signJwt, verifyJwt, hashPassword, verifyPassword } from '../lib/jwt';
+import { signJwt, hashPassword, verifyPassword } from '../lib/jwt';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
@@ -17,10 +18,40 @@ import {
 import { generateSecret, otpauthUri, totpVerify, generateBackupCodes } from '../lib/totp';
 import { normalizeProviderCategories } from '../lib/provider-categories';
 import type { Bindings, Variables, User } from '../lib/types';
+import type { Context } from 'hono';
 
 const auth = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const ACCESS_TOKEN_TTL = 60 * 60; // 1h
+
+// ── Cookie helpers ─────────────────────────────────────────────────────────────
+
+const REFRESH_COOKIE = 'houselog_refresh';
+const REFRESH_COOKIE_PATH = '/api/v1/auth';
+
+type AuthContext = Context<{ Bindings: Bindings; Variables: Variables }>;
+
+function setRefreshCookie(c: AuthContext, token: string, ttlDays: number): void {
+  const isProduction = c.env.ENVIRONMENT === 'production';
+  setCookie(c, REFRESH_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'Lax',
+    path: REFRESH_COOKIE_PATH,
+    maxAge: ttlDays * 86400,
+  });
+}
+
+function clearRefreshCookie(c: AuthContext): void {
+  setCookie(c, REFRESH_COOKIE, '', {
+    httpOnly: true,
+    secure: c.env.ENVIRONMENT === 'production',
+    sameSite: 'Lax',
+    path: REFRESH_COOKIE_PATH,
+    maxAge: 0,
+    expires: new Date(0),
+  });
+}
 
 const educationEntrySchema = z.object({
   institution: z.string().min(2).max(160),
@@ -89,17 +120,13 @@ const mfaChallengeSchema = z.object({
   challenge_token: z.string().min(1),
   code: z.string().min(6).max(10),
 });
-const refreshBodySchema = z.object({ refresh_token: z.string().min(10) });
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
 async function issueTokenPair(
-  c: {
-    env: Bindings;
-    req: { header: (n: string) => string | undefined };
-  },
+  c: AuthContext,
   user: Pick<User, 'id' | 'email' | 'role'>
-) {
+): Promise<{ access: string }> {
   const access = await signJwt(
     { sub: user.id, email: user.email, role: user.role },
     c.env.JWT_SECRET,
@@ -111,7 +138,8 @@ async function issueTokenPair(
     userAgent: c.req.header('User-Agent') ?? null,
     ip: c.req.header('CF-Connecting-IP') ?? null,
   });
-  return { access, refresh };
+  setRefreshCookie(c, refresh.token, ttlDays);
+  return { access };
 }
 
 // ── POST /auth/register ─────────────────────────────────────────────────────
@@ -183,9 +211,8 @@ auth.post('/register', async (c) => {
   return ok(
     c,
     {
-      token: pair.access, // compat com clientes antigos
+      token: pair.access,
       access_token: pair.access,
-      refresh_token: pair.refresh.token,
       expires_in: ACCESS_TOKEN_TTL,
       user: {
         id,
@@ -299,7 +326,6 @@ auth.post('/login', async (c) => {
   return ok(c, {
     token: pair.access,
     access_token: pair.access,
-    refresh_token: pair.refresh.token,
     expires_in: ACCESS_TOKEN_TTL,
     user: {
       id: user.id,
@@ -432,92 +458,64 @@ auth.post('/mfa/challenge', async (c) => {
   return ok(c, {
     token: pair.access,
     access_token: pair.access,
-    refresh_token: pair.refresh.token,
     expires_in: ACCESS_TOKEN_TTL,
     user,
   });
 });
 
 // ── POST /auth/refresh ──────────────────────────────────────────────────────
-// Aceita { refresh_token } no body (preferido). Mantém compat com o fluxo antigo
-// (Authorization: Bearer <access>) apenas emitindo novo access sem rotacionar.
+// Lê o refresh token exclusivamente do cookie HttpOnly 'houselog_refresh'.
+// Rotaciona o token e retorna apenas o access token no body.
 auth.post('/refresh', async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const parsed = refreshBodySchema.safeParse(body);
-
-  if (parsed.success) {
-    const rotated = await rotateRefreshToken(c.env.DB, parsed.data.refresh_token, {
-      userAgent: c.req.header('User-Agent') ?? null,
-      ip: c.req.header('CF-Connecting-IP') ?? null,
-    });
-    if (!rotated) return err(c, 'Refresh token inválido', 'UNAUTHORIZED', 401);
-
-    const db = getDb(c.env.DB);
-    const [user] = await db
-      .select({ id: users.id, email: users.email, role: users.role })
-      .from(users)
-      .where(and(eq(users.id, rotated.userId), isNull(users.deletedAt)))
-      .limit(1) as Array<Pick<User, 'id' | 'email' | 'role'>>;
-    if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
-
-    const access = await signJwt(
-      { sub: user.id, email: user.email, role: user.role },
-      c.env.JWT_SECRET,
-      ACCESS_TOKEN_TTL
-    );
-    return ok(c, {
-      token: access,
-      access_token: access,
-      refresh_token: rotated.token,
-      expires_in: ACCESS_TOKEN_TTL,
-    });
+  const cookieToken = getCookie(c, REFRESH_COOKIE);
+  if (!cookieToken) {
+    return err(c, 'Sessão não encontrada', 'UNAUTHORIZED', 401);
   }
 
-  // Fallback legado: Authorization: Bearer <access expirando>
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return err(c, 'Token não fornecido', 'UNAUTHORIZED', 401);
-  }
-  const token = authHeader.slice(7);
-  try {
-    const payload = await verifyJwt(token, c.env.JWT_SECRET).catch(async () => {
-      const parts = token.split('.');
-      if (parts.length !== 3) throw new Error('invalid');
-      const decoded = JSON.parse(atob(parts[1]!.replace(/-/g, '+').replace(/_/g, '/')));
-      const gracePeriod = 5 * 60;
-      if (decoded.exp + gracePeriod < Math.floor(Date.now() / 1000)) throw new Error('expired');
-      return decoded;
-    });
+  const ttlDays = Number(c.env.REFRESH_TOKEN_TTL_DAYS ?? 30);
+  const rotated = await rotateRefreshToken(c.env.DB, cookieToken, {
+    userAgent: c.req.header('User-Agent') ?? null,
+    ip: c.req.header('CF-Connecting-IP') ?? null,
+  });
+  if (!rotated) return err(c, 'Sessão inválida ou expirada', 'UNAUTHORIZED', 401);
 
-    const db = getDb(c.env.DB);
-    const [user] = await db
-      .select({ id: users.id, email: users.email, role: users.role })
-      .from(users)
-      .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
-      .limit(1) as Array<Pick<User, 'id' | 'email' | 'role'>>;
-    if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
+  const db = getDb(c.env.DB);
+  const [user] = await db
+    .select({ id: users.id, email: users.email, role: users.role })
+    .from(users)
+    .where(and(eq(users.id, rotated.userId), isNull(users.deletedAt)))
+    .limit(1) as Array<Pick<User, 'id' | 'email' | 'role'>>;
+  if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
-    const newToken = await signJwt(
-      { sub: user.id, email: user.email, role: user.role },
-      c.env.JWT_SECRET,
-      ACCESS_TOKEN_TTL
-    );
-    return ok(c, { token: newToken, access_token: newToken, expires_in: ACCESS_TOKEN_TTL });
-  } catch {
-    return err(c, 'Token inválido ou expirado', 'UNAUTHORIZED', 401);
-  }
+  const access = await signJwt(
+    { sub: user.id, email: user.email, role: user.role },
+    c.env.JWT_SECRET,
+    ACCESS_TOKEN_TTL
+  );
+
+  setRefreshCookie(c, rotated.token, ttlDays);
+
+  return ok(c, {
+    token: access,
+    access_token: access,
+    expires_in: ACCESS_TOKEN_TTL,
+  });
 });
 
 // ── POST /auth/logout ──────────────────────────────────────────────────────
-// Revoga refresh_token específico (se enviado) ou todos do usuário autenticado.
+// Revoga o refresh token do cookie HttpOnly e limpa o cookie.
+// Idempotente: se o cookie não existir, revoga todos os tokens do usuário.
 auth.post('/logout', authMiddleware, async (c) => {
   const userId = c.get('userId');
-  const body = await c.req.json().catch(() => ({}));
-  if (typeof body?.refresh_token === 'string') {
-    await revokeRefreshToken(c.env.DB, body.refresh_token);
+  const cookieToken = getCookie(c, REFRESH_COOKIE);
+
+  if (cookieToken) {
+    await revokeRefreshToken(c.env.DB, cookieToken);
   } else {
     await revokeAllForUser(c.env.DB, userId);
   }
+
+  clearRefreshCookie(c);
   return ok(c, { ok: true });
 });
 

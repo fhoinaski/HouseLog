@@ -48,7 +48,7 @@ export async function request<T>(
 
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: 'Erro desconhecido', code: 'UNKNOWN' }));
