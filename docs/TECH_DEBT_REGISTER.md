@@ -351,6 +351,34 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
+### TD-016 - Identificadores de infraestrutura e URL real em arquivos rastreados (mitigado)
+
+- **Severidade**: Alta
+- **Area**: Segurança / Configuração / Infra
+- **Status**: Mitigado
+- **Evidencia** (encontrada em auditoria de secrets 2026-05-14):
+  - `house-log-front/src/lib/api/core/config.ts`: URL real `houselog-api-dev.sukinodoncai.workers.dev` hardcoded como fallback — revelava subdomain Cloudflare e roteava silenciosamente builds sem `NEXT_PUBLIC_API_URL` para o Worker dev real.
+  - `house-log-back/apps/api/wrangler.toml`: `R2_PUBLIC_URL` com domínio real do bucket dev (`pub-3ff8849…r2.dev`) no bloco `[env.dev.vars]` — contradizia política de R2 privado por padrão (SECURITY.md) e expunha URL do bucket público.
+  - `house-log-back/apps/api/.dev.vars.example`: mesma URL R2 real no arquivo de exemplo rastreado.
+  - `docs/auth-routing-security.md`: URL real do Worker dev na documentação.
+- **Mitigação aplicada (2026-05-14)**:
+  - `config.ts`: fallback substituído por `http://localhost:8787/api/v1` com comentário explicando que `NEXT_PUBLIC_API_URL` deve ser configurada por variável de ambiente, nunca hardcoded.
+  - `wrangler.toml`: `R2_PUBLIC_URL` removida do bloco `[env.dev.vars]`; substituída por comentário explicando quando usar e risco de bucket público; orientação para `wrangler secret put R2_PUBLIC_URL --env dev`.
+  - `.dev.vars.example`: URL real substituída por placeholder `pub-YOUR_HASH.r2.dev` com comentário de risco.
+  - `docs/auth-routing-security.md`: URL real substituída por `<seu-subdomain>.workers.dev`.
+- **Não alterado** (risco residual aceitável):
+  - `wrangler.toml` IDs de D1 dev (`62bd81c4-77da-4867-a996-22fff5e0d258`) e KV dev (`30d1ccabab2349e79151d3dec9eb11de`) mantidos — são identificadores de recurso Cloudflare (não credenciais), necessários para `wrangler dev` funcionar para membros da equipe, e inutilizáveis sem API token da conta.
+- **Risco restante**:
+  - IDs de D1/KV dev permanecem visíveis no repositório. Risco real é baixo (necessitam API token + account ID para acesso). Podem ser rotacionados via `wrangler d1 create` e `wrangler kv namespace create` se necessário.
+  - Histórico git anterior ainda contém as URLs removidas. Recomenda-se rodar `git filter-repo` ou `BFG Repo Cleaner` para purgar completamente se o repositório for tornado público.
+- **Regras de rotação de segredos**:
+  - Secrets Cloudflare Workers (`JWT_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`, `RESEND_API_KEY`, credenciais R2): rotar via `wrangler secret put <KEY> [--env dev]` por ambiente. Nunca gravar em `wrangler.toml`, `.dev.vars` commitado ou código-fonte.
+  - `NEXT_PUBLIC_API_URL`: configurar em variáveis de ambiente da plataforma (Vercel environment variables) por ambiente (preview/production); em dev local, usar `.env.local` (gitignored).
+  - Após rotação de qualquer secret: revogar o valor anterior no painel Cloudflare antes de remover do dashboard para evitar janela de acesso duplo.
+- **Relacionamento com roadmap/ADRs**: SECURITY.md seção "R2 — Armazenamento privado por padrão"; TD-012; ADR-004.
+
+---
+
 ## 5. Regras para manter este registro
 
 - Nao registrar debito especulativo sem evidencia no codigo, docs ou refatoracao realizada.

@@ -40,9 +40,12 @@ ENVIRONMENT=development
 # R2 / arquivos publicos
 # -----------------------------------------------------------------------------
 
-# Base publica do bucket R2. Deve apontar para o dominio publico do bucket,
-# sem barra no final. Trocar este valor muda a base usada nos novos uploads.
-R2_PUBLIC_URL=https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev
+# R2_PUBLIC_URL: necessário APENAS se Cloudflare Image Resizing estiver
+# habilitado na zona. Sem isso, thumbnails usam cópia do original (fallback seguro).
+# ATENÇÃO: definir esta variável requer que o bucket dev tenha "Public access"
+# ativo, o que contradiz a política de R2 privado por padrão (SECURITY.md).
+# Substitua YOUR_HASH pelo hash do domínio público do seu bucket dev.
+# R2_PUBLIC_URL=https://pub-YOUR_HASH.r2.dev
 
 # Necessarios apenas para fluxos com URL preassinada.
 # R2_ACCOUNT_ID=replace-with-cloudflare-account-id
