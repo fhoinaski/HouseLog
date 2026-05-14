@@ -227,6 +227,20 @@ Migration: `0027_public_link_token_hash.sql` — adiciona `token_hash TEXT` e in
 
 Backfill pendente: executar `UPDATE ... SET token_hash = sha256(token) WHERE token_hash IS NULL` para registros pre-existentes antes de remover fallback de token plaintext.
 
+## Fila de evidencias offline (IndexedDB)
+
+A fila de evidencias offline (`houselog-eq` no IndexedDB do dispositivo) permite que prestadores registrem fotos de OS sem conexao.
+
+Regras de seguranca:
+
+- Nunca armazenar token de acesso, refresh token ou tenantId no IndexedDB — o token e lido da memoria no momento exato do upload.
+- Itens da fila armazenam apenas `propertyId`, `serviceOrderId`, `type`, `file (Blob)`, `filename`, `mimeType`, `status`, `attempts`, `createdAt` e `errorMessage`.
+- `propertyId` e `serviceOrderId` sao obrigatorios no `enqueue()` — rejeitar sem eles.
+- Sync so e iniciada se `getToken()` retornar um token valido (usuario autenticado com sessao ativa).
+- `clearOfflineQueue()` deve ser chamado no logout para remover todos os Blobs do dispositivo.
+- Sync e foreground-only: o service worker nao tem acesso ao token em memoria, portanto Background Sync API nao e usada para uploads autenticados.
+- Nao expor itens da fila em respostas de API ou logs.
+
 ## O que nunca fazer
 
 - Nunca aceitar `tenantId` do cliente como fonte de verdade.

@@ -415,6 +415,38 @@ Este registro deve ser lido em conjunto com:
 - **Documentacao**: SECURITY.md secao "Audit log" atualizada com tabela de cobertura por modulo e regras de sanitizacao.
 - **Relacionamento**: SECURITY.md secao "Audit log"; ADR-004 (credenciais auditaveis).
 
+### TD-018 - Perda de evidencias de OS quando prestador esta offline (mitigado)
+
+- **Severidade**: Alta
+- **Area**: UX / Confiabilidade / Produto premium
+- **Status**: Mitigado
+- **Evidencia** (auditoria PWA 2026-05-14):
+  - `handlePhotoUpload` na pagina de detalhes da OS chamava `servicesApi.uploadPhoto` sem fallback offline. Se o prestador estava sem sinal, o upload falhava silenciosamente com `toast.error` e a foto era perdida.
+  - Nenhuma fila de pendentes, sem status de sincronizacao, sem retry automatico.
+  - O service worker existente (`public/sw.js`) usava `networkOnly` para todas as rotas `/api/*` — sem capacidade de interceptar uploads para Background Sync.
+- **Mitigacao aplicada (2026-05-14)**:
+  - `src/lib/offline-evidence-queue.ts`: fila IDB-backed (`houselog-eq` DB) com itens `{ id, serviceOrderId, propertyId, type, file: Blob, filename, mimeType, status, attempts, createdAt, errorMessage }`. Operacoes: `enqueue`, `getPending`, `updateItem`, `clearSynced`, `clearAll`. Validacao: `propertyId` e `serviceOrderId` obrigatorios — nenhum dado sensivel armazenado (sem token, sem tenantId).
+  - `src/lib/use-offline-sync.ts`: hook `useOfflineSync()` com `sync()`, `pendingCount`, `syncingCount`, `failedCount`, `isSyncing`. Escuta evento `window.online` para sync automatica. Mutex via `syncingRef` para evitar concorrencia. `processPendingUploads(token)` exportado para testabilidade. `clearOfflineQueue()` exportado para logout.
+  - `src/components/offline-sync-status.tsx`: indicador visual compacto — spinner durante sync, badge de warning para falhas (com botao de retry), badge informativo para pendentes aguardando conexao.
+  - `src/app/(app)/properties/[id]/services/[serviceId]/page.tsx`: `handlePhotoUpload` agora detecta `!navigator.onLine || err instanceof TypeError` para enfileirar offline ao inves de mostrar apenas erro. Sync status visivel na secao de evidencias.
+  - `src/lib/auth-context.tsx`: `logout` chama `clearOfflineQueue()` para nao deixar fotos do usuario no dispositivo apos logout.
+- **Testes adicionados**: `src/__tests__/offline-evidence.test.ts` com 11 testes (Vitest + fake-indexeddb):
+  - Cria item com status pending e campos corretos
+  - Persiste no IDB — getAll retorna o item
+  - Rejeita se propertyId ausente
+  - Rejeita se serviceOrderId ausente
+  - getPending retorna pending+failed, ignora synced+uploading
+  - clearAll esvazia fila no logout
+  - Upload bem-sucedido marca synced e remove da fila
+  - Chama endpoint correto com token e campos da evidencia
+  - Falha de rede preserva item com status failed e Blob intacto
+  - Retry nao duplica — mesmo id apos falha e reenvio
+- **Risco residual**:
+  - Background Sync API nao implementada no service worker (`public/sw.js`). Sync e foreground-only (depende do token em memoria). Se o usuario fechar o app offline e abrir depois sem recarregar, a sync automatica so ocorre ao voltar online com o app aberto. Aceitavel para v1 — documentado.
+  - Itens com status `failed` apos 3+ tentativas nao sao descartados automaticamente. Fila pode acumular falhas persistentes (ex: arquivo rejeitado pelo servidor). Melhoria futura: limite de tentativas + descarte automatico.
+  - Blobs ficam no IndexedDB do dispositivo ate sync ou logout. Em dispositivos com armazenamento limitado, arquivos grandes podem causar quota errors. Mitigacao futura: validar tamanho antes de enfileirar.
+- **Documentacao**: SECURITY.md secao sobre armazenamento de dados no dispositivo.
+
 ---
 
 ## 5. Regras para manter este registro

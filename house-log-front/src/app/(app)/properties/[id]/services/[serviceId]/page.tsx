@@ -38,6 +38,9 @@ import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { invitesApi, normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
+import { enqueue as enqueueEvidence } from '@/lib/offline-evidence-queue';
+import { useOfflineSync } from '@/lib/use-offline-sync';
+import { OfflineSyncStatus } from '@/components/offline-sync-status';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -189,6 +192,7 @@ export default function ServiceDetailPage({
     order?.assigned_to && canManageTeamSuggestion ? ['team', propertyId] : null,
     () => invitesApi.list(propertyId)
   );
+  const offlineSync = useOfflineSync();
 
   useEffect(() => {
     if (!order) {
@@ -217,8 +221,25 @@ export default function ServiceDetailPage({
       await servicesApi.uploadPhoto(propertyId, serviceId, file, photoType);
       await mutate();
       toast.success(`Foto "${photoType === 'before' ? 'antes' : 'depois'}" enviada`);
-    } catch (e) {
-      toast.error('Erro no upload', { description: (e as Error).message });
+    } catch (err) {
+      // Se offline, enfileira para envio posterior; se online com erro de servidor, mostra o erro.
+      if (!navigator.onLine || err instanceof TypeError) {
+        try {
+          await enqueueEvidence({
+            serviceOrderId: serviceId,
+            propertyId,
+            type: photoType,
+            file,
+            filename: file.name,
+            mimeType: file.type || 'image/jpeg',
+          });
+          toast.info('Sem conexão — foto salva para envio automático quando voltar online');
+        } catch {
+          toast.error('Erro no upload', { description: (err as Error).message });
+        }
+      } else {
+        toast.error('Erro no upload', { description: (err as Error).message });
+      }
     } finally {
       setUploadingMedia(false);
       e.target.value = '';
@@ -514,7 +535,8 @@ export default function ServiceDetailPage({
         tone="surface"
         density="editorial"
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <OfflineSyncStatus state={offlineSync} />
             <Button
               variant="outline"
               size="sm"

@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { authApi, setToken, clearToken, isMfaChallenge, type User } from './api';
 import { clearLegacyAuthStorage } from './api/core/storage';
+import { clearOfflineQueue } from './use-offline-sync';
 
 export class MfaRequiredError extends Error {
   challengeToken: string;
@@ -198,6 +199,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     // Cookie revogado server-side; fire-and-forget
     void authApi.logout().catch(() => {});
+    // Limpa fila de evidências offline para não deixar dados do usuário no dispositivo
+    void clearOfflineQueue().catch(() => {});
     clearAll();
     setUser(null);
   }, []);

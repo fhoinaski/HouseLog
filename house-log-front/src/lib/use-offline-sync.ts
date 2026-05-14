@@ -1,0 +1,166 @@
+'use client';
+
+// Hook de sincronização para a fila de evidências offline.
+//
+// Regras:
+// - Nunca armazena token no IndexedDB — o token é lido da memória no momento do upload.
+// - Não inicia sync sem token disponível.
+// - Apenas uma sync corre por vez (syncingRef como mutex).
+// - Sync automática ao voltar online (evento 'online').
+// - clearOfflineQueue() é exportado para uso no logout.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  clearAll as clearQueueAll,
+  clearSynced,
+  getPending,
+  updateItem,
+} from './offline-evidence-queue';
+import { getToken } from './api/core/storage';
+
+const API_BASE =
+  typeof process !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8787/api/v1')
+    : 'http://localhost:8787/api/v1';
+
+/**
+ * Faz o upload de uma evidência diretamente via fetch.
+ * Separada do servicesApi para não criar dependência circular e para ser testável.
+ */
+async function uploadEvidenceFetch(
+  propertyId: string,
+  serviceOrderId: string,
+  file: Blob,
+  filename: string,
+  mimeType: string,
+  type: 'before' | 'after',
+  token: string
+): Promise<void> {
+  const fd = new FormData();
+  fd.append('file', new File([file], filename, { type: mimeType }));
+  fd.append('type', type);
+  const res = await fetch(
+    `${API_BASE}/properties/${propertyId}/services/${serviceOrderId}/photos`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    }
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Erro no upload' }));
+    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+}
+
+/**
+ * Processa todos os itens pendentes da fila.
+ * Função pura exportada para facilitar testes unitários sem React.
+ */
+export async function processPendingUploads(token: string): Promise<void> {
+  const items = await getPending();
+  for (const item of items) {
+    try {
+      await updateItem(item.id, { status: 'uploading' });
+      await uploadEvidenceFetch(
+        item.propertyId,
+        item.serviceOrderId,
+        item.file,
+        item.filename,
+        item.mimeType,
+        item.type,
+        token
+      );
+      await updateItem(item.id, { status: 'synced' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+      await updateItem(item.id, {
+        status: 'failed',
+        attempts: item.attempts + 1,
+        errorMessage: msg,
+      });
+    }
+  }
+  await clearSynced();
+}
+
+export type OfflineSyncState = {
+  pendingCount: number;
+  syncingCount: number;
+  failedCount: number;
+  isSyncing: boolean;
+  sync: () => Promise<void>;
+  clearSyncedItems: () => Promise<void>;
+};
+
+export function useOfflineSync(): OfflineSyncState {
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncingCount, setSyncingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncingRef = useRef(false);
+
+  const refreshCounts = useCallback(async () => {
+    if (typeof indexedDB === 'undefined') return;
+    try {
+      const pending = await getPending();
+      setPendingCount(pending.length);
+      setFailedCount(pending.filter((i) => i.status === 'failed').length);
+    } catch {
+      // IDB indisponível
+    }
+  }, []);
+
+  const sync = useCallback(async () => {
+    if (syncingRef.current) return;
+    const token = getToken();
+    if (!token) return;
+    if (typeof indexedDB === 'undefined') return;
+
+    syncingRef.current = true;
+    setIsSyncing(true);
+
+    try {
+      const items = await getPending();
+      setSyncingCount(items.length);
+      await processPendingUploads(token);
+    } finally {
+      syncingRef.current = false;
+      setIsSyncing(false);
+      setSyncingCount(0);
+      await refreshCounts();
+    }
+  }, [refreshCounts]);
+
+  const clearSyncedItems = useCallback(async () => {
+    await clearSynced();
+    await refreshCounts();
+  }, [refreshCounts]);
+
+  // Atualiza contadores na montagem
+  useEffect(() => {
+    void refreshCounts();
+  }, [refreshCounts]);
+
+  // Dispara sync automática ao recuperar conexão
+  useEffect(() => {
+    const handleOnline = () => void sync();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [sync]);
+
+  return { pendingCount, syncingCount, failedCount, isSyncing, sync, clearSyncedItems };
+}
+
+/**
+ * Limpa toda a fila de evidências.
+ * Deve ser chamado no logout para não deixar dados do usuário no dispositivo.
+ */
+export async function clearOfflineQueue(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  try {
+    await clearQueueAll();
+  } catch {
+    // IDB indisponível — falha silenciosa no logout
+  }
+}
