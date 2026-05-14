@@ -132,6 +132,39 @@ Acoes criticas devem chamar `writeAuditLog`, incluindo:
 
 O audit log deve incluir `tenantId` e `propertyId` sempre que aplicavel. Dados sensiveis devem ser sanitizados com `sanitizeAuditData`.
 
+### Cobertura obrigatoria por modulo (P0-AUDIT-COVERAGE, 2026-05-14)
+
+Todas as acoes abaixo foram verificadas e possuem `writeAuditLog` com `tenantId`+`actorId`:
+
+| Modulo | Acoes cobertas |
+|--------|----------------|
+| `auth` | `register`, `login`, `login_mfa`, `login_failed`, `logout`, `token_refreshed`, `mfa_enable`, `mfa_disable`, `PASSWORD_CHANGE`, `UPDATE` |
+| `documents` | `document_uploaded`, `document_downloaded`, `document_deleted`, `document_ocr_requested`, ingestao, extracao |
+| `expenses` | `create`, `update`, `delete` |
+| `finance` | `pix_charge_created`, `pix_mark_paid`, `nfe_imported` |
+| `service-requests` | `create`, `convert_to_service` |
+| `service-request-bids` | `bid_accepted` |
+| `messages` | `message_created`, `message_deleted` |
+| `maintenance` | `create`, `update`, `delete`, `maintenance_mark_done`, `auto_create` |
+| `bids` | `create` |
+| `credentials` | cobertura existente |
+| `handover-packages` | `create`, `update`, `share`, `revoke`, `delete` |
+| `audit-links` | `audit_link_created`, `submit` |
+| `invites`, `properties`, `services`, `rooms`, `warranties`, `inventory`, `renovations`, `technical-systems`, `technical-points`, `provider` | cobertura existente |
+
+### Regras de sanitizacao
+
+- Nunca registrar: `password`, `password_hash`, `token`, `refreshToken`, `refreshTokenHash`, `accessToken`, `publicAccessToken`, `inviteToken`, `shareToken`, `auditToken`, `mfaSecret`, `ciphertext`, `credentialSecret`, `secret`, `r2Key`, `fileUrl`, `signedUrl`, `privateUrl`, `mediaKey`, hashes de pacotes/tokens.
+- `sanitizeAuditData` e aplicado automaticamente em `newData`/`oldData` antes de persistir.
+- Em eventos de auth sem usuario valido (ex: `login_failed` com usuario inexistente), `tenantId` e `actorId` podem ser `null`.
+
+### Acoes fora de escopo de audit log
+
+- `ai.ts` (classify, transcribe, diagnose): operacoes de inferencia sem efeitos persistentes.
+- `push.ts` (subscribe/unsubscribe): eventos de infra de notificacao de baixo risco.
+- Rotas de leitura (GET sem efeitos colaterais): nao requerem audit log.
+- `marketplace.ts` (ratings, endorse, availability): baixo risco relativo; podem ser adicionados em versao futura.
+
 ## Protecao contra vazamento cross-tenant
 
 Toda rota privada deve impedir acesso cruzado entre tenants. O padrao e:

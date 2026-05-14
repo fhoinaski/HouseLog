@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
+import { writeAuditLog } from '../lib/audit';
 import { canAccessProperty, canCreateServiceOrder, canCreateServiceRequest } from '../lib/authorization';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import type { Bindings, Variables } from '../lib/types';
@@ -303,6 +304,17 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
       .update(serviceRequests)
       .set({ status: 'CLOSED', updatedAt: new Date().toISOString() })
       .where(and(eq(serviceRequests.id, serviceRequestId), eq(serviceRequests.tenantId, tenantId), eq(serviceRequests.propertyId, propertyId)));
+
+    await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
+      entityType: 'service_request',
+      entityId: serviceRequestId,
+      action: 'convert_to_service',
+      actorId: userId,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      newData: { service_order_id: serviceId, bid_id: acceptedBid.id },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('FOREIGN KEY')) {
@@ -504,6 +516,17 @@ serviceRequestsRoute.post('/', async (c) => {
     .from(serviceRequests)
     .where(eq(serviceRequests.id, requestId))
     .limit(1);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'service_request',
+    entityId: requestId,
+    action: 'create',
+    actorId: ownerId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { title: parsed.data.title, status: 'OPEN', media_count: mediaItems.length },
+  });
 
   return ok(
     c,

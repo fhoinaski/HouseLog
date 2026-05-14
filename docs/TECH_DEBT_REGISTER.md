@@ -377,6 +377,44 @@ Este registro deve ser lido em conjunto com:
   - Após rotação de qualquer secret: revogar o valor anterior no painel Cloudflare antes de remover do dashboard para evitar janela de acesso duplo.
 - **Relacionamento com roadmap/ADRs**: SECURITY.md seção "R2 — Armazenamento privado por padrão"; TD-012; ADR-004.
 
+### TD-017 - Lacunas de audit log em acoes criticas (mitigado)
+
+- **Severidade**: Alta
+- **Area**: Seguranca / Rastreabilidade / Produto premium
+- **Status**: Mitigado
+- **Evidencia** (auditoria de audit log 2026-05-14):
+  - `auth.ts`: `logout`, `refresh` (rotacao de token) e `login_failed` (usuario inexistente ou senha incorreta) nao geravam `writeAuditLog`. Eventos de autenticacao criticos para deteccao de brute-force e rastreabilidade de sessao ficavam sem registro.
+  - `documents.ts`: `GET /:id/download` nao registrava acesso ao arquivo. Usuarios premium nao tinham trilha de quem baixou quais documentos.
+  - `finance.ts`: `POST /pix` (criar cobrança PIX), `POST /pix/:id/mark-paid` (conciliacao) e `POST /nfe` (importar XML) sem registro. Mutacoes financeiras sem rastreabilidade.
+  - `service-requests.ts`: criacao e conversao para OS sem registro.
+  - `service-request-bids.ts`: aceite de orcamento sem registro.
+  - `messages.ts`: criacao e exclusao (soft-delete) de mensagens sem registro.
+- **Mitigacao aplicada (2026-05-14)**:
+  - `auth.ts`: adicionado `writeAuditLog` para `login_failed` (ambos caminhos: usuario inexistente e senha incorreta), `logout` e `token_refreshed`. Eventos sem tenant ativo registram `tenantId: null` conforme schema permite.
+  - `documents.ts`: adicionado `writeAuditLog` com `action: 'document_downloaded'`, `tenantId`, `propertyId` e `actorIp` antes de retornar o stream do R2.
+  - `finance.ts`: adicionado import de `writeAuditLog` e chamadas para `pix_charge_created` (com `newData` sem `pix_key`), `pix_mark_paid` e `nfe_imported`. `pix_key` nao persiste no audit log.
+  - `service-requests.ts`: adicionado import e `writeAuditLog` em `create` e `convert_to_service` (dentro do bloco try para atomicidade).
+  - `service-request-bids.ts`: adicionado import e `writeAuditLog` em `bid_accepted` antes do `return ok()`.
+  - `messages.ts`: adicionado import e `writeAuditLog` em `message_created` e `message_deleted`, com `propertyId` extraido do resultado de `loadParticipants`.
+- **Testes adicionados**: `src/routes/audit-coverage.test.ts` com 13 testes cobrindo:
+  - `login_failed` sem dados sensiveis (user inexistente e senha incorreta)
+  - `logout` com `actorId` correto
+  - `token_refreshed` sem token bruto no payload
+  - `pix_charge_created` com `tenantId` e sem `pix_key`
+  - `pix_mark_paid` com `tenantId`
+  - `nfe_imported` com `tenantId`
+  - `service_request create` com `tenantId` e `propertyId`
+  - `bid_accepted` com `tenantId` e `propertyId`
+  - `message_created` com `tenantId` e `propertyId`
+  - `message_deleted` com `tenantId` e `propertyId`
+  - `document_downloaded` com `tenantId`, `propertyId` e sem `r2Key`/`fileUrl`
+  - tenantId obrigatorio em evento de scope de tenant
+- **Risco residual**:
+  - `marketplace.ts` (ratings, endorse, availability) ainda sem audit log. Risco baixo relativo aos modulos financeiros/auth.
+  - `ai.ts` e `push.ts` sem audit log por decisao consciente (sem efeitos persistentes de dados ou baixo risco de seguranca).
+- **Documentacao**: SECURITY.md secao "Audit log" atualizada com tabela de cobertura por modulo e regras de sanitizacao.
+- **Relacionamento**: SECURITY.md secao "Audit log"; ADR-004 (credenciais auditaveis).
+
 ---
 
 ## 5. Regras para manter este registro
