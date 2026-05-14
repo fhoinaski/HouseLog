@@ -275,7 +275,7 @@ expenses.put('/:id', async (c) => {
   await db
     .update(expensesTable)
     .set(patch)
-    .where(and(eq(expensesTable.id, id), eq(expensesTable.tenantId, tenantId)));
+    .where(and(eq(expensesTable.id, id), eq(expensesTable.tenantId, tenantId), eq(expensesTable.propertyId, propertyId)));
 
   const [updated] = await db
     .select(expenseSelect)
@@ -341,7 +341,8 @@ expenses.delete('/:id', async (c) => {
       .where(
         and(
           eq(expensesTable.id, id),
-          eq(expensesTable.tenantId, tenantId)
+          eq(expensesTable.tenantId, tenantId),
+          eq(expensesTable.propertyId, propertyId)
         )
       );
   }

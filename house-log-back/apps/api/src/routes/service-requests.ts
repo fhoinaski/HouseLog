@@ -266,7 +266,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
       status: bids.status,
     })
     .from(bids)
-    .where(and(eq(bids.serviceRequestId, serviceRequestId), eq(bids.status, 'ACCEPTED')))
+    .where(and(eq(bids.serviceRequestId, serviceRequestId), eq(bids.tenantId, tenantId), eq(bids.status, 'ACCEPTED')))
     .limit(1);
 
   if (!acceptedBid) {
