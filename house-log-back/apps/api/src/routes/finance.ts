@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { err, ok } from '../lib/response';
+import { writeAuditLog } from '../lib/audit';
 import { buildBrCode, validatePixKey } from '../lib/pix';
 import { parseNfeXml } from '../lib/nfe';
 import { getDb } from '../db/client';
@@ -189,6 +190,17 @@ finance.post('/pix', async (c) => {
     expiresAt,
   });
 
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'pix_charge',
+    entityId: id,
+    action: 'pix_charge_created',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { txid, status: 'pending', amount_cents: b.amount_cents },
+  });
+
   return ok(c, { id, txid, br_code: brCode, expires_at: expiresAt, status: 'pending' }, 201);
 });
 
@@ -247,6 +259,17 @@ finance.post('/pix/:id/mark-paid', async (c) => {
           AND status = 'pending'`
   );
   if (!res.meta.changes) return err(c, 'Cobrança não encontrada ou já paga', 'NOT_FOUND', 404);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'pix_charge',
+    entityId: id,
+    action: 'pix_mark_paid',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+  });
+
   return ok(c, { id, status: 'paid' });
 });
 
@@ -311,6 +334,17 @@ finance.post('/nfe', async (c) => {
     valorTotal: nfe.valorTotal,
     dataEmissao: nfe.dataEmissao,
     rawSummary: { items: nfe.items.slice(0, 20) },
+  });
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'nfe_import',
+    entityId: id,
+    action: 'nfe_imported',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { chave_acesso: nfe.chaveAcesso, emitente: nfe.nomeEmitente, valor_total: nfe.valorTotal, item_count: nfe.items.length },
   });
 
   return ok(

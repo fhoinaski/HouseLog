@@ -98,7 +98,7 @@ Regras:
 Sem `CORS_ORIGINS` correto no ambiente Cloudflare, o navegador bloqueará chamadas como:
 
 ```text
-https://house-log.vercel.app -> https://houselog-api-dev.sukinodoncai.workers.dev/api/v1/auth/login
+https://house-log.vercel.app -> https://houselog-api-dev.<seu-subdomain>.workers.dev/api/v1/auth/login
 ```
 
 ## Responsabilidade do backend

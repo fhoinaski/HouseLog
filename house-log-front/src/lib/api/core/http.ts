@@ -1,6 +1,6 @@
 import { BASE } from './config';
 import { getToken } from './storage';
-import { handleUnauthorized } from './session';
+import { handleUnauthorized, shouldAttemptRefresh, refreshAccessToken } from './session';
 import { normalizeApiMediaUrls } from './media';
 
 const HTTP_ERROR_MESSAGES: Record<number, string> = {
@@ -15,6 +15,33 @@ type ApiErrorLike = {
   message?: string;
   status?: number;
 };
+
+type RawBody = {
+  error?: string | { message?: string; code?: string; details?: unknown };
+  code?: string;
+  details?: unknown;
+};
+
+function buildApiError(body: RawBody, status: number): Error & { code: string; status: number; details?: unknown } {
+  const apiError = body.error;
+  const rawMessage = typeof apiError === 'object' ? apiError?.message : apiError;
+  const message = HTTP_ERROR_MESSAGES[status] ?? rawMessage;
+  const code = typeof apiError === 'object' ? apiError?.code : body.code;
+  const details = typeof apiError === 'object' ? apiError?.details : body.details;
+  const error = new Error(message ?? 'Request failed') as Error & {
+    code: string;
+    status: number;
+    details?: unknown;
+  };
+  error.code = code ?? 'UNKNOWN';
+  error.status = status;
+  error.details = details;
+  return error;
+}
+
+async function parseErrorBody(res: Response): Promise<RawBody> {
+  return res.json().catch(() => ({ error: 'Erro desconhecido', code: 'UNKNOWN' })) as Promise<RawBody>;
+}
 
 export function qs(params?: Record<string, string | number | undefined>): string {
   if (!params) return '';
@@ -48,28 +75,33 @@ export async function request<T>(
 
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
+  let res = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include' });
+
+  // Silent token refresh on first 401 — non-public endpoints only.
+  // Concurrent callers share the same in-flight refresh request (deduplication in session.ts).
+  if (res.status === 401 && shouldAttemptRefresh(path)) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryHeaders: Record<string, string> = {
+        ...headers,
+        Authorization: `Bearer ${newToken}`,
+      };
+      res = await fetch(`${BASE}${path}`, {
+        ...options,
+        headers: retryHeaders,
+        credentials: 'include',
+      });
+    }
+  }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: 'Erro desconhecido', code: 'UNKNOWN' }));
-    const apiError = (body as { error?: string | { message?: string; code?: string; details?: unknown }; code?: string; details?: unknown }).error;
-    const rawMessage = typeof apiError === 'object' ? apiError.message : apiError;
-    const message = HTTP_ERROR_MESSAGES[res.status] ?? rawMessage;
-    const code = typeof apiError === 'object' ? apiError.code : (body as { code?: string }).code;
-    const details = typeof apiError === 'object' ? apiError.details : (body as { details?: unknown }).details;
-    const error = new Error(message ?? 'Request failed') as Error & {
-      code: string;
-      status: number;
-      details?: unknown;
-    };
-    error.code = code ?? 'UNKNOWN';
-    error.status = res.status;
-    error.details = details;
+    const body = await parseErrorBody(res);
+    const error = buildApiError(body, res.status);
     if (res.status === 401) handleUnauthorized(path);
     throw error;
   }
 
-  const data = await res.json() as T;
+  const data = (await res.json()) as T;
   return normalizeApiMediaUrls(data);
 }
 

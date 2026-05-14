@@ -5,7 +5,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { badRequest, conflict, created, forbidden, notFound, ok } from '../lib/response';
 import { resolveTechnicalSystemPermissions } from '../lib/technical-systems-permissions';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import {
   properties,
@@ -47,6 +47,7 @@ type TechnicalSystemRow = {
 const technicalSystemsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 technicalSystemsRoute.use('*', authMiddleware);
+technicalSystemsRoute.use('*', resolveTenant);
 
 function optionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -57,7 +58,8 @@ async function resolvePropertyAccess(
   db: ReturnType<typeof getDb>,
   propertyId: string,
   userId: string,
-  role: Role
+  role: Role,
+  jwtTenantId: string
 ): Promise<PropertyAccessContext | null> {
   const [property] = await db
     .select({
@@ -67,7 +69,7 @@ async function resolvePropertyAccess(
       managerId: properties.managerId,
     })
     .from(properties)
-    .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, jwtTenantId), isNull(properties.deletedAt)))
     .limit(1);
 
   if (!property) return null;
@@ -150,7 +152,9 @@ async function getAccessOrResponse(
   propertyId: string
 ) {
   const db = getDb(c.env.DB);
-  const access = await resolvePropertyAccess(db, propertyId, c.get('userId'), c.get('userRole'));
+  const jwtTenantId = c.get('tenantId');
+  if (!jwtTenantId) return { db, response: conflict(c, 'Tenant ativo obrigatorio para sistemas tecnicos.') };
+  const access = await resolvePropertyAccess(db, propertyId, c.get('userId'), c.get('userRole'), jwtTenantId);
 
   if (!access) return { db, response: notFound(c, 'Imovel nao encontrado.') };
   if (!access.tenantId) return { db, response: conflict(c, 'Imovel sem tenant ativo para sistemas tecnicos.') };
@@ -317,7 +321,13 @@ technicalSystemsRoute.patch('/:systemId', async (c) => {
   const [system] = await db
     .select(selectTechnicalSystems())
     .from(technicalSystems)
-    .where(eq(technicalSystems.id, systemId))
+    .where(
+      and(
+        eq(technicalSystems.id, systemId),
+        eq(technicalSystems.tenantId, access.tenantId),
+        eq(technicalSystems.propertyId, access.propertyId)
+      )
+    )
     .limit(1) as TechnicalSystemRow[];
 
   await writeAuditLog(c.env.DB, {

@@ -277,6 +277,8 @@ marketplace.post('/providers/endorse', async (c) => {
 // Matchmaking simples: ordena por rating médio, nº de avaliações, recência.
 marketplace.get('/providers/match', async (c) => {
   const db = getDb(c.env.DB);
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   const category = c.req.query('category');
   const providers = await db
     .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
@@ -284,11 +286,14 @@ marketplace.get('/providers/match', async (c) => {
     .where(and(eq(users.role, 'provider'), isNull(users.deletedAt)))
     .limit(50);
 
+  // Ratings are tenant-scoped: only aggregate ratings belonging to this tenant.
   const ratingRows = await db
     .select({ providerId: providerRatings.providerId, avg_stars: sql<number>`AVG(${providerRatings.stars})`, total_ratings: sql<number>`COUNT(*)` })
     .from(providerRatings)
+    .where(eq(providerRatings.tenantId, tenantId))
     .groupBy(providerRatings.providerId);
 
+  // Endorsements are global (no tenantId column on provider_endorsements).
   const endorseRows = await db
     .select({ providerId: providerEndorsements.providerId, endorsements: sql<number>`COUNT(*)` })
     .from(providerEndorsements)

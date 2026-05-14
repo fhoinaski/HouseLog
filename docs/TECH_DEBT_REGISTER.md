@@ -274,11 +274,17 @@ Este registro deve ser lido em conjunto com:
   - Frontend removeu `hl_refresh` do localStorage em `storage.ts` e `auth-context.tsx`.
   - `credentials: 'include'` adicionado ao fetch global para envio automático do cookie.
   - Testes: `routes/auth-session.test.ts` cobre login/register/refresh/logout.
+- **Mitigação adicional (P0-AUTH-SESSION-02, 2026-05-13)**:
+  - `storage.ts` moveu access token de `localStorage` para variável de módulo em memória (`let _accessToken`). `setToken` / `getToken` / `clearToken` não tocam mais `localStorage`.
+  - `clearLegacyAuthStorage()` adicionado: remove `hl_token` e `hl_refresh` legados; chamado no boot do `AuthProvider`.
+  - `AuthProvider` bootstrapa via cookie HttpOnly em **toda** inicialização (sem atalho por `localStorage`). User profile (`hl_user`) mantido em `localStorage` apenas para UI otimista.
+  - `session.ts` ganhou `refreshAccessToken()` (deduplicação via promise compartilhada) e `shouldAttemptRefresh()`.
+  - `http.ts` agora faz retry silencioso em 401: tenta refresh antes de redirecionar para `/login`.
+  - Testes novos em `auth-session.test.ts`: CORS real (`buildCorsOriginHandler`) + bloco "Armazenamento — refresh_token jamais exposto no body".
+  - `SECURITY.md` atualizado para refletir access token em memória como estado atual.
 - **Risco restante**:
-  - Access token ainda persiste em `localStorage` (`hl_token`). XSS ainda pode roubar o access token (TTL 1h). Mitigação futura: manter access token apenas em memória.
   - Em deployment cross-origin (workers.dev ≠ vercel.app, domínios distintos), `SameSite=Lax` não envia o cookie em POSTs cross-site. Solução: custom domain same-site (ex: api.houselog.app + app.houselog.app) OU `SameSite=None; Secure`.
 - **Próxima etapa recomendada**:
-  - P0-AUTH-SESSION-02: mover access token de localStorage para memória (variável de estado React).
   - Configurar custom domain same-site para eliminar necessidade de `SameSite=None`.
 - **Relacionamento com roadmap**: Sprint 3 do HOUSELOG_EXECUTION_MASTERPLAN.md.
 
@@ -342,6 +348,104 @@ Este registro deve ser lido em conjunto com:
   3. Aplicar `0028_redact_token_plaintext.sql` via `wrangler d1 execute`.
   4. Após 0028, o fallback de lookup plaintext é automaticamente inerte (registros têm `token_hash IS NOT NULL`).
 - **Relacionamento com roadmap/ADRs**: Sprint 3; SECURITY.md seção "Tokens de links publicos"; ADR-004.
+
+---
+
+### TD-016 - Identificadores de infraestrutura e URL real em arquivos rastreados (mitigado)
+
+- **Severidade**: Alta
+- **Area**: Segurança / Configuração / Infra
+- **Status**: Mitigado
+- **Evidencia** (encontrada em auditoria de secrets 2026-05-14):
+  - `house-log-front/src/lib/api/core/config.ts`: URL real `houselog-api-dev.sukinodoncai.workers.dev` hardcoded como fallback — revelava subdomain Cloudflare e roteava silenciosamente builds sem `NEXT_PUBLIC_API_URL` para o Worker dev real.
+  - `house-log-back/apps/api/wrangler.toml`: `R2_PUBLIC_URL` com domínio real do bucket dev (`pub-3ff8849…r2.dev`) no bloco `[env.dev.vars]` — contradizia política de R2 privado por padrão (SECURITY.md) e expunha URL do bucket público.
+  - `house-log-back/apps/api/.dev.vars.example`: mesma URL R2 real no arquivo de exemplo rastreado.
+  - `docs/auth-routing-security.md`: URL real do Worker dev na documentação.
+- **Mitigação aplicada (2026-05-14)**:
+  - `config.ts`: fallback substituído por `http://localhost:8787/api/v1` com comentário explicando que `NEXT_PUBLIC_API_URL` deve ser configurada por variável de ambiente, nunca hardcoded.
+  - `wrangler.toml`: `R2_PUBLIC_URL` removida do bloco `[env.dev.vars]`; substituída por comentário explicando quando usar e risco de bucket público; orientação para `wrangler secret put R2_PUBLIC_URL --env dev`.
+  - `.dev.vars.example`: URL real substituída por placeholder `pub-YOUR_HASH.r2.dev` com comentário de risco.
+  - `docs/auth-routing-security.md`: URL real substituída por `<seu-subdomain>.workers.dev`.
+- **Não alterado** (risco residual aceitável):
+  - `wrangler.toml` IDs de D1 dev (`62bd81c4-77da-4867-a996-22fff5e0d258`) e KV dev (`30d1ccabab2349e79151d3dec9eb11de`) mantidos — são identificadores de recurso Cloudflare (não credenciais), necessários para `wrangler dev` funcionar para membros da equipe, e inutilizáveis sem API token da conta.
+- **Risco restante**:
+  - IDs de D1/KV dev permanecem visíveis no repositório. Risco real é baixo (necessitam API token + account ID para acesso). Podem ser rotacionados via `wrangler d1 create` e `wrangler kv namespace create` se necessário.
+  - Histórico git anterior ainda contém as URLs removidas. Recomenda-se rodar `git filter-repo` ou `BFG Repo Cleaner` para purgar completamente se o repositório for tornado público.
+- **Regras de rotação de segredos**:
+  - Secrets Cloudflare Workers (`JWT_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`, `RESEND_API_KEY`, credenciais R2): rotar via `wrangler secret put <KEY> [--env dev]` por ambiente. Nunca gravar em `wrangler.toml`, `.dev.vars` commitado ou código-fonte.
+  - `NEXT_PUBLIC_API_URL`: configurar em variáveis de ambiente da plataforma (Vercel environment variables) por ambiente (preview/production); em dev local, usar `.env.local` (gitignored).
+  - Após rotação de qualquer secret: revogar o valor anterior no painel Cloudflare antes de remover do dashboard para evitar janela de acesso duplo.
+- **Relacionamento com roadmap/ADRs**: SECURITY.md seção "R2 — Armazenamento privado por padrão"; TD-012; ADR-004.
+
+### TD-017 - Lacunas de audit log em acoes criticas (mitigado)
+
+- **Severidade**: Alta
+- **Area**: Seguranca / Rastreabilidade / Produto premium
+- **Status**: Mitigado
+- **Evidencia** (auditoria de audit log 2026-05-14):
+  - `auth.ts`: `logout`, `refresh` (rotacao de token) e `login_failed` (usuario inexistente ou senha incorreta) nao geravam `writeAuditLog`. Eventos de autenticacao criticos para deteccao de brute-force e rastreabilidade de sessao ficavam sem registro.
+  - `documents.ts`: `GET /:id/download` nao registrava acesso ao arquivo. Usuarios premium nao tinham trilha de quem baixou quais documentos.
+  - `finance.ts`: `POST /pix` (criar cobrança PIX), `POST /pix/:id/mark-paid` (conciliacao) e `POST /nfe` (importar XML) sem registro. Mutacoes financeiras sem rastreabilidade.
+  - `service-requests.ts`: criacao e conversao para OS sem registro.
+  - `service-request-bids.ts`: aceite de orcamento sem registro.
+  - `messages.ts`: criacao e exclusao (soft-delete) de mensagens sem registro.
+- **Mitigacao aplicada (2026-05-14)**:
+  - `auth.ts`: adicionado `writeAuditLog` para `login_failed` (ambos caminhos: usuario inexistente e senha incorreta), `logout` e `token_refreshed`. Eventos sem tenant ativo registram `tenantId: null` conforme schema permite.
+  - `documents.ts`: adicionado `writeAuditLog` com `action: 'document_downloaded'`, `tenantId`, `propertyId` e `actorIp` antes de retornar o stream do R2.
+  - `finance.ts`: adicionado import de `writeAuditLog` e chamadas para `pix_charge_created` (com `newData` sem `pix_key`), `pix_mark_paid` e `nfe_imported`. `pix_key` nao persiste no audit log.
+  - `service-requests.ts`: adicionado import e `writeAuditLog` em `create` e `convert_to_service` (dentro do bloco try para atomicidade).
+  - `service-request-bids.ts`: adicionado import e `writeAuditLog` em `bid_accepted` antes do `return ok()`.
+  - `messages.ts`: adicionado import e `writeAuditLog` em `message_created` e `message_deleted`, com `propertyId` extraido do resultado de `loadParticipants`.
+- **Testes adicionados**: `src/routes/audit-coverage.test.ts` com 13 testes cobrindo:
+  - `login_failed` sem dados sensiveis (user inexistente e senha incorreta)
+  - `logout` com `actorId` correto
+  - `token_refreshed` sem token bruto no payload
+  - `pix_charge_created` com `tenantId` e sem `pix_key`
+  - `pix_mark_paid` com `tenantId`
+  - `nfe_imported` com `tenantId`
+  - `service_request create` com `tenantId` e `propertyId`
+  - `bid_accepted` com `tenantId` e `propertyId`
+  - `message_created` com `tenantId` e `propertyId`
+  - `message_deleted` com `tenantId` e `propertyId`
+  - `document_downloaded` com `tenantId`, `propertyId` e sem `r2Key`/`fileUrl`
+  - tenantId obrigatorio em evento de scope de tenant
+- **Risco residual**:
+  - `marketplace.ts` (ratings, endorse, availability) ainda sem audit log. Risco baixo relativo aos modulos financeiros/auth.
+  - `ai.ts` e `push.ts` sem audit log por decisao consciente (sem efeitos persistentes de dados ou baixo risco de seguranca).
+- **Documentacao**: SECURITY.md secao "Audit log" atualizada com tabela de cobertura por modulo e regras de sanitizacao.
+- **Relacionamento**: SECURITY.md secao "Audit log"; ADR-004 (credenciais auditaveis).
+
+### TD-018 - Perda de evidencias de OS quando prestador esta offline (mitigado)
+
+- **Severidade**: Alta
+- **Area**: UX / Confiabilidade / Produto premium
+- **Status**: Mitigado
+- **Evidencia** (auditoria PWA 2026-05-14):
+  - `handlePhotoUpload` na pagina de detalhes da OS chamava `servicesApi.uploadPhoto` sem fallback offline. Se o prestador estava sem sinal, o upload falhava silenciosamente com `toast.error` e a foto era perdida.
+  - Nenhuma fila de pendentes, sem status de sincronizacao, sem retry automatico.
+  - O service worker existente (`public/sw.js`) usava `networkOnly` para todas as rotas `/api/*` — sem capacidade de interceptar uploads para Background Sync.
+- **Mitigacao aplicada (2026-05-14)**:
+  - `src/lib/offline-evidence-queue.ts`: fila IDB-backed (`houselog-eq` DB) com itens `{ id, serviceOrderId, propertyId, type, file: Blob, filename, mimeType, status, attempts, createdAt, errorMessage }`. Operacoes: `enqueue`, `getPending`, `updateItem`, `clearSynced`, `clearAll`. Validacao: `propertyId` e `serviceOrderId` obrigatorios — nenhum dado sensivel armazenado (sem token, sem tenantId).
+  - `src/lib/use-offline-sync.ts`: hook `useOfflineSync()` com `sync()`, `pendingCount`, `syncingCount`, `failedCount`, `isSyncing`. Escuta evento `window.online` para sync automatica. Mutex via `syncingRef` para evitar concorrencia. `processPendingUploads(token)` exportado para testabilidade. `clearOfflineQueue()` exportado para logout.
+  - `src/components/offline-sync-status.tsx`: indicador visual compacto — spinner durante sync, badge de warning para falhas (com botao de retry), badge informativo para pendentes aguardando conexao.
+  - `src/app/(app)/properties/[id]/services/[serviceId]/page.tsx`: `handlePhotoUpload` agora detecta `!navigator.onLine || err instanceof TypeError` para enfileirar offline ao inves de mostrar apenas erro. Sync status visivel na secao de evidencias.
+  - `src/lib/auth-context.tsx`: `logout` chama `clearOfflineQueue()` para nao deixar fotos do usuario no dispositivo apos logout.
+- **Testes adicionados**: `src/__tests__/offline-evidence.test.ts` com 11 testes (Vitest + fake-indexeddb):
+  - Cria item com status pending e campos corretos
+  - Persiste no IDB — getAll retorna o item
+  - Rejeita se propertyId ausente
+  - Rejeita se serviceOrderId ausente
+  - getPending retorna pending+failed, ignora synced+uploading
+  - clearAll esvazia fila no logout
+  - Upload bem-sucedido marca synced e remove da fila
+  - Chama endpoint correto com token e campos da evidencia
+  - Falha de rede preserva item com status failed e Blob intacto
+  - Retry nao duplica — mesmo id apos falha e reenvio
+- **Risco residual**:
+  - Background Sync API nao implementada no service worker (`public/sw.js`). Sync e foreground-only (depende do token em memoria). Se o usuario fechar o app offline e abrir depois sem recarregar, a sync automatica so ocorre ao voltar online com o app aberto. Aceitavel para v1 — documentado.
+  - Itens com status `failed` apos 3+ tentativas nao sao descartados automaticamente. Fila pode acumular falhas persistentes (ex: arquivo rejeitado pelo servidor). Melhoria futura: limite de tentativas + descarte automatico.
+  - Blobs ficam no IndexedDB do dispositivo ate sync ou logout. Em dispositivos com armazenamento limitado, arquivos grandes podem causar quota errors. Mitigacao futura: validar tamanho antes de enfileirar.
+- **Documentacao**: SECURITY.md secao sobre armazenamento de dados no dispositivo.
 
 ---
 

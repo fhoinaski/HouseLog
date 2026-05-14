@@ -18,6 +18,7 @@ import {
   type ServiceMessageAuthorizationInput,
 } from '../lib/authorization';
 import { err, ok } from '../lib/response';
+import { writeAuditLog } from '../lib/audit';
 import { getDb } from '../db/client';
 import { properties, serviceBids, serviceMessages, serviceOrders, users } from '../db/schema';
 import type { Bindings, Variables, QueueMessage } from '../lib/types';
@@ -245,6 +246,17 @@ messages.post('/:serviceOrderId/messages', async (c) => {
     }
   }
 
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: p.propertyId,
+    entityType: 'service_message',
+    entityId: id,
+    action: 'message_created',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { service_order_id: soId, internal: b.internal },
+  });
+
   return ok(c, { id, created_at: new Date().toISOString() }, 201);
 });
 
@@ -270,6 +282,18 @@ messages.delete('/:serviceOrderId/messages/:id', async (c) => {
           AND deleted_at IS NULL`
   );
   if (!res.meta.changes) return err(c, 'Não encontrado', 'NOT_FOUND', 404);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: p.propertyId,
+    entityType: 'service_message',
+    entityId: id,
+    action: 'message_deleted',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { service_order_id: soId },
+  });
+
   return ok(c, { id });
 });
 

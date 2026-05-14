@@ -73,7 +73,13 @@ ENVIRONMENT = "development"
 # Dev permite localhost automaticamente, mas manter origins reais aqui ajuda
 # a testar previews e evita wildcard inseguro.
 CORS_ORIGINS = "https://house-log.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
-R2_PUBLIC_URL = "https://pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev"
+# R2_PUBLIC_URL: necessário APENAS se Cloudflare Image Resizing estiver habilitado
+# na zona. Sem isso, thumbnails usam cópia do original (fallback seguro).
+# ATENÇÃO: definir esta variável requer que o bucket tenha "Public access" ativo,
+# o que contradiz a política de R2 privado por padrão (SECURITY.md).
+# Para habilitar: defina via `wrangler secret put R2_PUBLIC_URL --env dev`
+# com o domínio público do bucket dev (ex: pub-XXXXXXXX.r2.dev).
+# R2_PUBLIC_URL = ""
 R2_BUCKET_NAME = "houselog-assets-dev"
 APP_URL = "http://localhost:3000"
 

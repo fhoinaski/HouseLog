@@ -108,7 +108,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
   const [property] = await db
     .select({ id: properties.id, name: properties.name, owner_id: properties.ownerId })
     .from(properties)
-    .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId ?? ''), isNull(properties.deletedAt)))
     .limit(1);
 
   if (!property) return err(c, 'Imóvel não encontrado ou sem permissão', 'FORBIDDEN', 403);
@@ -260,7 +260,7 @@ invites.post('/properties/:propertyId/collaborators', async (c) => {
   const [property] = await db
     .select({ id: properties.id, tenantId: properties.tenantId })
     .from(properties)
-    .where(and(eq(properties.id, propertyId), isNull(properties.deletedAt)))
+    .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId ?? ''), isNull(properties.deletedAt)))
     .limit(1);
 
   if (!property) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
@@ -421,9 +421,11 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
   const db = getDb(c.env.DB);
   const { propertyId } = c.req.param();
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   // Owner, manager_id, or collaborator with role='manager' can view team
-  const property = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  const property = await canManagePropertyTeam(c.env.DB, propertyId, userId, tenantId, c.get('tenantRole'), c.get('userRole'));
   if (!property.allowed) return err(c, 'Sem acesso', property.code, property.status);
 
   const results = await db
@@ -468,7 +470,7 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
     })
     .from(propertyCollaborators)
     .innerJoin(users, eq(users.id, propertyCollaborators.userId))
-    .where(eq(propertyCollaborators.propertyId, propertyId))
+    .where(and(eq(propertyCollaborators.propertyId, propertyId), eq(propertyCollaborators.tenantId, tenantId)))
     .orderBy(propertyCollaborators.role, users.name);
 
   const temporaryProviders = await db
@@ -490,6 +492,7 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
     .where(
       and(
         eq(serviceOrders.propertyId, propertyId),
+        eq(serviceOrders.tenantId, tenantId),
         isNull(serviceShareLinks.deletedAt),
         isNull(serviceOrders.deletedAt),
         or(
@@ -519,6 +522,7 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
     .where(
       and(
         eq(serviceOrders.propertyId, propertyId),
+        eq(serviceOrders.tenantId, tenantId),
         isNull(serviceOrders.deletedAt),
         sql`${serviceOrders.assignedTo} IS NOT NULL`,
         sql`${serviceOrders.status} IN ('completed', 'verified')`

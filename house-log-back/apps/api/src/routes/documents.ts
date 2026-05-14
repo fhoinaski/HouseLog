@@ -330,6 +330,16 @@ documents.get('/:id/download', async (c) => {
   headers.set('cache-control', 'private, max-age=60');
   headers.set('content-disposition', `inline; filename="${doc.title.replace(/"/g, '')}"`);
 
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'document',
+    entityId: id,
+    action: 'document_downloaded',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+  });
+
   return new Response(object.body, { headers });
 });
 

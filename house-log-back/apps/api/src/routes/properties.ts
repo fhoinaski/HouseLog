@@ -629,7 +629,10 @@ properties.get('/:id/media/*', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso a este imovel', 'FORBIDDEN', 403);
 
   const key = decodeURIComponent(c.req.path.split(`/properties/${id}/media/`)[1] ?? '');
-  if (!key || key.includes('..')) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  // Block path traversal and enforce that the key belongs to this property (prefix check)
+  if (!key || key.includes('..') || !key.startsWith(`${id}/`)) {
+    return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  }
 
   const [property] = await db
     .select({ coverUrl: propertiesTable.coverUrl })

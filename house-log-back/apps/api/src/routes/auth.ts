@@ -275,10 +275,30 @@ auth.post('/login', async (c) => {
     .where(and(eq(users.email, email), isNull(users.deletedAt)))
     .limit(1) as User[];
 
-  if (!user) return err(c, 'Credenciais inválidas', 'INVALID_CREDENTIALS', 401);
+  if (!user) {
+    await writeAuditLog(c.env.DB, {
+      entityType: 'user',
+      entityId: 'unknown',
+      action: 'login_failed',
+      actorId: null,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      newData: { reason: 'user_not_found' },
+    });
+    return err(c, 'Credenciais inválidas', 'INVALID_CREDENTIALS', 401);
+  }
 
   const valid = await verifyPassword(password, user.password_hash);
-  if (!valid) return err(c, 'Credenciais inválidas', 'INVALID_CREDENTIALS', 401);
+  if (!valid) {
+    await writeAuditLog(c.env.DB, {
+      entityType: 'user',
+      entityId: user.id,
+      action: 'login_failed',
+      actorId: user.id,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      newData: { reason: 'invalid_password' },
+    });
+    return err(c, 'Credenciais inválidas', 'INVALID_CREDENTIALS', 401);
+  }
 
   // Migra legado SHA-256 → PBKDF2 na primeira autenticação bem-sucedida
   const isLegacy = !user.password_hash.startsWith('pbkdf2:');
@@ -495,6 +515,14 @@ auth.post('/refresh', async (c) => {
 
   setRefreshCookie(c, rotated.token, ttlDays);
 
+  await writeAuditLog(c.env.DB, {
+    entityType: 'user',
+    entityId: rotated.userId,
+    action: 'token_refreshed',
+    actorId: rotated.userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+  });
+
   return ok(c, {
     token: access,
     access_token: access,
@@ -516,6 +544,15 @@ auth.post('/logout', authMiddleware, async (c) => {
   }
 
   clearRefreshCookie(c);
+
+  await writeAuditLog(c.env.DB, {
+    entityType: 'user',
+    entityId: userId,
+    action: 'logout',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+  });
+
   return ok(c, { ok: true });
 });
 

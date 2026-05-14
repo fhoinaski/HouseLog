@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
+import { writeAuditLog } from '../lib/audit';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { canApproveBudget } from '../lib/authorization';
 import type { Bindings, Variables } from '../lib/types';
@@ -156,6 +157,17 @@ serviceRequestBids.patch('/:bidId/accept', async (c) => {
         propertyAddress: property.propertyAddress ?? null,
       },
     };
+
+    await writeAuditLog(c.env.DB, {
+      tenantId,
+      propertyId,
+      entityType: 'service_request_bid',
+      entityId: bidId,
+      action: 'bid_accepted',
+      actorId: ownerId,
+      actorIp: c.req.header('CF-Connecting-IP'),
+      newData: { service_request_id: serviceRequestId, rejected_count: Number(rejectedSummary?.totalRejected ?? 0) },
+    });
 
     return ok(c, {
       accepted_bid: acceptedBid,

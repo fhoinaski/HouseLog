@@ -64,12 +64,49 @@ Regras:
 - Nunca aceitar refresh token via body — apenas via cookie.
 - Nunca logar o valor cru do refresh token.
 - O hash SHA-256 é o único valor persistido no banco.
-- O access token (JWT, TTL 1h) permanece no body/memória — não deve ser persistido de forma insegura.
+- O access token (JWT, TTL 1h) é armazenado **exclusivamente em memória React** (módulo `storage.ts`), jamais em `localStorage` ou `sessionStorage`. Ele é perdido ao recarregar a página e obtido novamente via cookie HttpOnly no boot do `AuthProvider`.
 - O frontend usa `credentials: 'include'` em todas as chamadas à API para enviar o cookie automaticamente.
-
-Risco residual documentado: access token ainda está em `localStorage` (TD-013). Próximo passo: mover para memória React.
+- Em caso de 401 em endpoint privado, o frontend tenta uma renovação silenciosa via cookie antes de redirecionar para login (deduplicação via promise compartilhada em `session.ts`).
 
 Nota de compatibilidade de deployment: em ambientes onde frontend e API estão em domínios distintos (ex: vercel.app e workers.dev), `SameSite=Lax` não envia o cookie em POSTs cross-site. A solução definitiva é custom domain same-site (ex: api.houselog.app + app.houselog.app).
+
+## R2 — Armazenamento privado por padrão
+
+Todos os objetos R2 do HouseLog são considerados privados por padrão. Nenhum arquivo de domínio (documentos, fotos, vídeos, evidências, faturas, itens de inventário) deve ser acessível por URL pública permanente.
+
+### Política de acesso ao bucket
+
+- O bucket R2 **deve** ter a opção "Public access" desabilitada no painel Cloudflare.
+- Objetos são servidos **exclusivamente** via Worker autenticado (`c.env.STORAGE.get(key)`).
+- Nenhuma URL assinada de leitura (presigned GET) é emitida. O acesso é proxied pelo Worker, que valida `tenantId` e `propertyId` em cada requisição.
+- A variável `R2_PUBLIC_URL` é utilizada **apenas** para geração de thumbnails via Cloudflare Image Resizing (feature opcional). Se não configurada, thumbnails usam o arquivo original como fallback. Em ambientes seguros: **não configure `R2_PUBLIC_URL`** para manter o bucket totalmente privado.
+
+### Categorias de chave
+
+| Categoria | Classificação | Endpoint de acesso |
+|-----------|---------------|-------------------|
+| `avatars` | público | `GET /api/v1/media/{key}` (sem auth) |
+| `photos` | privado | `GET /properties/:id/media/*` ou `/services/:id/media/*` |
+| `videos` | privado | `GET /services/:id/media/*` |
+| `documents` | privado | `GET /properties/:propertyId/documents/:id/download` |
+| `invoices` | privado | `GET /provider/service-orders/:id/invoice` (se implementado) |
+| `inventory` | privado | `GET /properties/:propertyId/inventory/:id/photo` |
+
+### Validações obrigatórias antes de servir R2
+
+- Verificar `tenantId` do JWT contra o tenant do imóvel (no DB).
+- Verificar que o usuário tem acesso ao imóvel (`assertPropertyAccess`).
+- Verificar que a chave R2 começa com `{propertyId}/` (prefixo de property).
+- Para evidências de OS: verificar que a chave está registrada na OS específica (`allowedKeys.has(key)`).
+- Para downloads de documento: verificar que `tenantId` e `propertyId` do documento batem com o contexto.
+- Nunca retornar a chave R2 interna em respostas de erro.
+- `file_url` em respostas de documentos deve ser o endpoint autenticado (`/api/v1/properties/.../documents/.../download`), nunca a chave bruta.
+
+### Regras de upload
+
+- Validar MIME type e extensão com `validatePrivateUpload` antes de qualquer gravação em R2.
+- `tenantId` é sempre injetado do contexto JWT — nunca aceitar do client.
+- `buildR2Key({ propertyId, category, filename })` garante que a chave contém o `propertyId` como prefixo.
 
 ## CORS seguro em producao
 
@@ -94,6 +131,39 @@ Acoes criticas devem chamar `writeAuditLog`, incluindo:
 - acoes administrativas.
 
 O audit log deve incluir `tenantId` e `propertyId` sempre que aplicavel. Dados sensiveis devem ser sanitizados com `sanitizeAuditData`.
+
+### Cobertura obrigatoria por modulo (P0-AUDIT-COVERAGE, 2026-05-14)
+
+Todas as acoes abaixo foram verificadas e possuem `writeAuditLog` com `tenantId`+`actorId`:
+
+| Modulo | Acoes cobertas |
+|--------|----------------|
+| `auth` | `register`, `login`, `login_mfa`, `login_failed`, `logout`, `token_refreshed`, `mfa_enable`, `mfa_disable`, `PASSWORD_CHANGE`, `UPDATE` |
+| `documents` | `document_uploaded`, `document_downloaded`, `document_deleted`, `document_ocr_requested`, ingestao, extracao |
+| `expenses` | `create`, `update`, `delete` |
+| `finance` | `pix_charge_created`, `pix_mark_paid`, `nfe_imported` |
+| `service-requests` | `create`, `convert_to_service` |
+| `service-request-bids` | `bid_accepted` |
+| `messages` | `message_created`, `message_deleted` |
+| `maintenance` | `create`, `update`, `delete`, `maintenance_mark_done`, `auto_create` |
+| `bids` | `create` |
+| `credentials` | cobertura existente |
+| `handover-packages` | `create`, `update`, `share`, `revoke`, `delete` |
+| `audit-links` | `audit_link_created`, `submit` |
+| `invites`, `properties`, `services`, `rooms`, `warranties`, `inventory`, `renovations`, `technical-systems`, `technical-points`, `provider` | cobertura existente |
+
+### Regras de sanitizacao
+
+- Nunca registrar: `password`, `password_hash`, `token`, `refreshToken`, `refreshTokenHash`, `accessToken`, `publicAccessToken`, `inviteToken`, `shareToken`, `auditToken`, `mfaSecret`, `ciphertext`, `credentialSecret`, `secret`, `r2Key`, `fileUrl`, `signedUrl`, `privateUrl`, `mediaKey`, hashes de pacotes/tokens.
+- `sanitizeAuditData` e aplicado automaticamente em `newData`/`oldData` antes de persistir.
+- Em eventos de auth sem usuario valido (ex: `login_failed` com usuario inexistente), `tenantId` e `actorId` podem ser `null`.
+
+### Acoes fora de escopo de audit log
+
+- `ai.ts` (classify, transcribe, diagnose): operacoes de inferencia sem efeitos persistentes.
+- `push.ts` (subscribe/unsubscribe): eventos de infra de notificacao de baixo risco.
+- Rotas de leitura (GET sem efeitos colaterais): nao requerem audit log.
+- `marketplace.ts` (ratings, endorse, availability): baixo risco relativo; podem ser adicionados em versao futura.
 
 ## Protecao contra vazamento cross-tenant
 
@@ -156,6 +226,20 @@ Aplicado a partir de P0-PUBLIC-LINKS-HASH-01 (2026-05-12):
 Migration: `0027_public_link_token_hash.sql` — adiciona `token_hash TEXT` e indices nas tabelas `audit_links`, `service_share_links`, `property_invites`.
 
 Backfill pendente: executar `UPDATE ... SET token_hash = sha256(token) WHERE token_hash IS NULL` para registros pre-existentes antes de remover fallback de token plaintext.
+
+## Fila de evidencias offline (IndexedDB)
+
+A fila de evidencias offline (`houselog-eq` no IndexedDB do dispositivo) permite que prestadores registrem fotos de OS sem conexao.
+
+Regras de seguranca:
+
+- Nunca armazenar token de acesso, refresh token ou tenantId no IndexedDB — o token e lido da memoria no momento exato do upload.
+- Itens da fila armazenam apenas `propertyId`, `serviceOrderId`, `type`, `file (Blob)`, `filename`, `mimeType`, `status`, `attempts`, `createdAt` e `errorMessage`.
+- `propertyId` e `serviceOrderId` sao obrigatorios no `enqueue()` — rejeitar sem eles.
+- Sync so e iniciada se `getToken()` retornar um token valido (usuario autenticado com sessao ativa).
+- `clearOfflineQueue()` deve ser chamado no logout para remover todos os Blobs do dispositivo.
+- Sync e foreground-only: o service worker nao tem acesso ao token em memoria, portanto Background Sync API nao e usada para uploads autenticados.
+- Nao expor itens da fila em respostas de API ou logs.
 
 ## O que nunca fazer
 
