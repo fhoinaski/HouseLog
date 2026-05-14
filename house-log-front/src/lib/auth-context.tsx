@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { authApi, setToken, clearToken, isMfaChallenge, type User } from './api';
+import { clearLegacyAuthStorage } from './api/core/storage';
 
 export class MfaRequiredError extends Error {
   challengeToken: string;
@@ -51,8 +52,9 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+// User profile is kept in localStorage for optimistic UI on page reload.
+// The access token is NEVER stored in localStorage — it lives in module memory only.
 const USER_KEY = 'hl_user';
-const TOKEN_KEY = 'hl_token';
 
 function getTokenExpiry(token: string): number | null {
   try {
@@ -64,12 +66,13 @@ function getTokenExpiry(token: string): number | null {
 }
 
 function storeSession(access: string, user?: User) {
-  setToken(access);
+  setToken(access); // in-memory only — never touches localStorage
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 function clearAll() {
   clearToken();
+  localStorage.removeItem(USER_KEY);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -111,21 +114,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
 
-    const stored = localStorage.getItem(USER_KEY);
-    const token = localStorage.getItem(TOKEN_KEY);
+    // One-time migration: remove any legacy hl_token left in localStorage by older app versions.
+    clearLegacyAuthStorage();
 
-    if (stored && token) {
-      const expiry = getTokenExpiry(token);
-      if (expiry && expiry > Date.now()) {
+    // Pre-populate the user profile for instant UI — no auth dependency.
+    // The actual access token must always come from the HttpOnly cookie via refresh.
+    const stored = localStorage.getItem(USER_KEY);
+    if (stored) {
+      try {
         setUser(JSON.parse(stored) as User);
-        scheduleRefresh(token);
-        setLoading(false);
-        return cleanup;
+      } catch {
+        localStorage.removeItem(USER_KEY);
       }
     }
 
-    // Token ausente ou expirado — tenta renovar via cookie HttpOnly
+    // Always bootstrap the access token from the HttpOnly refresh cookie.
+    // Access tokens are ephemeral (in-memory only) and are lost on page reload.
     void doRefresh().finally(() => setLoading(false));
+
     return cleanup;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

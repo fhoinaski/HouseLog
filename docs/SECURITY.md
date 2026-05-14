@@ -64,10 +64,9 @@ Regras:
 - Nunca aceitar refresh token via body — apenas via cookie.
 - Nunca logar o valor cru do refresh token.
 - O hash SHA-256 é o único valor persistido no banco.
-- O access token (JWT, TTL 1h) permanece no body/memória — não deve ser persistido de forma insegura.
+- O access token (JWT, TTL 1h) é armazenado **exclusivamente em memória React** (módulo `storage.ts`), jamais em `localStorage` ou `sessionStorage`. Ele é perdido ao recarregar a página e obtido novamente via cookie HttpOnly no boot do `AuthProvider`.
 - O frontend usa `credentials: 'include'` em todas as chamadas à API para enviar o cookie automaticamente.
-
-Risco residual documentado: access token ainda está em `localStorage` (TD-013). Próximo passo: mover para memória React.
+- Em caso de 401 em endpoint privado, o frontend tenta uma renovação silenciosa via cookie antes de redirecionar para login (deduplicação via promise compartilhada em `session.ts`).
 
 Nota de compatibilidade de deployment: em ambientes onde frontend e API estão em domínios distintos (ex: vercel.app e workers.dev), `SameSite=Lax` não envia o cookie em POSTs cross-site. A solução definitiva é custom domain same-site (ex: api.houselog.app + app.houselog.app).
 

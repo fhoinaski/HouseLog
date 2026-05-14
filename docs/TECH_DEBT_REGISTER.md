@@ -274,11 +274,17 @@ Este registro deve ser lido em conjunto com:
   - Frontend removeu `hl_refresh` do localStorage em `storage.ts` e `auth-context.tsx`.
   - `credentials: 'include'` adicionado ao fetch global para envio automático do cookie.
   - Testes: `routes/auth-session.test.ts` cobre login/register/refresh/logout.
+- **Mitigação adicional (P0-AUTH-SESSION-02, 2026-05-13)**:
+  - `storage.ts` moveu access token de `localStorage` para variável de módulo em memória (`let _accessToken`). `setToken` / `getToken` / `clearToken` não tocam mais `localStorage`.
+  - `clearLegacyAuthStorage()` adicionado: remove `hl_token` e `hl_refresh` legados; chamado no boot do `AuthProvider`.
+  - `AuthProvider` bootstrapa via cookie HttpOnly em **toda** inicialização (sem atalho por `localStorage`). User profile (`hl_user`) mantido em `localStorage` apenas para UI otimista.
+  - `session.ts` ganhou `refreshAccessToken()` (deduplicação via promise compartilhada) e `shouldAttemptRefresh()`.
+  - `http.ts` agora faz retry silencioso em 401: tenta refresh antes de redirecionar para `/login`.
+  - Testes novos em `auth-session.test.ts`: CORS real (`buildCorsOriginHandler`) + bloco "Armazenamento — refresh_token jamais exposto no body".
+  - `SECURITY.md` atualizado para refletir access token em memória como estado atual.
 - **Risco restante**:
-  - Access token ainda persiste em `localStorage` (`hl_token`). XSS ainda pode roubar o access token (TTL 1h). Mitigação futura: manter access token apenas em memória.
   - Em deployment cross-origin (workers.dev ≠ vercel.app, domínios distintos), `SameSite=Lax` não envia o cookie em POSTs cross-site. Solução: custom domain same-site (ex: api.houselog.app + app.houselog.app) OU `SameSite=None; Secure`.
 - **Próxima etapa recomendada**:
-  - P0-AUTH-SESSION-02: mover access token de localStorage para memória (variável de estado React).
   - Configurar custom domain same-site para eliminar necessidade de `SameSite=None`.
 - **Relacionamento com roadmap**: Sprint 3 do HOUSELOG_EXECUTION_MASTERPLAN.md.
 

@@ -55,6 +55,7 @@ vi.mock('../lib/provider-categories', () => ({
 
 import { getDb } from '../db/client';
 import { rotateRefreshToken, revokeRefreshToken } from '../lib/refresh';
+import { buildCorsOriginHandler } from '../lib/cors';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -376,12 +377,98 @@ describe('POST /auth/logout — limpa cookie', () => {
   });
 });
 
+// ── Testes: armazenamento — refresh_token nunca no body ─────────────────────
+// Prova que localStorage/sessionStorage do browser jamais podem receber o
+// refresh_token, pois ele nunca é exposto em nenhuma resposta JSON da API.
+
+describe('Armazenamento — refresh_token jamais exposto no body da resposta', () => {
+  it('login não expõe refresh_token no body', async () => {
+    vi.mocked(getDb).mockReturnValue(createLoginDb() as never);
+
+    const req = new Request('http://localhost/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
+    });
+
+    const res = await auth.fetch(req, buildEnv());
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(body)).not.toContain('refresh_token');
+  });
+
+  it('refresh não expõe refresh_token no body', async () => {
+    vi.mocked(getDb).mockReturnValue(createRefreshDb() as never);
+
+    const req = new Request('http://localhost/refresh', {
+      method: 'POST',
+      headers: { 'Cookie': 'houselog_refresh=jti-mock.raw-mock-token-value-48chars' },
+    });
+
+    const res = await auth.fetch(req, buildEnv());
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(body)).not.toContain('refresh_token');
+  });
+
+  it('register não expõe refresh_token no body', async () => {
+    vi.mocked(getDb).mockReturnValue(createRegisterDb() as never);
+
+    const req = new Request('http://localhost/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'new@example.com',
+        name: 'New User',
+        password: 'password123',
+        role: 'owner',
+      }),
+    });
+
+    const res = await auth.fetch(req, buildEnv());
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(201);
+    expect(Object.keys(body)).not.toContain('refresh_token');
+  });
+});
+
 // ── Testes: CORS com credentials ─────────────────────────────────────────────
 
 describe('CORS — não usa wildcard com credentials', () => {
-  it('origin wildcard (*) não é aceita na produção', () => {
-    // Teste direto da função buildCorsOriginHandler (sem mocks de DB)
-    // Verificado em cors.test.ts — aqui apenas garantimos a configuração
-    expect(true).toBe(true); // cobertura garantida em cors.test.ts
+  it('origin wildcard (*) é bloqueado em produção', () => {
+    const handler = buildCorsOriginHandler({
+      ENVIRONMENT: 'production',
+      CORS_ORIGINS: '*',
+    });
+    // Wildcard nunca deve ser refletido de volta — bloqueado para todos
+    expect(handler('https://house-log.vercel.app')).toBeNull();
+    expect(handler('*')).toBeNull();
+  });
+
+  it('origem desconhecida é bloqueada em produção', () => {
+    const handler = buildCorsOriginHandler({
+      ENVIRONMENT: 'production',
+      CORS_ORIGINS: 'https://house-log.vercel.app',
+    });
+    expect(handler('https://evil.example.com')).toBeNull();
+  });
+
+  it('origem autorizada é refletida em produção', () => {
+    const handler = buildCorsOriginHandler({
+      ENVIRONMENT: 'production',
+      CORS_ORIGINS: 'https://house-log.vercel.app',
+    });
+    expect(handler('https://house-log.vercel.app')).toBe('https://house-log.vercel.app');
+  });
+
+  it('falha fechado quando CORS_ORIGINS está vazia em produção', () => {
+    const handler = buildCorsOriginHandler({
+      ENVIRONMENT: 'production',
+      CORS_ORIGINS: '',
+    });
+    expect(handler('https://house-log.vercel.app')).toBeNull();
   });
 });
