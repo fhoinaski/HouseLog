@@ -34,6 +34,11 @@ async function resizeViaCloudflare(
   origKey: string,
   width: number
 ): Promise<Uint8Array | null> {
+  // SECURITY: R2_PUBLIC_URL is only required for Cloudflare Image Resizing (CF Images zone feature).
+  // If this URL points to a public R2 bucket domain, objects are directly accessible without auth.
+  // For secure deployments: keep R2_PUBLIC_URL unset (thumbnails fall back to original copy),
+  // OR use a private bucket and configure CF Images with a Worker URL instead of a public domain.
+  // In production: verify the R2 bucket access policy is set to "Private" in the Cloudflare dashboard.
   if (!env.R2_PUBLIC_URL) return null;
   try {
     const url = `${env.R2_PUBLIC_URL.replace(/\/$/, '')}/${origKey}`;

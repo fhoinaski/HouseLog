@@ -70,6 +70,44 @@ Regras:
 
 Nota de compatibilidade de deployment: em ambientes onde frontend e API estão em domínios distintos (ex: vercel.app e workers.dev), `SameSite=Lax` não envia o cookie em POSTs cross-site. A solução definitiva é custom domain same-site (ex: api.houselog.app + app.houselog.app).
 
+## R2 — Armazenamento privado por padrão
+
+Todos os objetos R2 do HouseLog são considerados privados por padrão. Nenhum arquivo de domínio (documentos, fotos, vídeos, evidências, faturas, itens de inventário) deve ser acessível por URL pública permanente.
+
+### Política de acesso ao bucket
+
+- O bucket R2 **deve** ter a opção "Public access" desabilitada no painel Cloudflare.
+- Objetos são servidos **exclusivamente** via Worker autenticado (`c.env.STORAGE.get(key)`).
+- Nenhuma URL assinada de leitura (presigned GET) é emitida. O acesso é proxied pelo Worker, que valida `tenantId` e `propertyId` em cada requisição.
+- A variável `R2_PUBLIC_URL` é utilizada **apenas** para geração de thumbnails via Cloudflare Image Resizing (feature opcional). Se não configurada, thumbnails usam o arquivo original como fallback. Em ambientes seguros: **não configure `R2_PUBLIC_URL`** para manter o bucket totalmente privado.
+
+### Categorias de chave
+
+| Categoria | Classificação | Endpoint de acesso |
+|-----------|---------------|-------------------|
+| `avatars` | público | `GET /api/v1/media/{key}` (sem auth) |
+| `photos` | privado | `GET /properties/:id/media/*` ou `/services/:id/media/*` |
+| `videos` | privado | `GET /services/:id/media/*` |
+| `documents` | privado | `GET /properties/:propertyId/documents/:id/download` |
+| `invoices` | privado | `GET /provider/service-orders/:id/invoice` (se implementado) |
+| `inventory` | privado | `GET /properties/:propertyId/inventory/:id/photo` |
+
+### Validações obrigatórias antes de servir R2
+
+- Verificar `tenantId` do JWT contra o tenant do imóvel (no DB).
+- Verificar que o usuário tem acesso ao imóvel (`assertPropertyAccess`).
+- Verificar que a chave R2 começa com `{propertyId}/` (prefixo de property).
+- Para evidências de OS: verificar que a chave está registrada na OS específica (`allowedKeys.has(key)`).
+- Para downloads de documento: verificar que `tenantId` e `propertyId` do documento batem com o contexto.
+- Nunca retornar a chave R2 interna em respostas de erro.
+- `file_url` em respostas de documentos deve ser o endpoint autenticado (`/api/v1/properties/.../documents/.../download`), nunca a chave bruta.
+
+### Regras de upload
+
+- Validar MIME type e extensão com `validatePrivateUpload` antes de qualquer gravação em R2.
+- `tenantId` é sempre injetado do contexto JWT — nunca aceitar do client.
+- `buildR2Key({ propertyId, category, filename })` garante que a chave contém o `propertyId` como prefixo.
+
 ## CORS seguro em producao
 
 Em producao, CORS deve usar origins explicitas. Nao usar `*` com credenciais.

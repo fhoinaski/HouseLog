@@ -916,7 +916,10 @@ services.get('/:id/media/*', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const key = decodeURIComponent(c.req.path.split(`/services/${id}/media/`)[1] ?? '');
-  if (!key || key.includes('..')) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  // Block path traversal and enforce that the key belongs to this property (prefix check)
+  if (!key || key.includes('..') || !key.startsWith(`${propertyId}/`)) {
+    return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  }
 
   const [order] = await db
     .select({
