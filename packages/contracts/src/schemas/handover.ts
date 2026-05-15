@@ -217,6 +217,7 @@ export const HandoverAcceptanceReceiptPublicSchema = z.object({
   acceptedByName: z.string().max(120),
   acceptedByEmailMasked: z.string().max(160),
   acceptanceNotes: z.string().max(1000).nullable(),
+  hasSignature: z.boolean(),
   packageStatus: z.literal('accepted'),
   issuedAt: z.string().nullable(),
   expiresAt: z.string().nullable(),
@@ -285,6 +286,13 @@ export const PublicHandoverPackageAcceptInputSchema = z.object({
   acceptedTerms: z.literal(true, {
     errorMap: () => ({ message: 'Confirme a ciencia para registrar o aceite.' }),
   }),
+  signatureDataUrl: z
+    .string()
+    .min(1)
+    .max(200_000, 'Assinatura excede o tamanho maximo.')
+    .refine((v) => v.startsWith('data:image/'), { message: 'Assinatura invalida.' })
+    .optional()
+    .nullable(),
 }).strict();
 
 export const handoverPackageFilterSchema = z.object({

@@ -23,6 +23,7 @@ export type PublicHandoverPackageRow = {
   accepted_by_name: string | null;
   accepted_by_email: string | null;
   acceptance_notes: string | null;
+  accepted_signature_data_url?: string | null;
   revoked_at: string | null;
   expires_at: string | null;
   created_at: string;
@@ -157,6 +158,7 @@ export function resolvePublicHandoverPackage(
         acceptedByName: row.accepted_by_name,
         acceptedByEmailMasked: maskPublicHandoverEmail(row.accepted_by_email),
         acceptanceNotes: row.acceptance_notes,
+        hasSignature: !!row.accepted_signature_data_url,
         packageStatus: 'accepted' as const,
         issuedAt: row.issued_at,
         expiresAt: row.expires_at,

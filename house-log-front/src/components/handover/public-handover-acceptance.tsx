@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { CheckCircle2, ClipboardCheck, Copy, Printer, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, Copy, PenLine, Printer, ShieldCheck } from 'lucide-react';
 import {
   buildPublicHandoverAcceptancePrintData,
   buildPublicHandoverAcceptanceSummary,
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { PublicHandoverError, publicHandoverApi } from '@/lib/api/handover-public';
+import { SignatureCanvas } from '@/components/handover/signature-canvas';
 
 type PublicHandoverAcceptanceProps = {
   token: string;
@@ -44,6 +45,7 @@ export function PublicHandoverAcceptance({
   const [acceptedByEmail, setAcceptedByEmail] = useState('');
   const [acceptanceNotes, setAcceptanceNotes] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -91,6 +93,7 @@ export function PublicHandoverAcceptance({
         acceptedByEmail,
         acceptanceNotes: acceptanceNotes.trim() || null,
         acceptedTerms: true,
+        signatureDataUrl: signatureDataUrl ?? null,
       });
       onAccepted(result.package);
       setSuccessMessage('Recebimento digital confirmado com sucesso.');
@@ -191,6 +194,13 @@ export function PublicHandoverAcceptance({
               </div>
             </div>
 
+            {receipt.hasSignature && (
+              <div className="flex items-center gap-2 rounded-[var(--radius-lg)] bg-bg-accent-subtle px-4 py-3">
+                <PenLine className="h-4 w-4 shrink-0 text-text-accent" aria-hidden="true" />
+                <p className="text-sm leading-6 text-text-accent">Assinatura digital registrada neste aceite.</p>
+              </div>
+            )}
+
             {receipt.acceptanceNotes && (
               <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3">
                 <p className="text-xs font-medium text-text-tertiary">Observacoes</p>
@@ -273,6 +283,12 @@ export function PublicHandoverAcceptance({
                     <p className="mt-1 text-base font-medium">{printData.responsibleDisplay}</p>
                   </div>
                 )}
+                {receipt.hasSignature && (
+                  <div className="col-span-2">
+                    <p className="text-xs font-semibold uppercase text-[#6b7280]">Evidencia adicional</p>
+                    <p className="mt-1 text-sm text-[#374151]">Assinatura digital registrada no sistema.</p>
+                  </div>
+                )}
                 {printData.acceptanceNotes && (
                   <div className="col-span-2">
                     <p className="text-xs font-semibold uppercase text-[#6b7280]">Observacoes do aceite</p>
@@ -344,6 +360,20 @@ export function PublicHandoverAcceptance({
               placeholder="Opcional"
             />
           </label>
+
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium text-text-primary">
+              Assinatura digital{' '}
+              <span className="font-normal text-text-tertiary">(opcional)</span>
+            </p>
+            <SignatureCanvas
+              onSignatureChange={setSignatureDataUrl}
+              disabled={isSubmitting}
+            />
+            <p className="text-xs leading-5 text-text-tertiary">
+              Desenhe sua assinatura no campo acima para registrar evidencia adicional.
+            </p>
+          </div>
 
           <label className="flex gap-3 rounded-[var(--radius-lg)] bg-bg-subtle px-4 py-3 text-sm leading-6 text-text-secondary">
             <input

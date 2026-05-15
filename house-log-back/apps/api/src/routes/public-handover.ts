@@ -10,6 +10,12 @@ import { hashPublicHandoverToken, resolvePublicHandoverPackage } from '../lib/ha
 
 const publicHandover = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+/** Truncate user-agent to a safe max length before persisting. */
+function truncateUserAgent(ua: string | null | undefined): string | null {
+  if (!ua) return null;
+  return ua.length > 500 ? ua.slice(0, 500) : ua;
+}
+
 publicHandover.get('/handover/:token', async (c) => {
   const db = getDb(c.env.DB);
   const token = c.req.param('token')!;
@@ -33,6 +39,7 @@ publicHandover.get('/handover/:token', async (c) => {
       accepted_by_name: handoverPackages.acceptedByName,
       accepted_by_email: handoverPackages.acceptedByEmail,
       acceptance_notes: handoverPackages.acceptanceNotes,
+      accepted_signature_data_url: handoverPackages.acceptedSignatureDataUrl,
       revoked_at: handoverPackages.revokedAt,
       expires_at: handoverPackages.expiresAt,
       created_at: handoverPackages.createdAt,
@@ -74,6 +81,10 @@ publicHandover.post('/handover/:token/accept', async (c) => {
     return err(c, 'Dados do aceite invalidos', 'VALIDATION_ERROR', 422);
   }
 
+  // Capture evidence from request headers — never accept from client body.
+  const acceptedIp = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? null;
+  const acceptedUserAgent = truncateUserAgent(c.req.header('User-Agent'));
+
   const [row] = await db
     .select({
       id: handoverPackages.id,
@@ -93,6 +104,7 @@ publicHandover.post('/handover/:token/accept', async (c) => {
       accepted_by_name: handoverPackages.acceptedByName,
       accepted_by_email: handoverPackages.acceptedByEmail,
       acceptance_notes: handoverPackages.acceptanceNotes,
+      accepted_signature_data_url: handoverPackages.acceptedSignatureDataUrl,
       revoked_at: handoverPackages.revokedAt,
       expires_at: handoverPackages.expiresAt,
       created_at: handoverPackages.createdAt,
@@ -129,6 +141,8 @@ publicHandover.post('/handover/:token/accept', async (c) => {
   }
 
   const now = new Date().toISOString();
+  const signatureDataUrl = parsedBody.data.signatureDataUrl ?? null;
+
   await db
     .update(handoverPackages)
     .set({
@@ -137,6 +151,9 @@ publicHandover.post('/handover/:token/accept', async (c) => {
       acceptedByName: parsedBody.data.acceptedByName,
       acceptedByEmail: parsedBody.data.acceptedByEmail,
       acceptanceNotes: parsedBody.data.acceptanceNotes ?? null,
+      acceptedIp,
+      acceptedUserAgent,
+      acceptedSignatureDataUrl: signatureDataUrl,
       updatedAt: now,
     })
     .where(and(eq(handoverPackages.id, row.id), eq(handoverPackages.publicAccessTokenHash, tokenHash), isNull(handoverPackages.deletedAt)));
@@ -148,6 +165,7 @@ publicHandover.post('/handover/:token/accept', async (c) => {
     accepted_by_name: parsedBody.data.acceptedByName,
     accepted_by_email: parsedBody.data.acceptedByEmail,
     acceptance_notes: parsedBody.data.acceptanceNotes ?? null,
+    accepted_signature_data_url: signatureDataUrl,
     updated_at: now,
   };
 
@@ -158,7 +176,7 @@ publicHandover.post('/handover/:token/accept', async (c) => {
     entityId: row.id,
     action: 'handover_package_public_accepted',
     actorId: null,
-    actorIp: c.req.header('CF-Connecting-IP'),
+    actorIp: acceptedIp ?? undefined,
     oldData: {
       id: row.id,
       property_id: row.property_id,
@@ -173,6 +191,8 @@ publicHandover.post('/handover/:token/accept', async (c) => {
       acceptedByName: parsedBody.data.acceptedByName,
       acceptedByEmail: parsedBody.data.acceptedByEmail,
       acceptanceNotes: parsedBody.data.acceptanceNotes ?? null,
+      acceptedUserAgent,
+      hasSignature: !!signatureDataUrl,
       source: 'public_handover_accept',
     },
   });
