@@ -123,6 +123,7 @@ describe('resolvePublicHandoverPackage', () => {
         acceptedByName: 'Maria Silva',
         acceptedByEmailMasked: 'ma*********@exemplo.com',
         acceptanceNotes: 'Recebido sem ressalvas.',
+        hasSignature: false,
         packageStatus: 'accepted',
         issuedAt: '2026-05-09T10:05:00.000Z',
         expiresAt: '2026-06-09T10:05:00.000Z',

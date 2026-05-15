@@ -15,6 +15,7 @@ import {
   Package,
   Plus,
   QrCode,
+  ScanLine,
   Search,
   ShieldCheck,
 } from 'lucide-react';
@@ -31,7 +32,8 @@ import { MetricCard } from '@/components/ui/metric-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { inventoryItemCardVariants, inventoryPhotoFrameVariants } from '@/components/ui/visual-system';
-import { inventoryApi, roomsApi, type InventoryItem } from '@/lib/api';
+import { inventoryApi, roomsApi, type InventoryItem, type LabelExtractResult } from '@/lib/api';
+import { LabelOcrDialog, type OcrApplyFields } from '@/components/inventory/label-ocr-dialog';
 import { cn, INVENTORY_CATEGORY_LABELS } from '@/lib/utils';
 
 const schema = z.object({
@@ -40,6 +42,7 @@ const schema = z.object({
   room_id: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
+  serial_number: z.string().optional(),
   color_code: z.string().optional(),
   quantity: z.coerce.number().min(0).default(0),
   unit: z.string().default('un'),
@@ -170,6 +173,13 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<string | null>(null);
 
+  // OCR state
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrDialogOpen, setOcrDialogOpen] = useState(false);
+  const [ocrExtraction, setOcrExtraction] = useState<LabelExtractResult | null>(null);
+  const [ocrKey, setOcrKey] = useState(0);
+  const ocrFileInputRef = useRef<HTMLInputElement>(null);
+
   const {
     data,
     error,
@@ -224,6 +234,7 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
       room_id: item.room_id ?? undefined,
       brand: item.brand ?? undefined,
       model: item.model ?? undefined,
+      serial_number: item.serial_number ?? undefined,
       color_code: item.color_code ?? undefined,
       quantity: item.quantity,
       unit: item.unit,
@@ -263,6 +274,35 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
 
   function toastPhotoError() {
     setApiError('Não foi possível enviar a foto. Tente novamente.');
+  }
+
+  async function handleOcrFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const itemId = editItem?.id;
+    if (!file || !itemId) return;
+
+    event.target.value = '';
+    setOcrLoading(true);
+    setApiError(null);
+
+    try {
+      const { extraction } = await inventoryApi.labelOcr(id, itemId, file);
+      setOcrExtraction(extraction);
+      setOcrKey((k) => k + 1);
+      setOcrDialogOpen(true);
+    } catch (err) {
+      setApiError((err as Error).message ?? 'Não foi possível ler a etiqueta. Tente novamente.');
+    } finally {
+      setOcrLoading(false);
+    }
+  }
+
+  function handleOcrApply(fields: OcrApplyFields) {
+    if (fields.brand !== undefined) setValue('brand', fields.brand, { shouldDirty: true });
+    if (fields.model !== undefined) setValue('model', fields.model, { shouldDirty: true });
+    if (fields.serial_number !== undefined) setValue('serial_number', fields.serial_number, { shouldDirty: true });
+    if (fields.warranty_until !== undefined) setValue('warranty_until', fields.warranty_until, { shouldDirty: true });
+    setOcrDialogOpen(false);
   }
 
   async function onSubmit(form: FormData) {
@@ -415,11 +455,48 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
         className="hidden"
         onChange={handleFileChange}
       />
+      <input
+        ref={ocrFileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handleOcrFileChange}
+      />
+
+      {ocrExtraction && (
+        <LabelOcrDialog
+          key={ocrKey}
+          open={ocrDialogOpen}
+          onOpenChange={setOcrDialogOpen}
+          extraction={ocrExtraction}
+          onApply={handleOcrApply}
+          isApplying={false}
+        />
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editItem ? 'Editar item' : 'Novo item'}</DialogTitle>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>{editItem ? 'Editar item' : 'Novo item'}</DialogTitle>
+              {editItem && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => ocrFileInputRef.current?.click()}
+                  disabled={ocrLoading}
+                  title="Ler etiqueta técnica com IA"
+                >
+                  {ocrLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ScanLine className="h-3.5 w-3.5" />
+                  )}
+                  {ocrLoading ? 'Lendo...' : 'Ler etiqueta'}
+                </Button>
+              )}
+            </div>
           </DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="mt-2 max-h-[70vh] space-y-4 overflow-y-auto pr-1">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -457,6 +534,11 @@ export default function InventoryPage({ params }: { params: Promise<{ id: string
               <div className="space-y-1.5">
                 <Label htmlFor="model">Modelo</Label>
                 <Input id="model" placeholder="Código ou referência" {...register('model')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="serial-number">Número de série (S/N)</Label>
+                <Input id="serial-number" placeholder="Ex.: SN-123456" {...register('serial_number')} />
               </div>
 
               <div className="space-y-1.5">

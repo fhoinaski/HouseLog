@@ -74,6 +74,7 @@ type PublicHandoverRow = {
   accepted_by_name?: string | null;
   accepted_by_email?: string | null;
   acceptance_notes?: string | null;
+  accepted_signature_data_url?: string | null;
   revoked_at: string | null;
   expires_at: string | null;
   created_at: string;
@@ -132,6 +133,7 @@ function buildIssuedRow(overrides: Partial<PublicHandoverRow> = {}): PublicHando
     accepted_by_name: null,
     accepted_by_email: null,
     acceptance_notes: null,
+    accepted_signature_data_url: null,
     revoked_at: null,
     expires_at: '2026-06-09T10:05:00.000Z',
     created_at: '2026-05-09T10:05:00.000Z',
@@ -535,5 +537,224 @@ describe('POST /public/handover/:token/accept', () => {
     });
     expect(JSON.stringify(body.package.snapshot_json)).not.toContain('property-1');
     expect(JSON.stringify(body.package.snapshot_json)).not.toContain('doc-1');
+  });
+
+  it('persiste IP e user-agent do aceitante no DB', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const req = new Request('http://localhost/handover/token-publico/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '198.51.100.42',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+      body: JSON.stringify(validBody),
+    });
+
+    const response = await publicHandover.fetch(req, buildEnv());
+    expect(response.status).toBe(200);
+
+    expect(db.updateValues[0]).toMatchObject({
+      acceptedIp: '198.51.100.42',
+      acceptedUserAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    });
+  });
+
+  it('registra IP no audit log como actorIp', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const req = new Request('http://localhost/handover/token-publico/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CF-Connecting-IP': '198.51.100.55',
+      },
+      body: JSON.stringify(validBody),
+    });
+
+    await publicHandover.fetch(req, buildEnv());
+
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      actorIp: '198.51.100.55',
+    }));
+  });
+
+  it('registra user-agent e hasSignature no audit log newData', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const req = new Request('http://localhost/handover/token-publico/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'TestBrowser/1.0',
+      },
+      body: JSON.stringify(validBody),
+    });
+
+    await publicHandover.fetch(req, buildEnv());
+
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      newData: expect.objectContaining({
+        acceptedUserAgent: 'TestBrowser/1.0',
+        hasSignature: false,
+      }),
+    }));
+  });
+
+  it('trunca user-agent longo para 500 caracteres', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const longUa = 'A'.repeat(600);
+    const req = new Request('http://localhost/handover/token-publico/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': longUa,
+      },
+      body: JSON.stringify(validBody),
+    });
+
+    await publicHandover.fetch(req, buildEnv());
+
+    expect(db.updateValues[0]).toMatchObject({
+      acceptedUserAgent: 'A'.repeat(500),
+    });
+  });
+
+  it('persiste signatureDataUrl quando fornecido', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const signature = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    const response = await publicHandover.fetch(acceptRequest({
+      ...validBody,
+      signatureDataUrl: signature,
+    }), buildEnv());
+
+    expect(response.status).toBe(200);
+    expect(db.updateValues[0]).toMatchObject({
+      acceptedSignatureDataUrl: signature,
+    });
+  });
+
+  it('registra hasSignature true no audit log quando assinatura fornecida', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const signature = 'data:image/png;base64,abc123';
+    await publicHandover.fetch(acceptRequest({
+      ...validBody,
+      signatureDataUrl: signature,
+    }), buildEnv());
+
+    expect(writeAuditLog).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      newData: expect.objectContaining({ hasSignature: true }),
+    }));
+    const callArgs = vi.mocked(writeAuditLog).mock.calls[0]![1]!;
+    const newData = JSON.stringify(callArgs.newData);
+    expect(newData).not.toContain('data:image/');
+    expect(newData).not.toContain('base64');
+  });
+
+  it('retorna hasSignature false no comprovante quando sem assinatura', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const response = await publicHandover.fetch(acceptRequest(validBody), buildEnv());
+    const body = (await response.json()) as { package: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    const receipt = body.package.acceptanceReceipt as Record<string, unknown>;
+    expect(receipt.hasSignature).toBe(false);
+  });
+
+  it('retorna hasSignature true no comprovante quando assinatura fornecida', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const response = await publicHandover.fetch(acceptRequest({
+      ...validBody,
+      signatureDataUrl: 'data:image/png;base64,abc123',
+    }), buildEnv());
+    const body = (await response.json()) as { package: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    const receipt = body.package.acceptanceReceipt as Record<string, unknown>;
+    expect(receipt.hasSignature).toBe(true);
+  });
+
+  it('nao expoe signatureDataUrl, accepted_ip ou accepted_user_agent no DTO publico', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const response = await publicHandover.fetch(acceptRequest({
+      ...validBody,
+      signatureDataUrl: 'data:image/png;base64,abc123',
+    }), buildEnv());
+    const body = (await response.json()) as { package: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    const serialized = JSON.stringify(body.package);
+    expect(serialized).not.toContain('data:image/');
+    expect(serialized).not.toContain('accepted_ip');
+    expect(serialized).not.toContain('accepted_user_agent');
+    expect(serialized).not.toContain('acceptedIp');
+    expect(serialized).not.toContain('acceptedUserAgent');
+    expect(serialized).not.toContain('signatureDataUrl');
+    expect(serialized).not.toContain('accepted_signature_data_url');
+  });
+
+  it('rejeita signatureDataUrl sem prefixo data:image/', async () => {
+    vi.mocked(getDb).mockReturnValue(createDb(buildIssuedRow()) as never);
+
+    const response = await publicHandover.fetch(acceptRequest({
+      ...validBody,
+      signatureDataUrl: 'http://evil.com/image.png',
+    }), buildEnv());
+    const body = (await response.json()) as { code: string };
+
+    expect(response.status).toBe(422);
+    expect(body.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('aceita signatureDataUrl nulo (assinatura opcional)', async () => {
+    vi.mocked(getDb).mockReturnValue(createDb(buildIssuedRow()) as never);
+
+    const response = await publicHandover.fetch(acceptRequest({
+      ...validBody,
+      signatureDataUrl: null,
+    }), buildEnv());
+
+    expect(response.status).toBe(200);
+  });
+
+  it('versao do pacote e bloqueada no snapshot — aceite nao muta version', async () => {
+    const db = createDb(buildIssuedRow({ version: 3 }));
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const response = await publicHandover.fetch(acceptRequest(validBody), buildEnv());
+    const body = (await response.json()) as { package: { version: number; snapshot_json: { package: { version: number } } } };
+
+    expect(response.status).toBe(200);
+    expect(body.package.version).toBe(3);
+    expect(body.package.snapshot_json.package.version).toBe(3);
+    // DB update nao deve alterar version
+    expect(db.updateValues[0]).not.toHaveProperty('version');
+  });
+
+  it('nao registra o token bruto no audit log', async () => {
+    const db = createDb(buildIssuedRow());
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const response = await publicHandover.fetch(acceptRequest(validBody), buildEnv());
+    expect(response.status).toBe(200);
+
+    const callArgs = JSON.stringify(vi.mocked(writeAuditLog).mock.calls);
+    expect(callArgs).not.toContain('token-publico');
   });
 });

@@ -123,6 +123,7 @@ export type InventoryItem = {
   name: string;
   brand: string | null;
   model: string | null;
+  serial_number: string | null;
   color_code: string | null;
   lot_number: string | null;
   supplier: string | null;
@@ -134,6 +135,7 @@ export type InventoryItem = {
   qr_code: string | null;
   price_paid: number | null;
   purchase_date: string | null;
+  warranty_until: string | null;
   notes: string | null;
   created_at: string;
   deleted_at: string | null;

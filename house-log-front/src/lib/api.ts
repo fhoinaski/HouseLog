@@ -146,7 +146,7 @@ export type {
 
 // Inventory
 export { inventoryApi } from '@/lib/api/inventory';
-export type { InventoryItem, InventoryMutationInput, InventoryCategory, ColorEntry } from '@/lib/api/inventory';
+export type { InventoryItem, InventoryMutationInput, InventoryCategory, ColorEntry, LabelExtractResult } from '@/lib/api/inventory';
 
 // Services, Bids, Messages, Audit
 export { servicesApi, auditApi, bidsApi, messagesApi } from '@/lib/api/services';
@@ -154,7 +154,7 @@ export type { AuditLinkData, ServiceMessage } from '@/lib/api/services';
 
 // Expenses & Reports
 export { expensesApi, reportsApi } from '@/lib/api/expenses';
-export type { Expense, ExpenseCategory, ExpenseSummary, HealthScoreReport, ValuationPayload } from '@/lib/api/expenses';
+export type { DossiePayload, Expense, ExpenseCategory, ExpenseSummary, HealthScoreReport, ValuationPayload } from '@/lib/api/expenses';
 
 // Maintenance
 export { maintenanceApi } from '@/lib/api/maintenance';
