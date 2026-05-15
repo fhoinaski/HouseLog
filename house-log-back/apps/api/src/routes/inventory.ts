@@ -8,7 +8,7 @@ import {
   uploadToR2,
   buildR2Key,
   extractR2KeyFromPublicUrl,
-  validatePrivateUpload,
+  preparePrivateUpload,
 } from '../lib/r2';
 import { extractLabelData } from '../lib/ai';
 import {
@@ -493,13 +493,12 @@ inventory.post('/:itemId/photo', async (c) => {
   }
 
   // Additional extension + dangerous-extension check from the private-upload policy.
-  const validation = validatePrivateUpload(photo.type, photo.size, photo.name);
+  const validation = await preparePrivateUpload(photo);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId, category: 'inventory', filename: photo.name });
 
-  const buffer = await photo.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, photo.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
   // Store the R2 key (not a public URL) — served via authenticated endpoint.
   await db
@@ -575,7 +574,9 @@ inventory.post('/:itemId/label-ocr', async (c) => {
   // 4. Chamar IA — resposta validada por Zod dentro de extractLabelData
   let extraction;
   try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    const validation = await preparePrivateUpload(file);
+    if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
+    const bytes = new Uint8Array(validation.buffer);
     extraction = await extractLabelData(c.env.AI, c.env.DB, bytes);
   } catch (e) {
     return err(c, 'Falha na extração de dados da etiqueta', 'AI_ERROR', 503, { message: String(e) });

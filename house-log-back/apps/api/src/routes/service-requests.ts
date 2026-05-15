@@ -44,6 +44,14 @@ const MIME_BY_KIND: Record<MediaKind, Set<string>> = {
   audio: new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4']),
 };
 
+const EXTENSIONS_BY_KIND: Record<MediaKind, Set<string>> = {
+  photo: new Set(['jpg', 'jpeg', 'png', 'webp']),
+  video: new Set(['mp4', 'webm', 'mov']),
+  audio: new Set(['mp3', 'wav', 'ogg', 'm4a', 'mp4']),
+};
+
+const DANGEROUS_MEDIA_EXTENSIONS = new Set(['bat', 'cmd', 'com', 'exe', 'html', 'hta', 'jar', 'js', 'msi', 'php', 'ps1', 'scr', 'sh', 'svg', 'vbs']);
+
 // Authenticated endpoint URL for a specific media item inside a service request.
 function mediaEndpoint(propertyId: string, requestId: string, index: number): string {
   return `/api/v1/properties/${propertyId}/service-requests/${requestId}/media/${index}`;
@@ -53,6 +61,33 @@ function mediaEndpoint(propertyId: string, requestId: string, index: number): st
 // authenticated endpoint URLs so clients never receive raw R2 keys/public URLs.
 function toMediaEndpoints(propertyId: string, requestId: string, stored: string[] | null): string[] {
   return (stored ?? []).map((_, i) => mediaEndpoint(propertyId, requestId, i));
+}
+
+function getFileExtension(filename: string): string {
+  const cleanName = filename.split(/[\\/]/).pop() ?? '';
+  const ext = cleanName.includes('.') ? cleanName.split('.').pop() : '';
+  return (ext ?? '').trim().toLowerCase();
+}
+
+function validateMediaMetadata(file: { kind: MediaKind; mimeType: string; filename: string; size: number }): true | string {
+  if (!assertAllowedMimeType(file.kind, file.mimeType)) {
+    return `Tipo MIME nao permitido para ${file.kind}: ${file.mimeType}`;
+  }
+
+  const ext = getFileExtension(file.filename);
+  if (!ext || DANGEROUS_MEDIA_EXTENSIONS.has(ext)) {
+    return 'Extensao de arquivo nao permitida';
+  }
+  if (!EXTENSIONS_BY_KIND[file.kind].has(ext)) {
+    return 'Extensao nao corresponde ao tipo de midia';
+  }
+
+  const maxBytes = file.kind === 'video' ? 100 * 1024 * 1024 : file.kind === 'audio' ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    return 'Arquivo excede o limite permitido';
+  }
+
+  return true;
 }
 
 async function isRoomInTenantProperty(
@@ -490,9 +525,8 @@ serviceRequestsRoute.post('/', async (c) => {
   const requestId = createId();
 
   for (const file of parsed.data.media) {
-    if (!assertAllowedMimeType(file.kind, file.mimeType)) {
-      return err(c, `Tipo MIME nao permitido para ${file.kind}: ${file.mimeType}`, 'INVALID_MEDIA', 422);
-    }
+    const validation = validateMediaMetadata(file);
+    if (validation !== true) return err(c, validation, 'INVALID_MEDIA', 422);
   }
 
   // Build keys and presigned PUT URLs for each media item.

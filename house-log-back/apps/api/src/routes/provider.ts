@@ -455,13 +455,12 @@ provider.post('/services/:id/invoice', async (c) => {
   if (!allowed.includes(file.type)) return err(c, 'Tipo de arquivo não permitido', 'INVALID_FILE', 422);
   if (file.size > 10 * 1024 * 1024) return err(c, 'Arquivo excede 10MB', 'INVALID_FILE', 422);
 
-  const { buildR2Key, uploadToR2, validatePrivateUpload } = await import('../lib/r2');
-  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  const { buildR2Key, uploadToR2, preparePrivateUpload } = await import('../lib/r2');
+  const validation = await preparePrivateUpload(file);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId: order.property_id, category: 'invoices', filename: file.name });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
   // Create a document record linked to this service
   const { nanoid } = await import('nanoid');
@@ -474,7 +473,7 @@ provider.post('/services/:id/invoice', async (c) => {
     type: 'invoice',
     title: `Nota Fiscal - ${id.slice(0, 8).toUpperCase()}`,
     fileUrl: key,
-    fileSize: file.size,
+    fileSize: validation.size,
     uploadedBy: userId,
   });
 
@@ -492,8 +491,8 @@ provider.post('/services/:id/invoice', async (c) => {
       document_id: docId,
       type: 'invoice',
       title: `Nota Fiscal - ${id.slice(0, 8).toUpperCase()}`,
-      file_mime_type: file.type,
-      file_size: file.size,
+      file_mime_type: validation.mimeType,
+      file_size: validation.size,
       upload_source: 'provider_invoice',
       actor_id: userId,
       actor_role: role,

@@ -15,7 +15,7 @@ import {
 } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
-import { validatePrivateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
+import { buildR2Key, uploadToR2, preparePrivateUpload, detectMimeType } from '../lib/r2';
 import { sendEmail, emailOsStatusChanged, emailServiceAssigned } from '../lib/email';
 import { getDb } from '../db/client';
 import { properties, propertyCollaborators, rooms, serviceOrders, users } from '../db/schema';
@@ -728,12 +728,11 @@ services.post('/:id/photos', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  const validation = await preparePrivateUpload(file);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId, category: 'photos', filename: file.name });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
   const current = photoType === 'after'
     ? [...(order.after_photos ?? [])]
@@ -758,8 +757,8 @@ services.post('/:id/photos', async (c) => {
       service_order_id: id,
       evidence_type: 'photo',
       photo_type: photoType,
-      file_mime_type: file.type,
-      file_size: file.size,
+      file_mime_type: validation.mimeType,
+      file_size: validation.size,
       actor_id: userId,
     },
   });
@@ -797,14 +796,13 @@ services.post('/:id/video', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  const videoValidation = validatePrivateUpload(file.type, file.size, file.name);
+  const videoValidation = await preparePrivateUpload(file);
   if (!videoValidation.ok || file.type !== 'video/mp4') {
     return err(c, videoValidation.ok ? 'Apenas videos MP4 sao aceitos' : videoValidation.error, 'INVALID_FILE', 422);
   }
 
   const key = buildR2Key({ propertyId, category: 'videos', filename: file.name });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, 'video/mp4');
+  await uploadToR2(c.env.STORAGE, key, videoValidation.buffer, videoValidation.mimeType);
 
   await db
     .update(serviceOrders)
@@ -823,8 +821,8 @@ services.post('/:id/video', async (c) => {
       property_id: propertyId,
       service_order_id: id,
       evidence_type: 'video',
-      file_mime_type: file.type,
-      file_size: file.size,
+      file_mime_type: videoValidation.mimeType,
+      file_size: videoValidation.size,
       actor_id: userId,
     },
   });
@@ -872,6 +870,13 @@ services.post('/:id/audio', async (c) => {
 
   const key = buildR2Key({ propertyId, category: 'documents', filename: file.name });
   const buffer = await file.arrayBuffer();
+  const detectedMimeType = detectMimeType(new Uint8Array(buffer));
+  const contentTypeMatches =
+    detectedMimeType === file.type ||
+    (file.type === 'audio/mp4' && detectedMimeType === 'video/mp4');
+  if (!contentTypeMatches) {
+    return err(c, 'Conteudo do arquivo nao corresponde ao tipo declarado', 'INVALID_FILE', 422);
+  }
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
 
   await db

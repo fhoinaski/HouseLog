@@ -4,7 +4,7 @@ import { writeAuditLog } from '../lib/audit';
 import { canDeleteDocument, canRequestDocumentIngestion, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
-import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
+import { buildR2Key, uploadToR2, extractR2KeyFromPublicUrl, preparePrivateUpload } from '../lib/r2';
 import { getDb } from '../db/client';
 import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, inventoryItems, maintenanceSchedules, properties, serviceOrders, technicalSystems, users, warranties } from '../db/schema';
 import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, GenerateDocumentExtractionCandidatesInputSchema, ListDocumentExtractionCandidatesQuerySchema, ListDocumentIngestionJobsQuerySchema, ReviewDocumentExtractionCandidateInputSchema, ReviewDocumentExtractionInputSchema } from '@houselog/contracts';
@@ -165,7 +165,7 @@ documents.post('/', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo obrigatório', 'MISSING_FILE');
 
-  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  const validation = await preparePrivateUpload(file);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const rawMeta = formData.get('meta') as string | null;
@@ -180,8 +180,7 @@ documents.post('/', async (c) => {
   if (!serviceOrderAllowed) return err(c, 'OS nao encontrada neste imovel', 'SERVICE_ORDER_NOT_FOUND', 404);
 
   const key = buildR2Key({ propertyId, category: 'documents', filename: file.name });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
   const id = createId();
   await db.insert(documentsTable).values({
@@ -234,8 +233,8 @@ documents.post('/', async (c) => {
       document_id: id,
       type: doc.type,
       title: doc.title,
-      file_mime_type: file.type,
-      file_size: doc.file_size,
+      file_mime_type: validation.mimeType,
+      file_size: validation.size,
       actor_id: userId,
     },
   });

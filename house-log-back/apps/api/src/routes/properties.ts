@@ -5,7 +5,7 @@ import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, requireRole, assertPropertyAccess, resolveTenant, assertTenantAccess } from '../middleware/auth';
 import { canCreatePropertyInTenant } from '../lib/property-tenant';
-import { validatePrivateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
+import { buildR2Key, uploadToR2, preparePrivateUpload } from '../lib/r2';
 import { getDb } from '../db/client';
 import {
   documentExtractionCandidates,
@@ -593,12 +593,11 @@ properties.post('/:id/cover', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  const validation = await preparePrivateUpload(file);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId: id, category: 'photos', filename: `cover.${file.name.split('.').pop()}` });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
   const coverUrl = `/api/v1/properties/${id}/media/${encodeURIComponent(key)}`;
 
