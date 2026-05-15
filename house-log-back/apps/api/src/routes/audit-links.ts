@@ -27,7 +27,13 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const canCreateLink = await canCreateAuditLink(c.env.DB, { propertyId, userId, role: userRole });
+  const canCreateLink = await canCreateAuditLink(c.env.DB, {
+    propertyId,
+    userId,
+    role: userRole,
+    tenantId,
+    tenantRole: c.get('tenantRole'),
+  });
   if (!canCreateLink) return err(c, 'Permissão insuficiente', 'FORBIDDEN', 403);
 
   // Verify the OS exists and belongs to the property
