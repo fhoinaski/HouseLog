@@ -1,6 +1,8 @@
 import { qs, request } from '@/lib/api/_core';
 import type { CursorPage, Property } from '@/lib/api/_core';
-import type { ExpenseCategory } from '@houselog/contracts';
+import type { DossiePayload, ExpenseCategory } from '@houselog/contracts';
+
+export type { DossiePayload };
 
 export type { ExpenseCategory };
 
@@ -85,4 +87,7 @@ export const reportsApi = {
 
   valuationPdf: (propertyId: string) =>
     request<ValuationPayload>(`/properties/${propertyId}/report/valuation-pdf`),
+
+  dossie: (propertyId: string) =>
+    request<{ dossie: DossiePayload }>(`/properties/${propertyId}/report/dossie`),
 };

@@ -6,10 +6,11 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import {
   ArrowLeft, Activity, Wrench, ShieldCheck, Clock, FileText,
-  TrendingUp, Download, RefreshCw,
+  TrendingUp, Download, RefreshCw, BookOpen,
 } from 'lucide-react';
 import { reportsApi, propertiesApi } from '@/lib/api';
 import { HealthReportPDF } from '@/components/pdf/HealthReportPDF';
+import { PropertyDossieDocument } from '@/components/pdf/PropertyDossieDocument';
 
 const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((m) => m.PDFDownloadLink),
@@ -131,6 +132,11 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
   const { data: valuationData, isLoading: valuationLoading } = useSWR(
     ['valuation', id],
     () => reportsApi.valuationPdf(id)
+  );
+
+  const { data: dossieData, isLoading: dossieLoading } = useSWR(
+    ['dossie', id],
+    () => reportsApi.dossie(id)
   );
 
   const { data: propData } = useSWR(['property', id], () => propertiesApi.get(id));
@@ -296,6 +302,52 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
           </CardContent>
         </Card>
       )}
+
+      {/* Dossiê Técnico */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpen className="h-4 w-4 text-text-accent" />
+            Dossiê Técnico do Imóvel
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6 pt-0">
+          <p className="mb-4 text-sm text-text-secondary">
+            Documento consolidado com ambientes, inventário, garantias, reformas, serviços, planos de manutenção
+            e linha do tempo do imóvel. Gerado localmente — nenhum arquivo é armazenado.
+          </p>
+          {dossieLoading ? (
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-interactive-primary-bg border-t-transparent" />
+              Carregando dados...
+            </div>
+          ) : dossieData?.dossie ? (
+            <div className="flex flex-wrap gap-3">
+              <PDFDownloadLink
+                document={<PropertyDossieDocument dossie={dossieData.dossie} />}
+                fileName={`dossie-tecnico-${property?.name ?? id}-${new Date().toISOString().slice(0, 10)}.pdf`}
+              >
+                {({ loading }) => (
+                  <Button variant="default" size="sm" disabled={loading}>
+                    <Download className="h-3.5 w-3.5" />
+                    {loading ? 'Gerando dossiê...' : 'Exportar Dossiê Técnico (PDF)'}
+                  </Button>
+                )}
+              </PDFDownloadLink>
+              <div className="flex flex-wrap gap-4 text-xs text-text-secondary self-center">
+                <span>{dossieData.dossie.rooms.length} ambientes</span>
+                <span>{dossieData.dossie.inventory_items.length} itens de inventário</span>
+                <span>{dossieData.dossie.warranties.length} garantias</span>
+                <span>{dossieData.dossie.service_orders.length} serviços concluídos</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-text-secondary">
+              Não foi possível carregar os dados do dossiê.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

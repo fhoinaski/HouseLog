@@ -154,7 +154,7 @@ export type { AuditLinkData, ServiceMessage } from '@/lib/api/services';
 
 // Expenses & Reports
 export { expensesApi, reportsApi } from '@/lib/api/expenses';
-export type { Expense, ExpenseCategory, ExpenseSummary, HealthScoreReport, ValuationPayload } from '@/lib/api/expenses';
+export type { DossiePayload, Expense, ExpenseCategory, ExpenseSummary, HealthScoreReport, ValuationPayload } from '@/lib/api/expenses';
 
 // Maintenance
 export { maintenanceApi } from '@/lib/api/maintenance';
