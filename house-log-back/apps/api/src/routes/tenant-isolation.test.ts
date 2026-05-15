@@ -10,7 +10,8 @@
 
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Bindings } from '../lib/types';
+import type { Bindings, Variables } from '../lib/types';
+import { isUuidV4 } from '../lib/id';
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
 
@@ -33,11 +34,18 @@ vi.mock('../lib/audit', () => ({
 import { getDb } from '../db/client';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import roomsRouter from '../routes/rooms';
+import propertiesRouter from '../routes/properties';
 
 /** Wrap the rooms sub-router the same way the main app does so params resolve correctly. */
 function buildRoomsApp() {
-  const app = new Hono<{ Bindings: Bindings }>();
+  const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
   app.route('/properties/:propertyId/rooms', roomsRouter);
+  return app;
+}
+
+function buildPropertiesApp() {
+  const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+  app.route('/properties', propertiesRouter);
   return app;
 }
 
@@ -73,7 +81,7 @@ function authedRequest(url: string, options: RequestInit = {}): Request {
 
 /** Minimal Hono app with authMiddleware + resolveTenant + a /ping endpoint. */
 function buildMiddlewareApp() {
-  const app = new Hono<{ Bindings: Bindings }>();
+  const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
   app.use('*', authMiddleware);
   app.use('*', resolveTenant);
   app.get('/ping', (c) =>
@@ -234,6 +242,74 @@ describe('POST /properties/:propertyId/rooms — tenant_id obrigatório no INSER
     const [insertedValues] = insertValuesSpy.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(insertedValues).toHaveProperty('tenantId', 'tenant-a');
     expect(insertedValues).toHaveProperty('propertyId', 'prop-1');
+    expect(isUuidV4(String(insertedValues.id))).toBe(true);
+  });
+});
+
+describe('POST /properties - novo imovel recebe UUID v4', () => {
+  const insertValuesSpy = vi.fn(async () => undefined);
+
+  beforeEach(() => {
+    insertValuesSpy.mockClear();
+  });
+
+  it('gera id UUID v4 e usa tenantId do contexto autenticado', async () => {
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn()
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({ limit: vi.fn(async () => [{ tenantId: 'tenant-a', role: 'owner' }]) })),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{
+                id: 'prop-created',
+                owner_id: 'user-1',
+                manager_id: null,
+                name: 'Casa',
+                type: 'house',
+                address: 'Rua A',
+                city: 'Sao Paulo',
+                area_m2: null,
+                year_built: null,
+                structure: null,
+                floors: 1,
+                cover_url: null,
+                health_score: 100,
+                created_at: new Date().toISOString(),
+                deleted_at: null,
+              }]),
+            })),
+          })),
+        }),
+      insert: vi.fn(() => ({ values: insertValuesSpy })),
+    } as never);
+
+    const res = await buildPropertiesApp().fetch(
+      authedRequest('http://localhost/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Casa',
+          type: 'house',
+          address: 'Rua A',
+          city: 'Sao Paulo',
+          floors: 1,
+          tenantId: 'tenant-b',
+        }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(201);
+    expect(insertValuesSpy).toHaveBeenCalledOnce();
+    const [insertedValues] = insertValuesSpy.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(insertedValues.tenantId).toBe('tenant-a');
+    expect(isUuidV4(String(insertedValues.id))).toBe(true);
   });
 });
 

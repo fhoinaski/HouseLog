@@ -23,6 +23,7 @@ vi.mock('../db/client', () => ({ getDb: vi.fn() }));
 vi.mock('../lib/audit', () => ({ writeAuditLog: vi.fn(async () => undefined) }));
 vi.mock('../lib/r2', () => ({
   validatePrivateUpload: vi.fn(() => ({ ok: true })),
+  preparePrivateUpload: vi.fn(async (file: File) => ({ ok: true, buffer: await file.arrayBuffer(), mimeType: file.type, size: file.size })),
   buildR2Key: vi.fn(() => 'prop-a/inventory/1234567890.jpg'),
   uploadToR2: vi.fn(async () => undefined),
   extractR2KeyFromPublicUrl: vi.fn((url: string) => url),

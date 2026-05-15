@@ -9,7 +9,8 @@ import { writeAuditLog } from '../lib/audit';
 import { sha256TokenHash } from '../lib/token-hash';
 import { properties, propertyCollaborators, propertyInvites, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import { canManageTenantUsers } from '../lib/authorization';
-import type { Bindings, Variables } from '../lib/types';
+import type { Bindings, Role, TenantRole, Variables } from '../lib/types';
+import { createId } from '../lib/id';
 
 const invites = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -77,15 +78,15 @@ async function canManagePropertyTeam(
   propertyId: string,
   userId: string,
   tenantId: string | null | undefined,
-  tenantRole: string | null | undefined,
-  role: string
+  tenantRole: TenantRole | null | undefined,
+  role: Role
 ) {
   return canManageTenantUsers(db, {
     propertyId,
     userId,
-    role: role as any,
+    role,
     tenantId,
-    tenantRole: tenantRole as any,
+    tenantRole,
   });
 }
 
@@ -101,6 +102,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
   const tenantId = c.get('tenantId');
   const tenantRole = c.get('tenantRole');
   const userRole = c.get('userRole');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
   const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, tenantId, tenantRole, userRole);
   if (!canManage.allowed) return err(c, 'Imóvel não encontrado ou sem permissão', canManage.code, canManage.status);
@@ -144,6 +146,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
       .where(
         and(
           eq(propertyInvites.propertyId, propertyId),
+          eq(propertyInvites.tenantId, tenantId),
           eq(propertyInvites.email, inviteEmail),
           isNull(propertyInvites.acceptedAt),
           gt(propertyInvites.expiresAt, sql`datetime('now')`)
@@ -160,6 +163,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
       .where(
         and(
           eq(propertyInvites.propertyId, propertyId),
+          eq(propertyInvites.tenantId, tenantId),
           eq(propertyInvites.whatsapp, normalizedWhatsapp),
           isNull(propertyInvites.acceptedAt),
           gt(propertyInvites.expiresAt, sql`datetime('now')`)
@@ -169,7 +173,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
     if (existingByWhatsapp) return err(c, 'Já existe um convite pendente para este WhatsApp', 'DUPLICATE_INVITE', 409);
   }
 
-  const id = nanoid();
+  const id = createId();
   const token = nanoid(32);
   const tokenHash = await sha256TokenHash(token);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -177,6 +181,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
 
   await db.insert(propertyInvites).values({
     id,
+    tenantId,
     propertyId,
     invitedBy: userId,
     email: inviteEmail,
@@ -307,7 +312,7 @@ invites.post('/properties/:propertyId/collaborators', async (c) => {
     });
   }
 
-  const collaboratorId = nanoid();
+  const collaboratorId = createId();
   const canOpenOs = parsed.data.can_open_os ?? parsed.data.role !== 'viewer';
 
   await db.insert(propertyCollaborators).values({
@@ -431,6 +436,7 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
   const results = await db
     .select({
       id: propertyInvites.id,
+      tenant_id: propertyInvites.tenantId,
       property_id: propertyInvites.propertyId,
       invited_by: propertyInvites.invitedBy,
       email: propertyInvites.email,
@@ -448,6 +454,7 @@ invites.get('/properties/:propertyId/invites', authMiddleware, async (c) => {
     .where(
       and(
         eq(propertyInvites.propertyId, propertyId),
+        eq(propertyInvites.tenantId, tenantId),
         isNull(propertyInvites.acceptedAt),
         gt(propertyInvites.expiresAt, sql`datetime('now')`)
       )
@@ -540,11 +547,13 @@ invites.delete('/properties/:propertyId/invites/:inviteId', authMiddleware, asyn
   const db = getDb(c.env.DB);
   const { propertyId, inviteId } = c.req.param();
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, tenantId, c.get('tenantRole'), c.get('userRole'));
   if (!canManage.allowed) return err(c, 'Sem acesso', canManage.code, canManage.status);
 
-  await db.delete(propertyInvites).where(and(eq(propertyInvites.id, inviteId), eq(propertyInvites.propertyId, propertyId)));
+  await db.delete(propertyInvites).where(and(eq(propertyInvites.id, inviteId), eq(propertyInvites.tenantId, tenantId), eq(propertyInvites.propertyId, propertyId)));
   return ok(c, { success: true });
 });
 
@@ -571,13 +580,16 @@ invites.get('/invite/:token', async (c) => {
       property_city: properties.city,
       invited_by_name: users.name,
       property_id: propertyInvites.propertyId,
+      tenant_id: propertyInvites.tenantId,
     })
     .from(propertyInvites)
     .innerJoin(properties, eq(properties.id, propertyInvites.propertyId))
     .innerJoin(users, eq(users.id, propertyInvites.invitedBy))
     .where(
       and(
-        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`
+        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`,
+        eq(propertyInvites.tenantId, properties.tenantId),
+        isNull(properties.deletedAt)
       )
     )
     .limit(1) as Array<{
@@ -585,10 +597,10 @@ invites.get('/invite/:token', async (c) => {
     invite_name: string | null;
     whatsapp: string | null;
     property_name: string; property_address: string; property_city: string;
-    invited_by_name: string; property_id: string;
+    invited_by_name: string; property_id: string; tenant_id: string | null;
   }>;
 
-  if (!invite) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (!invite?.tenant_id) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
   if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
   if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
 
@@ -620,6 +632,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
   const [invite] = await db
     .select({
       id: propertyInvites.id,
+      tenant_id: propertyInvites.tenantId,
       property_id: propertyInvites.propertyId,
       role: propertyInvites.role,
       email: propertyInvites.email,
@@ -630,11 +643,17 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
       expires_at: propertyInvites.expiresAt,
     })
     .from(propertyInvites)
+    .innerJoin(properties, eq(properties.id, propertyInvites.propertyId))
     .where(
-      sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`
+      and(
+        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`,
+        eq(propertyInvites.tenantId, properties.tenantId),
+        isNull(properties.deletedAt)
+      )
     )
     .limit(1) as Array<{
     id: string;
+    tenant_id: string | null;
     property_id: string;
     role: 'viewer' | 'provider' | 'manager';
     email: string;
@@ -645,17 +664,18 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     expires_at: string;
   }>;
 
-  if (!invite) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (!invite?.tenant_id) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
   if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
   if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
 
   // Managers get can_open_os = 1 by default; providers/viewers start at 0
   const defaultCanOpenOs = invite.role === 'manager' ? 1 : 0;
-  const collabId = nanoid();
+  const collabId = createId();
   const inviteSpecialties = invite.specialties ?? [];
   try {
     await db.insert(propertyCollaborators).values({
       id: collabId,
+      tenantId: invite.tenant_id,
       propertyId: invite.property_id,
       userId,
       role: invite.role,
@@ -674,7 +694,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
         specialties: inviteSpecialties,
         whatsapp: invite.whatsapp,
       })
-      .where(and(eq(propertyCollaborators.propertyId, invite.property_id), eq(propertyCollaborators.userId, userId)));
+      .where(and(eq(propertyCollaborators.tenantId, invite.tenant_id), eq(propertyCollaborators.propertyId, invite.property_id), eq(propertyCollaborators.userId, userId)));
   }
 
   if (invite.whatsapp) {
@@ -688,7 +708,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     }
   }
 
-  await db.update(propertyInvites).set({ acceptedAt: sql`datetime('now')` }).where(eq(propertyInvites.id, invite.id));
+  await db.update(propertyInvites).set({ acceptedAt: sql`datetime('now')` }).where(and(eq(propertyInvites.id, invite.id), eq(propertyInvites.tenantId, invite.tenant_id)));
 
   return ok(c, { success: true, property_id: invite.property_id, role: invite.role });
 });
@@ -699,8 +719,10 @@ invites.patch('/properties/:propertyId/collaborators/:collabId', authMiddleware,
   const db = getDb(c.env.DB);
   const { propertyId, collabId } = c.req.param();
   const userId = c.get('userId');
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, c.get('tenantId'), c.get('tenantRole'), c.get('userRole'));
+  const canManage = await canManagePropertyTeam(c.env.DB, propertyId, userId, tenantId, c.get('tenantRole'), c.get('userRole'));
   if (!canManage.allowed) return err(c, 'Sem permissão para alterar permissões', canManage.code, canManage.status);
 
   const body = await c.req.json().catch(() => null);
@@ -712,11 +734,11 @@ invites.patch('/properties/:propertyId/collaborators/:collabId', authMiddleware,
   const [collab] = await db
     .select({ id: propertyCollaborators.id })
     .from(propertyCollaborators)
-    .where(and(eq(propertyCollaborators.id, collabId), eq(propertyCollaborators.propertyId, propertyId)))
+    .where(and(eq(propertyCollaborators.id, collabId), eq(propertyCollaborators.tenantId, tenantId), eq(propertyCollaborators.propertyId, propertyId)))
     .limit(1);
   if (!collab) return err(c, 'Colaborador não encontrado', 'NOT_FOUND', 404);
 
-  await db.update(propertyCollaborators).set({ canOpenOs: can_open_os ? 1 : 0 }).where(eq(propertyCollaborators.id, collabId));
+  await db.update(propertyCollaborators).set({ canOpenOs: can_open_os ? 1 : 0 }).where(and(eq(propertyCollaborators.id, collabId), eq(propertyCollaborators.tenantId, tenantId), eq(propertyCollaborators.propertyId, propertyId)));
 
   return ok(c, { success: true });
 });
@@ -741,7 +763,7 @@ invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware
   const [collab] = await db
     .select({ id: propertyCollaborators.id, user_id: propertyCollaborators.userId })
     .from(propertyCollaborators)
-    .where(and(eq(propertyCollaborators.id, collabId), eq(propertyCollaborators.propertyId, propertyId)))
+    .where(and(eq(propertyCollaborators.id, collabId), eq(propertyCollaborators.tenantId, tenantId), eq(propertyCollaborators.propertyId, propertyId)))
     .limit(1) as Array<{ id: string; user_id: string }>;
   if (!collab) return err(c, 'Colaborador não encontrado', 'NOT_FOUND', 404);
 
@@ -752,6 +774,7 @@ invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware
     .where(
       and(
         eq(propertyCollaborators.propertyId, propertyId),
+        eq(propertyCollaborators.tenantId, tenantId),
         eq(propertyCollaborators.userId, userId),
         eq(propertyCollaborators.role, 'manager')
       )
@@ -763,7 +786,7 @@ invites.delete('/properties/:propertyId/collaborators/:collabId', authMiddleware
     return err(c, 'Sem permissão para remover este colaborador', 'FORBIDDEN', 403);
   }
 
-  await db.delete(propertyCollaborators).where(eq(propertyCollaborators.id, collabId));
+  await db.delete(propertyCollaborators).where(and(eq(propertyCollaborators.id, collabId), eq(propertyCollaborators.tenantId, tenantId), eq(propertyCollaborators.propertyId, propertyId)));
   return ok(c, { success: true });
 });
 

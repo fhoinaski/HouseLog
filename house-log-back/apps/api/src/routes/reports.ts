@@ -13,12 +13,13 @@ reports.use('*', authMiddleware);
 reports.use('*', resolveTenant);
 
 // ── Health score computation ──────────────────────────────────────────────────
-// Score = weighted sum of 5 factors (0–100):
-//   1. Maintenance compliance   (30pts) — % of schedules not overdue
+// Score = weighted sum of 6 factors (0–100):
+//   1. Maintenance compliance   (25pts) — % of schedules not overdue
 //   2. Service backlog          (20pts) — penalizes open/urgent OS
-//   3. Preventive ratio         (20pts) — % of OS that are preventive
+//   3. Preventive ratio         (15pts) — % of OS that are preventive
 //   4. Property age penalty     (15pts) — older buildings score lower
 //   5. Document completeness    (15pts) — has insurance + deed
+//   6. Warranty health          (10pts) — penalizes warranties expiring in ≤90 days
 
 async function computeHealthScore(db: D1Database, propertyId: string, tenantId: string): Promise<{
   score: number;
@@ -27,7 +28,7 @@ async function computeHealthScore(db: D1Database, propertyId: string, tenantId: 
   const drizzle = getDb(db);
   const today = new Date().toISOString().slice(0, 10);
 
-  const [maint, svc, age, doc] = await Promise.all([
+  const [maint, svc, age, doc, warr] = await Promise.all([
     drizzle
       .select({
         total: sql<number>`COUNT(*)`,
@@ -62,17 +63,25 @@ async function computeHealthScore(db: D1Database, propertyId: string, tenantId: 
       .from(documents)
       .where(and(eq(documents.tenantId, tenantId), eq(documents.propertyId, propertyId), isNull(documents.deletedAt)))
       .then((r) => r[0] as { has_insurance: number; has_deed: number } | undefined),
+    drizzle
+      .select({
+        expiring_30: sql<number>`SUM(CASE WHEN ${warranties.endDate} <= date('now', '+30 days') AND ${warranties.endDate} > date('now') AND ${warranties.status} = 'active' THEN 1 ELSE 0 END)`,
+        expiring_90: sql<number>`SUM(CASE WHEN ${warranties.endDate} <= date('now', '+90 days') AND ${warranties.endDate} > date('now', '+30 days') AND ${warranties.status} = 'active' THEN 1 ELSE 0 END)`,
+      })
+      .from(warranties)
+      .where(and(eq(warranties.tenantId, tenantId), eq(warranties.propertyId, propertyId), isNull(warranties.deletedAt)))
+      .then((r) => r[0] as { expiring_30: number; expiring_90: number } | undefined),
   ]);
 
   const serviceStats = svc as {
     total: number; open: number; urgent: number; preventive: number;
   } | undefined;
 
-  // 1. Maintenance compliance (30 pts)
-  let maintScore = 30;
+  // 1. Maintenance compliance (25 pts)
+  let maintScore = 25;
   if (maint && maint.total > 0) {
     const compliance = (maint.total - maint.overdue) / maint.total;
-    maintScore = Math.round(30 * compliance);
+    maintScore = Math.round(25 * compliance);
   }
 
   // 2. Service backlog (20 pts)
@@ -83,11 +92,11 @@ async function computeHealthScore(db: D1Database, propertyId: string, tenantId: 
     svcScore = Math.max(0, Math.round(20 * (1 - openRatio)) - urgentPenalty);
   }
 
-  // 3. Preventive ratio (20 pts)
-  let prevScore = 10; // base if no data
+  // 3. Preventive ratio (15 pts)
+  let prevScore = 8; // base if no data
   if (serviceStats && serviceStats.total > 5) {
     const ratio = (serviceStats.preventive || 0) / serviceStats.total;
-    prevScore = Math.round(20 * Math.min(ratio * 2, 1));
+    prevScore = Math.round(15 * Math.min(ratio * 2, 1));
   }
 
   // 4. Age penalty (15 pts)
@@ -104,7 +113,17 @@ async function computeHealthScore(db: D1Database, propertyId: string, tenantId: 
   const docScore =
     (doc?.has_insurance ? 8 : 0) + (doc?.has_deed ? 7 : 0);
 
-  const total = maintScore + svcScore + prevScore + ageScore + docScore;
+  // 6. Warranty health (10 pts) — penalizes active warranties expiring within 90 days
+  //    ≤30 days: -3pts each (max -6); 31–90 days: -1pt each (max -4)
+  let warrantyScore = 10;
+  if (warr) {
+    const penalty =
+      Math.min((warr.expiring_30 || 0) * 3, 6) +
+      Math.min((warr.expiring_90 || 0) * 1, 4);
+    warrantyScore = Math.max(0, 10 - penalty);
+  }
+
+  const total = maintScore + svcScore + prevScore + ageScore + docScore + warrantyScore;
   const score = Math.min(Math.max(total, 0), 100);
 
   // Persist updated score
@@ -121,6 +140,7 @@ async function computeHealthScore(db: D1Database, propertyId: string, tenantId: 
       preventive_ratio: prevScore,
       age_penalty: ageScore,
       document_completeness: docScore,
+      warranty_health: warrantyScore,
     },
   };
 }

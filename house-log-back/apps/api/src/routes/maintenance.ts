@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { nanoid } from 'nanoid';
 import { and, asc, eq, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { canMarkMaintenanceDone } from '../lib/authorization';
@@ -11,6 +10,7 @@ import { getDb } from '../db/client';
 import { maintenanceSchedules, properties, serviceOrders, users } from '../db/schema';
 import { maintenanceCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables } from '../lib/types';
+import { createId } from '../lib/id';
 
 type MaintenanceSchedule = {
   id: string; tenant_id: string | null; property_id: string; system_type: string; title: string;
@@ -122,7 +122,7 @@ async function markMaintenanceDone(c: MaintenanceContext) {
 
   // If auto_create_os is enabled, create a service order
   if (schedule.auto_create_os) {
-    const osId = nanoid();
+    const osId = createId();
     await db.insert(serviceOrders).values({
       id: osId,
       tenantId,
@@ -260,7 +260,7 @@ maintenance.post('/', async (c) => {
 
   const { system_type, title, description, frequency, responsible, last_done, auto_create_os, notes } = parsed.data;
   const next_due = calcNextDue(frequency, last_done);
-  const id = nanoid();
+  const id = createId();
 
   await db.insert(maintenanceSchedules).values({
     id,
@@ -476,7 +476,7 @@ maintenance.post('/:id/done', async (c) => {
 
   // If auto_create_os is enabled, create a service order
   if (schedule.auto_create_os) {
-    const osId = nanoid();
+    const osId = createId();
     await db.insert(serviceOrders).values({
       id: osId,
       tenantId,
@@ -674,7 +674,7 @@ export async function autoCreateOverdueOS(db: D1Database): Promise<{ checked: nu
       continue;
     }
 
-    const osId = nanoid();
+    const osId = createId();
 
     await drizzle.insert(serviceOrders).values({
       id: osId,

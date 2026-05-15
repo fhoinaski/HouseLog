@@ -14,6 +14,7 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Bindings } from '../lib/types';
+import { isUuidV4 } from '../lib/id';
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ vi.mock('../db/client', () => ({ getDb: vi.fn() }));
 vi.mock('../lib/audit', () => ({ writeAuditLog: vi.fn(async () => undefined) }));
 vi.mock('../lib/r2', () => ({
   validatePrivateUpload: vi.fn(() => ({ ok: true })),
+  preparePrivateUpload: vi.fn(async () => ({ ok: true, buffer: new ArrayBuffer(4), mimeType: 'application/pdf', size: 4 })),
   buildR2Key: vi.fn(() => 'prop-a/documents/1234567890.pdf'),
   uploadToR2: vi.fn(async () => undefined),
   extractR2KeyFromPublicUrl: vi.fn((url: string) => url),
@@ -378,6 +380,7 @@ describe('POST /:propertyId/documents — upload injeta tenantId do JWT', () => 
     const insertArg = insertCalls[0]?.[0] ?? {};
     expect(insertArg?.tenantId).toBe('tenant-a');
     expect(insertArg?.propertyId).toBe('prop-a');
+    expect(isUuidV4(String(insertArg?.id))).toBe(true);
 
     // file_url no response deve ser o endpoint autenticado, não a key R2 bruta
     const body = await res.json() as { document: Record<string, unknown> };

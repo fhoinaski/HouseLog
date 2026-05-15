@@ -365,7 +365,40 @@ describe('GET /properties/:propertyId/report/dossie', () => {
   });
 });
 
-// ── Health score and valuation-pdf (smoke tests) ──────────────────────────────
+// ── Health score ──────────────────────────────────────────────────────────────
+// Query order inside computeHealthScore (Promise.all):
+//   0: property check  →  [{id}] or []
+//   1: maint stats     →  [{total, overdue}]
+//   2: svc stats       →  [{total, open, urgent, preventive}]
+//   3: age             →  [{year_built}]
+//   4: doc completeness→  [{has_insurance, has_deed}]
+//   5: warranty health →  [{expiring_30, expiring_90}]
+
+type MaintStats = { total: number; overdue: number };
+type SvcStats = { total: number; open: number; urgent: number; preventive: number };
+type AgeRow = { year_built: number | null };
+type DocRow = { has_insurance: number; has_deed: number };
+type WarrRow = { expiring_30: number; expiring_90: number };
+
+function buildHealthDb(opts: {
+  propertyFound?: boolean;
+  maint?: MaintStats;
+  svc?: SvcStats;
+  age?: AgeRow;
+  doc?: DocRow;
+  warr?: WarrRow;
+} = {}) {
+  const responses: unknown[] = [
+    opts.propertyFound !== false ? [{ id: 'prop-1' }] : [],
+    [opts.maint  ?? { total: 5,  overdue: 0 }],
+    [opts.svc    ?? { total: 10, open: 0, urgent: 0, preventive: 6 }],
+    [opts.age    ?? { year_built: 2015 }],
+    [opts.doc    ?? { has_insurance: 1, has_deed: 1 }],
+    [opts.warr   ?? { expiring_30: 0, expiring_90: 0 }],
+  ];
+  const select = vi.fn(() => makeChain(responses.shift() ?? []));
+  return { select, update: vi.fn(() => makeChain(undefined)) };
+}
 
 describe('GET /properties/:propertyId/report/health-score', () => {
   beforeEach(() => {
@@ -403,5 +436,174 @@ describe('GET /properties/:propertyId/report/health-score', () => {
     );
 
     expect(res.status).toBe(403);
+  });
+
+  it('imóvel sem problemas retorna score 100 e breakdown completo', async () => {
+    // All perfect: maint ok, svc ok (60% preventive → max), docs ok, no expiring warranties
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb() as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { score: number; label: string; breakdown: Record<string, number> };
+    expect(body.score).toBe(100);
+    expect(body.label).toBe('Excelente');
+    expect(body.breakdown).toMatchObject({
+      maintenance_compliance: 25,
+      service_backlog: 20,
+      preventive_ratio: 15,
+      age_penalty: 15,
+      document_completeness: 15,
+      warranty_health: 10,
+    });
+  });
+
+  it('manutenção 100% vencida reduz maintenance_compliance para 0', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb({ maint: { total: 5, overdue: 5 } }) as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { score: number; breakdown: Record<string, number> };
+    expect(body.breakdown.maintenance_compliance).toBe(0);
+    expect(body.score).toBeLessThan(100);
+  });
+
+  it('OS urgente aberta reduz service_backlog significativamente', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb({
+        svc: { total: 8, open: 4, urgent: 3, preventive: 2 },
+      }) as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { score: number; breakdown: Record<string, number> };
+    // openRatio=0.5 → base=10; urgentPenalty=min(9,10)=9 → svcScore=max(0,10-9)=1
+    expect(body.breakdown.service_backlog).toBe(1);
+    expect(body.score).toBeLessThan(100);
+  });
+
+  it('garantia vencendo em ≤30 dias reduz warranty_health', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb({ warr: { expiring_30: 2, expiring_90: 0 } }) as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { score: number; breakdown: Record<string, number> };
+    // penalty = min(2*3,6)+0 = 6 → warrantyScore = max(0, 10-6) = 4
+    expect(body.breakdown.warranty_health).toBe(4);
+    expect(body.score).toBeLessThan(100);
+  });
+
+  it('garantia vencendo entre 31 e 90 dias aplica penalidade menor', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb({ warr: { expiring_30: 0, expiring_90: 3 } }) as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { score: number; breakdown: Record<string, number> };
+    // penalty = 0 + min(3,4) = 3 → warrantyScore = max(0, 10-3) = 7
+    expect(body.breakdown.warranty_health).toBe(7);
+  });
+
+  it('score nunca excede 100', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb() as unknown as ReturnType<typeof getDb>
+    );
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+    const body = await res.json() as { score: number };
+    expect(body.score).toBeLessThanOrEqual(100);
+  });
+
+  it('score nunca fica abaixo de 0 mesmo com penalidades extremas', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb({
+        maint: { total: 20, overdue: 20 },
+        svc:   { total: 20, open: 20, urgent: 20, preventive: 0 },
+        age:   { year_built: 1900 },
+        doc:   { has_insurance: 0, has_deed: 0 },
+        warr:  { expiring_30: 100, expiring_90: 100 },
+      }) as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { score: number };
+    expect(body.score).toBeGreaterThanOrEqual(0);
+  });
+
+  it('breakdown contém todos os 6 fatores explicativos', async () => {
+    vi.mocked(getDb).mockReturnValue(
+      buildHealthDb() as unknown as ReturnType<typeof getDb>
+    );
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { breakdown: Record<string, number> };
+    const keys = Object.keys(body.breakdown);
+    expect(keys).toContain('maintenance_compliance');
+    expect(keys).toContain('service_backlog');
+    expect(keys).toContain('preventive_ratio');
+    expect(keys).toContain('age_penalty');
+    expect(keys).toContain('document_completeness');
+    expect(keys).toContain('warranty_health');
+    // All factor values are non-negative
+    for (const v of Object.values(body.breakdown)) {
+      expect(v).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('tenant A não pode ver score do imóvel de tenant B (propriedade não encontrada)', async () => {
+    authState.tenantId = 'tenant-2';
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn(() => makeChain([])),
+      update: vi.fn(() => makeChain(undefined)),
+    } as unknown as ReturnType<typeof getDb>);
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/health-score',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    expect(res.status).toBe(404);
   });
 });

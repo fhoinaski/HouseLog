@@ -9,7 +9,8 @@ import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
-import { validatePrivateUpload } from '../lib/r2';
+import { buildR2Key, preparePrivateUpload } from '../lib/r2';
+import { createId } from '../lib/id';
 
 type AuditScope = { canUploadPhotos: boolean; canUploadVideo: boolean; requiredFields: string[] };
 
@@ -27,7 +28,13 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const canCreateLink = await canCreateAuditLink(c.env.DB, { propertyId, userId, role: userRole });
+  const canCreateLink = await canCreateAuditLink(c.env.DB, {
+    propertyId,
+    userId,
+    role: userRole,
+    tenantId,
+    tenantRole: c.get('tenantRole'),
+  });
   if (!canCreateLink) return err(c, 'Permissão insuficiente', 'FORBIDDEN', 403);
 
   // Verify the OS exists and belongs to the property
@@ -67,7 +74,7 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
     requiredFields: body.scope?.requiredFields ?? [],
   };
 
-  const id = nanoid();
+  const id = createId();
   const token = nanoid(32);
   const tokenHash = await sha256TokenHash(token);
 
@@ -167,6 +174,20 @@ auditLinks.get('/public/:token', async (c) => {
     .set({ accessedAt: new Date().toISOString(), accessorIp: ip })
     .where(eq(auditLinksTable.id, link.id));
 
+  await writeAuditLog(c.env.DB, {
+    tenantId: link.link_tenant_id,
+    propertyId: link.property_id,
+    entityType: 'audit_link',
+    entityId: link.id,
+    action: 'audit_link_public_viewed',
+    actorId: null,
+    actorIp: ip,
+    newData: {
+      service_order_id: link.service_order_id,
+      source: 'public_audit_link',
+    },
+  });
+
   return ok(c, {
     order_title: link.order_title,
     order_description: link.order_description,
@@ -241,12 +262,11 @@ auditLinks.post('/public/:token/submit', async (c) => {
     for (const entry of files) {
       if (typeof entry === 'string') continue;
       const file = entry as File;
-      const validation = validatePrivateUpload(file.type, file.size, file.name);
+      const validation = await preparePrivateUpload(file);
       if (!validation.ok) continue;
 
-      const key = `${link.property_id}/photos/audit_${Date.now()}_${nanoid(8)}.jpg`;
-      const buf = await file.arrayBuffer();
-      await c.env.STORAGE.put(key, buf, { httpMetadata: { contentType: file.type } });
+      const key = buildR2Key({ propertyId: link.property_id, category: 'photos', filename: file.name });
+      await c.env.STORAGE.put(key, validation.buffer, { httpMetadata: { contentType: validation.mimeType } });
       uploadedUrls.push(key);
     }
 

@@ -74,6 +74,8 @@ vi.mock('../lib/r2', () => ({
   buildR2Key: vi.fn(({ propertyId, filename }: { propertyId: string; filename: string }) => `${propertyId}/documents/${filename}`),
   extractR2KeyFromPublicUrl: vi.fn(() => 'prop-1/documents/file.pdf'),
   validatePrivateUpload: vi.fn(() => ({ ok: true })),
+  preparePrivateUpload: vi.fn(async (file: File) => ({ ok: true, buffer: await file.arrayBuffer(), mimeType: file.type, size: file.size })),
+  uploadToR2: vi.fn(async () => undefined),
 }));
 
 vi.mock('../lib/r2-presigned', () => ({

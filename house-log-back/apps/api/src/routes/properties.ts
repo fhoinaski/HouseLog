@@ -1,12 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, requireRole, assertPropertyAccess, resolveTenant, assertTenantAccess } from '../middleware/auth';
 import { canCreatePropertyInTenant } from '../lib/property-tenant';
-import { validatePrivateUpload, buildR2Key, uploadToR2 } from '../lib/r2';
+import { buildR2Key, uploadToR2, preparePrivateUpload } from '../lib/r2';
 import { getDb } from '../db/client';
 import {
   documentExtractionCandidates,
@@ -25,6 +24,7 @@ import {
 } from '../db/schema';
 import type { Bindings, Variables, Property } from '../lib/types';
 import { PropertyDocumentIngestionSummarySchema, propertyCreateSchema, propertyUpdateSchema } from '@houselog/contracts';
+import { createId } from '../lib/id';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -148,7 +148,7 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
     if (!ownerInTenant) return err(c, 'Owner informado nao pertence ao tenant ativo', 'FORBIDDEN', 403);
   }
 
-  const id = nanoid();
+  const id = createId();
 
   await db.insert(propertiesTable).values({
     id,
@@ -593,12 +593,11 @@ properties.post('/:id/cover', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
 
-  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  const validation = await preparePrivateUpload(file);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const key = buildR2Key({ propertyId: id, category: 'photos', filename: `cover.${file.name.split('.').pop()}` });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
   const coverUrl = `/api/v1/properties/${id}/media/${encodeURIComponent(key)}`;
 
@@ -927,12 +926,12 @@ properties.post('/:id/apply-template', async (c) => {
     ...template.rooms.map((r) =>
       db
         .insert(rooms)
-        .values({ id: nanoid(), tenantId, propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
+        .values({ id: createId(), tenantId, propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
         .onConflictDoNothing()
     ),
     ...template.maintenance.map((m) =>
       db.insert(maintenanceSchedules).values({
-        id: nanoid(),
+        id: createId(),
         tenantId,
         propertyId: id,
         systemType: m.system_type,

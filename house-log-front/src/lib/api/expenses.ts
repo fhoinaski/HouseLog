@@ -39,6 +39,7 @@ export type HealthScoreReport = {
     preventive_ratio: number;
     age_penalty: number;
     document_completeness: number;
+    warranty_health: number;
   };
 };
 

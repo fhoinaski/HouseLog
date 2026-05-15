@@ -1,11 +1,10 @@
 import { Hono } from 'hono';
-import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { canDeleteDocument, canRequestDocumentIngestion, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
-import { validatePrivateUpload, buildR2Key, uploadToR2, extractR2KeyFromPublicUrl } from '../lib/r2';
+import { buildR2Key, uploadToR2, extractR2KeyFromPublicUrl, preparePrivateUpload } from '../lib/r2';
 import { getDb } from '../db/client';
 import { documents as documentsTable, documentIngestionJobs as ingestionJobsTable, documentExtractions as extractionsTable, documentExtractionReviews as extractionReviewsTable, documentExtractionCandidates as extractionCandidatesTable, inventoryItems, maintenanceSchedules, properties, serviceOrders, technicalSystems, users, warranties } from '../db/schema';
 import { documentCreateSchema, CreateDocumentIngestionJobInputSchema, GenerateDocumentExtractionCandidatesInputSchema, ListDocumentExtractionCandidatesQuerySchema, ListDocumentIngestionJobsQuerySchema, ReviewDocumentExtractionCandidateInputSchema, ReviewDocumentExtractionInputSchema } from '@houselog/contracts';
@@ -41,6 +40,7 @@ import {
   mapReviewToContract,
 } from '../lib/document-ingestion-tenant';
 import type { Bindings, Variables } from '../lib/types';
+import { createId } from '../lib/id';
 
 type Document = {
   id: string; property_id: string; service_id: string | null;
@@ -165,7 +165,7 @@ documents.post('/', async (c) => {
   const file = formData.get('file') as File | null;
   if (!file) return err(c, 'Arquivo obrigatório', 'MISSING_FILE');
 
-  const validation = validatePrivateUpload(file.type, file.size, file.name);
+  const validation = await preparePrivateUpload(file);
   if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
 
   const rawMeta = formData.get('meta') as string | null;
@@ -180,10 +180,9 @@ documents.post('/', async (c) => {
   if (!serviceOrderAllowed) return err(c, 'OS nao encontrada neste imovel', 'SERVICE_ORDER_NOT_FOUND', 404);
 
   const key = buildR2Key({ propertyId, category: 'documents', filename: file.name });
-  const buffer = await file.arrayBuffer();
-  await uploadToR2(c.env.STORAGE, key, buffer, file.type);
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
 
-  const id = nanoid();
+  const id = createId();
   await db.insert(documentsTable).values({
     id,
     tenantId,
@@ -234,8 +233,8 @@ documents.post('/', async (c) => {
       document_id: id,
       type: doc.type,
       title: doc.title,
-      file_mime_type: file.type,
-      file_size: doc.file_size,
+      file_mime_type: validation.mimeType,
+      file_size: validation.size,
       actor_id: userId,
     },
   });
@@ -712,7 +711,7 @@ documents.post('/:id/ingestion-jobs', async (c) => {
 
   if (existingJob) return err(c, 'Ja existe job ativo para este documento', 'ACTIVE_JOB_EXISTS', 409);
 
-  const jobId = nanoid();
+  const jobId = createId();
   await db.insert(ingestionJobsTable).values({
     id: jobId,
     tenantId,
@@ -1119,7 +1118,7 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
     normalizedJson,
     extractionConfidenceScore: extraction.confidenceScore,
     now,
-    idFactory: nanoid,
+    idFactory: createId,
   });
   if (candidatesToInsert.length > 0) {
     await db.insert(extractionCandidatesTable).values(candidatesToInsert);
@@ -1397,7 +1396,7 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
   }
 
   const now = new Date().toISOString();
-  const targetEntityId = nanoid();
+  const targetEntityId = createId();
   let responseEntity:
     | { technicalSystem: ReturnType<typeof mapAppliedTechnicalSystemToResponse> }
     | { warranty: ReturnType<typeof mapAppliedWarrantyToResponse> }
@@ -1716,7 +1715,7 @@ documents.patch('/:id/ingestion-jobs/:jobId/extractions/:extractionId/review', a
     ))
     .limit(1);
 
-  const reviewId = existingReview?.id ?? nanoid();
+  const reviewId = existingReview?.id ?? createId();
   const reviewPatch = {
     status: parsed.data.status,
     notes: parsed.data.notes ?? null,

@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { writeAuditLog } from '../lib/audit';
@@ -8,10 +7,11 @@ import { canAccessProperty, canCreateServiceOrder, canCreateServiceRequest } fro
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
-import { bids, properties, serviceOrders, serviceRequests, users } from '../db/schema';
+import { bids, properties, rooms, serviceOrders, serviceRequests, users } from '../db/schema';
 import { buildR2Key, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
 import { serviceOrderCreateSchema } from '@houselog/contracts';
+import { createId } from '../lib/id';
 
 const serviceRequestsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -44,6 +44,14 @@ const MIME_BY_KIND: Record<MediaKind, Set<string>> = {
   audio: new Set(['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4']),
 };
 
+const EXTENSIONS_BY_KIND: Record<MediaKind, Set<string>> = {
+  photo: new Set(['jpg', 'jpeg', 'png', 'webp']),
+  video: new Set(['mp4', 'webm', 'mov']),
+  audio: new Set(['mp3', 'wav', 'ogg', 'm4a', 'mp4']),
+};
+
+const DANGEROUS_MEDIA_EXTENSIONS = new Set(['bat', 'cmd', 'com', 'exe', 'html', 'hta', 'jar', 'js', 'msi', 'php', 'ps1', 'scr', 'sh', 'svg', 'vbs']);
+
 // Authenticated endpoint URL for a specific media item inside a service request.
 function mediaEndpoint(propertyId: string, requestId: string, index: number): string {
   return `/api/v1/properties/${propertyId}/service-requests/${requestId}/media/${index}`;
@@ -53,6 +61,55 @@ function mediaEndpoint(propertyId: string, requestId: string, index: number): st
 // authenticated endpoint URLs so clients never receive raw R2 keys/public URLs.
 function toMediaEndpoints(propertyId: string, requestId: string, stored: string[] | null): string[] {
   return (stored ?? []).map((_, i) => mediaEndpoint(propertyId, requestId, i));
+}
+
+function getFileExtension(filename: string): string {
+  const cleanName = filename.split(/[\\/]/).pop() ?? '';
+  const ext = cleanName.includes('.') ? cleanName.split('.').pop() : '';
+  return (ext ?? '').trim().toLowerCase();
+}
+
+function validateMediaMetadata(file: { kind: MediaKind; mimeType: string; filename: string; size: number }): true | string {
+  if (!assertAllowedMimeType(file.kind, file.mimeType)) {
+    return `Tipo MIME nao permitido para ${file.kind}: ${file.mimeType}`;
+  }
+
+  const ext = getFileExtension(file.filename);
+  if (!ext || DANGEROUS_MEDIA_EXTENSIONS.has(ext)) {
+    return 'Extensao de arquivo nao permitida';
+  }
+  if (!EXTENSIONS_BY_KIND[file.kind].has(ext)) {
+    return 'Extensao nao corresponde ao tipo de midia';
+  }
+
+  const maxBytes = file.kind === 'video' ? 100 * 1024 * 1024 : file.kind === 'audio' ? 20 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    return 'Arquivo excede o limite permitido';
+  }
+
+  return true;
+}
+
+async function isRoomInTenantProperty(
+  db: ReturnType<typeof getDb>,
+  tenantId: string,
+  propertyId: string,
+  roomId?: string | null
+): Promise<boolean> {
+  if (!roomId) return true;
+
+  const [room] = await db
+    .select({ id: rooms.id })
+    .from(rooms)
+    .where(and(
+      eq(rooms.id, roomId),
+      eq(rooms.tenantId, tenantId),
+      eq(rooms.propertyId, propertyId),
+      isNull(rooms.deletedAt)
+    ))
+    .limit(1);
+
+  return Boolean(room);
 }
 
 serviceRequestsRoute.get('/', async (c) => {
@@ -275,7 +332,10 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
   }
 
   const input = parsed.data;
-  const serviceId = nanoid();
+  const roomAllowed = await isRoomInTenantProperty(db, tenantId, propertyId, input.room_id);
+  if (!roomAllowed) return err(c, 'Comodo nao encontrado neste imovel', 'REFERENCE_NOT_FOUND', 422);
+
+  const serviceId = createId();
   const descriptionParts = [
     input.description?.trim() || requestRow.description,
     acceptedBid.scope ? `Escopo aprovado:\n${acceptedBid.scope}` : null,
@@ -462,12 +522,11 @@ serviceRequestsRoute.post('/', async (c) => {
     return err(c, 'Configuracao de upload R2 ausente', 'MISSING_R2_PRESIGN_CONFIG', 500);
   }
 
-  const requestId = nanoid();
+  const requestId = createId();
 
   for (const file of parsed.data.media) {
-    if (!assertAllowedMimeType(file.kind, file.mimeType)) {
-      return err(c, `Tipo MIME nao permitido para ${file.kind}: ${file.mimeType}`, 'INVALID_MEDIA', 422);
-    }
+    const validation = validateMediaMetadata(file);
+    if (validation !== true) return err(c, validation, 'INVALID_MEDIA', 422);
   }
 
   // Build keys and presigned PUT URLs for each media item.
@@ -514,7 +573,11 @@ serviceRequestsRoute.post('/', async (c) => {
       createdAt: serviceRequests.createdAt,
     })
     .from(serviceRequests)
-    .where(eq(serviceRequests.id, requestId))
+    .where(and(
+      eq(serviceRequests.id, requestId),
+      eq(serviceRequests.tenantId, tenantId),
+      eq(serviceRequests.propertyId, propertyId)
+    ))
     .limit(1);
 
   await writeAuditLog(c.env.DB, {

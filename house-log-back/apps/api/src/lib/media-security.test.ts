@@ -6,7 +6,7 @@ import {
   canUsePublicUrl,
   classifyR2Key,
 } from './media-security';
-import { buildR2Key, validatePrivateUpload } from './r2';
+import { buildR2Key, preparePrivateUpload, validatePrivateUpload } from './r2';
 
 describe('media security policy', () => {
   it('classifies document and service evidence keys as private', () => {
@@ -43,6 +43,43 @@ describe('media security policy', () => {
       ok: false,
       error: 'Extensao nao corresponde ao tipo do arquivo',
     });
+  });
+
+  it('rejects file content that does not match declared MIME type', async () => {
+    const fakePdf = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'contract.pdf', { type: 'application/pdf' });
+    await expect(preparePrivateUpload(fakePdf)).resolves.toEqual({
+      ok: false,
+      error: 'Conteudo do arquivo nao corresponde ao tipo declarado',
+    });
+  });
+
+  it('removes JPEG EXIF metadata before storing private uploads', async () => {
+    const jpegWithExif = new Uint8Array([
+      0xff, 0xd8,
+      0xff, 0xe1, 0x00, 0x0e,
+      0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+      0x47, 0x50, 0x53, 0x00, 0x00, 0x00,
+      0xff, 0xda, 0x00, 0x08,
+      0x01, 0x02, 0x03, 0x04,
+      0xff, 0xd9,
+    ]);
+    const file = new File([jpegWithExif], 'photo.jpg', { type: 'image/jpeg' });
+
+    const result = await preparePrivateUpload(file);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const sanitized = new Uint8Array(result.buffer);
+      expect(Array.from(sanitized)).not.toContain(0xe1);
+      expect(new TextDecoder().decode(sanitized)).not.toContain('GPS');
+      expect(result.size).toBeLessThan(jpegWithExif.byteLength);
+    }
+  });
+
+  it('generates non-predictable storage keys instead of timestamp-only names', () => {
+    const key = buildR2Key({ propertyId: 'prop-a', category: 'documents', filename: 'contract.pdf' });
+    expect(key).toMatch(/^prop-a\/documents\/[a-f0-9]{32}\.pdf$/);
+    expect(key).not.toMatch(/\/\d{10,}\.pdf$/);
   });
 
   it('blocks expired public media tokens', () => {

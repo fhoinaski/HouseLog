@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import {
-  ArrowLeft, Activity, Wrench, ShieldCheck, Clock, FileText,
+  ArrowLeft, Activity, Wrench, ShieldCheck, ShieldAlert, Clock, FileText,
   TrendingUp, Download, RefreshCw, BookOpen,
 } from 'lucide-react';
 import { reportsApi, propertiesApi } from '@/lib/api';
@@ -50,6 +50,12 @@ const FACTOR_META: Record<string, { label: string; max: number; icon: React.Elem
     max: 15,
     icon: FileText,
     description: 'Cobertura de documentos obrigatórios e vigentes',
+  },
+  warranty_health: {
+    label: 'Saúde das garantias',
+    max: 10,
+    icon: ShieldAlert,
+    description: 'Penalidade por garantias ativas vencendo em menos de 90 dias',
   },
 };
 
