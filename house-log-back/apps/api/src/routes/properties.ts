@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
@@ -25,6 +24,7 @@ import {
 } from '../db/schema';
 import type { Bindings, Variables, Property } from '../lib/types';
 import { PropertyDocumentIngestionSummarySchema, propertyCreateSchema, propertyUpdateSchema } from '@houselog/contracts';
+import { createId } from '../lib/id';
 
 const properties = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -148,7 +148,7 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
     if (!ownerInTenant) return err(c, 'Owner informado nao pertence ao tenant ativo', 'FORBIDDEN', 403);
   }
 
-  const id = nanoid();
+  const id = createId();
 
   await db.insert(propertiesTable).values({
     id,
@@ -927,12 +927,12 @@ properties.post('/:id/apply-template', async (c) => {
     ...template.rooms.map((r) =>
       db
         .insert(rooms)
-        .values({ id: nanoid(), tenantId, propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
+        .values({ id: createId(), tenantId, propertyId: id, name: r.name, type: r.type as never, floor: r.floor })
         .onConflictDoNothing()
     ),
     ...template.maintenance.map((m) =>
       db.insert(maintenanceSchedules).values({
-        id: nanoid(),
+        id: createId(),
         tenantId,
         propertyId: id,
         systemType: m.system_type,

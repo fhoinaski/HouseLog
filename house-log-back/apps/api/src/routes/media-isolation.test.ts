@@ -14,6 +14,7 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Bindings } from '../lib/types';
+import { isUuidV4 } from '../lib/id';
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
 
@@ -378,6 +379,7 @@ describe('POST /:propertyId/documents — upload injeta tenantId do JWT', () => 
     const insertArg = insertCalls[0]?.[0] ?? {};
     expect(insertArg?.tenantId).toBe('tenant-a');
     expect(insertArg?.propertyId).toBe('prop-a');
+    expect(isUuidV4(String(insertArg?.id))).toBe(true);
 
     // file_url no response deve ser o endpoint autenticado, não a key R2 bruta
     const body = await res.json() as { document: Record<string, unknown> };

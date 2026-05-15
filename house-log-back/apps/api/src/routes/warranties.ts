@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
@@ -16,6 +15,7 @@ import {
 } from '../db/schema';
 import { canLinkWarrantyReference } from '../lib/warranty-tenant';
 import type { Bindings, Variables } from '../lib/types';
+import { createId } from '../lib/id';
 import {
   warrantyCreateSchema,
   warrantyFilterSchema,
@@ -277,7 +277,7 @@ warrantiesRoute.post('/', async (c) => {
   const references = await validateWarrantyReferences(db, tenantId, propertyId, data);
   if (!references.ok) return err(c, references.message, references.responseCode, references.status);
 
-  const id = nanoid();
+  const id = createId();
   await db.insert(warranties).values({
     id,
     tenantId,

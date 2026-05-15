@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { writeAuditLog } from '../lib/audit';
@@ -12,6 +11,7 @@ import { bids, properties, rooms, serviceOrders, serviceRequests, users } from '
 import { buildR2Key, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
 import { serviceOrderCreateSchema } from '@houselog/contracts';
+import { createId } from '../lib/id';
 
 const serviceRequestsRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -300,7 +300,7 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
   const roomAllowed = await isRoomInTenantProperty(db, tenantId, propertyId, input.room_id);
   if (!roomAllowed) return err(c, 'Comodo nao encontrado neste imovel', 'REFERENCE_NOT_FOUND', 422);
 
-  const serviceId = nanoid();
+  const serviceId = createId();
   const descriptionParts = [
     input.description?.trim() || requestRow.description,
     acceptedBid.scope ? `Escopo aprovado:\n${acceptedBid.scope}` : null,
@@ -487,7 +487,7 @@ serviceRequestsRoute.post('/', async (c) => {
     return err(c, 'Configuracao de upload R2 ausente', 'MISSING_R2_PRESIGN_CONFIG', 500);
   }
 
-  const requestId = nanoid();
+  const requestId = createId();
 
   for (const file of parsed.data.media) {
     if (!assertAllowedMimeType(file.kind, file.mimeType)) {

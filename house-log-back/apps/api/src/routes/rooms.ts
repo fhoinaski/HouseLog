@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { nanoid } from 'nanoid';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
@@ -8,6 +7,7 @@ import { getDb } from '../db/client';
 import { rooms as roomsTable } from '../db/schema';
 import { roomCreateSchema } from '@houselog/contracts';
 import type { Bindings, Variables, Room } from '../lib/types';
+import { createId } from '../lib/id';
 
 const rooms = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -70,7 +70,7 @@ rooms.post('/', async (c) => {
   }
 
   const { name, type, floor, area_m2, notes } = parsed.data;
-  const id = nanoid();
+  const id = createId();
 
   await db.insert(roomsTable).values({
     id,

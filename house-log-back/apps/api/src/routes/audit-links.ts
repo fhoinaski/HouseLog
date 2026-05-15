@@ -10,6 +10,7 @@ import { getDb } from '../db/client';
 import { auditLinks as auditLinksTable, properties, serviceOrders } from '../db/schema';
 import type { Bindings, Variables } from '../lib/types';
 import { validatePrivateUpload } from '../lib/r2';
+import { createId } from '../lib/id';
 
 type AuditScope = { canUploadPhotos: boolean; canUploadVideo: boolean; requiredFields: string[] };
 
@@ -73,7 +74,7 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
     requiredFields: body.scope?.requiredFields ?? [],
   };
 
-  const id = nanoid();
+  const id = createId();
   const token = nanoid(32);
   const tokenHash = await sha256TokenHash(token);
 

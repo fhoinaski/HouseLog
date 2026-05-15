@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import {
@@ -23,6 +22,7 @@ import { properties, propertyCollaborators, rooms, serviceOrders, users } from '
 import type { Bindings, Variables, ServiceOrder } from '../lib/types';
 import { canAssignProviderToTenantService } from '../lib/service-tenant';
 import { serviceOrderCreateSchema } from '@houselog/contracts';
+import { createId } from '../lib/id';
 
 const services = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -222,7 +222,7 @@ services.post('/', async (c) => {
   }
 
   const d = parsed.data;
-  const id = nanoid();
+  const id = createId();
 
   const roomAllowed = await isRoomInTenantProperty(db, tenantId, propertyId, d.room_id);
   if (!roomAllowed) return err(c, 'Comodo nao encontrado neste imovel', 'REFERENCE_NOT_FOUND', 422);

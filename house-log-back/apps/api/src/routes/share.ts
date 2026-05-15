@@ -9,6 +9,7 @@ import { properties, propertyAccessCredentials, rooms, serviceOrders, serviceSha
 import { writeAuditLog } from '../lib/audit';
 import { sha256TokenHash } from '../lib/token-hash';
 import type { Bindings, Variables } from '../lib/types';
+import { createId } from '../lib/id';
 
 const share = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -80,7 +81,7 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
   }
 
   // Always create a fresh token — never stored in DB
-  const linkId = nanoid();
+  const linkId = createId();
   const token = nanoid(32);
   const tokenHash = await sha256TokenHash(token);
   await db.insert(serviceShareLinks).values({
@@ -164,7 +165,7 @@ share.get('/public/share/service/:token', async (c) => {
     .innerJoin(serviceOrders, eq(serviceOrders.id, serviceShareLinks.serviceId))
     .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
     .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
-    .leftJoin(rooms, eq(rooms.id, serviceOrders.roomId))
+    .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, serviceOrders.tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
     .where(
       and(
         // Hash lookup for new records; fallback to plaintext for legacy records without hash

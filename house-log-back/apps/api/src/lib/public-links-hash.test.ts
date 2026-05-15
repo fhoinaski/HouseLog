@@ -121,6 +121,13 @@ function makeSelectReturning(rows: unknown[]) {
   return chain;
 }
 
+function expectHashOnlyInsert(values: Record<string, unknown> | null): void {
+  if (!values) return;
+  expect(String(values.token)).toMatch(/^hash-only:/);
+  expect(values).toHaveProperty('tokenHash');
+  expect(String(values.tokenHash)).toHaveLength(64);
+}
+
 const TENANT_ROW = { tenantId: 'tenant-a', role: 'owner' };
 
 beforeEach(() => {
@@ -636,11 +643,7 @@ describe('Token redaction — INSERT usa hash-only:<id> em vez de token puro', (
       buildEnv()
     );
 
-    if (capturedValues) {
-      expect(String(capturedValues.token)).toMatch(/^hash-only:/);
-      expect(capturedValues).toHaveProperty('tokenHash');
-      expect(String(capturedValues.tokenHash)).toHaveLength(64);
-    }
+    expectHashOnlyInsert(capturedValues);
   });
 
   it('share-link: INSERT grava hash-only: no campo token', async () => {
@@ -808,7 +811,7 @@ describe('GET /invite/:token — 410 para expirado e já aceito', () => {
       accepted_at: null,
       invite_name: null, whatsapp: null,
       property_name: 'Casa', property_address: 'Rua A', property_city: 'SP',
-      invited_by_name: 'Owner', property_id: 'prop-1',
+      invited_by_name: 'Owner', property_id: 'prop-1', tenant_id: 'tenant-a',
       ...inviteOverrides,
     };
 

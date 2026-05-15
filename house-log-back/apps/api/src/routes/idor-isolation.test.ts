@@ -13,6 +13,7 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Bindings } from '../lib/types';
+import { isUuidV4 } from '../lib/id';
 
 // ── Mocks globais ────────────────────────────────────────────────────────────
 
@@ -269,6 +270,119 @@ describe('POST /properties/:propertyId/service-requests/:id/convert-to-service -
     expect(res.status).toBe(422);
     expect(body.code).toBe('REFERENCE_NOT_FOUND');
     expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('cria OS autorizada com UUID v4', async () => {
+    const serviceInsertValuesSpy = vi.fn(async () => undefined);
+    const updateWhereSpy = vi.fn(async () => undefined);
+
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn()
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({ limit: vi.fn(async () => [membershipRow('tenant-a')]) })),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }]),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [{
+                  id: 'request-1',
+                  propertyId: 'prop-1',
+                  title: 'Orcamento',
+                  description: 'Descricao',
+                  status: 'OPEN',
+                }]),
+              })),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{
+                id: 'bid-1',
+                providerId: 'provider-1',
+                amount: 500,
+                scope: 'Escopo',
+                status: 'ACCEPTED',
+              }]),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => [{ id: 'room-1' }]) })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{
+                id: 'service-created',
+                property_id: 'prop-1',
+                room_id: 'room-1',
+                system_type: 'general',
+                requested_by: 'user-1',
+                assigned_to: 'provider-1',
+                title: 'OS convertida',
+                description: 'Descricao',
+                priority: 'normal',
+                status: 'approved',
+                cost: 500,
+                before_photos: [],
+                after_photos: [],
+                video_url: null,
+                audio_url: null,
+                checklist: [],
+                warranty_until: null,
+                scheduled_at: null,
+                completed_at: null,
+                created_at: new Date().toISOString(),
+                deleted_at: null,
+              }]),
+            })),
+          })),
+        }),
+      insert: vi.fn(() => ({ values: serviceInsertValuesSpy })),
+      update: vi.fn(() => ({ set: vi.fn(() => ({ where: updateWhereSpy })) })),
+    } as never);
+
+    const res = await buildApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/service-requests/request-1/convert-to-service', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'OS convertida',
+          system_type: 'general',
+          priority: 'normal',
+          room_id: 'room-1',
+        }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(201);
+    expect(serviceInsertValuesSpy).toHaveBeenCalledOnce();
+    const [insertedValues] = serviceInsertValuesSpy.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(insertedValues.tenantId).toBe('tenant-a');
+    expect(insertedValues.propertyId).toBe('prop-1');
+    expect(isUuidV4(String(insertedValues.id))).toBe(true);
   });
 });
 

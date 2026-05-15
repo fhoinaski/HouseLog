@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { nanoid } from 'nanoid';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { canDeleteDocument, canRequestDocumentIngestion, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
@@ -41,6 +40,7 @@ import {
   mapReviewToContract,
 } from '../lib/document-ingestion-tenant';
 import type { Bindings, Variables } from '../lib/types';
+import { createId } from '../lib/id';
 
 type Document = {
   id: string; property_id: string; service_id: string | null;
@@ -183,7 +183,7 @@ documents.post('/', async (c) => {
   const buffer = await file.arrayBuffer();
   await uploadToR2(c.env.STORAGE, key, buffer, file.type);
 
-  const id = nanoid();
+  const id = createId();
   await db.insert(documentsTable).values({
     id,
     tenantId,
@@ -712,7 +712,7 @@ documents.post('/:id/ingestion-jobs', async (c) => {
 
   if (existingJob) return err(c, 'Ja existe job ativo para este documento', 'ACTIVE_JOB_EXISTS', 409);
 
-  const jobId = nanoid();
+  const jobId = createId();
   await db.insert(ingestionJobsTable).values({
     id: jobId,
     tenantId,
@@ -1119,7 +1119,7 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
     normalizedJson,
     extractionConfidenceScore: extraction.confidenceScore,
     now,
-    idFactory: nanoid,
+    idFactory: createId,
   });
   if (candidatesToInsert.length > 0) {
     await db.insert(extractionCandidatesTable).values(candidatesToInsert);
@@ -1397,7 +1397,7 @@ documents.post('/:id/ingestion-jobs/:jobId/extractions/:extractionId/candidates/
   }
 
   const now = new Date().toISOString();
-  const targetEntityId = nanoid();
+  const targetEntityId = createId();
   let responseEntity:
     | { technicalSystem: ReturnType<typeof mapAppliedTechnicalSystemToResponse> }
     | { warranty: ReturnType<typeof mapAppliedWarrantyToResponse> }
@@ -1716,7 +1716,7 @@ documents.patch('/:id/ingestion-jobs/:jobId/extractions/:extractionId/review', a
     ))
     .limit(1);
 
-  const reviewId = existingReview?.id ?? nanoid();
+  const reviewId = existingReview?.id ?? createId();
   const reviewPatch = {
     status: parsed.data.status,
     notes: parsed.data.notes ?? null,

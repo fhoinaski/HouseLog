@@ -285,7 +285,9 @@ describe('POST audit-link — criação', () => {
     vi.mocked(verifyJwt).mockResolvedValueOnce({
       sub: 'provider-1',
       email: 'provider@example.com',
-      role: 'provider' as never,
+      role: 'provider',
+      iat: 1,
+      exp: 2,
     });
 
     vi.mocked(getDb).mockReturnValue({
