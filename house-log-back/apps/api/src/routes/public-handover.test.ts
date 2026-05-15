@@ -151,6 +151,7 @@ describe('GET /public/handover/:token', () => {
   it('retorna pacote público válido sem expor campos internos', async () => {
     const row: PublicHandoverRow = {
       id: 'package-1',
+      tenant_id: 'tenant-1',
       property_id: 'property-1',
       title: 'Dossie de entrega',
       description: 'Entrega final da unidade',
@@ -192,11 +193,23 @@ describe('GET /public/handover/:token', () => {
     expect(body.package).not.toHaveProperty('property_id');
     expect(JSON.stringify(body.package)).not.toContain('property-1');
     expect(JSON.stringify(body.package)).not.toContain('doc-1');
+    expect(vi.mocked(writeAuditLog)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: 'tenant-1',
+        propertyId: 'property-1',
+        entityType: 'handover_package',
+        entityId: 'package-1',
+        action: 'handover_package_public_viewed',
+        actorId: null,
+      })
+    );
   });
 
   it('retorna pacote aceito com o mesmo DTO público', async () => {
     const row: PublicHandoverRow = {
       id: 'package-1',
+      tenant_id: 'tenant-1',
       property_id: 'property-1',
       title: 'Dossie de entrega',
       description: 'Entrega final da unidade',

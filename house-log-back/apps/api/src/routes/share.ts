@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
-import { properties, propertyAccessCredentials, rooms, serviceOrders, serviceShareLinks, users } from '../db/schema';
+import { properties, rooms, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import { writeAuditLog } from '../lib/audit';
 import { sha256TokenHash } from '../lib/token-hash';
 import type { Bindings, Variables } from '../lib/types';
@@ -134,6 +134,7 @@ share.get('/public/share/service/:token', async (c) => {
       id: serviceShareLinks.id,
       tenant_id: serviceShareLinks.tenantId,
       service_id: serviceShareLinks.serviceId,
+      property_id: serviceOrders.propertyId,
       expires_at: serviceShareLinks.expiresAt,
       deleted_at: serviceShareLinks.deletedAt,
       provider_name: serviceShareLinks.providerName,
@@ -181,35 +182,19 @@ share.get('/public/share/service/:token', async (c) => {
   if (link.deleted_at) return err(c, 'Link revogado', 'GONE', 410);
   if (new Date(String(link.expires_at)) < new Date()) return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
 
-  // Optionally include credentials marked for sharing
-  let sharedCredentials: unknown[] = [];
-  if (link.share_credentials) {
-    const [serviceProperty] = await db
-      .select({ propertyId: serviceOrders.propertyId, tenantId: serviceOrders.tenantId })
-      .from(serviceOrders)
-      .where(and(eq(serviceOrders.id, String(link.service_id)), eq(serviceOrders.tenantId, String(link.tenant_id)), isNull(serviceOrders.deletedAt)))
-      .limit(1);
-
-    if (serviceProperty) {
-      const creds = await db
-        .select({
-          category: propertyAccessCredentials.category,
-          label: propertyAccessCredentials.label,
-          username: propertyAccessCredentials.username,
-          notes: propertyAccessCredentials.notes,
-        })
-        .from(propertyAccessCredentials)
-        .where(
-          and(
-            eq(propertyAccessCredentials.propertyId, serviceProperty.propertyId),
-            eq(propertyAccessCredentials.tenantId, String(serviceProperty.tenantId)),
-            eq(propertyAccessCredentials.shareWithOs, 1),
-            isNull(propertyAccessCredentials.deletedAt)
-          )
-        );
-      sharedCredentials = creds;
-    }
-  }
+  await writeAuditLog(c.env.DB, {
+    tenantId: String(link.tenant_id),
+    propertyId: String(link.property_id),
+    entityType: 'service_share_link',
+    entityId: String(link.id),
+    action: 'share_link_public_viewed',
+    actorId: null,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      service_id: String(link.service_id),
+      source: 'public_share_link',
+    },
+  });
 
   return ok(c, {
     service: {
@@ -241,9 +226,9 @@ share.get('/public/share/service/:token', async (c) => {
       provider_started_at: link.provider_started_at,
       provider_done_at: link.provider_done_at,
       notes_from_provider: link.notes_from_provider,
-      share_credentials: link.share_credentials === 1,
+      share_credentials: false,
     },
-    credentials: sharedCredentials,
+    credentials: [],
   });
 });
 
@@ -281,6 +266,7 @@ share.patch('/public/share/service/:token/status', async (c) => {
       id: serviceShareLinks.id,
       tenant_id: serviceShareLinks.tenantId,
       service_id: serviceShareLinks.serviceId,
+      property_id: serviceOrders.propertyId,
       provider_accepted_at: serviceShareLinks.providerAcceptedAt,
       expires_at: serviceShareLinks.expiresAt,
       deleted_at: serviceShareLinks.deletedAt,
@@ -297,7 +283,7 @@ share.patch('/public/share/service/:token/status', async (c) => {
         isNull(properties.deletedAt)
       )
     )
-    .limit(1) as Array<{ id: string; tenant_id: string; service_id: string; provider_accepted_at: string | null; expires_at: string; deleted_at: string | null }>;
+    .limit(1) as Array<{ id: string; tenant_id: string; service_id: string; property_id: string; provider_accepted_at: string | null; expires_at: string; deleted_at: string | null }>;
 
   if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
   if (link.deleted_at) return err(c, 'Link revogado', 'GONE', 410);
@@ -347,6 +333,22 @@ share.patch('/public/share/service/:token/status', async (c) => {
   if (Object.keys(linkUpdate).length > 0) {
     await db.update(serviceShareLinks).set(linkUpdate).where(and(eq(serviceShareLinks.id, link.id), eq(serviceShareLinks.tenantId, link.tenant_id)));
   }
+
+  await writeAuditLog(c.env.DB, {
+    tenantId: link.tenant_id,
+    propertyId: link.property_id,
+    entityType: 'service_share_link',
+    entityId: link.id,
+    action: 'share_link_public_status_updated',
+    actorId: null,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      service_id: link.service_id,
+      action,
+      provider_name: provider_name ?? null,
+      notes_provided: !!notes,
+    },
+  });
 
   return ok(c, { action, updated_at: now });
 });

@@ -174,6 +174,20 @@ auditLinks.get('/public/:token', async (c) => {
     .set({ accessedAt: new Date().toISOString(), accessorIp: ip })
     .where(eq(auditLinksTable.id, link.id));
 
+  await writeAuditLog(c.env.DB, {
+    tenantId: link.link_tenant_id,
+    propertyId: link.property_id,
+    entityType: 'audit_link',
+    entityId: link.id,
+    action: 'audit_link_public_viewed',
+    actorId: null,
+    actorIp: ip,
+    newData: {
+      service_order_id: link.service_order_id,
+      source: 'public_audit_link',
+    },
+  });
+
   return ok(c, {
     order_title: link.order_title,
     order_description: link.order_description,

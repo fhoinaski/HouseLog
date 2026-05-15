@@ -24,6 +24,7 @@ publicHandover.get('/handover/:token', async (c) => {
   const [row] = await db
     .select({
       id: handoverPackages.id,
+      tenant_id: handoverPackages.tenantId,
       property_id: handoverPackages.propertyId,
       title: handoverPackages.title,
       description: handoverPackages.description,
@@ -64,6 +65,18 @@ publicHandover.get('/handover/:token', async (c) => {
       }
       return err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
     }
+    await writeAuditLog(c.env.DB, {
+      tenantId: row!.tenant_id,
+      propertyId: row!.property_id,
+      entityType: 'handover_package',
+      entityId: row!.id,
+      action: 'handover_package_public_viewed',
+      actorId: null,
+      actorIp: c.req.header('CF-Connecting-IP') ?? undefined,
+      newData: {
+        source: 'public_handover_link',
+      },
+    });
     return ok(c, { package: resolved.package });
   } catch {
     return err(c, 'Erro interno', 'INTERNAL_ERROR', 500);

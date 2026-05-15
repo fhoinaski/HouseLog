@@ -320,6 +320,17 @@ describe('GET /audit/public/:token — audit links públicos', () => {
     expect(body).toHaveProperty('order_title');
     expect(body).toHaveProperty('scope');
     expect(body).toHaveProperty('expires_at');
+    expect(vi.mocked(writeAuditLog)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        propertyId: 'prop-1',
+        entityType: 'audit_link',
+        entityId: 'link-1',
+        action: 'audit_link_public_viewed',
+        actorId: null,
+      })
+    );
   });
 });
 
@@ -369,7 +380,7 @@ describe('GET /public/share/service/:token', () => {
 
   it('DTO público não inclui service_id nem tenant_id', async () => {
     const linkData = {
-      id: 'link-1', tenant_id: 'tenant-a', service_id: 'service-1',
+      id: 'link-1', tenant_id: 'tenant-a', service_id: 'service-1', property_id: 'prop-1',
       expires_at: new Date(Date.now() + 86400_000).toISOString(),
       provider_name: null, provider_accepted_at: null, provider_started_at: null,
       provider_done_at: null, notes_from_provider: null, share_credentials: 0,
@@ -397,6 +408,76 @@ describe('GET /public/share/service/:token', () => {
     expect(link).not.toHaveProperty('token');
     expect(body).not.toHaveProperty('tenant_id');
   });
+
+  it('nao expoe credenciais do imovel no payload publico inicial', async () => {
+    const linkData = {
+      id: 'link-1', tenant_id: 'tenant-a', service_id: 'service-1', property_id: 'prop-1',
+      expires_at: new Date(Date.now() + 86400_000).toISOString(),
+      provider_name: null, provider_accepted_at: null, provider_started_at: null,
+      provider_done_at: null, notes_from_provider: null, share_credentials: 1,
+      title: 'Reforma eletrica', description: 'Troca de fiacao',
+      status: 'requested', priority: 'high', system_type: 'electrical',
+      scheduled_at: null, cost: null, checklist: null,
+      before_photos: null, after_photos: null, warranty_until: null, completed_at: null,
+      property_name: 'Casa 1', property_address: 'Rua B', property_city: 'SP', property_type: 'house',
+      requested_by_name: 'Joao', room_name: null,
+    };
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn(() => makeSelectReturning([linkData])),
+    } as never);
+
+    const { default: share } = await import('../routes/share');
+    const res = await share.fetch(
+      new Request('http://localhost/public/share/service/validtoken12345678901234567890'),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.credentials).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain('password');
+    expect(JSON.stringify(body)).not.toContain('username');
+  });
+
+  it('registra audit log quando link publico e acessado', async () => {
+    const linkData = {
+      id: 'link-1', tenant_id: 'tenant-a', service_id: 'service-1', property_id: 'prop-1',
+      expires_at: new Date(Date.now() + 86400_000).toISOString(),
+      provider_name: null, provider_accepted_at: null, provider_started_at: null,
+      provider_done_at: null, notes_from_provider: null, share_credentials: 0,
+      title: 'Reforma eletrica', description: 'Troca de fiacao',
+      status: 'requested', priority: 'high', system_type: 'electrical',
+      scheduled_at: null, cost: null, checklist: null,
+      before_photos: null, after_photos: null, warranty_until: null, completed_at: null,
+      property_name: 'Casa 1', property_address: 'Rua B', property_city: 'SP', property_type: 'house',
+      requested_by_name: 'Joao', room_name: null,
+    };
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn(() => makeSelectReturning([linkData])),
+    } as never);
+
+    const { default: share } = await import('../routes/share');
+    const res = await share.fetch(
+      new Request('http://localhost/public/share/service/validtoken12345678901234567890', {
+        headers: { 'CF-Connecting-IP': '203.0.113.10' },
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(writeAuditLog)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        propertyId: 'prop-1',
+        entityType: 'service_share_link',
+        entityId: 'link-1',
+        action: 'share_link_public_viewed',
+        actorId: null,
+        actorIp: '203.0.113.10',
+      })
+    );
+  });
 });
 
 describe('PATCH /public/share/service/:token/status', () => {
@@ -407,6 +488,48 @@ describe('PATCH /public/share/service/:token/status', () => {
       buildEnv()
     );
     expect(res.status).toBe(400);
+  });
+
+  it('registra audit log quando provider atualiza status por token publico', async () => {
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn(() => makeSelectReturning([{
+        id: 'link-1',
+        tenant_id: 'tenant-a',
+        service_id: 'service-1',
+        property_id: 'prop-1',
+        provider_accepted_at: null,
+        expires_at: new Date(Date.now() + 86400_000).toISOString(),
+        deleted_at: null,
+      }])),
+      update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn(async () => undefined) })) })),
+    } as never);
+
+    const { default: share } = await import('../routes/share');
+    const res = await share.fetch(
+      new Request('http://localhost/public/share/service/validtoken12345678901234567890/status', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': '203.0.113.11',
+        },
+        body: JSON.stringify({ action: 'accept', provider_name: 'Provider A', notes: 'Ok' }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    expect(vi.mocked(writeAuditLog)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        propertyId: 'prop-1',
+        entityType: 'service_share_link',
+        entityId: 'link-1',
+        action: 'share_link_public_status_updated',
+        actorId: null,
+        actorIp: '203.0.113.11',
+      })
+    );
   });
 });
 
