@@ -146,7 +146,7 @@ export type {
 
 // Inventory
 export { inventoryApi } from '@/lib/api/inventory';
-export type { InventoryItem, InventoryMutationInput, InventoryCategory, ColorEntry } from '@/lib/api/inventory';
+export type { InventoryItem, InventoryMutationInput, InventoryCategory, ColorEntry, LabelExtractResult } from '@/lib/api/inventory';
 
 // Services, Bids, Messages, Audit
 export { servicesApi, auditApi, bidsApi, messagesApi } from '@/lib/api/services';

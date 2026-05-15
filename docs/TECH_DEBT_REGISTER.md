@@ -449,6 +449,46 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
+### TD-019 - Inventory Label OCR — leitura de etiqueta tecnica sem auto-save (mitigado)
+
+- **Severidade**: Media
+- **Area**: Backend / Frontend / IA / Inventario
+- **Status**: Mitigado
+- **Evidencia** (auditoria de inventario 2026-05-15):
+  - `inventoryCreateSchema` (contracts) e `InventoryItem` (types.ts) nao incluiam `serial_number` nem `warranty_until` — campos existiam no schema Drizzle mas eram silenciosamente descartados no create/update.
+  - Nenhum mecanismo de leitura automatica de etiqueta tecnica (marca, modelo, S/N, garantia) — usuario precisava preencher manualmente apos fotografia do equipamento.
+  - Fluxo de OCR nao existia: sem endpoint, sem validacao de tenant/item, sem tela de revisao, sem audit log.
+- **Mitigacao aplicada (2026-05-15)**:
+  - Migration `0029_inventory_ocr_fields.sql`: `ALTER TABLE inventory_items ADD COLUMN serial_number TEXT`.
+  - Schema Drizzle: `serialNumber: text('serial_number')` adicionado apos `warrantyUntil`.
+  - `packages/contracts/src/schemas/inventory.ts`: `serial_number` e `warranty_until` adicionados ao `inventoryCreateSchema` (e derivado `inventoryUpdateSchema`).
+  - `apps/api/src/lib/types.ts`: `serial_number` e `warranty_until` adicionados ao tipo `InventoryItem`.
+  - `apps/api/src/lib/ai.ts`: funcao `extractLabelData(ai, db, imageBytes)` com modelo `@cf/llava-hf/llava-1.5-7b-hf`, cache por SHA-256, schema Zod com `.catch()` em todos os campos, tipo `LabelExtractResult` exportado.
+  - `apps/api/src/routes/inventory.ts`:
+    - `inventorySelect` inclui `serial_number`.
+    - POST create e PUT update propagam `serial_number` e `warranty_until`.
+    - Novo endpoint `POST /:itemId/label-ocr`: valida tenant/property/item, aceita multipart `file` (MIME imagem, max 5 MB, nao vazio), chama `extractLabelData`, registra audit log `label_ocr` sem `rawExtractedText`, retorna `{ extraction }`. Nunca salva automaticamente.
+    - 503 `AI_ERROR` em falha de inferencia — sem audit log quando IA falha.
+  - `house-log-front/src/lib/api/inventory.ts`: `serial_number` em `InventoryItem` e `InventoryMutationInput`; tipo `LabelExtractResult` exportado; metodo `inventoryApi.labelOcr(propertyId, itemId, file)`.
+  - `house-log-front/src/components/inventory/label-ocr-dialog.tsx`: dialog de revisao com campos editaveis (marca, modelo, S/N, garantia), indicador de confianca, secao de dados extras (capacidade, tensao, data de fabricacao) somente-leitura, accordion de texto bruto. Estado inicializado no mount — remonta via `key` no parent para evitar stale state.
+  - `house-log-front/src/app/(app)/properties/[id]/inventory/page.tsx`: botao "Ler etiqueta" no dialog de edicao (somente para itens existentes), campo `serial_number` no formulario, fluxo OCR (file picker → loading → `LabelOcrDialog` → `setValue` nos campos → salvar manualmente).
+  - **Testes adicionados**: `apps/api/src/routes/inventory-ocr.test.ts` — 8 testes cobrindo:
+    - 403 tenant sem acesso nao executa OCR
+    - 404 item de outro tenant (isolamento cross-tenant)
+    - 422 MIME invalido (`INVALID_FILE_TYPE`)
+    - 422 arquivo vazio (`EMPTY_FILE`)
+    - 200 campos e confidence corretos na response
+    - 503 falha da IA (`AI_ERROR`) sem quebrar o servidor
+    - `updateWhere` nao e chamado (OCR nunca salva automaticamente)
+    - Audit log com `tenantId`, `propertyId`, `actorId`, sem `rawExtractedText` em `newData`
+- **Risco residual**:
+  - Cache de OCR por SHA-256 (`ai_cache`) nao tem TTL: resultados de etiquetas identicas sao reutilizados indefinidamente. Se a etiqueta mudar fisicamente (ex: adesivo substituido), o cache pode retornar dados desatualizados ate ser eviccionado manualmente. Risco baixo dado que a IA nunca salva automaticamente — o usuario sempre revisa.
+  - `rawExtractedText` pode conter dados pessoais ou informacoes sensiveis presentes na etiqueta (nome de tecnico, numero de contrato, etc). Ja excluido do audit log; nao e persistido pelo endpoint. Se futuramente armazenado, aplicar redacao ou politica de retencao.
+  - Modelo `llava-1.5-7b-hf` tem acuracia variavel para etiquetas com fonte pequena, reflexo ou angulo ruim. Confianca (`confidence`) e autoavaliacao do modelo — pode ser superestimada. O dialogo de revisao obrigatorio mitiga o risco de dados incorretos sendo salvos.
+- **Relacionamento com roadmap/ADRs**: SECURITY.md secao "OCR de etiqueta tecnica"; TD-011 (search nao indexa campos OCR); ADR-004 (dados auditaveis).
+
+---
+
 ## 5. Regras para manter este registro
 
 - Nao registrar debito especulativo sem evidencia no codigo, docs ou refatoracao realizada.

@@ -13,6 +13,7 @@ export type InventoryItem = {
   name: string;
   brand: string | null;
   model: string | null;
+  serial_number: string | null;
   color_code: string | null;
   lot_number: string | null;
   supplier: string | null;
@@ -37,6 +38,7 @@ export type InventoryMutationInput = {
   room_id?: string;
   brand?: string;
   model?: string;
+  serial_number?: string;
   color_code?: string;
   lot_number?: string;
   supplier?: string;
@@ -48,6 +50,20 @@ export type InventoryMutationInput = {
   purchase_date?: string;
   warranty_until?: string;
   notes?: string;
+};
+
+// Result returned by the label-ocr endpoint.
+// Fields are suggestions — never auto-saved, always reviewed by the user.
+export type LabelExtractResult = {
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  capacity: string | null;
+  voltage: string | null;
+  manufactureDate: string | null;
+  warrantyUntil: string | null;
+  confidence: number;
+  rawExtractedText: string;
 };
 
 export type ColorEntry = {
@@ -100,5 +116,22 @@ export const inventoryApi = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: fd,
     }).then(async (r) => normalizeApiMediaUrls(await r.json() as { photo_url: string }));
+  },
+
+  // Reads a technical label from an image and returns field suggestions.
+  // Never saves automatically — the caller must present the result for user review.
+  labelOcr: (propertyId: string, id: string, file: File): Promise<{ extraction: LabelExtractResult }> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const token = getToken();
+    return fetch(`${BASE}/properties/${propertyId}/inventory/${id}/label-ocr`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    }).then(async (r) => {
+      const body = await r.json() as { extraction: LabelExtractResult; code?: string; error?: string };
+      if (!r.ok) throw new Error(body.error ?? `OCR falhou (${r.status})`);
+      return body;
+    });
   },
 };

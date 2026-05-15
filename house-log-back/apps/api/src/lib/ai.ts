@@ -2,7 +2,9 @@
 // - diagnose: image → { category, severity, summary, suggested_title, checklist }
 // - transcribe: audio → { text }
 // - classify: document text → { kind, fields }
+// - extractLabelData: image → { manufacturer, model, serialNumber, capacity, voltage, manufactureDate, warrantyUntil, confidence, rawExtractedText }
 
+import { z } from 'zod';
 import type { Bindings } from './types';
 import { eq } from 'drizzle-orm';
 import { getDb } from '../db/client';
@@ -197,5 +199,90 @@ export async function classifyDocument(
         : {},
   };
   await cacheSet(db, cacheKey, 'classify', out);
+  return out;
+}
+
+// ── extractLabelData ──────────────────────────────────────────────────────────
+// Lê etiqueta técnica de equipamento via visão (llava) e extrai campos estruturados.
+// Resultado validado por Zod. Nunca salva automaticamente — apenas retorna sugestões.
+
+export type LabelExtractResult = {
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  capacity: string | null;
+  voltage: string | null;
+  manufactureDate: string | null;
+  warrantyUntil: string | null;
+  confidence: number;
+  rawExtractedText: string;
+};
+
+const labelExtractSchema = z.object({
+  manufacturer: z.string().nullable().catch(null),
+  model: z.string().nullable().catch(null),
+  serialNumber: z.string().nullable().catch(null),
+  capacity: z.string().nullable().catch(null),
+  voltage: z.string().nullable().catch(null),
+  manufactureDate: z.string().nullable().catch(null),
+  warrantyUntil: z.string().nullable().catch(null),
+  confidence: z.number().min(0).max(1).catch(0.5),
+  rawExtractedText: z.string().catch(''),
+});
+
+export async function extractLabelData(
+  ai: AiBinding,
+  db: D1Database,
+  imageBytes: Uint8Array
+): Promise<LabelExtractResult> {
+  const cacheKey = `label:${await sha256Hex(imageBytes)}`;
+  const cached = await cacheGet<LabelExtractResult>(db, cacheKey);
+  if (cached) return cached;
+
+  const prompt = [
+    'Você é um leitor de etiquetas técnicas de equipamentos residenciais.',
+    'Analise a imagem desta etiqueta e extraia as informações visíveis.',
+    'Responda APENAS com JSON válido sem texto adicional:',
+    '{',
+    '  "manufacturer": string | null,',
+    '  "model": string | null,',
+    '  "serialNumber": string | null,',
+    '  "capacity": string | null,',
+    '  "voltage": string | null,',
+    '  "manufactureDate": string | null,',
+    '  "warrantyUntil": string | null,',
+    '  "confidence": number (0.0 a 1.0),',
+    '  "rawExtractedText": string',
+    '}',
+    'Use null para campos não encontrados na etiqueta.',
+    'manufacturer = fabricante/marca; serialNumber = S/N; capacity = capacidade; voltage = tensão.',
+    'Datas em formato ISO (AAAA-MM-DD) quando possível.',
+  ].join('\n');
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const res = (await (ai as any).run('@cf/llava-hf/llava-1.5-7b-hf', {
+    image: Array.from(imageBytes),
+    prompt,
+    max_tokens: 512,
+  })) as { description?: string; response?: string };
+
+  const text = res.description ?? res.response ?? '';
+  const raw = (extractJson(text) ?? {}) as Record<string, unknown>;
+
+  const out = labelExtractSchema.parse({
+    manufacturer: raw.manufacturer ?? null,
+    model: raw.model ?? null,
+    serialNumber: raw.serialNumber ?? raw.serial_number ?? null,
+    capacity: raw.capacity ?? null,
+    voltage: raw.voltage ?? null,
+    manufactureDate: raw.manufactureDate ?? raw.manufacture_date ?? null,
+    warrantyUntil: raw.warrantyUntil ?? raw.warranty_until ?? null,
+    confidence: typeof raw.confidence === 'number' ? raw.confidence : 0.5,
+    rawExtractedText: typeof raw.rawExtractedText === 'string'
+      ? raw.rawExtractedText
+      : text.slice(0, 2000),
+  });
+
+  await cacheSet(db, cacheKey, 'label', out);
   return out;
 }

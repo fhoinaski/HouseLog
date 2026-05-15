@@ -222,6 +222,7 @@ export const inventoryItems = sqliteTable('inventory_items', {
   pricePaid: real('price_paid'),
   purchaseDate: text('purchase_date'),
   warrantyUntil: text('warranty_until'),
+  serialNumber: text('serial_number'),
   notes: text('notes'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   deletedAt: text('deleted_at'),

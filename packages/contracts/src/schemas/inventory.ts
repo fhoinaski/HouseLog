@@ -18,6 +18,7 @@ export const inventoryCreateSchema = z.object({
   room_id: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
+  serial_number: z.string().optional(),
   color_code: z.string().optional(),
   lot_number: z.string().optional(),
   supplier: z.string().optional(),
@@ -27,6 +28,7 @@ export const inventoryCreateSchema = z.object({
   storage_loc: z.string().optional(),
   price_paid: z.number().positive().optional(),
   purchase_date: z.string().optional(),
+  warranty_until: z.string().optional(),
   notes: z.string().optional(),
 });
 

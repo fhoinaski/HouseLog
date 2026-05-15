@@ -158,6 +158,8 @@ Todas as acoes abaixo foram verificadas e possuem `writeAuditLog` com `tenantId`
 - `sanitizeAuditData` e aplicado automaticamente em `newData`/`oldData` antes de persistir.
 - Em eventos de auth sem usuario valido (ex: `login_failed` com usuario inexistente), `tenantId` e `actorId` podem ser `null`.
 
+| `inventory (OCR)` | `label_ocr` (leitura de etiqueta; nunca salva automaticamente) |
+
 ### Acoes fora de escopo de audit log
 
 - `ai.ts` (classify, transcribe, diagnose): operacoes de inferencia sem efeitos persistentes.
@@ -240,6 +242,21 @@ Regras de seguranca:
 - `clearOfflineQueue()` deve ser chamado no logout para remover todos os Blobs do dispositivo.
 - Sync e foreground-only: o service worker nao tem acesso ao token em memoria, portanto Background Sync API nao e usada para uploads autenticados.
 - Nao expor itens da fila em respostas de API ou logs.
+
+## OCR de etiqueta tecnica (label-ocr)
+
+O endpoint `POST /properties/:propertyId/inventory/:itemId/label-ocr` aceita imagem de etiqueta tecnica de equipamento e retorna sugestoes de campos extraidos pela IA.
+
+Regras de seguranca:
+
+- Validar `tenantId`, `propertyId` e `itemId` antes de enviar qualquer dado para a IA — item de outro tenant retorna 404.
+- A IA nunca salva automaticamente: o endpoint retorna apenas `{ extraction: LabelExtractResult }`. O usuario deve revisar e confirmar antes de chamar o PUT de update.
+- `rawExtractedText` nao e incluido no audit log (`newData`) — pode conter texto arbitrario do produto, dados pessoais ou informacoes de identificacao sensivel da etiqueta.
+- O audit log registra apenas `{ confidence, fields_found }` — metadados de qualidade da extracao, sem dados de conteudo.
+- Arquivo enviado deve ter MIME de imagem (`image/jpeg`, `image/png`, `image/webp`) e tamanho > 0 — rejeitado com 422 (`INVALID_FILE_TYPE` ou `EMPTY_FILE`) caso contrario.
+- Falha da IA retorna 503 (`AI_ERROR`) sem registrar audit log — nenhum dado a auditar.
+- O arquivo de imagem nao e salvo em R2 pelo endpoint de OCR — e descartado apos inferencia.
+- A imagem e enviada em bytes (`Uint8Array`) diretamente ao binding `env.AI` — nunca a uma API externa de terceiros.
 
 ## O que nunca fazer
 

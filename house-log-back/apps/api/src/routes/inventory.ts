@@ -10,6 +10,7 @@ import {
   extractR2KeyFromPublicUrl,
   validatePrivateUpload,
 } from '../lib/r2';
+import { extractLabelData } from '../lib/ai';
 import {
   canAssignRoomToInventory,
   inventoryPhotoEndpoint,
@@ -39,6 +40,7 @@ const inventorySelect = {
   name: inventoryItems.name,
   brand: inventoryItems.brand,
   model: inventoryItems.model,
+  serial_number: inventoryItems.serialNumber,
   color_code: inventoryItems.colorCode,
   lot_number: inventoryItems.lotNumber,
   supplier: inventoryItems.supplier,
@@ -190,6 +192,7 @@ inventory.post('/', async (c) => {
     name: d.name,
     brand: d.brand ?? null,
     model: d.model ?? null,
+    serialNumber: d.serial_number ?? null,
     colorCode: d.color_code ?? null,
     lotNumber: d.lot_number ?? null,
     supplier: d.supplier ?? null,
@@ -199,6 +202,7 @@ inventory.post('/', async (c) => {
     storageLoc: d.storage_loc ?? null,
     pricePaid: d.price_paid ?? null,
     purchaseDate: d.purchase_date ?? null,
+    warrantyUntil: d.warranty_until ?? null,
     notes: d.notes ?? null,
   });
 
@@ -361,6 +365,7 @@ inventory.put('/:id', async (c) => {
   if (d.name !== undefined) patch.name = d.name;
   if (d.brand !== undefined) patch.brand = d.brand;
   if (d.model !== undefined) patch.model = d.model;
+  if (d.serial_number !== undefined) patch.serialNumber = d.serial_number;
   if (d.color_code !== undefined) patch.colorCode = d.color_code;
   if (d.lot_number !== undefined) patch.lotNumber = d.lot_number;
   if (d.supplier !== undefined) patch.supplier = d.supplier;
@@ -370,6 +375,7 @@ inventory.put('/:id', async (c) => {
   if (d.storage_loc !== undefined) patch.storageLoc = d.storage_loc;
   if (d.price_paid !== undefined) patch.pricePaid = d.price_paid;
   if (d.purchase_date !== undefined) patch.purchaseDate = d.purchase_date;
+  if (d.warranty_until !== undefined) patch.warrantyUntil = d.warranty_until;
   if (d.notes !== undefined) patch.notes = d.notes;
 
   if (Object.keys(patch).length === 0) return err(c, 'Nenhum campo para atualizar', 'NO_CHANGES');
@@ -513,6 +519,85 @@ inventory.post('/:itemId/photo', async (c) => {
   });
 
   return ok(c, { photo_url: photoEndpoint(propertyId, itemId) });
+});
+
+// ── POST /properties/:propertyId/inventory/:itemId/label-ocr ─────────────────
+// Extrai dados de uma etiqueta técnica via Workers AI (llava).
+// NUNCA salva automaticamente — retorna campos sugeridos para revisão do usuário.
+// Segurança: valida tenant + property + item antes de chamar a IA.
+
+inventory.post('/:itemId/label-ocr', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const itemId = c.req.param('itemId')!;
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const tenantId = c.get('tenantId') as string;
+
+  // 1. Validar acesso ao imóvel (tenant + property)
+  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
+  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+
+  // 2. Validar que o item pertence a este tenant + property (defense-in-depth)
+  const [item] = await db
+    .select({ id: inventoryItems.id })
+    .from(inventoryItems)
+    .where(
+      and(
+        eq(inventoryItems.id, itemId),
+        eq(inventoryItems.propertyId, propertyId),
+        eq(inventoryItems.tenantId, tenantId),
+        isNull(inventoryItems.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!item) return err(c, 'Item não encontrado', 'NOT_FOUND', 404);
+
+  // 3. Aceitar imagem da etiqueta via multipart
+  const formData = await c.req.formData().catch(() => null);
+  if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
+
+  const file = formData.get('file') as File | null;
+  if (!file) return err(c, 'Campo "file" ausente', 'MISSING_FILE', 422);
+
+  // Validar MIME e tamanho antes de qualquer chamada à IA
+  if (!PHOTO_ALLOWED.has(file.type)) {
+    return err(c, 'Formato inválido. Use jpg, png ou webp', 'INVALID_FILE_TYPE', 422);
+  }
+  if (file.size > PHOTO_MAX_BYTES) {
+    return err(c, 'Arquivo excede o limite de 5MB', 'FILE_TOO_LARGE', 422);
+  }
+  if (file.size === 0) {
+    return err(c, 'Arquivo vazio', 'EMPTY_FILE', 422);
+  }
+
+  // 4. Chamar IA — resposta validada por Zod dentro de extractLabelData
+  let extraction;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    extraction = await extractLabelData(c.env.AI, c.env.DB, bytes);
+  } catch (e) {
+    return err(c, 'Falha na extração de dados da etiqueta', 'AI_ERROR', 503, { message: String(e) });
+  }
+
+  // 5. Auditoria: registrar chamada de OCR (sem conteúdo bruto da imagem ou rawExtractedText)
+  const foundFields = (['manufacturer', 'model', 'serialNumber', 'capacity', 'voltage', 'manufactureDate', 'warrantyUntil'] as const)
+    .filter((k) => extraction[k] !== null).length;
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'inventory_item',
+    entityId: itemId,
+    action: 'label_ocr',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: { confidence: extraction.confidence, fields_found: foundFields },
+  });
+
+  // 6. Retornar sugestões — o usuário deve confirmar antes de salvar
+  return ok(c, { extraction });
 });
 
 // ── POST /properties/:propertyId/inventory/:itemId/qr ────────────────────────
