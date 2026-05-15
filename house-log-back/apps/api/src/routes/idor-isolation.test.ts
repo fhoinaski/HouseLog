@@ -37,6 +37,7 @@ import technicalSystemsRouter from './technical-systems';
 import technicalPointsRouter from './technical-points';
 import marketplaceRouter from './marketplace';
 import expensesRouter from './expenses';
+import serviceRequestsRouter from './service-requests';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,98 @@ describe('GET /properties/:propertyId/technical-systems — isolamento cross-ten
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
     expect(body).toHaveProperty('systems');
+  });
+});
+
+describe('POST /properties/:propertyId/service-requests/:id/convert-to-service - room cross-tenant bloqueado', () => {
+  const insertSpy = vi.fn();
+
+  function buildApp() {
+    const app = new Hono<{ Bindings: Bindings }>();
+    app.route('/properties/:propertyId/service-requests', serviceRequestsRouter);
+    return app;
+  }
+
+  beforeEach(() => {
+    insertSpy.mockClear();
+  });
+
+  it('retorna 422 e nao cria OS quando room_id nao pertence ao tenant/property ativo', async () => {
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn()
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({ limit: vi.fn(async () => [membershipRow('tenant-a')]) })),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }]),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [{
+                  id: 'request-1',
+                  propertyId: 'prop-1',
+                  title: 'Orcamento',
+                  description: 'Descricao',
+                  status: 'OPEN',
+                }]),
+              })),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{
+                id: 'bid-1',
+                providerId: 'provider-1',
+                amount: 500,
+                scope: 'Escopo',
+                status: 'ACCEPTED',
+              }]),
+            })),
+          })),
+        })
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+          })),
+        }),
+      insert: insertSpy,
+    } as never);
+
+    const res = await buildApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/service-requests/request-1/convert-to-service', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'OS convertida',
+          system_type: 'general',
+          priority: 'normal',
+          room_id: 'room-tenant-b',
+        }),
+      }),
+      buildEnv()
+    );
+
+    const body = await res.json() as Record<string, unknown>;
+    expect(res.status).toBe(422);
+    expect(body.code).toBe('REFERENCE_NOT_FOUND');
+    expect(insertSpy).not.toHaveBeenCalled();
   });
 });
 

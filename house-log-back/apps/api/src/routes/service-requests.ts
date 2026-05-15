@@ -8,7 +8,7 @@ import { canAccessProperty, canCreateServiceOrder, canCreateServiceRequest } fro
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import type { Bindings, Variables } from '../lib/types';
 import { getDb } from '../db/client';
-import { bids, properties, serviceOrders, serviceRequests, users } from '../db/schema';
+import { bids, properties, rooms, serviceOrders, serviceRequests, users } from '../db/schema';
 import { buildR2Key, extractR2KeyFromPublicUrl } from '../lib/r2';
 import { generateR2PresignedPutUrl } from '../lib/r2-presigned';
 import { serviceOrderCreateSchema } from '@houselog/contracts';
@@ -53,6 +53,28 @@ function mediaEndpoint(propertyId: string, requestId: string, index: number): st
 // authenticated endpoint URLs so clients never receive raw R2 keys/public URLs.
 function toMediaEndpoints(propertyId: string, requestId: string, stored: string[] | null): string[] {
   return (stored ?? []).map((_, i) => mediaEndpoint(propertyId, requestId, i));
+}
+
+async function isRoomInTenantProperty(
+  db: ReturnType<typeof getDb>,
+  tenantId: string,
+  propertyId: string,
+  roomId?: string | null
+): Promise<boolean> {
+  if (!roomId) return true;
+
+  const [room] = await db
+    .select({ id: rooms.id })
+    .from(rooms)
+    .where(and(
+      eq(rooms.id, roomId),
+      eq(rooms.tenantId, tenantId),
+      eq(rooms.propertyId, propertyId),
+      isNull(rooms.deletedAt)
+    ))
+    .limit(1);
+
+  return Boolean(room);
 }
 
 serviceRequestsRoute.get('/', async (c) => {
@@ -275,6 +297,9 @@ serviceRequestsRoute.post('/:serviceRequestId/convert-to-service', async (c) => 
   }
 
   const input = parsed.data;
+  const roomAllowed = await isRoomInTenantProperty(db, tenantId, propertyId, input.room_id);
+  if (!roomAllowed) return err(c, 'Comodo nao encontrado neste imovel', 'REFERENCE_NOT_FOUND', 422);
+
   const serviceId = nanoid();
   const descriptionParts = [
     input.description?.trim() || requestRow.description,
@@ -514,7 +539,11 @@ serviceRequestsRoute.post('/', async (c) => {
       createdAt: serviceRequests.createdAt,
     })
     .from(serviceRequests)
-    .where(eq(serviceRequests.id, requestId))
+    .where(and(
+      eq(serviceRequests.id, requestId),
+      eq(serviceRequests.tenantId, tenantId),
+      eq(serviceRequests.propertyId, propertyId)
+    ))
     .limit(1);
 
   await writeAuditLog(c.env.DB, {
