@@ -48,6 +48,21 @@ async function getStore(mode: IDBTransactionMode): Promise<IDBObjectStore> {
   return database.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
 }
 
+/**
+ * Limpa todos os dados do cache SWR persistido no IndexedDB.
+ * Deve ser chamado no logout para evitar que dados de um usuário sejam
+ * hidratados no próximo login de outro usuário no mesmo dispositivo.
+ */
+export async function clearIDBCache(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  const store = await getStore('readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
 // SWR cache provider factory — returns a SWR-compatible cache provider
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createIDBCacheProvider(): (cache: Map<string, any>) => Map<string, any> {

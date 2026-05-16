@@ -16,7 +16,6 @@ import {
   getPending,
   updateItem,
 } from './offline-evidence-queue';
-import { clearAll as clearNewQueueAll } from './offline-queue';
 import { getToken } from './api/core/storage';
 
 const API_BASE =
@@ -165,8 +164,5 @@ export function useOfflineSync(): OfflineSyncState {
  */
 export async function clearOfflineQueue(): Promise<void> {
   if (typeof indexedDB === 'undefined') return;
-  await Promise.allSettled([
-    clearQueueAll().catch(() => {}),
-    clearNewQueueAll().catch(() => {}),
-  ]);
+  await clearQueueAll().catch(() => {});
 }

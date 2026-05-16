@@ -143,6 +143,12 @@ Toda rota pública deve expor o mínimo necessário e sempre com:
 - revogação;
 - trilha de uso.
 
+Padrão atual para links públicos tokenizados:
+- token público opaco, aleatório e armazenado somente como hash quando possível;
+- erro público genérico para token inexistente, expirado, revogado, usado ou malformado;
+- payload público sem identificadores internos, tokens, hashes ou credenciais do imóvel;
+- links de service share expõem apenas dados mínimos da OS necessários ao prestador externo.
+
 ## 6.5 Auditoria obrigatória
 Ações críticas devem gerar evento auditável.
 

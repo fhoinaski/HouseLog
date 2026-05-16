@@ -38,8 +38,9 @@ import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { invitesApi, normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
-import { enqueue as enqueueEvidence } from '@/lib/offline-evidence-queue';
+import { enqueue as enqueueOffline } from '@/lib/offline-queue';
 import { useOfflineSync } from '@/lib/use-offline-sync';
+import { useOfflineQueueSync } from '@/lib/use-offline-queue-sync';
 import { OfflineSyncStatus } from '@/components/offline-sync-status';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, cn, formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -186,6 +187,7 @@ export default function ServiceDetailPage({
 
   const { data: propData } = useSWR(['property', propertyId], () => propertiesApi.get(propertyId));
   const property = propData?.property;
+  const activeTenantId = property?.tenant_id ?? null;
   const order = data?.order;
   const canManageTeamSuggestion = user?.role === 'owner' || user?.role === 'admin';
   const { data: teamData, mutate: mutateTeam } = useSWR(
@@ -193,6 +195,8 @@ export default function ServiceDetailPage({
     () => invitesApi.list(propertyId)
   );
   const offlineSync = useOfflineSync();
+  // Nova fila unificada — isolada por userId (usado como tenantId enquanto backend não expõe tenantId)
+  const offlineQueueSync = useOfflineQueueSync(activeTenantId, user?.id ?? null);
 
   useEffect(() => {
     if (!order) {
@@ -209,7 +213,24 @@ export default function ServiceDetailPage({
       void globalMutate(['dashboard', propertyId]);
       toast.success(`Status: ${SERVICE_STATUS_LABELS[next]}`);
     } catch (e) {
-      toast.error('Erro ao atualizar status', { description: (e as Error).message });
+      // Se offline, enfileira rascunho de OS para envio posterior.
+      if (!navigator.onLine || e instanceof TypeError) {
+        try {
+          await enqueueOffline({
+            type: 'os-update',
+            tenantId: activeTenantId ?? '',
+            userId: user?.id ?? '',
+            propertyId,
+            serviceOrderId: serviceId,
+            patch: { status: next },
+          });
+          toast.info('Sem conexão — atualização salva para envio automático quando voltar online');
+        } catch {
+          toast.error('Erro ao atualizar status', { description: (e as Error).message });
+        }
+      } else {
+        toast.error('Erro ao atualizar status', { description: (e as Error).message });
+      }
     }
   }
 
@@ -225,10 +246,13 @@ export default function ServiceDetailPage({
       // Se offline, enfileira para envio posterior; se online com erro de servidor, mostra o erro.
       if (!navigator.onLine || err instanceof TypeError) {
         try {
-          await enqueueEvidence({
-            serviceOrderId: serviceId,
+          await enqueueOffline({
+            type: 'photo-upload',
+            tenantId: activeTenantId ?? '',
+            userId: user?.id ?? '',
             propertyId,
-            type: photoType,
+            serviceOrderId: serviceId,
+            evidenceType: photoType,
             file,
             filename: file.name,
             mimeType: file.type || 'image/jpeg',
@@ -536,7 +560,7 @@ export default function ServiceDetailPage({
         density="editorial"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <OfflineSyncStatus state={offlineSync} />
+            <OfflineSyncStatus state={offlineSync} queueState={offlineQueueSync} />
             <Button
               variant="outline"
               size="sm"

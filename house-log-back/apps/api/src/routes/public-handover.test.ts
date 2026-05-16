@@ -202,6 +202,7 @@ describe('GET /public/handover/:token', () => {
         entityId: 'package-1',
         action: 'handover_package_public_viewed',
         actorId: null,
+        newData: expect.objectContaining({ actor_type: 'public' }),
       })
     );
   });
@@ -266,7 +267,7 @@ describe('GET /public/handover/:token', () => {
     const body = (await response.json()) as { error: string; code: string };
 
     expect(response.status).toBe(404);
-    expect(body).toEqual({ error: 'Pacote nao encontrado', code: 'NOT_FOUND' });
+    expect(body).toEqual({ error: 'Link indisponivel', code: 'PUBLIC_LINK_UNAVAILABLE' });
   });
 
   it('bloqueia pacote vencido', async () => {
@@ -296,8 +297,8 @@ describe('GET /public/handover/:token', () => {
     const response = await publicHandover.fetch(new Request('http://localhost/handover/token-expirado'), buildEnv());
     const body = (await response.json()) as { error: string; code: string };
 
-    expect(response.status).toBe(410);
-    expect(body).toEqual({ error: 'Link expirado', code: 'LINK_EXPIRED' });
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ error: 'Link indisponivel', code: 'PUBLIC_LINK_UNAVAILABLE' });
   });
 
   it('bloqueia pacote revogado', async () => {
@@ -327,8 +328,8 @@ describe('GET /public/handover/:token', () => {
     const response = await publicHandover.fetch(new Request('http://localhost/handover/token-revogado'), buildEnv());
     const body = (await response.json()) as { error: string; code: string };
 
-    expect(response.status).toBe(410);
-    expect(body).toEqual({ error: 'Pacote revogado', code: 'PACKAGE_REVOKED' });
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ error: 'Link indisponivel', code: 'PUBLIC_LINK_UNAVAILABLE' });
   });
 
   it('usa snapshot_json e nao dados vivos', async () => {
@@ -430,6 +431,7 @@ describe('POST /public/handover/:token/accept', () => {
       action: 'handover_package_public_accepted',
       actorId: null,
       actorIp: '203.0.113.10',
+      newData: expect.objectContaining({ actor_type: 'public' }),
     }));
     expect(JSON.stringify(vi.mocked(writeAuditLog).mock.calls)).not.toContain('token-publico');
   });
@@ -467,7 +469,7 @@ describe('POST /public/handover/:token/accept', () => {
     const body = (await response.json()) as { error: string; code: string };
 
     expect(response.status).toBe(404);
-    expect(body).toEqual({ error: 'Pacote nao encontrado', code: 'NOT_FOUND' });
+    expect(body).toEqual({ error: 'Link indisponivel', code: 'PUBLIC_LINK_UNAVAILABLE' });
   });
 
   it('rejeita link expirado com codigo seguro', async () => {
@@ -478,8 +480,8 @@ describe('POST /public/handover/:token/accept', () => {
     const response = await publicHandover.fetch(acceptRequest(validBody), buildEnv());
     const body = (await response.json()) as { error: string; code: string };
 
-    expect(response.status).toBe(410);
-    expect(body).toEqual({ error: 'Link expirado', code: 'LINK_EXPIRED' });
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ error: 'Link indisponivel', code: 'PUBLIC_LINK_UNAVAILABLE' });
   });
 
   it('rejeita pacote revogado com codigo seguro', async () => {
@@ -490,8 +492,8 @@ describe('POST /public/handover/:token/accept', () => {
     const response = await publicHandover.fetch(acceptRequest(validBody), buildEnv());
     const body = (await response.json()) as { error: string; code: string };
 
-    expect(response.status).toBe(410);
-    expect(body).toEqual({ error: 'Pacote revogado', code: 'PACKAGE_REVOKED' });
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ error: 'Link indisponivel', code: 'PUBLIC_LINK_UNAVAILABLE' });
   });
 
   it('rejeita pacote ja aceito', async () => {

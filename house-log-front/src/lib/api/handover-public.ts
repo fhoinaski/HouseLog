@@ -15,6 +15,7 @@ const PublicHandoverResponseSchema = z.object({
 
 export type PublicHandoverErrorCode =
   | 'NOT_FOUND'
+  | 'PUBLIC_LINK_UNAVAILABLE'
   | 'LINK_EXPIRED'
   | 'PACKAGE_REVOKED'
   | 'PACKAGE_ALREADY_ACCEPTED'
@@ -44,6 +45,7 @@ function normalizePublicErrorCode(value: string | undefined, status: number): Pu
     value === 'LINK_EXPIRED' ||
     value === 'PACKAGE_REVOKED' ||
     value === 'PACKAGE_ALREADY_ACCEPTED' ||
+    value === 'PUBLIC_LINK_UNAVAILABLE' ||
     value === 'VALIDATION_ERROR' ||
     value === 'INTERNAL_ERROR'
   ) return value;

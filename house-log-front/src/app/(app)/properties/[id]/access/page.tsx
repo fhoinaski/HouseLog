@@ -220,7 +220,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
       share_with_os: cred.share_with_os,
       intelbras_host: (cred.integration_config?.host as string) ?? '',
       intelbras_user: (cred.integration_config?.username as string) ?? '',
-      intelbras_pass: (cred.integration_config?.password as string) ?? '',
+      intelbras_pass: '',
     });
     setEditing(cred);
     setFormOpen(true);
@@ -234,7 +234,11 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
 
     const intelbrasConfig =
       form.integration_type === 'intelbras'
-        ? { host: form.intelbras_host, username: form.intelbras_user, password: form.intelbras_pass }
+        ? {
+            host: form.intelbras_host,
+            username: form.intelbras_user,
+            ...(form.intelbras_pass?.trim() ? { password: form.intelbras_pass } : {}),
+          }
         : null;
 
     const payload: Partial<AccessCredentialPayload> = {
@@ -501,7 +505,7 @@ export default function AccessPage({ params }: { params: Promise<{ id: string }>
                       <Input placeholder="Senha" type="password" {...register('intelbras_pass')} />
                     </div>
                     <p className="text-xs leading-5 text-text-warning">
-                      Compatibilidade mantida com a integracao atual do backend.
+                      Deixe a senha em branco para manter o segredo de integracao atual.
                     </p>
                   </div>
                 )}

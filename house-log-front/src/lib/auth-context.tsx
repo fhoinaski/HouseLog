@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { authApi, setToken, clearToken, isMfaChallenge, type User } from './api';
 import { clearLegacyAuthStorage } from './api/core/storage';
-import { clearOfflineQueue } from './use-offline-sync';
+import { clearOfflineStateForLogout } from './auth-logout-cleanup';
 
 export class MfaRequiredError extends Error {
   challengeToken: string;
@@ -199,8 +199,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     // Cookie revogado server-side; fire-and-forget
     void authApi.logout().catch(() => {});
-    // Limpa fila de evidências offline para não deixar dados do usuário no dispositivo
-    void clearOfflineQueue().catch(() => {});
+
+    // Lê o userId do localStorage antes de limpar — o callback não fecha sobre user state
+    // porque tem deps=[]. O localStorage ainda contém o perfil neste momento.
+    const stored = localStorage.getItem(USER_KEY);
+    const currentUser = stored
+      ? (() => { try { return JSON.parse(stored) as User; } catch { return null; } })()
+      : null;
+
+    void clearOfflineStateForLogout(currentUser).catch(() => {});
+
     clearAll();
     setUser(null);
   }, []);

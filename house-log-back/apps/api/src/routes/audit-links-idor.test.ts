@@ -442,7 +442,7 @@ describe('GET /audit/:token — consulta pública', () => {
     expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
     // Resposta não deve vazar nomes de propriedades ou IDs de outros tenants
-    expect(body.code).toBe('NOT_FOUND');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
     expect(body).not.toHaveProperty('tenantId');
     expect(body).not.toHaveProperty('propertyId');
   });
@@ -496,9 +496,9 @@ describe('GET /audit/:token — consulta pública', () => {
       buildEnv()
     );
 
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('LINK_EXPIRED');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 });
 
@@ -550,9 +550,9 @@ describe('POST /audit/:token/submit — submissão pública', () => {
       buildEnv()
     );
 
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('LINK_USED');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('link expirado no submit → 410 LINK_EXPIRED', async () => {
@@ -603,9 +603,9 @@ describe('POST /audit/:token/submit — submissão pública', () => {
       buildEnv()
     );
 
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('LINK_EXPIRED');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('token inválido (curto demais) → 400 INVALID_TOKEN', async () => {
@@ -617,8 +617,8 @@ describe('POST /audit/:token/submit — submissão pública', () => {
       buildEnv()
     );
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('INVALID_TOKEN');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 });

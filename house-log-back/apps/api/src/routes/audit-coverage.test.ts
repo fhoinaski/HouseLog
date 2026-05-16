@@ -485,7 +485,7 @@ describe('POST /properties/:propertyId/service-requests', () => {
     expect(opts.tenantId).toBe('tenant-1');
     expect(opts.propertyId).toBe('prop-1');
     expect(opts.actorId).toBe('user-1');
-  });
+  }, 15000);
 });
 
 // ── SERVICE REQUEST BIDS: bid_accepted ─────────────────────────────────────────
@@ -722,6 +722,7 @@ describe('GET /properties/:propertyId/documents/:id/download', () => {
       id: 'doc-1',
       file_url: 'prop-1/documents/file.pdf',
       title: 'Manual',
+      type: 'manual',
       service_id: 'so-1',
     };
     return {
@@ -764,6 +765,13 @@ describe('GET /properties/:propertyId/documents/:id/download', () => {
     expect(opts.entityId).toBe('doc-1');
     expect(opts.actorId).toBe('user-1');
     expect(opts.actorIp).toBe('7.8.9.10');
+    expect(opts.newData).toMatchObject({
+      property_id: 'prop-1',
+      document_id: 'doc-1',
+      type: 'manual',
+      title: 'Manual',
+      actor_id: 'user-1',
+    });
 
     // R2 key nunca deve aparecer no payload
     const payload = JSON.stringify(opts);

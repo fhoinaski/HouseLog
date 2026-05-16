@@ -16,6 +16,10 @@ type AuditScope = { canUploadPhotos: boolean; canUploadVideo: boolean; requiredF
 
 const auditLinks = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+function publicLinkUnavailable(c: Parameters<typeof err>[0]) {
+  return err(c, 'Link indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
+
 // ── POST /properties/:propertyId/services/:serviceId/audit-link ──────────────
 // Protected — requires auth
 
@@ -114,7 +118,7 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
 auditLinks.get('/public/:token', async (c) => {
   const db = getDb(c.env.DB);
   const rawToken = c.req.param('token')!;
-  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
 
   const tokenHash = await sha256TokenHash(rawToken);
@@ -158,15 +162,15 @@ auditLinks.get('/public/:token', async (c) => {
     )
     .limit(1);
 
-  if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
+  if (!link) return publicLinkUnavailable(c);
 
   if (new Date(link.expires_at) < new Date()) {
     await db.update(auditLinksTable).set({ status: 'expired' }).where(eq(auditLinksTable.id, link.id));
-    return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
+    return publicLinkUnavailable(c);
   }
 
-  if (link.status === 'expired') return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
-  if (link.status === 'used')    return err(c, 'Este link já foi utilizado', 'LINK_USED', 410);
+  if (link.status === 'expired') return publicLinkUnavailable(c);
+  if (link.status === 'used')    return publicLinkUnavailable(c);
 
   // Record access
   await db
@@ -205,7 +209,7 @@ auditLinks.get('/public/:token', async (c) => {
 auditLinks.post('/public/:token/submit', async (c) => {
   const db = getDb(c.env.DB);
   const rawToken = c.req.param('token')!;
-  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
 
   const tokenHash = await sha256TokenHash(rawToken);
@@ -242,13 +246,13 @@ auditLinks.post('/public/:token/submit', async (c) => {
     )
     .limit(1);
 
-  if (!link?.tenant_id) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
+  if (!link?.tenant_id) return publicLinkUnavailable(c);
   const linkTenantId = link.tenant_id;
-  if (link.status === 'used')   return err(c, 'Este link já foi utilizado', 'LINK_USED', 410);
-  if (link.status === 'expired') return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
+  if (link.status === 'used')   return publicLinkUnavailable(c);
+  if (link.status === 'expired') return publicLinkUnavailable(c);
   if (new Date(link.expires_at) < new Date()) {
     await db.update(auditLinksTable).set({ status: 'expired' }).where(eq(auditLinksTable.id, link.id));
-    return err(c, 'Este link expirou', 'LINK_EXPIRED', 410);
+    return publicLinkUnavailable(c);
   }
 
   const scope = (link.scope ?? { canUploadPhotos: true, canUploadVideo: false, requiredFields: [] }) as AuditScope;

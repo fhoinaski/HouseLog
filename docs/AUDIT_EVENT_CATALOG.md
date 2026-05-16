@@ -84,7 +84,12 @@ Nunca registrar:
 | P1 | `credential_updated` | Credentials and Sensitive Access | Alta | obrigatorio sem segredo |
 | P1 | `credential_deleted` | Credentials and Sensitive Access | Alta | obrigatorio sem segredo |
 | P1 | `document_uploaded` | Documents and Evidence | Alta | obrigatorio para acervo tecnico |
+| P1 | `document_downloaded` | Documents and Evidence | Alta | obrigatorio para acesso a arquivo sensivel |
 | P1 | `document_deleted` | Documents and Evidence | Alta | obrigatorio |
+| P0 | `handover_package_issued` | Handover Digital / Public Access Boundary | Critica | obrigatorio sem token |
+| P0 | `handover_package_revoked` | Handover Digital / Public Access Boundary | Critica | obrigatorio |
+| P0 | `handover_package_public_viewed` | Handover Digital / Public Access Boundary | Critica | obrigatorio para acesso publico |
+| P0 | `handover_package_public_accepted` | Handover Digital / Public Access Boundary | Critica | obrigatorio para aceite publico |
 | P1 | `service_order_status_changed` | Service Operations | Alta | obrigatorio |
 | P1 | `maintenance_mark_done` | Property Operating System | Alta | recomendado como nome canonico |
 | P1 | `service_order_created` | Service Operations | Alta | recomendado |
@@ -287,7 +292,103 @@ Nunca registrar:
   - URL permanente ou temporaria sem necessidade
 - **Observacao**: evento implementado no fluxo principal de exclusao documental. Deve ser acompanhado de confirmacao explicita no frontend.
 
-### 5.10 `document_ocr_requested`
+### 5.10 `document_downloaded`
+
+- **Prioridade**: P1
+- **Sensibilidade**: Alta
+- **Boundary**: Documents and Evidence
+- **Quando registrar**: download ou visualizacao inline de arquivo documental pelo endpoint autenticado.
+- **Action relacionada**: `GET /properties/:propertyId/documents/:id/download`.
+- **Autorizacao esperada**: acesso autenticado ao imovel no tenant ativo.
+- **Payload minimo**:
+  - `property_id`
+  - `document_id`
+  - `type`
+  - `title`
+  - `actor_id`
+- **Nao registrar**:
+  - `file_url`
+  - chave R2
+  - URL assinada
+  - conteudo do documento
+- **Observacao**: evento implementado sem expor a chave privada do arquivo.
+
+### 5.11 `handover_package_issued`
+
+- **Prioridade**: P0
+- **Sensibilidade**: Critica
+- **Boundary**: Handover Digital / Public Access Boundary
+- **Quando registrar**: emissao de pacote de handover com criacao de link publico.
+- **Action relacionada**: `POST /properties/:propertyId/handover-packages/:id/issue`.
+- **Autorizacao esperada**: `canIssueHandoverPackage`.
+- **Payload minimo**:
+  - `property_id`
+  - `status`
+  - `issued_at`
+  - `issued_by`
+  - `expires_at`
+  - `public_link_created`
+- **Nao registrar**:
+  - token completo
+  - hash do token
+  - hash do pacote
+  - snapshot completo quando nao for necessario para investigacao
+
+### 5.12 `handover_package_revoked`
+
+- **Prioridade**: P0
+- **Sensibilidade**: Critica
+- **Boundary**: Handover Digital / Public Access Boundary
+- **Quando registrar**: revogacao de pacote/link publico de handover.
+- **Action relacionada**: `POST /properties/:propertyId/handover-packages/:id/revoke`.
+- **Autorizacao esperada**: `canRevokeHandoverPackage`.
+- **Payload minimo**:
+  - `property_id`
+  - `status`
+  - `revoked_at`
+  - `revoked_by`
+  - `revoke_reason`
+- **Nao registrar**:
+  - token completo
+  - hash do token
+  - hash do pacote
+
+### 5.13 `handover_package_public_viewed`
+
+- **Prioridade**: P0
+- **Sensibilidade**: Critica
+- **Boundary**: Handover Digital / Public Access Boundary
+- **Quando registrar**: acesso bem-sucedido ao link publico de handover.
+- **Action relacionada**: `GET /public/handover/:token`.
+- **Payload minimo**:
+  - `actor_type = public`
+  - `source`
+- **Nao registrar**:
+  - token completo
+  - IP dentro do payload; usar `actor_ip`
+  - snapshot completo
+
+### 5.14 `handover_package_public_accepted`
+
+- **Prioridade**: P0
+- **Sensibilidade**: Critica
+- **Boundary**: Handover Digital / Public Access Boundary
+- **Quando registrar**: aceite publico do pacote de handover.
+- **Action relacionada**: `POST /public/handover/:token/accept`.
+- **Payload minimo**:
+  - `property_id`
+  - `status`
+  - `accepted_at`
+  - `actor_type = public`
+  - `acceptedByName`
+  - email mascaravel/necessario ao comprovante
+  - `hasSignature`
+- **Nao registrar**:
+  - token completo
+  - assinatura em base64
+  - accepted IP no payload; usar `actor_ip`
+
+### 5.15 `document_ocr_requested`
 
 - **Prioridade**: P2
 - **Sensibilidade**: Media/Alta
@@ -306,7 +407,7 @@ Nunca registrar:
   - dados sensiveis detectados no OCR
 - **Observacao**: evento implementado no fluxo principal de OCR documental. Recomendado antes de automatizar classificacao ou resumo documental.
 
-### 5.11 `service_order_created`
+### 5.16 `service_order_created`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -327,7 +428,7 @@ Nunca registrar:
   - dados pessoais excessivos
 - **Observacao**: evento implementado no fluxo principal de criacao de OS com payload minimo. OS e unidade operacional central do HouseLog.
 
-### 5.12 `service_order_status_changed`
+### 5.17 `service_order_status_changed`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -347,7 +448,7 @@ Nunca registrar:
   - payload de chat
 - **Observacao**: evento implementado no fluxo principal de mudanca de status de OS. Deve ser base para timeline e governanca operacional.
 
-### 5.13 `service_order_evidence_uploaded`
+### 5.18 `service_order_evidence_uploaded`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -380,7 +481,7 @@ Nunca registrar:
   - arquivo bruto
 - **Proximo passo**: revisar somente quando o chat tiver contrato explicito de anexo com metadados seguros ou quando anexos forem promovidos para documento/evidencia formal.
 
-### 5.14 `service_order_updated`
+### 5.19 `service_order_updated`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -400,7 +501,7 @@ Nunca registrar:
   - descricoes longas, anexos ou payload de checklist
 - **Observacao**: evento implementado no fluxo atual de edicao sem alterar contrato publico.
 
-### 5.15 `service_order_deleted`
+### 5.20 `service_order_deleted`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -419,7 +520,7 @@ Nunca registrar:
   - conversas ou mensagens vinculadas
 - **Observacao**: evento implementado no fluxo atual de exclusao logica sem alterar contrato publico.
 
-### 5.16 `service_order_checklist_updated`
+### 5.21 `service_order_checklist_updated`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta
@@ -439,7 +540,7 @@ Nunca registrar:
   - snapshots completos do checklist
 - **Observacao**: evento implementado no endpoint dedicado de checklist com payload de contagem para governanca sem excesso de dados.
 
-### 5.17 `provider_proposal_submitted`
+### 5.22 `provider_proposal_submitted`
 
 - **Prioridade**: P1
 - **Sensibilidade**: Alta

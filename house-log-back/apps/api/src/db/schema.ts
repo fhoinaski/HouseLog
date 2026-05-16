@@ -749,6 +749,7 @@ export const propertyAccessCredentials = sqliteTable('property_access_credential
   notes: text('notes'),
   integrationType: text('integration_type'),
   integrationConfig: text('integration_config', { mode: 'json' }).$type<Record<string, unknown> | null>(),
+  integrationSecret: text('integration_secret'),
   shareWithOs: integer('share_with_os').notNull().default(0),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),

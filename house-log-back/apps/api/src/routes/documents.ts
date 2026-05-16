@@ -308,6 +308,7 @@ documents.get('/:id/download', async (c) => {
       id: documentsTable.id,
       file_url: documentsTable.fileUrl,
       title: documentsTable.title,
+      type: documentsTable.type,
       service_id: documentsTable.serviceId,
     })
     .from(documentsTable)
@@ -337,6 +338,13 @@ documents.get('/:id/download', async (c) => {
     action: 'document_downloaded',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: propertyId,
+      document_id: id,
+      type: doc.type,
+      title: doc.title,
+      actor_id: userId,
+    },
   });
 
   return new Response(object.body, { headers });
