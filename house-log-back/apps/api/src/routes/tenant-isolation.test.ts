@@ -315,7 +315,9 @@ describe('POST /properties - novo imovel recebe UUID v4', () => {
 
 // ── Testes: cross-tenant property read → 404 ────────────────────────────────
 
-describe('GET /properties/:propertyId/rooms — property de outro tenant retorna 404', () => {
+describe('GET/POST /properties/:propertyId/rooms — property de outro tenant retorna 404', () => {
+  const insertValuesSpy = vi.fn(async () => undefined);
+
   function buildCrossTenantDb(propertyTenantId: string | null) {
     return {
       select: vi.fn()
@@ -341,8 +343,13 @@ describe('GET /properties/:propertyId/rooms — property de outro tenant retorna
             })),
           })),
         }),
+      insert: vi.fn(() => ({ values: insertValuesSpy })),
     };
   }
+
+  beforeEach(() => {
+    insertValuesSpy.mockClear();
+  });
 
   it('retorna 404 quando property pertence a outro tenant', async () => {
     vi.mocked(getDb).mockReturnValue(buildCrossTenantDb('tenant-b') as never);
@@ -350,7 +357,7 @@ describe('GET /properties/:propertyId/rooms — property de outro tenant retorna
     const req = authedRequest('http://localhost/properties/prop-x/rooms');
     const res = await buildRoomsApp().fetch(req, buildEnv());
 
-    expect([403, 404]).toContain(res.status);
+    expect(res.status).toBe(404);
   });
 
   it('retorna 404 quando property tem tenant_id NULL (registro legado)', async () => {
@@ -359,6 +366,23 @@ describe('GET /properties/:propertyId/rooms — property de outro tenant retorna
     const req = authedRequest('http://localhost/properties/prop-legacy/rooms');
     const res = await buildRoomsApp().fetch(req, buildEnv());
 
-    expect([403, 404]).toContain(res.status);
+    expect(res.status).toBe(404);
+  });
+
+  it('bloqueia POST e nao insere room quando property pertence a outro tenant', async () => {
+    vi.mocked(getDb).mockReturnValue(buildCrossTenantDb('tenant-b') as never);
+
+    const req = authedRequest('http://localhost/properties/prop-x/rooms', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'Sala', type: 'living' }),
+    });
+    const res = await buildRoomsApp().fetch(req, buildEnv());
+
+    expect(res.status).toBe(404);
+    expect(insertValuesSpy).not.toHaveBeenCalled();
   });
 });

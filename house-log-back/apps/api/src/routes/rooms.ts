@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
-import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
+import { authMiddleware, requireTenantPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { rooms as roomsTable } from '../db/schema';
 import { roomCreateSchema } from '@houselog/contracts';
@@ -13,6 +13,7 @@ const rooms = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 rooms.use('*', authMiddleware);
 rooms.use('*', resolveTenant);
+rooms.use('*', requireTenantPropertyAccess('propertyId', 'view'));
 
 const schema = roomCreateSchema;
 
@@ -33,12 +34,7 @@ const roomSelect = {
 rooms.get('/', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
-  const userId = c.get('userId');
-  const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
-
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso a este imóvel', 'FORBIDDEN', 403);
 
   const results = await db
     .select(roomSelect)
@@ -55,11 +51,7 @@ rooms.post('/', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
-  const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
-
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
@@ -109,12 +101,8 @@ rooms.get('/:id', async (c) => {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const id = c.req.param('id')!;
-  const userId = c.get('userId');
-  const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [room] = await db
     .select(roomSelect)
@@ -141,11 +129,8 @@ rooms.put('/:id', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const id = c.req.param('id')!;
   const userId = c.get('userId');
-  const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
     .select(roomSelect)
@@ -210,11 +195,8 @@ rooms.delete('/:id', async (c) => {
   const propertyId = c.req.param('propertyId')!;
   const id = c.req.param('id')!;
   const userId = c.get('userId');
-  const role = c.get('userRole');
   const tenantId = c.get('tenantId') as string;
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const [old] = await db
     .select(roomSelect)

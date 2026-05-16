@@ -34,6 +34,8 @@ Este documento deve ser lido como mapa operacional de proximas refatoracoes incr
 
 Helpers ja existentes:
 
+- `requireTenantPropertyAccess`
+- `assertTenantPropertyAccess`
 - `canAccessProperty`
 - `canRevealCredentialSecret`
 - `canListCredentials`
@@ -70,6 +72,24 @@ Helpers ja existentes:
 - `listAccessiblePropertyIds`
 
 Observacao: varios helpers ja nomeiam a action correta, mas ainda preservam a regra atual baseada em acesso contextual ao imovel. Isso e intencional para compatibilidade, mas ainda nao resolve granularidade final.
+
+### 3.1 Auditoria de rotas tenant/property (2026-05-16)
+
+Escopo auditado: `properties.ts`, `rooms.ts`, `maintenance.ts`, `warranties.ts`, `services.ts`, `documents.ts` e `credentials.ts`.
+
+Total encontrado no escopo: 63 rotas.
+
+| Arquivo | Rotas | Padrao atual | Risco |
+| --- | ---: | --- | --- |
+| `properties.ts` | 11 | `assertPropertyAccess` + filtros `tenantId`/`propertyId`; criacao usa regra propria de tenant | Medio |
+| `rooms.ts` | 5 | `requireTenantPropertyAccess` + filtros `tenantId`/`propertyId` por entidade | Baixo |
+| `maintenance.ts` | 7 | `assertPropertyAccess`, `canMarkMaintenanceDone` e helper local de schedule | Medio |
+| `warranties.ts` | 5 | helper local de property + validacao de referencias `room/service_order/document/inventory` | Medio |
+| `services.ts` | 11 | helpers por action de service order + validacoes de room/provider/evidencia | Alto |
+| `documents.ts` | 16 | helpers por action documental + validacoes de document/job/extraction/candidate | Alto |
+| `credentials.ts` | 8 | helpers de credencial, regra `secret` e auditoria sensivel | Alto |
+
+`requireTenantPropertyAccess` existe em `apps/api/src/middleware/auth.ts`. Em 2026-05-16, `rooms.ts` passou a usar o middleware diretamente porque suas checagens manuais eram equivalentes ao helper central. As demais rotas foram mantidas sem substituicao automatica por terem regras especificas de entidade, action, segredo, provider, ingestion ou referencia cruzada.
 
 ---
 
