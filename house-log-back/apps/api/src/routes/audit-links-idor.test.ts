@@ -27,6 +27,7 @@ vi.mock('../db/client', () => ({ getDb: vi.fn() }));
 vi.mock('../lib/audit', () => ({ writeAuditLog: vi.fn(async () => undefined) }));
 vi.mock('../lib/token-hash', () => ({
   sha256TokenHash: vi.fn(async (t: string) => `hash:${t}`),
+  publicTokenPlaceholder: vi.fn((id: string) => `hash-only:${id}`),
 }));
 
 vi.mock('../lib/jwt', () => ({

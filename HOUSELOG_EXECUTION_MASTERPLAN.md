@@ -263,7 +263,7 @@ Objetivo:
 Corrigir `house-log-back/apps/api/wrangler.toml` para deixar dev/prod seguros, separados e com filas funcionando.
 
 Problemas a resolver:
-1. `database_id` de dev e produção estão IDÊNTICOS (62bd81c4-77da-...) — separar.
+1. `database_id` de dev e produção estavam idênticos — separar sem registrar IDs reais no documento.
 2. KV de produção tem placeholder `COLE_AQUI_O_ID_DO_KV_PRODUCAO` — criar KV real ou bloquear deploy.
 3. Bug das filas:
    - prod producer "QUEUE" -> "houselog-jobs"

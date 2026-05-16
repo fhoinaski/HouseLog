@@ -97,6 +97,9 @@ wrangler r2 bucket create houselog-assets
 
 # Dev
 wrangler r2 bucket create houselog-assets-dev
+
+# Staging
+wrangler r2 bucket create houselog-assets-staging
 ```
 
 O `wrangler.toml` já referencia esses nomes — não é necessário copiar nenhum ID para R2.
@@ -111,6 +114,11 @@ bucket_name = "houselog-assets"
 [[env.dev.r2_buckets]]
 binding    = "STORAGE"
 bucket_name = "houselog-assets-dev"
+
+# Staging
+[[env.staging.r2_buckets]]
+binding    = "STORAGE"
+bucket_name = "houselog-assets-staging"
 ```
 
 ### 2.2 Configurar CORS no bucket
@@ -132,6 +140,7 @@ Aplique:
 ```bash
 wrangler r2 bucket cors put houselog-assets     --file house-log-back/apps/api/r2-cors.json
 wrangler r2 bucket cors put houselog-assets-dev --file house-log-back/apps/api/r2-cors.json
+wrangler r2 bucket cors put houselog-assets-staging --file house-log-back/apps/api/r2-cors.json
 ```
 
 ---
@@ -167,10 +176,19 @@ id      = "ID_DEV_AQUI"     # ← já preenchido no arquivo
 ## 4. Filas — Queues
 
 ```bash
+wrangler queues create houselog-jobs-dev
+wrangler queues create houselog-jobs-staging
 wrangler queues create houselog-jobs
+
+wrangler queues create houselog-document-ingestion-dev
+wrangler queues create houselog-document-ingestion-staging
+wrangler queues create houselog-document-ingestion
 ```
 
-O `wrangler.toml` já tem o binding configurado com esse nome.
+O `wrangler.toml` já tem os bindings configurados com esses nomes:
+
+- `QUEUE`: jobs gerais, como push assíncrono e thumbnails.
+- `DOCUMENT_INGESTION_QUEUE`: jobs de ingestão documental.
 
 ---
 
@@ -306,11 +324,11 @@ npx vercel deploy --prod
 ```
 [ ] wrangler login
 [ ] D1 prod criado → ID no wrangler.toml
-[ ] D1 dev criado  → ID no wrangler.toml  (ou usar o já existente)
+[ ] D1 dev criado  → ID aplicado somente na copia usada para deploy
 [ ] Migrations aplicadas: npm run db:migrate:local
-[ ] R2 buckets criados: houselog-assets + houselog-assets-dev
-[ ] KV namespace criado → IDs no wrangler.toml
-[ ] Queue criada: houselog-jobs
+[ ] R2 buckets criados: houselog-assets + houselog-assets-dev + houselog-assets-staging
+[ ] KV namespaces criados → IDs aplicados somente na copia usada para deploy
+[ ] Queues criadas: houselog-jobs, houselog-jobs-dev, houselog-jobs-staging, houselog-document-ingestion, houselog-document-ingestion-dev, houselog-document-ingestion-staging
 [ ] house-log-back/apps/api/.dev.vars preenchido com JWT_SECRET forte
 [ ] house-log-front/.env.local com NEXT_PUBLIC_API_URL
 [ ] npm install em house-log-front/

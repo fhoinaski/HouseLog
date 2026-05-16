@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const WRANGLER_PATH = 'house-log-back/apps/api/wrangler.toml';
 const PRODUCTION_READY = process.argv.includes('--production-ready');
+const STAGING_READY = process.argv.includes('--staging-ready');
+const DEV_READY = process.argv.includes('--dev-ready');
 const content = readFileSync(WRANGLER_PATH, 'utf8');
 
 const errors = [];
@@ -60,34 +62,76 @@ function trackedWranglerFiles() {
 
 const prodSection = sectionBetween(/^# --- CONFIGURACAO GLOBAL \/ PRODUCAO ---/m, /^\[env\.dev\]/m);
 const devStart = content.search(/^\[env\.dev\]/m);
-const devSection = devStart < 0 ? '' : content.slice(devStart);
+const stagingStart = content.search(/^\[env\.staging\]/m);
+const devSection = devStart < 0
+  ? ''
+  : content.slice(devStart, stagingStart > devStart ? stagingStart : undefined);
+const stagingSection = stagingStart < 0 ? '' : content.slice(stagingStart);
 
 const prodDatabaseId = matchOne(/database_name\s*=\s*"houselog-db"\s*\n\s*database_id\s*=\s*"([^"]+)"/m, 'database_id de producao');
 const devDatabaseId = matchOne(/\[\[env\.dev\.d1_databases\]\][\s\S]*?database_id\s*=\s*"([^"]+)"/m, 'database_id de dev');
+const stagingDatabaseId = matchOne(/\[\[env\.staging\.d1_databases\]\][\s\S]*?database_id\s*=\s*"([^"]+)"/m, 'database_id de staging');
 const prodKvId = matchOne(/\[\[kv_namespaces\]\][\s\S]*?id\s*=\s*"([^"]+)"/m, 'KV id de producao');
 const devKvId = matchOne(/\[\[env\.dev\.kv_namespaces\]\][\s\S]*?id\s*=\s*"([^"]+)"/m, 'KV id de dev');
+const stagingKvId = matchOne(/\[\[env\.staging\.kv_namespaces\]\][\s\S]*?id\s*=\s*"([^"]+)"/m, 'KV id de staging');
 const prodR2Bucket = matchOne(/\[\[r2_buckets\]\][\s\S]*?bucket_name\s*=\s*"([^"]+)"/m, 'R2 bucket de producao');
 const devR2Bucket = matchOne(/\[\[env\.dev\.r2_buckets\]\][\s\S]*?bucket_name\s*=\s*"([^"]+)"/m, 'R2 bucket de dev');
+const stagingR2Bucket = matchOne(/\[\[env\.staging\.r2_buckets\]\][\s\S]*?bucket_name\s*=\s*"([^"]+)"/m, 'R2 bucket de staging');
 
-if (prodDatabaseId && devDatabaseId && prodDatabaseId === devDatabaseId) {
-  errors.push('D1 dev e producao usam o mesmo database_id.');
+function ensureDistinct(label, entries) {
+  const seen = new Map();
+  for (const [envName, value] of entries) {
+    if (!value) continue;
+    const previous = seen.get(value);
+    if (previous) {
+      errors.push(`${label} de ${envName} reutiliza o mesmo valor de ${previous}.`);
+    }
+    seen.set(value, envName);
+  }
 }
 
-if (prodKvId && devKvId && prodKvId === devKvId) {
-  errors.push('KV dev e producao usam o mesmo namespace id.');
-}
+ensureDistinct('D1 database_id', [
+  ['production', prodDatabaseId],
+  ['dev', devDatabaseId],
+  ['staging', stagingDatabaseId],
+]);
 
-if (prodR2Bucket && devR2Bucket && prodR2Bucket === devR2Bucket) {
-  errors.push('R2 dev e producao usam o mesmo bucket.');
-}
+ensureDistinct('KV namespace id', [
+  ['production', prodKvId],
+  ['dev', devKvId],
+  ['staging', stagingKvId],
+]);
+
+ensureDistinct('R2 bucket', [
+  ['production', prodR2Bucket],
+  ['dev', devR2Bucket],
+  ['staging', stagingR2Bucket],
+]);
 
 if (content.includes('COLE_AQUI_O_ID_DO_KV_PRODUCAO')) {
   errors.push('KV de producao ainda usa o placeholder antigo COLE_AQUI_O_ID_DO_KV_PRODUCAO.');
 }
 
-for (const secretKey of ['JWT_SECRET', 'CREDENTIALS_ENCRYPTION_KEY', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'RESEND_API_KEY']) {
-  if (new RegExp(`^${secretKey}\\s*=`, 'm').test(prodSection)) {
-    errors.push(`${secretKey} nao deve ficar em wrangler.toml; use wrangler secret put.`);
+const sectionsByEnv = [
+  ['production', prodSection],
+  ['dev', devSection],
+  ['staging', stagingSection],
+];
+
+for (const secretKey of [
+  'JWT_SECRET',
+  'CREDENTIALS_ENCRYPTION_KEY',
+  'R2_PUBLIC_URL',
+  'R2_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'RESEND_API_KEY',
+  'VAPID_PRIVATE_KEY',
+]) {
+  for (const [envName, section] of sectionsByEnv) {
+    if (new RegExp(`^${secretKey}\\s*=`, 'm').test(section)) {
+      errors.push(`${secretKey} nao deve ficar em wrangler.toml (${envName}); use wrangler secret put.`);
+    }
   }
 }
 
@@ -110,20 +154,61 @@ for (const queue of devProducers) {
   }
 }
 
+const stagingProducers = queueNames(stagingSection, 'env.staging.queues.producers');
+const stagingConsumers = queueNames(stagingSection, 'env.staging.queues.consumers');
+
+if (stagingStart < 0) {
+  errors.push('Ambiente staging nao esta declarado no wrangler.toml.');
+}
+
+for (const queue of stagingProducers) {
+  if (!stagingConsumers.includes(queue)) {
+    errors.push(`Fila de staging "${queue}" tem producer sem consumer correspondente.`);
+  }
+  if (prodProducers.includes(queue)) {
+    errors.push(`Fila de staging "${queue}" reutiliza nome de fila de producao.`);
+  }
+  if (devProducers.includes(queue)) {
+    errors.push(`Fila de staging "${queue}" reutiliza nome de fila de dev.`);
+  }
+}
+
+if (content.includes('houselog-queue')) {
+  errors.push('Nome legado/invalido "houselog-queue" encontrado. Use "houselog-jobs" por ambiente.');
+}
+
+const expectedQueuesByEnv = [
+  ['production', prodProducers, ['houselog-jobs', 'houselog-document-ingestion']],
+  ['dev', devProducers, ['houselog-jobs-dev', 'houselog-document-ingestion-dev']],
+  ['staging', stagingProducers, ['houselog-jobs-staging', 'houselog-document-ingestion-staging']],
+];
+
+for (const [envName, actualQueues, expectedQueues] of expectedQueuesByEnv) {
+  for (const expectedQueue of expectedQueues) {
+    if (!actualQueues.includes(expectedQueue)) {
+      errors.push(`Fila esperada "${expectedQueue}" nao esta configurada em ${envName}.`);
+    }
+  }
+}
+
 const trackedWrangler = trackedWranglerFiles();
 if (trackedWrangler.length > 0) {
   errors.push(`Arquivos locais do Wrangler ainda estao versionados: ${trackedWrangler.join(', ')}`);
 }
 
-const invalidProductionPlaceholders = [
-  ['D1 production database_id', prodDatabaseId, '00000000-0000-0000-0000-000000000001'],
-  ['KV production namespace id', prodKvId, '00000000000000000000000000000001'],
+const invalidResourcePlaceholders = [
+  ['production', 'D1 database_id', prodDatabaseId, '00000000-0000-0000-0000-000000000001', PRODUCTION_READY],
+  ['production', 'KV namespace id', prodKvId, '00000000000000000000000000000001', PRODUCTION_READY],
+  ['staging', 'D1 database_id', stagingDatabaseId, '00000000-0000-0000-0000-000000000002', STAGING_READY],
+  ['staging', 'KV namespace id', stagingKvId, '00000000000000000000000000000002', STAGING_READY],
+  ['dev', 'D1 database_id', devDatabaseId, '00000000-0000-0000-0000-000000000101', DEV_READY],
+  ['dev', 'KV namespace id', devKvId, '00000000000000000000000000000101', DEV_READY],
 ];
 
-for (const [label, actual, invalidPlaceholder] of invalidProductionPlaceholders) {
+for (const [envName, label, actual, invalidPlaceholder, isReadyCheck] of invalidResourcePlaceholders) {
   if (actual === invalidPlaceholder) {
-    const message = `${label} ainda usa placeholder invalido intencional. Producao nao esta pronta para deploy.`;
-    if (PRODUCTION_READY) errors.push(message);
+    const message = `${label} de ${envName} ainda usa placeholder invalido intencional. ${envName} nao esta pronto para deploy.`;
+    if (isReadyCheck) errors.push(message);
     else warnings.push(message);
   }
 }

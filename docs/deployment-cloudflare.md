@@ -29,7 +29,6 @@ Variaveis importantes:
 - `CORS_ORIGINS` ou `CORS_ORIGIN`
 - `ENVIRONMENT`
 - `APP_URL`
-- `R2_PUBLIC_URL`
 - `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
@@ -38,6 +37,10 @@ Variaveis importantes:
 
 Secrets devem ser cadastrados por `wrangler secret put` e nunca gravados no
 `wrangler.toml`.
+
+`R2_PUBLIC_URL` e opcional e tambem nao deve ficar hardcoded no `wrangler.toml`.
+Configure com `wrangler secret put R2_PUBLIC_URL [--env dev|staging]` apenas se
+o bucket publico for intencionalmente habilitado para Image Resizing/avatars.
 
 Regra de CORS:
 
