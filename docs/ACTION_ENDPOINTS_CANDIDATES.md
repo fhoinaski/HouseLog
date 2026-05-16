@@ -65,7 +65,7 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 
 | Prioridade | Candidato | Boundary principal | Risco | Beneficio | Status recomendado |
 | --- | --- | --- | --- | --- | --- |
-| P0 | `revealCredentialSecret` | Credentials and Sensitive Access | Alto | Alto | manter como action endpoint e remover legado `GET` depois |
+| P0 | `revealCredentialSecret` | Credentials and Sensitive Access | Alto | Alto | action endpoint implementado, sem `GET` legado funcional |
 | P0 | `generateTemporaryCredentialAccess` | Credentials and Sensitive Access | Alto | Alto | formalizar auditoria e policy granular |
 | P0 | `createAuditLink` | Audit and Governance / Service Operations | Alto | Alto | manter action endpoint com Authorization Core |
 | P1 | `closeServiceOrderWithEvidence` | Service Operations / Documents and Evidence | Alto | Alto | evoluir depois do passo minimo ja iniciado no fluxo de status |
@@ -86,12 +86,12 @@ Action endpoints devem ser adotados apenas quando houver valor real de dominio h
 - **Boundary**: Credentials and Sensitive Access
 - **Operacao atual relacionada**: revelacao explicita de segredo de credencial.
 - **Motivo para action endpoint**: revelar segredo e uma acao sensivel e auditavel, nao uma leitura comum.
-- **Contrato recomendado**: `POST /properties/:propertyId/credentials/:credId/secret/reveal`
+- **Contrato atual**: `POST /properties/:propertyId/credentials/:credId/reveal`
 - **Autorizacao esperada**: `canRevealCredentialSecret`
 - **Auditoria esperada**: obrigatoria, action `secret_reveal`, sem registrar valor do segredo.
 - **Risco**: alto, por exposicao de credencial.
 - **Beneficio**: alto, porque corrige semantica HTTP, melhora governanca e prepara policy granular.
-- **Observacao**: o `GET /secret` legado deve permanecer apenas durante janela de compatibilidade; enquanto existir, deve ser sinalizado como depreciado e apontar para `POST /secret/reveal`.
+- **Observacao**: `GET /secret` e `POST /secret/reveal` nao sao caminhos funcionais de revelacao; novos consumidores devem usar somente `POST /reveal`.
 
 ### 5.2 `generateTemporaryCredentialAccess`
 
@@ -246,7 +246,7 @@ Nao criar action endpoint quando:
 
 ## 8. Proximos passos recomendados
 
-1. Manter `revealCredentialSecret` como referencia de action endpoint sensivel e concluir a remocao futura do `GET` legado.
+1. Manter `revealCredentialSecret` como referencia de action endpoint sensivel e nao reintroduzir caminho legado por `GET`.
 2. Adicionar auditoria formal a `generateTemporaryCredentialAccess`.
 3. Revisar `createAuditLink` como referencia de Public Access Boundary.
 4. Granularizar helpers do Authorization Core para service orders e maintenance antes de novas actions.

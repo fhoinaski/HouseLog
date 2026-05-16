@@ -249,7 +249,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
   let plainSecret: string;
   let integrationSecret: string | null = null;
   try {
-    plainSecret = await decryptStoredSecret(rawCred.secret, credKey);
+    plainSecret = await decryptStoredSecret(cred.secret, credKey);
     if (cred.integration_secret) {
       integrationSecret = await decryptStoredSecret(cred.integration_secret, credKey);
     }
@@ -389,20 +389,9 @@ credentials.post('/', async (c) => {
   return ok(c, { credential: toCredentialResponse(row) }, 201);
 });
 
-// â”€â”€ GET /properties/:propertyId/credentials/:credId/secret â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Blocked to prevent cache/log/preload exposure of credential secrets.
-
-credentials.get('/:credId/secret', async (c) => {
-  c.header('Allow', 'POST');
-  return c.json({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
-});
-
 // â”€â”€ POST /properties/:propertyId/credentials/:credId/reveal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 credentials.post('/:credId/reveal', revealCredentialSecret);
-
-// Backward-compatible alias while consumers migrate to /reveal.
-credentials.post('/:credId/secret/reveal', revealCredentialSecret);
 
 // â”€â”€ PUT /properties/:propertyId/credentials/:credId â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

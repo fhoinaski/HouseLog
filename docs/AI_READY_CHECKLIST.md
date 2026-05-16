@@ -107,7 +107,7 @@ Criterio:
 
 - listagens nunca retornam `secret`;
 - revelacao continua explicita, auditada e protegida por `canRevealCredentialSecret`;
-- novos consumidores devem usar `POST /secret/reveal`, nao o `GET` legado;
+- novos consumidores devem usar `POST /reveal`, nao o `GET` legado;
 - nao colocar segredo em logs, cache, prompt, estado global ou payload de compartilhamento sem escopo formal;
 - qualquer evolucao de IA envolvendo credenciais depende de policy granular futura.
 
@@ -205,7 +205,6 @@ Se qualquer resposta for incerta, a implementacao deve ser reduzida, documentada
 
 1. Usar esta checklist em novas refatoracoes de documentos, credenciais, OS, provider network e auditoria.
 2. Evoluir Authorization Core antes de qualquer automacao sensivel.
-3. Concluir a migracao de credenciais para a acao `POST /secret/reveal` e remover o legado quando seguro.
+3. Manter credenciais na acao `POST /reveal` e nao reintroduzir caminho legado por `GET`.
 4. Melhorar audit log com contexto operacional antes de criar experiencias assistidas.
 5. Formalizar uma ADR especifica apenas quando houver proposta concreta de agente, escopo, permissoes e riscos.
-

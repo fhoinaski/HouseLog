@@ -90,14 +90,30 @@ beforeEach(() => {
 });
 
 describe('credentials secret reveal hardening', () => {
-  it('bloqueia GET sem revelar segredo', async () => {
+  it('nao possui GET legado para revelar segredo', async () => {
     const db = createDb([]);
     vi.mocked(getDb).mockReturnValue(db as never);
 
     const response = await buildApp().fetch(new Request('http://localhost/properties/property-1/credentials/cred-1/secret', { method: 'GET' }), buildEnv());
 
-    expect(response.status).toBe(405);
-    expect(await response.json()).toMatchObject({ code: 'METHOD_NOT_ALLOWED' });
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain('plain-secret');
+  });
+
+  it('nao possui alias POST legado em /secret/reveal', async () => {
+    const db = createDb([]);
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const response = await buildApp().fetch(
+      new Request('http://localhost/properties/property-1/credentials/cred-1/secret/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Motivo valido para auditoria' }),
+      }),
+      buildEnv()
+    );
+
+    expect(response.status).toBe(404);
   });
 
   it('exige motivo no POST de revelação', async () => {
@@ -141,6 +157,16 @@ describe('credentials secret reveal hardening', () => {
 
     expect(vi.mocked(writeAuditLog)).toHaveBeenCalledTimes(1);
     const [, auditInput] = vi.mocked(writeAuditLog).mock.calls[0] ?? [];
+    expect(auditInput).toMatchObject({
+      action: 'secret_reveal',
+      tenantId: 'tenant-1',
+      propertyId: 'property-1',
+    });
+    expect(auditInput?.newData).toMatchObject({
+      reason: 'Compartilhar o acesso com a equipe',
+      tenant_id: 'tenant-1',
+      property_id: 'property-1',
+    });
     expect(JSON.stringify(auditInput)).not.toContain('plain-secret');
     expect(JSON.stringify(auditInput)).not.toContain('token');
     expect(JSON.stringify(auditInput)).not.toContain('hash');

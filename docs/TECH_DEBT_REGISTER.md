@@ -85,19 +85,17 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
-### TD-004 - Revelacao de credencial usa `GET` mesmo sendo acao sensivel e auditavel
+### TD-004 - Revelacao de credencial usava `GET` mesmo sendo acao sensivel e auditavel
 
 - **Severidade**: Alta
 - **Area**: Backend / Seguranca / Credenciais
-- **Status**: Mitigado parcialmente
-- **Evidencia**: `house-log-back/apps/api/src/routes/credentials.ts` ainda expoe `GET /properties/:propertyId/credentials/:credId/secret` por compatibilidade, mas ja existe `POST /properties/:propertyId/credentials/:credId/secret/reveal` como acao preferencial. O frontend consome o endpoint `POST` em `credentialsApi.revealSecret`, nao foram encontrados consumidores diretos de `GET /secret` em `house-log-front/src`, e a rota legada agora retorna headers de depreciacao.
-- **Impacto**: a semantica principal foi corrigida para novos consumidores, e o legado esta sinalizado; a rota `GET` ainda continua sendo ponto de atencao para caches/proxies e clareza operacional ate sua remocao.
+- **Status**: Mitigado
+- **Evidencia**: `house-log-back/apps/api/src/routes/credentials.ts` usa `POST /properties/:propertyId/credentials/:credId/reveal` como unico caminho funcional de revelacao. `GET /properties/:propertyId/credentials/:credId/secret` e `POST /properties/:propertyId/credentials/:credId/secret/reveal` nao possuem handler funcional. O frontend consome `credentialsApi.revealSecret` com `POST /reveal`.
+- **Impacto**: a semantica de action sensivel ficou explicita, com body validado, motivo obrigatorio e audit log sem segredo.
 - **Recomendacao**:
-  - fazer busca final de consumidores em frontend, backend, docs e integracoes antes da remocao;
-  - manter compatibilidade temporaria durante a janela de migracao;
-  - monitorar qualquer uso remanescente do endpoint legado sinalizado por headers de depreciacao;
-  - exigir body opcional com motivo/contexto quando a policy evoluir;
-  - remover a rota `GET` apenas apos validacao de auditoria e comunicacao de release.
+  - nao reintroduzir fallback para `GET /secret` ou `POST /secret/reveal`;
+  - manter testes de regressao para o endpoint unico `POST /reveal`;
+  - evoluir policy granular sem alterar a garantia de que listagens nao retornam segredo.
 - **Relacionamento com roadmap/ADRs**: Fase 2; ADR-004.
 
 ---
@@ -238,11 +236,10 @@ Este registro deve ser lido em conjunto com:
 ### Curto prazo
 
 1. TD-012 - concluir IDs reais/secrets de producao e validar `check:deploy-config:prod`.
-2. TD-004 - concluir migracao e remover consumidores legados de `GET /secret`.
-3. TD-005 - iniciar policy granular para credenciais.
-4. TD-010 - desenhar e iniciar Authorization Core.
-5. TD-003 - adicionar confirmacao de exclusao documental.
-6. TD-002 - padronizar erro de upload multipart.
+2. TD-005 - iniciar policy granular para credenciais.
+3. TD-010 - desenhar e iniciar Authorization Core.
+4. TD-003 - adicionar confirmacao de exclusao documental.
+5. TD-002 - padronizar erro de upload multipart.
 
 ### Medio prazo
 

@@ -112,16 +112,19 @@ Nunca registrar:
 - **Quando registrar**: toda revelacao explicita de segredo de credencial.
 - **Action relacionada**: `revealCredentialSecret`
 - **Autorizacao esperada**: `canRevealCredentialSecret`
+- **Contrato atual**: `POST /properties/:propertyId/credentials/:credId/reveal`
 - **Payload minimo**:
   - `property_id`
+  - `tenant_id`
   - `credential_id`
   - `category`
   - `label`
   - `actor_id`
+  - `reason`
 - **Nao registrar**:
   - `secret`
   - senha, PIN, token ou valor revelado
-- **Observacao**: evento ja existe no fluxo de credenciais e deve permanecer como referencia para acoes sensiveis.
+- **Observacao**: evento ja existe no fluxo de credenciais e deve permanecer como referencia para acoes sensiveis. O motivo de revelacao e obrigatorio no contrato atual, com minimo de 10 caracteres, e a rota antiga `GET /secret` nao deve ser usada para revelar segredo.
 
 ### 5.2 `temporary_credential_access_generated`
 

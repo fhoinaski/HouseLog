@@ -106,19 +106,21 @@ Deve auditar `credential_deleted` sem gravar segredo ou payload sensivel.
 
 ### Revelacao
 
-Preferencial:
+Contrato atual:
 
-`POST /properties/:propertyId/credentials/:credId/secret/reveal`
+`POST /properties/:propertyId/credentials/:credId/reveal`
 
-Legado temporario:
+Contrato legado removido/bloqueado:
 
 `GET /properties/:propertyId/credentials/:credId/secret`
 
-O fluxo preferencial agora usa `POST`, porque revelar segredo e uma acao explicita, sensivel e auditavel. A rota `GET` permanece temporariamente por compatibilidade com consumidores legados durante a migracao e deve retornar headers de depreciacao.
+O fluxo atual usa somente `POST /reveal`, porque revelar segredo e uma acao explicita, sensivel e auditavel. A rota `GET /secret` nao deve existir como caminho funcional de revelacao.
 
 Deve:
 
 - exigir `canRevealCredentialSecret`;
+- exigir tenant ativo e validar `tenantId + propertyId`;
+- exigir `reason` com minimo de 10 caracteres;
 - registrar auditoria;
 - nunca gravar o segredo no audit payload;
 - retornar `secret_revealed: true`.
@@ -131,14 +133,12 @@ Deve:
 - listagem normal de credenciais nunca deve incluir `integration_config.password`.
 - updates podem omitir o segredo de integracao para preservar o valor atual sem reexposicao.
 
-Regra de migracao:
+Regra operacional:
 
-- novos consumidores devem usar `POST /secret/reveal`;
-- consumidores existentes em `GET /secret` devem ser migrados antes da remocao;
-- frontend atual usa `credentialsApi.revealSecret` com `POST /secret/reveal`; nao foram encontrados consumidores diretos de `GET /secret` em `house-log-front/src` nesta revisao;
-- rota `GET /secret` permanece funcional, mas marcada com `Deprecation: true`, `Warning` e `Link` para o endpoint sucessor;
-- a remocao da rota legada exige busca previa de consumidores, comunicacao de release e validacao de auditoria;
-- corpo com motivo/contexto de revelacao ainda nao e obrigatorio nesta etapa, mas permanece como evolucao prevista.
+- novos consumidores devem usar somente `POST /reveal`;
+- `GET /secret` e `POST /secret/reveal` nao devem ser reintroduzidos;
+- frontend atual usa `credentialsApi.revealSecret` com `POST /reveal`;
+- o motivo/contexto de revelacao e obrigatorio e registrado no audit log sem segredo.
 
 ### Acesso temporario
 
@@ -167,13 +167,11 @@ Esses pontos permanecem no roadmap de Authorization Core, multi-tenant e governa
 
 ## 7. Evolucao recomendada
 
-1. Remover consumidores restantes da rota legada `GET /secret`.
-2. Registrar motivo/contexto de revelacao.
-3. Criar entidade futura `CredentialAccessPolicy`.
-4. Diferenciar permissao de listar, criar, editar, remover, revelar, compartilhar e gerar acesso temporario.
-5. Integrar policy a tenant/organization quando multi-tenant real for introduzido.
-6. Evoluir auditoria para motivo/contexto operacional sem gravar valores sensiveis.
-7. Avaliar criptografia forte e rotacao de segredos.
+1. Criar entidade futura `CredentialAccessPolicy`.
+2. Diferenciar permissao de listar, criar, editar, remover, revelar, compartilhar e gerar acesso temporario.
+3. Integrar policy a tenant/organization quando multi-tenant real for introduzido.
+4. Evoluir auditoria para contexto operacional mais rico sem gravar valores sensiveis.
+5. Avaliar rotacao de segredos.
 
 ---
 

@@ -259,9 +259,9 @@ Fazer:
 
 Contrato preferencial:
 
-- `POST /properties/:propertyId/credentials/:credId/secret/reveal`
+- `POST /properties/:propertyId/credentials/:credId/reveal`
 
-Legado temporario:
+Legado removido/bloqueado:
 
 - `GET /properties/:propertyId/credentials/:credId/secret`
 
@@ -276,10 +276,10 @@ UX esperada:
 
 Regra de compatibilidade:
 
-- novos consumidores devem usar `POST /secret/reveal`;
-- manter suporte ao legado apenas em wrappers de API enquanto a migracao nao for concluida;
+- novos consumidores devem usar `POST /reveal`;
+- nao manter fallback para o legado em wrappers de API;
 - nao criar novas telas dependentes do `GET` legado.
-- estado atual: `credentialsApi.revealSecret` ja usa `POST /secret/reveal`; nao reintroduzir chamada direta ao `GET /secret`.
+- estado atual: `credentialsApi.revealSecret` usa `POST /reveal`; nao reintroduzir chamada direta ao `GET /secret`.
 
 ### 9.2 `generateTemporaryCredentialAccess`
 
