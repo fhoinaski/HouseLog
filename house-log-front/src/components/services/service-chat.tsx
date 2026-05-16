@@ -22,10 +22,29 @@ export function ServiceChat({ serviceOrderId, title = 'Chat da OS' }: ServiceCha
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Ao receber 403 ou 404 o canal de mensagens desativa completamente —
+  // o usuário não é participante desta OS e revalidar não vai mudar isso.
+  // Precisa de useState (não useRef) para forçar re-render e mudar a key do SWR para null,
+  // desligando o refreshInterval na próxima tick.
+  const [forbidden, setForbidden] = useState(false);
+
   const { data, mutate, isLoading, error } = useSWR(
-    ['service-messages', serviceOrderId],
+    forbidden ? null : ['service-messages', serviceOrderId],
     () => messagesApi.list(serviceOrderId),
-    { refreshInterval: 6000 }
+    {
+      refreshInterval: 6000,
+      onErrorRetry(err, _key, _config, revalidate, { retryCount }) {
+        const status = (err as { status?: number })?.status;
+        // Erros definitivos — desativa o SWR inteiro via key = null
+        if (status === 403 || status === 404) {
+          setForbidden(true);
+          return;
+        }
+        // Demais erros: até 3 tentativas com backoff
+        if (retryCount >= 3) return;
+        setTimeout(() => revalidate({ retryCount }), Math.min(1_000 * 2 ** retryCount, 30_000));
+      },
+    }
   );
 
   const messages = data?.data ?? [];
