@@ -148,14 +148,16 @@ api.route('/provider', provider);
 // Audit link creation (nested under property+service)
 api.route('/properties/:propertyId/services/:serviceId/audit-link', auditLinks);
 
-// Team invites and acceptance links
-api.route('/', invites);
-
-// Public audit endpoints (no auth required — handled inside the route)
+// Public audit endpoints (no auth required — must be registered BEFORE '/' invites,
+// because invites.use('*', authMiddleware) would otherwise intercept these paths first.
 api.route('/audit', auditLinks);
 
-// Public handover package view (tokenized)
+// Public handover package view (tokenized, no auth — also before invites for the same reason)
 api.route('/public', publicHandover);
+
+// Team invites and acceptance links — mounts use('*', authMiddleware) at root,
+// so it MUST come after all public routes to avoid blocking them.
+api.route('/', invites);
 
 // Full-text search (services, documents/OCR, inventory, maintenance)
 api.route('/search', search);

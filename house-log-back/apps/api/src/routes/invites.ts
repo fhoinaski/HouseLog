@@ -90,6 +90,70 @@ async function canManagePropertyTeam(
   });
 }
 
+// ── Public: get invite details ────────────────────────────────────────────────
+// MUST be registered before the global authMiddleware below, otherwise
+// invites.use('*', authMiddleware) will intercept this path and return 401.
+
+invites.get('/invite/:token', async (c) => {
+  const db = getDb(c.env.DB);
+  const { token: rawToken } = c.req.param();
+  if (!rawToken || rawToken.length < 8) return err(c, 'Convite inválido', 'INVALID_TOKEN', 400);
+
+  const tokenHash = await sha256TokenHash(rawToken);
+
+  const [invite] = await db
+    .select({
+      id: propertyInvites.id,
+      email: propertyInvites.email,
+      role: propertyInvites.role,
+      expires_at: propertyInvites.expiresAt,
+      accepted_at: propertyInvites.acceptedAt,
+      invite_name: propertyInvites.inviteName,
+      whatsapp: propertyInvites.whatsapp,
+      property_name: properties.name,
+      property_address: properties.address,
+      property_city: properties.city,
+      invited_by_name: users.name,
+      property_id: propertyInvites.propertyId,
+      tenant_id: propertyInvites.tenantId,
+    })
+    .from(propertyInvites)
+    .innerJoin(properties, eq(properties.id, propertyInvites.propertyId))
+    .innerJoin(users, eq(users.id, propertyInvites.invitedBy))
+    .where(
+      and(
+        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`,
+        eq(propertyInvites.tenantId, properties.tenantId),
+        isNull(properties.deletedAt)
+      )
+    )
+    .limit(1) as Array<{
+    id: string; email: string; role: string; expires_at: string; accepted_at: string | null;
+    invite_name: string | null;
+    whatsapp: string | null;
+    property_name: string; property_address: string; property_city: string;
+    invited_by_name: string; property_id: string; tenant_id: string | null;
+  }>;
+
+  if (!invite?.tenant_id) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
+  if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
+
+  const email = invite.email.endsWith('@pending.houselog.local') ? null : invite.email;
+
+  return ok(c, {
+    email,
+    invite_name: invite.invite_name,
+    whatsapp: invite.whatsapp,
+    role: invite.role,
+    expires_at: invite.expires_at,
+    property_name: invite.property_name,
+    property_address: invite.property_address,
+    property_city: invite.property_city,
+    invited_by_name: invite.invited_by_name,
+  });
+});
+
 // ── Protected: create invite ──────────────────────────────────────────────────
 
 invites.use('*', authMiddleware);
@@ -555,68 +619,6 @@ invites.delete('/properties/:propertyId/invites/:inviteId', authMiddleware, asyn
 
   await db.delete(propertyInvites).where(and(eq(propertyInvites.id, inviteId), eq(propertyInvites.tenantId, tenantId), eq(propertyInvites.propertyId, propertyId)));
   return ok(c, { success: true });
-});
-
-// ── Public: get invite details ────────────────────────────────────────────────
-
-invites.get('/invite/:token', async (c) => {
-  const db = getDb(c.env.DB);
-  const { token: rawToken } = c.req.param();
-  if (!rawToken || rawToken.length < 8) return err(c, 'Convite inválido', 'INVALID_TOKEN', 400);
-
-  const tokenHash = await sha256TokenHash(rawToken);
-
-  const [invite] = await db
-    .select({
-      id: propertyInvites.id,
-      email: propertyInvites.email,
-      role: propertyInvites.role,
-      expires_at: propertyInvites.expiresAt,
-      accepted_at: propertyInvites.acceptedAt,
-      invite_name: propertyInvites.inviteName,
-      whatsapp: propertyInvites.whatsapp,
-      property_name: properties.name,
-      property_address: properties.address,
-      property_city: properties.city,
-      invited_by_name: users.name,
-      property_id: propertyInvites.propertyId,
-      tenant_id: propertyInvites.tenantId,
-    })
-    .from(propertyInvites)
-    .innerJoin(properties, eq(properties.id, propertyInvites.propertyId))
-    .innerJoin(users, eq(users.id, propertyInvites.invitedBy))
-    .where(
-      and(
-        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`,
-        eq(propertyInvites.tenantId, properties.tenantId),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1) as Array<{
-    id: string; email: string; role: string; expires_at: string; accepted_at: string | null;
-    invite_name: string | null;
-    whatsapp: string | null;
-    property_name: string; property_address: string; property_city: string;
-    invited_by_name: string; property_id: string; tenant_id: string | null;
-  }>;
-
-  if (!invite?.tenant_id) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
-  if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
-  if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
-
-  const email = invite.email.endsWith('@pending.houselog.local') ? null : invite.email;
-
-  return ok(c, {
-    email,
-    invite_name: invite.invite_name,
-    whatsapp: invite.whatsapp,
-    role: invite.role,
-    expires_at: invite.expires_at,
-    property_name: invite.property_name,
-    property_address: invite.property_address,
-    property_city: invite.property_city,
-    invited_by_name: invite.invited_by_name,
-  });
 });
 
 // ── Protected: accept invite ──────────────────────────────────────────────────
