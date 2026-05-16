@@ -72,8 +72,14 @@ export type OqOsUpdateItem = OqBase & {
 
 export type OqItem = OqPhotoItem | OqOsUpdateItem;
 
-/** Tipo parcial para enfileirar — os campos gerenciados pela fila são omitidos. */
-export type OqEnqueueInput = Omit<OqItem, 'id' | 'status' | 'attempts' | 'createdAt'>;
+/**
+ * Tipo de entrada para enfileirar — os campos gerenciados pela fila são omitidos.
+ * Usa distribuição explícita do union para preservar o discriminante `type`
+ * e os campos específicos de cada variante (evidenceType, file, patch, etc.).
+ */
+export type OqEnqueueInput =
+  | Omit<OqPhotoItem, 'id' | 'status' | 'attempts' | 'createdAt'>
+  | Omit<OqOsUpdateItem, 'id' | 'status' | 'attempts' | 'createdAt'>;
 
 // ── IDB internals ─────────────────────────────────────────────────────────────
 
