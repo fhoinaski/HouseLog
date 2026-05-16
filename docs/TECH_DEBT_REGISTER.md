@@ -164,19 +164,26 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
-### TD-009 - Ausencia de multi-tenant real
+### TD-009 - Ausencia de multi-tenant real (mitigado parcialmente)
 
 - **Severidade**: Critica
 - **Area**: Arquitetura / Backend / Produto / Seguranca
-- **Status**: Aberto
+- **Status**: Mitigado parcialmente
 - **Evidencia**: a arquitetura atual ainda opera principalmente por usuario, propriedade e roles simples; `ARCHITECTURE_TARGET.md` e ADR-005 definem evolucao para tenant, organizacao, memberships e isolamento formal.
 - **Impacto**: limita escala B2B, construtoras, administradoras, portfolios independentes, redes homologadas por organizacao e isolamento forte de dados.
-- **Recomendacao**:
-  - planejar migracao incremental com `organization_id`/tenant context;
-  - criar memberships e provider scopes;
-  - fazer backfill de dados existentes;
-  - nunca introduzir migracao destrutiva sem plano e checklist;
-  - alinhar frontend a contexto organizacional quando backend estiver pronto.
+- **Mitigação aplicada (base multi-tenant concluída)**:
+  - `tenants` e `tenant_members` criadas e populadas (0014).
+  - `tenant_id` presente e NOT NULL (DDL) em 19 tabelas críticas após 0033.
+  - `resolveTenant` middleware em todas as rotas autenticadas; rejeita 400 sem membership ativo.
+  - Backfill completo de dados legados via 0032; scripts de diagnóstico e relatório de órfãos disponíveis.
+  - Isolamento cross-tenant testado e funcional (routes/tenant-isolation.test.ts, routes/idor-isolation.test.ts).
+  - Schema Drizzle consistente com DDL em todas as tabelas críticas.
+- **Pendente (próximas fases)**:
+  - `organization_id` dentro de um tenant (sub-unidades, carteiras, regionais).
+  - Memberships com escopo por organization.
+  - Provider scopes homologados por tenant.
+  - Frontend alinhado a contexto organizacional.
+  - Nenhuma dessas fases deve introduzir migração destrutiva sem plano e checklist.
 - **Relacionamento com roadmap/ADRs**: Fase 7; ADR-005.
 
 ---
@@ -287,29 +294,40 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
-### TD-014 - tenant_id nullable nas tabelas principais (mitigado parcialmente)
+### TD-014 - tenant_id nullable nas tabelas principais (mitigado)
 
 - **Severidade**: Critica
 - **Area**: Backend / Multi-tenant / Isolamento de Dados
-- **Status**: Mitigado parcialmente
-- **Evidencia**: migration `0014_tenant_foundation.sql` adicionou `tenant_id` nullable em 20 tabelas e fez backfill dos dados legados via `owner_id → tenant_members`. Novas tabelas criadas após 0014 (`technical_systems`, `technical_points`, `warranties`, `renovations`, `handover_packages`, `handover_checklist_items`, `document_ingestion_jobs`, etc.) já usam `NOT NULL`. As 20 tabelas originais permanecem `nullable` enquanto o backfill de dados legados não for validado.
+- **Status**: Mitigado
+- **Evidencia**: migration `0014_tenant_foundation.sql` adicionou `tenant_id` nullable em 20 tabelas e fez backfill dos dados legados via `owner_id → tenant_members`. Novas tabelas criadas após 0014 (`technical_systems`, `technical_points`, `warranties`, `renovations`, `handover_packages`, `handover_checklist_items`, `document_ingestion_jobs`, etc.) já usam `NOT NULL`. Migration `0032_tenant_backfill_and_null_guards.sql` completou o backfill de produção e adicionou triggers que bloqueiam INSERT/UPDATE com tenant_id NULL nas 19 tabelas críticas. Migration `0033_tenant_not_null.sql` aplica o constraint NOT NULL real no DDL via recriação de tabela.
 - **Mitigação aplicada (P0-TENANT-BACKFILL-01)**:
   - Todas as rotas autenticadas usam `resolveTenant` middleware — rejeita com 400 `TENANT_REQUIRED` se não houver membership ativo.
   - Todos os handlers de criação (rooms, services, expenses, credentials, documents, audit-links, invites, maintenance, service-requests, bids, renovations, warranties, handover) injetam `tenantId` do contexto no INSERT.
-  - Scripts de diagnóstico e backfill criados em `apps/api/src/db/backfill/`:
-    - `phase_a_diagnostic.sql` — relatório de `tenant_id IS NULL` por tabela (somente-leitura, compatível com `wrangler d1 execute`).
-    - `phase_b_safe_backfill.sql` — backfill idempotente: preenche apenas registros `NULL` a partir do parent; nunca sobrescreve valor existente.
-    - `phase_c_orphan_report.sql` — relatório de órfãos pós-backfill (registros sem parent resolvível).
-  - Helpers puros para decisão de backfill: `lib/backfill-diagnostics.ts` (`resolveChildTenant`, `resolvePropertyTenant`, `BACKFILL_STRATEGIES`).
-  - Testes: `lib/backfill-diagnostics.test.ts`, `lib/tenant-authorization.test.ts`, `lib/room-tenant.test.ts`, `lib/service-tenant.test.ts`, `lib/expense-tenant.test.ts` e outros por domínio. Testes de rota em `routes/tenant-isolation.test.ts` cobrem `resolveTenant`, insert com tenantId e cross-tenant read → 404.
+  - Scripts de diagnóstico e backfill em `apps/api/src/db/backfill/`:
+    - `phase_a_diagnostic.sql` — relatório de `tenant_id IS NULL` por tabela (somente-leitura).
+    - `phase_b_safe_backfill.sql` — backfill idempotente: preenche apenas registros `NULL` a partir do parent.
+    - `phase_c_orphan_report.sql` — relatório de órfãos pós-backfill.
+  - Helpers puros: `lib/backfill-diagnostics.ts` (`resolveChildTenant`, `resolvePropertyTenant`, `BACKFILL_STRATEGIES`, `CRITICAL_NULLABLE_TENANT_TABLES`).
+  - Testes: `lib/backfill-diagnostics.test.ts`, `lib/tenant-authorization.test.ts`, `lib/room-tenant.test.ts`, `lib/service-tenant.test.ts`, `lib/expense-tenant.test.ts` e outros por domínio. `routes/tenant-isolation.test.ts`, `routes/tenant-not-null.test.ts` (Fase D).
+- **Mitigação aplicada (Fase D — 0033)**:
+  - Migration `0032_tenant_backfill_and_null_guards.sql`: backfill completo com `SELECT changes()` por tabela + triggers BEFORE INSERT/UPDATE bloqueando NULL em 19 tabelas críticas. `audit_log` permanece nullable (eventos globais sem tenant scope são legítimos).
+  - Migration `0033_tenant_not_null.sql`: recriação de 19 tabelas com DDL `NOT NULL` em `tenant_id`. Padrão `CREATE new → INSERT FROM old → DROP old → RENAME`. PRAGMA foreign_keys OFF durante a operação + foreign_key_check ao final. Triggers de 0032 descartados automaticamente ao DROP; constraint DDL substitui enforcement por trigger.
+  - Schema Drizzle `schema.ts`: `.notNull()` declarado em todas as 19 tabelas desde a migração de schema (consistente com o DDL após 0033).
+  - `routes/tenant-not-null.test.ts`: 14 testes cobrindo consistência estrutural, idempotência, decisões de backfill, enforcement de camada de aplicação, relatório de órfãos e invariantes de BACKFILL_STRATEGIES.
 - **Risco restante**:
-  - As 20 tabelas originais ainda têm `tenant_id TEXT` sem `NOT NULL`. Registros legados não resolvíveis pelo backfill permanecem com `tenant_id IS NULL` — serão excluídos das listagens por filtragem de tenant ativo, mas podem criar débito de limpeza.
-  - Sem a constraint `NOT NULL`, um bug de código poderia criar um registro sem `tenant_id` sem falha de banco.
-- **Próxima etapa (Fase D — não implementar sem validação)**:
-  - Executar `phase_a_diagnostic.sql` no banco de produção. Se `null_tenant = 0` em todas as tabelas, prosseguir.
-  - Executar `phase_b_safe_backfill.sql`. Reexecutar `phase_a`. Se `null_tenant > 0` ainda, executar `phase_c_orphan_report.sql` para triagem manual.
-  - Quando `orphaned = 0` em todas as tabelas e validação em dev por ≥ 24h: criar migration `0026_tenant_not_null.sql` usando recriação de tabela (D1/SQLite não suporta `ALTER COLUMN`). Padrão: `CREATE TABLE ... NOT NULL → INSERT FROM old → DROP old → RENAME`.
-  - Executar somente com backup completo confirmado.
+  - `audit_log.tenant_id` permanece nullable por design — eventos de autenticação global (login_failed, token_refreshed) não têm tenant scope.
+  - Registros irresolvíveis (orphaned) identificados pelo `phase_c_orphan_report.sql` precisam de triagem manual por operador; não foram apagados automaticamente.
+- **Comandos de execução em produção**:
+  ```bash
+  # 1. Confirmar precondições (deve retornar null_tenant = 0 em todas as tabelas)
+  wrangler d1 execute houselog-db --command "$(cat apps/api/src/db/backfill/phase_a_diagnostic.sql)"
+  # 2. Backup
+  wrangler d1 export houselog-db > backup_$(date +%Y%m%d_%H%M).sql
+  # 3. Aplicar migration
+  wrangler d1 migrations apply houselog-db
+  # 4. Verificar integridade
+  wrangler d1 execute houselog-db --command "PRAGMA foreign_key_check;"
+  ```
 - **Relacionamento com roadmap/ADRs**: Sprint 4; ADR-005 (multi-tenant incremental); TD-009.
 
 ---
