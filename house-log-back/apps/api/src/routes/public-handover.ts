@@ -10,6 +10,10 @@ import { hashPublicHandoverToken, resolvePublicHandoverPackage } from '../lib/ha
 
 const publicHandover = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+function publicLinkUnavailable(c: Parameters<typeof err>[0]) {
+  return err(c, 'Link indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
+
 /** Truncate user-agent to a safe max length before persisting. */
 function truncateUserAgent(ua: string | null | undefined): string | null {
   if (!ua) return null;
@@ -57,13 +61,7 @@ publicHandover.get('/handover/:token', async (c) => {
     const resolved = resolvePublicHandoverPackage(row ?? null);
     if (!resolved.ok) {
       if (resolved.status === 500) return err(c, 'Erro interno', 'INTERNAL_ERROR', 500);
-      if (resolved.code === 'LINK_EXPIRED') {
-        return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
-      }
-      if (resolved.code === 'PACKAGE_REVOKED') {
-        return err(c, 'Pacote revogado', 'PACKAGE_REVOKED', 410);
-      }
-      return err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
+      return publicLinkUnavailable(c);
     }
     await writeAuditLog(c.env.DB, {
       tenantId: row!.tenant_id,
@@ -74,6 +72,7 @@ publicHandover.get('/handover/:token', async (c) => {
       actorId: null,
       actorIp: c.req.header('CF-Connecting-IP') ?? undefined,
       newData: {
+        actor_type: 'public',
         source: 'public_handover_link',
       },
     });
@@ -130,19 +129,19 @@ publicHandover.post('/handover/:token/accept', async (c) => {
     .where(and(eq(handoverPackages.publicAccessTokenHash, tokenHash), isNull(handoverPackages.deletedAt)))
     .limit(1);
 
-  if (!row) return err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
+  if (!row) return publicLinkUnavailable(c);
 
   if (row.revoked_at || row.status === 'revoked') {
-    return err(c, 'Pacote revogado', 'PACKAGE_REVOKED', 410);
+    return publicLinkUnavailable(c);
   }
 
   if (row.status === 'expired') {
-    return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
+    return publicLinkUnavailable(c);
   }
 
   const expiresAtMs = row.expires_at ? new Date(row.expires_at).getTime() : Number.NaN;
   if (Number.isNaN(expiresAtMs) || expiresAtMs <= Date.now()) {
-    return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
+    return publicLinkUnavailable(c);
   }
 
   if (row.status === 'accepted' || row.accepted_at) {
@@ -150,7 +149,7 @@ publicHandover.post('/handover/:token/accept', async (c) => {
   }
 
   if (row.status !== 'issued') {
-    return err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
+    return publicLinkUnavailable(c);
   }
 
   const now = new Date().toISOString();
@@ -201,6 +200,7 @@ publicHandover.post('/handover/:token/accept', async (c) => {
       property_id: row.property_id,
       status: 'accepted',
       accepted_at: now,
+      actor_type: 'public',
       acceptedByName: parsedBody.data.acceptedByName,
       acceptedByEmail: parsedBody.data.acceptedByEmail,
       acceptanceNotes: parsedBody.data.acceptanceNotes ?? null,
@@ -213,9 +213,7 @@ publicHandover.post('/handover/:token/accept', async (c) => {
   const resolved = resolvePublicHandoverPackage(acceptedRow);
   if (!resolved.ok) {
     if (resolved.status === 500) return err(c, 'Erro interno', 'INTERNAL_ERROR', 500);
-    if (resolved.code === 'LINK_EXPIRED') return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
-    if (resolved.code === 'PACKAGE_REVOKED') return err(c, 'Pacote revogado', 'PACKAGE_REVOKED', 410);
-    return err(c, 'Pacote nao encontrado', 'NOT_FOUND', 404);
+    return publicLinkUnavailable(c);
   }
 
   return ok(c, { package: resolved.package });

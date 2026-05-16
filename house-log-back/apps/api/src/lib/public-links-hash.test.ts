@@ -227,7 +227,7 @@ describe('GET /audit/public/:token — audit links públicos', () => {
   it('retorna 400 para token muito curto (< 8 chars)', async () => {
     const app = await buildAuditApp();
     const res = await app.fetch(new Request('http://localhost/audit/public/abc'), buildEnv());
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it('retorna 404 quando link não encontrado por hash', async () => {
@@ -263,9 +263,9 @@ describe('GET /audit/public/:token — audit links públicos', () => {
       new Request('http://localhost/audit/public/validtoken12345678901234567890'),
       buildEnv()
     );
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('LINK_EXPIRED');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('retorna 410 para link com status=used', async () => {
@@ -288,9 +288,9 @@ describe('GET /audit/public/:token — audit links públicos', () => {
       new Request('http://localhost/audit/public/validtoken12345678901234567890'),
       buildEnv()
     );
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('LINK_USED');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('200 — DTO não contém campo token', async () => {
@@ -349,7 +349,7 @@ describe('POST /audit/public/:token/submit', () => {
       new Request('http://localhost/audit/public/abc/submit', { method: 'POST' }),
       buildEnv()
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -362,7 +362,7 @@ describe('GET /public/share/service/:token', () => {
       new Request('http://localhost/public/share/service/abc'),
       buildEnv()
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it('retorna 404 quando link não encontrado', async () => {
@@ -404,7 +404,15 @@ describe('GET /public/share/service/:token', () => {
     const body = await res.json() as Record<string, unknown>;
     const service = body.service as Record<string, unknown>;
     const link = body.link as Record<string, unknown>;
+    const property = body.property as Record<string, unknown>;
     expect(service).not.toHaveProperty('id');
+    expect(service).not.toHaveProperty('cost');
+    expect(service).not.toHaveProperty('before_photos');
+    expect(service).not.toHaveProperty('after_photos');
+    expect(service).not.toHaveProperty('warranty_until');
+    expect(service).not.toHaveProperty('completed_at');
+    expect(service).not.toHaveProperty('requested_by_name');
+    expect(property).not.toHaveProperty('address');
     expect(link).not.toHaveProperty('token');
     expect(body).not.toHaveProperty('tenant_id');
   });
@@ -487,7 +495,7 @@ describe('PATCH /public/share/service/:token/status', () => {
       new Request('http://localhost/public/share/service/abc/status', { method: 'PATCH' }),
       buildEnv()
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
   });
 
   it('registra audit log quando provider atualiza status por token publico', async () => {
@@ -912,18 +920,18 @@ describe('GET /public/share/service/:token — 410 para expirado e revogado', ()
     const res = await fetchShare('validtoken12345678901234567890', {
       expires_at: new Date(Date.now() - 86400_000).toISOString(),
     });
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('LINK_EXPIRED');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('retorna 410 com GONE quando link está revogado (deleted_at preenchido)', async () => {
     const res = await fetchShare('validtoken12345678901234567890', {
       deleted_at: new Date().toISOString(),
     });
-    expect(res.status).toBe(410);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('GONE');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 });
 

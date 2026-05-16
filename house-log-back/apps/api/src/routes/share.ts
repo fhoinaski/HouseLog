@@ -5,13 +5,17 @@ import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
-import { properties, rooms, serviceOrders, serviceShareLinks, users } from '../db/schema';
+import { properties, rooms, serviceOrders, serviceShareLinks } from '../db/schema';
 import { writeAuditLog } from '../lib/audit';
 import { sha256TokenHash } from '../lib/token-hash';
 import type { Bindings, Variables } from '../lib/types';
 import { createId } from '../lib/id';
 
 const share = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+function publicLinkUnavailable(c: Parameters<typeof err>[0]) {
+  return err(c, 'Link indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
 
 // ── POST /properties/:propertyId/services/:serviceId/share-link ──────────────
 // Always creates a fresh link, revoking any active link first.
@@ -125,7 +129,7 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
 share.get('/public/share/service/:token', async (c) => {
   const db = getDb(c.env.DB);
   const rawToken = c.req.param('token');
-  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
 
   const tokenHash = await sha256TokenHash(rawToken);
 
@@ -149,23 +153,15 @@ share.get('/public/share/service/:token', async (c) => {
       priority: serviceOrders.priority,
       system_type: serviceOrders.systemType,
       scheduled_at: serviceOrders.scheduledAt,
-      cost: serviceOrders.cost,
       checklist: serviceOrders.checklist,
-      before_photos: serviceOrders.beforePhotos,
-      after_photos: serviceOrders.afterPhotos,
-      warranty_until: serviceOrders.warrantyUntil,
-      completed_at: serviceOrders.completedAt,
       property_name: properties.name,
-      property_address: properties.address,
       property_city: properties.city,
       property_type: properties.type,
-      requested_by_name: users.name,
       room_name: rooms.name,
     })
     .from(serviceShareLinks)
     .innerJoin(serviceOrders, eq(serviceOrders.id, serviceShareLinks.serviceId))
     .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
-    .innerJoin(users, eq(users.id, serviceOrders.requestedBy))
     .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, serviceOrders.tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
     .where(
       and(
@@ -178,9 +174,9 @@ share.get('/public/share/service/:token', async (c) => {
     )
     .limit(1) as Array<Record<string, unknown>>;
 
-  if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
-  if (link.deleted_at) return err(c, 'Link revogado', 'GONE', 410);
-  if (new Date(String(link.expires_at)) < new Date()) return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
+  if (!link) return publicLinkUnavailable(c);
+  if (link.deleted_at) return publicLinkUnavailable(c);
+  if (new Date(String(link.expires_at)) < new Date()) return publicLinkUnavailable(c);
 
   await writeAuditLog(c.env.DB, {
     tenantId: String(link.tenant_id),
@@ -204,18 +200,11 @@ share.get('/public/share/service/:token', async (c) => {
       priority: link.priority,
       system_type: link.system_type,
       scheduled_at: link.scheduled_at,
-      cost: link.cost,
       checklist: link.checklist ? JSON.parse(link.checklist as string) : [],
-      before_photos: parseStringArray(link.before_photos),
-      after_photos: parseStringArray(link.after_photos),
-      warranty_until: link.warranty_until,
-      completed_at: link.completed_at,
       room_name: link.room_name,
-      requested_by_name: link.requested_by_name,
     },
     property: {
       name: link.property_name,
-      address: link.property_address,
       city: link.property_city,
       type: link.property_type,
     },
@@ -241,23 +230,10 @@ const providerStatusSchema = z.object({
   notes: z.string().optional(),
 });
 
-function parseStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string');
-  }
-  if (typeof value !== 'string' || value.trim() === '') return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
 share.patch('/public/share/service/:token/status', async (c) => {
   const db = getDb(c.env.DB);
   const rawToken = c.req.param('token');
-  if (!rawToken || rawToken.length < 8) return err(c, 'Token inválido', 'INVALID_TOKEN', 400);
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
 
   const tokenHash = await sha256TokenHash(rawToken);
 
@@ -285,9 +261,9 @@ share.patch('/public/share/service/:token/status', async (c) => {
     )
     .limit(1) as Array<{ id: string; tenant_id: string; service_id: string; property_id: string; provider_accepted_at: string | null; expires_at: string; deleted_at: string | null }>;
 
-  if (!link) return err(c, 'Link não encontrado', 'NOT_FOUND', 404);
-  if (link.deleted_at) return err(c, 'Link revogado', 'GONE', 410);
-  if (new Date(link.expires_at) < new Date()) return err(c, 'Link expirado', 'LINK_EXPIRED', 410);
+  if (!link) return publicLinkUnavailable(c);
+  if (link.deleted_at) return publicLinkUnavailable(c);
+  if (new Date(link.expires_at) < new Date()) return publicLinkUnavailable(c);
 
   const body = await c.req.json().catch(() => null);
   if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
