@@ -599,43 +599,46 @@ describe('POST share-link criação — audit log', () => {
 
 // ── 5. Invites ───────────────────────────────────────────────────────────────
 
-describe('GET /invite/:token — invite público (requires auth via router middleware)', () => {
-  it('retorna 401 sem Authorization header (rota usa authMiddleware)', async () => {
+describe('GET /invite/:token — invite público (sem autenticação)', () => {
+  // GET /invite/:token foi movido para ANTES de invites.use('*', authMiddleware),
+  // portanto é genuinamente público. Sem Authorization → deve responder normalmente.
+
+  it('não retorna 401 sem Authorization header (rota é pública)', async () => {
+    // Sem mock de DB: a rota deve chegar no handler (não ser bloqueada por authMiddleware)
+    // e retornar 404 quando o invite não é encontrado — nunca 401.
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn(() => makeEmptySelectChain()),
+    } as never);
+
     const { default: invites } = await import('../routes/invites');
     const res = await invites.fetch(
       new Request('http://localhost/invite/validtoken12345678901234567890'),
       buildEnv()
     );
-    // The invites router applies authMiddleware globally, so public endpoints also need auth
-    expect(res.status).toBe(401);
+    // Deve chegar no handler (invite não encontrado → 404), nunca 401
+    expect(res.status).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.code).toBe('NOT_FOUND');
   });
 
-  it('retorna 400 para token muito curto mesmo com auth', async () => {
-    vi.mocked(getDb).mockReturnValue({
-      select: vi.fn(() => makeSelectReturning([TENANT_ROW])),
-    } as never);
-
+  it('retorna 400 para token muito curto (sem auth)', async () => {
     const { default: invites } = await import('../routes/invites');
     const res = await invites.fetch(
-      authedReq('http://localhost/invite/abc'),
+      new Request('http://localhost/invite/abc'),
       buildEnv()
     );
     expect(res.status).toBe(400);
   });
 
   it('retorna 404 quando invite não encontrado (hash não bate)', async () => {
-    let callCount = 0;
+    // Rota é pública: sem middleware, o primeiro select é o invite query.
     vi.mocked(getDb).mockReturnValue({
-      select: vi.fn(() => {
-        callCount++;
-        if (callCount === 1) return makeSelectReturning([TENANT_ROW]); // resolveTenant
-        return makeEmptySelectChain(); // invite lookup
-      }),
+      select: vi.fn(() => makeEmptySelectChain()),
     } as never);
 
     const { default: invites } = await import('../routes/invites');
     const res = await invites.fetch(
-      authedReq('http://localhost/invite/validtoken12345678901234567890'),
+      new Request('http://localhost/invite/validtoken12345678901234567890'),
       buildEnv()
     );
     expect(res.status).toBe(404);
@@ -938,18 +941,17 @@ describe('GET /invite/:token — 410 para expirado e já aceito', () => {
       ...inviteOverrides,
     };
 
-    let callCount = 0;
+    // GET /invite/:token is a public route registered before the auth middleware,
+    // so no resolveTenant DB call happens — the first select goes straight to the
+    // invite query. No TENANT_ROW preflight needed.
     vi.mocked(getDb).mockReturnValue({
-      select: vi.fn(() => {
-        callCount++;
-        if (callCount === 1) return makeSelectReturning([TENANT_ROW]);
-        return makeSelectReturning([baseInvite]);
-      }),
+      select: vi.fn(() => makeSelectReturning([baseInvite])),
     } as never);
 
     const { default: invites } = await import('../routes/invites');
+    // Public route — no Authorization header required, but sending one is harmless.
     return invites.fetch(
-      authedReq(`http://localhost/invite/${token}`),
+      new Request(`http://localhost/invite/${token}`),
       buildEnv()
     );
   }

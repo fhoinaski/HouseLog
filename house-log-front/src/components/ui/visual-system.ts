@@ -191,7 +191,7 @@ export const pageSectionVariants = cva('space-y-3', {
 });
 
 export const metricCardVariants = cva(
-  'rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 text-text-primary transition-all duration-150',
+  'rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 text-text-primary transition-colors duration-150',
   {
     variants: {
       tone: {
@@ -235,7 +235,7 @@ export const metricIconVariants = cva(
 );
 
 export const actionTileVariants = cva(
-  'group/action-tile flex min-h-28 flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-center text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
+  'group/action-tile flex min-h-28 flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-center text-text-primary transition-[background-color,transform] duration-150 hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
   {
     variants: {
       tone: {
@@ -307,7 +307,7 @@ export const documentTypeIconVariants = cva(
 );
 
 export const inventoryItemCardVariants = cva(
-  'group/inventory cursor-pointer overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-base)] text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)] active:scale-[0.98]',
+  'group/inventory cursor-pointer overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-base)] text-text-primary transition-[background-color,transform] duration-150 hover:bg-[var(--field-bg-hover)] active:scale-[0.98]',
   {
     variants: {
       state: {
@@ -334,7 +334,7 @@ export const inventoryPhotoFrameVariants = cva('relative h-32 overflow-hidden bg
 });
 
 export const serviceOrderCardVariants = cva(
-  'group/service-order rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3 text-text-primary transition-all duration-150 hover:bg-[var(--field-bg-hover)]',
+  'group/service-order rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3 text-text-primary transition-[background-color] duration-150 hover:bg-[var(--field-bg-hover)]',
   {
     variants: {
       density: {

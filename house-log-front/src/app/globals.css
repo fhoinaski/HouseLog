@@ -665,6 +665,61 @@ body {
   }
 }
 
+/* ── MOBILE: BLUR REDUZIDO ────────────────────────────────────────────────
+ * Reduz backdrop-blur de 18px → 8px em telas ≤ 767px.
+ * Mantém o efeito glass mas reduz custo de composição em GPUs Android.
+ * Em desktop o valor original (18px) é preservado pelo tokens.css.
+ * ────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  :root,
+  .light,
+  .dark {
+    --surface-blur: 8px;
+  }
+}
+
+/* ── REDUCED TRANSPARENCY (iOS Reduce Transparency / Android) ─────────────
+ * Quando o usuário ativa "Reduzir Transparência" no sistema operacional,
+ * as superfícies glass tornam-se opacas — sem custo de composição.
+ * ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  .light,
+  .dark {
+    --surface-blur: 0px;
+    --surface-glass: var(--bg-surface);
+    --nav-bg: rgba(6, 14, 32, 1);
+    --card-bg: var(--bg-surface);
+  }
+}
+
+/* ── REDUCED MOTION (WCAG 2.1 §2.3.3) ─────────────────────────────────────
+ * Desabilita animações e transições quando o usuário ativa "Reduzir Movimento"
+ * no sistema operacional (iOS, Android, macOS, Windows).
+ * Mantém a duração em 0.01ms (não 0) para não quebrar listeners de
+ * animationend/transitionend que alguns componentes Radix dependem.
+ * ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── SKELETON PERFORMANCE ─────────────────────────────────────────────────
+ * will-change: opacity promove elementos skeleton para camada GPU,
+ * evitando repaint em cada frame durante a animação pulse.
+ * Aplicado apenas quando há animação ativa (via classe).
+ * ────────────────────────────────────────────────────────────────────────── */
+.animate-skeleton,
+.hl-skeleton {
+  will-change: opacity;
+}
+
 .glass {
   background: var(--hl-bg-card);
 }
