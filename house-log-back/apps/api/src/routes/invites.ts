@@ -6,7 +6,7 @@ import { ok, err } from '../lib/response';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { writeAuditLog } from '../lib/audit';
-import { sha256TokenHash } from '../lib/token-hash';
+import { publicTokenPlaceholder, sha256TokenHash } from '../lib/token-hash';
 import { properties, propertyCollaborators, propertyInvites, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import { canManageTenantUsers } from '../lib/authorization';
 import type { Bindings, Role, TenantRole, Variables } from '../lib/types';
@@ -122,7 +122,7 @@ invites.get('/invite/:token', async (c) => {
     .innerJoin(users, eq(users.id, propertyInvites.invitedBy))
     .where(
       and(
-        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`,
+        eq(propertyInvites.tokenHash, tokenHash),
         eq(propertyInvites.tenantId, properties.tenantId),
         isNull(properties.deletedAt)
       )
@@ -250,7 +250,7 @@ invites.post('/properties/:propertyId/invites', async (c) => {
     invitedBy: userId,
     email: inviteEmail,
     role,
-    token: `hash-only:${id}`,
+    token: publicTokenPlaceholder(id),
     tokenHash,
     expiresAt,
     specialties: JSON.parse(specialtiesJson) as string[],
@@ -296,8 +296,8 @@ invites.post('/properties/:propertyId/invites', async (c) => {
           expiresAt,
         }),
       });
-    } catch (e) {
-      console.error('Invite email failed:', e);
+    } catch {
+      console.error('Invite email failed');
     }
   })();
 
@@ -648,7 +648,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     .innerJoin(properties, eq(properties.id, propertyInvites.propertyId))
     .where(
       and(
-        sql`(${propertyInvites.tokenHash} = ${tokenHash} OR (${propertyInvites.tokenHash} IS NULL AND ${propertyInvites.token} = ${rawToken}))`,
+        eq(propertyInvites.tokenHash, tokenHash),
         eq(propertyInvites.tenantId, properties.tenantId),
         isNull(properties.deletedAt)
       )

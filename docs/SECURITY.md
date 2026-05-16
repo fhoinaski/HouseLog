@@ -216,8 +216,8 @@ Aplicado a partir de P0-PUBLIC-LINKS-HASH-01 (2026-05-12):
 
 - O banco de dados armazena apenas o hash SHA-256 do token (`token_hash TEXT`).
 - O token puro (nanoid) e emitido apenas uma vez na criacao e nunca mais relido do banco.
-- Lookup publico e feito por hash: `WHERE token_hash = sha256(token_apresentado)`.
-- Registros legados sem `token_hash` usam fallback de lookup por `token` ate que o script de backfill seja executado.
+- Lookup publico e feito somente por hash: `WHERE token_hash = sha256(token_apresentado)`.
+- Registros legados sem `token_hash` precisam passar pelo backfill antes do deploy que remove fallback de token plaintext.
 - `sanitizeAuditData` redacta automaticamente todos os campos de token:
   `token`, `accessToken`, `refreshToken`, `publicAccessToken`, `inviteToken`, `shareToken`, `auditToken` e suas variantes `_hash` e snake_case.
 - Links expirados ou revogados retornam `410 Gone` (nao `409`).
@@ -227,7 +227,7 @@ Aplicado a partir de P0-PUBLIC-LINKS-HASH-01 (2026-05-12):
 
 Migration: `0027_public_link_token_hash.sql` — adiciona `token_hash TEXT` e indices nas tabelas `audit_links`, `service_share_links`, `property_invites`.
 
-Backfill pendente: executar `UPDATE ... SET token_hash = sha256(token) WHERE token_hash IS NULL` para registros pre-existentes antes de remover fallback de token plaintext.
+Backfill obrigatorio antes de `0028`: executar `phase_a_token_hash_backfill.ts` ate `verifyNoPlaintextRemaining()` retornar zero pendencias; depois aplicar `0028_redact_token_plaintext.sql`, que falha se ainda houver token plaintext sem hash e redige `token` para `hash-only:<id>`.
 
 ## Fila de evidencias offline (IndexedDB)
 

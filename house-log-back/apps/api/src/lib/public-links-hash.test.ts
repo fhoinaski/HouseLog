@@ -54,7 +54,12 @@ vi.mock('../lib/email', () => ({
 
 import { getDb } from '../db/client';
 import { writeAuditLog } from '../lib/audit';
-import { sha256TokenHash } from './token-hash';
+import {
+  isPublicTokenPlaceholder,
+  publicTokenPlaceholder,
+  sha256TokenHash,
+  shouldRedactPublicTokenPlaintext,
+} from './token-hash';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -160,6 +165,38 @@ describe('sha256TokenHash', () => {
     const nonEmpty = await sha256TokenHash('a');
     expect(empty).not.toBe(nonEmpty);
     expect(empty).toHaveLength(64);
+  });
+});
+
+describe('public token plaintext redaction helpers', () => {
+  it('gera placeholder hash-only estavel por id', () => {
+    expect(publicTokenPlaceholder('link-1')).toBe('hash-only:link-1');
+    expect(isPublicTokenPlaceholder('hash-only:link-1')).toBe(true);
+    expect(isPublicTokenPlaceholder('raw-public-token')).toBe(false);
+  });
+
+  it('redaction e idempotente para token plaintext com hash', () => {
+    const firstPass = shouldRedactPublicTokenPlaintext({
+      token: 'raw-public-token',
+      tokenHash: 'a'.repeat(64),
+    })
+      ? publicTokenPlaceholder('link-1')
+      : 'raw-public-token';
+
+    const secondPassShouldRedact = shouldRedactPublicTokenPlaintext({
+      token: firstPass,
+      tokenHash: 'a'.repeat(64),
+    });
+
+    expect(firstPass).toBe('hash-only:link-1');
+    expect(secondPassShouldRedact).toBe(false);
+  });
+
+  it('nao redige plaintext sem token_hash para evitar quebrar link antes do backfill', () => {
+    expect(shouldRedactPublicTokenPlaintext({
+      token: 'legacy-token-without-hash',
+      tokenHash: null,
+    })).toBe(false);
   });
 });
 

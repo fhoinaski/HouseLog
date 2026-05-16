@@ -20,6 +20,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
+import { isPublicTokenPlaceholder } from '../../lib/token-hash';
 
 const BATCH = 200;
 
@@ -68,7 +69,7 @@ async function backfillTable(db: D1Database, cfg: TableConfig): Promise<Backfill
     if (!results || results.length === 0) break;
 
     for (const row of results) {
-      if (!row.token || row.token.startsWith('hash-only:')) {
+      if (!row.token || isPublicTokenPlaceholder(row.token)) {
         skipped++;
         continue;
       }

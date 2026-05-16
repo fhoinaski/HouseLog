@@ -7,7 +7,7 @@ import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middlewa
 import { getDb } from '../db/client';
 import { properties, rooms, serviceOrders, serviceShareLinks } from '../db/schema';
 import { writeAuditLog } from '../lib/audit';
-import { sha256TokenHash } from '../lib/token-hash';
+import { publicTokenPlaceholder, sha256TokenHash } from '../lib/token-hash';
 import type { Bindings, Variables } from '../lib/types';
 import { createId } from '../lib/id';
 
@@ -92,7 +92,7 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
     id: linkId,
     tenantId,
     serviceId,
-    token: `hash-only:${linkId}`,
+    token: publicTokenPlaceholder(linkId),
     tokenHash,
     createdBy: userId,
     expiresAt,
@@ -165,8 +165,7 @@ share.get('/public/share/service/:token', async (c) => {
     .leftJoin(rooms, and(eq(rooms.id, serviceOrders.roomId), eq(rooms.tenantId, serviceOrders.tenantId), eq(rooms.propertyId, serviceOrders.propertyId)))
     .where(
       and(
-        // Hash lookup for new records; fallback to plaintext for legacy records without hash
-        sql`(${serviceShareLinks.tokenHash} = ${tokenHash} OR (${serviceShareLinks.tokenHash} IS NULL AND ${serviceShareLinks.token} = ${rawToken}))`,
+        eq(serviceShareLinks.tokenHash, tokenHash),
         eq(serviceShareLinks.tenantId, serviceOrders.tenantId),
         eq(serviceShareLinks.tenantId, properties.tenantId),
         isNull(serviceOrders.deletedAt)
@@ -252,7 +251,7 @@ share.patch('/public/share/service/:token/status', async (c) => {
     .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
     .where(
       and(
-        sql`(${serviceShareLinks.tokenHash} = ${tokenHash} OR (${serviceShareLinks.tokenHash} IS NULL AND ${serviceShareLinks.token} = ${rawToken}))`,
+        eq(serviceShareLinks.tokenHash, tokenHash),
         eq(serviceShareLinks.tenantId, serviceOrders.tenantId),
         eq(serviceShareLinks.tenantId, properties.tenantId),
         isNull(serviceOrders.deletedAt),

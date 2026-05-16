@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { and, eq, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
-import { sha256TokenHash } from '../lib/token-hash';
+import { publicTokenPlaceholder, sha256TokenHash } from '../lib/token-hash';
 import { ok, err } from '../lib/response';
 import { canCreateAuditLink } from '../lib/authorization';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
@@ -88,7 +88,7 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
     serviceOrderId: serviceId,
     propertyId,
     createdBy: userId,
-    token: `hash-only:${id}`,
+    token: publicTokenPlaceholder(id),
     tokenHash,
     scope,
     expiresAt,
