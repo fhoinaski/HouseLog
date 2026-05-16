@@ -1,39 +1,22 @@
 'use client';
 
 import { use, useState } from 'react';
+import dynamic from 'next/dynamic';
 import useSWR from 'swr';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   AlertTriangle,
-  BarChart3,
   LineChart,
-  PieChart as PieChartIcon,
   Plus,
   RefreshCw,
   Ruler,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
-import {
-  Bar,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Legend,
-  Line,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import { toast } from 'sonner';
-
 import { PageHeader } from '@/components/layout/page-header';
-import { PageSection } from '@/components/layout/page-section';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -43,6 +26,25 @@ import { MetricCard } from '@/components/ui/metric-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { expensesApi, propertiesApi } from '@/lib/api';
 import { cn, EXPENSE_CATEGORY_LABELS, formatCurrency, formatMonth } from '@/lib/utils';
+import type { DreDataPoint, CategoryDataPoint } from '@/components/financial/financial-charts';
+
+/**
+ * Recharts (~140 KB) é carregado via dynamic import para não bloquear
+ * o parse inicial da página — em mobile Android o parse JS é 3-5× mais lento.
+ * O fallback (skeleton) mantém o layout estável enquanto o bundle carrega.
+ */
+const FinancialCharts = dynamic(
+  () => import('@/components/financial/financial-charts').then((m) => ({ default: m.FinancialCharts })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="space-y-4">
+        <div className="animate-skeleton h-[280px] w-full rounded-[var(--radius-xl)]" />
+        <div className="animate-skeleton h-[240px] w-full rounded-[var(--radius-xl)]" />
+      </div>
+    ),
+  }
+);
 
 const CHART_COLORS = [
   'var(--interactive-primary-bg)',
@@ -71,15 +73,6 @@ const expenseSchema = z.object({
 });
 
 type ExpenseForm = z.infer<typeof expenseSchema>;
-
-const tooltipStyle = {
-  borderRadius: '12px',
-  border: '0',
-  background: 'var(--surface-raised)',
-  boxShadow: 'var(--surface-shadow-raised)',
-  color: 'var(--text-primary)',
-  fontSize: '12px',
-};
 
 export default function FinancialPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -146,7 +139,7 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
 
   const allMonths = Array.from(new Set([...expenseByMonth.keys(), ...revenueByMonth.keys()])).sort();
 
-  const dreData = allMonths.map((m) => ({
+  const dreData: DreDataPoint[] = allMonths.map((m) => ({
     month: formatMonth(m),
     despesas: expenseByMonth.get(m) ?? 0,
     receitas: revenueByMonth.get(m) ?? 0,
@@ -158,10 +151,10 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
   const balance = totalRevenue - totalExpenses;
   const costPerSqm = area && area > 0 ? totalExpenses / area : null;
 
-  const categoryData = (data?.by_category ?? []).map((category, index) => ({
+  const categoryData: CategoryDataPoint[] = (data?.by_category ?? []).map((category, index) => ({
     name: ALL_CATEGORIES[category.category] ?? category.category,
     value: category.total,
-    color: CHART_COLORS[index % CHART_COLORS.length],
+    color: CHART_COLORS[index % CHART_COLORS.length] ?? 'var(--text-secondary)',
   }));
 
   return (
@@ -225,105 +218,12 @@ export default function FinancialPage({ params }: { params: Promise<{ id: string
             />
           </div>
 
-          <PageSection
-            tone="surface"
-            density="compact"
-            title="Resultado operacional"
-          >
-            {dreData.length === 0 ? (
-              <EmptyState
-                tone="strong"
-                icon={<BarChart3 className="h-5 w-5" />}
-                title="Sem lancamentos no periodo."
-                description="Registre receitas ou despesas para formar o historico financeiro deste imovel."
-                actions={<Button onClick={() => openDialog('expense')}>Adicionar lancamento</Button>}
-              />
-            ) : (
-              <div className="rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-3 sm:p-4">
-                <div className="h-[280px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={dreData} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }} axisLine={false} tickLine={false} />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: 'var(--text-tertiary)' }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={(v) => `R$${(Number(v) / 1000).toFixed(0)}k`}
-                      />
-                      <Tooltip
-                        formatter={(value: number, name: string) => [
-                          formatCurrency(value),
-                          name === 'despesas' ? 'Despesas' : name === 'receitas' ? 'Receitas' : 'Saldo',
-                        ]}
-                        contentStyle={tooltipStyle}
-                      />
-                      <Legend
-                        iconType="circle"
-                        iconSize={8}
-                        formatter={(value) => <span className="text-xs capitalize text-text-secondary">{value}</span>}
-                      />
-                      <Bar dataKey="despesas" fill="var(--text-danger)" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="receitas" fill="var(--text-success)" radius={[6, 6, 0, 0]} />
-                      <Line dataKey="saldo" stroke="var(--interactive-primary-bg)" strokeWidth={2} dot={{ r: 3 }} type="monotone" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-          </PageSection>
-
-          <PageSection
-            tone="surface"
-            density="compact"
-            title="Composição de despesas"
-          >
-            {categoryData.length === 0 ? (
-              <EmptyState
-                tone="strong"
-                density="compact"
-                icon={<PieChartIcon className="h-5 w-5" />}
-                title="Ainda nao ha despesas categorizadas."
-                description="As categorias aparecem aqui conforme os lancamentos forem registrados."
-              />
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
-                <div className="rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-3 sm:p-4">
-                  <div className="h-[240px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={categoryData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={88}
-                          innerRadius={48}
-                        >
-                          {categoryData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value: number) => [formatCurrency(value)]} contentStyle={tooltipStyle} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {categoryData.map((entry) => (
-                    <div key={entry.name} className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-3 py-2">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: entry.color }} />
-                        <span className="truncate text-sm text-text-secondary">{entry.name}</span>
-                      </div>
-                      <span className="shrink-0 text-sm font-medium text-text-primary">{formatCurrency(entry.value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </PageSection>
+          {/* Charts — lazy loaded via dynamic() para não bloquear o parse inicial em mobile */}
+          <FinancialCharts
+            dreData={dreData}
+            categoryData={categoryData}
+            onAddExpense={() => openDialog('expense')}
+          />
         </>
       )}
 
