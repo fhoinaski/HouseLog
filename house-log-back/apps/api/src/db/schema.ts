@@ -73,7 +73,7 @@ export const users = sqliteTable('users', {
 
 export const properties = sqliteTable('properties', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   ownerId: text('owner_id').notNull().references(() => users.id),
   managerId: text('manager_id').references(() => users.id),
   name: text('name').notNull(),
@@ -183,7 +183,7 @@ export const technicalPoints = sqliteTable('technical_points', {
 
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   name: text('name').notNull(),
   type: text('type', {
@@ -201,7 +201,7 @@ export const rooms = sqliteTable('rooms', {
 
 export const inventoryItems = sqliteTable('inventory_items', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   roomId: text('room_id').references(() => rooms.id),
   category: text('category', {
@@ -235,7 +235,7 @@ export const inventoryItems = sqliteTable('inventory_items', {
 
 export const serviceOrders = sqliteTable('service_orders', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   roomId: text('room_id').references(() => rooms.id),
   systemType: text('system_type', {
@@ -269,7 +269,7 @@ export const serviceOrders = sqliteTable('service_orders', {
 
 export const serviceBids = sqliteTable('service_bids', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   serviceId: text('service_id').notNull().references(() => serviceOrders.id, { onDelete: 'cascade' }),
   providerId: text('provider_id').notNull().references(() => users.id),
   amount: real('amount').notNull(),
@@ -285,7 +285,7 @@ export const serviceBids = sqliteTable('service_bids', {
 
 export const auditLinks = sqliteTable('audit_links', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   serviceOrderId: text('service_order_id').notNull().references(() => serviceOrders.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   createdBy: text('created_by').notNull().references(() => users.id),
@@ -309,7 +309,7 @@ export const auditLinks = sqliteTable('audit_links', {
 
 export const documents = sqliteTable('documents', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   serviceId: text('service_id').references(() => serviceOrders.id),
   type: text('type', { enum: ['invoice', 'manual', 'project', 'contract', 'deed', 'permit', 'insurance', 'other'] }).notNull(),
@@ -612,7 +612,7 @@ export const handoverChecklistItems = sqliteTable('handover_checklist_items', {
 
 export const expenses = sqliteTable('expenses', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   category: text('category', {
     enum: ['water', 'electricity', 'gas', 'condo', 'iptu', 'insurance', 'cleaning', 'garden', 'security', 'other'],
@@ -635,7 +635,7 @@ export const expenses = sqliteTable('expenses', {
 
 export const maintenanceSchedules = sqliteTable('maintenance_schedules', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   systemType: text('system_type').notNull(),
   title: text('title').notNull(),
@@ -675,7 +675,7 @@ export const auditLog = sqliteTable('audit_log', {
 
 export const propertyCollaborators = sqliteTable('property_collaborators', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().references(() => users.id),
   role: text('role', { enum: ['viewer', 'provider', 'manager'] }).notNull().default('viewer'),
@@ -693,7 +693,7 @@ export const propertyCollaborators = sqliteTable('property_collaborators', {
 
 export const propertyInvites = sqliteTable('property_invites', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   invitedBy: text('invited_by').notNull().references(() => users.id),
   email: text('email').notNull(),
@@ -716,7 +716,7 @@ export const propertyInvites = sqliteTable('property_invites', {
 
 export const serviceShareLinks = sqliteTable('service_share_links', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   serviceId: text('service_id').notNull().references(() => serviceOrders.id),
   token: text('token').notNull(),
   tokenHash: text('token_hash'),
@@ -733,13 +733,14 @@ export const serviceShareLinks = sqliteTable('service_share_links', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   deletedAt: text('deleted_at'),
 }, (table) => ({
+  tenantIdx: index('idx_service_share_links_tenant').on(table.tenantId),
   tokenUnique: uniqueIndex('service_share_links_token_unique').on(table.token),
   tokenHashIdx: index('idx_service_share_links_token_hash').on(table.tokenHash),
 }));
 
 export const propertyAccessCredentials = sqliteTable('property_access_credentials', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id),
   createdBy: text('created_by').notNull().references(() => users.id),
   category: text('category').notNull().default('other'),
@@ -754,11 +755,14 @@ export const propertyAccessCredentials = sqliteTable('property_access_credential
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
   deletedAt: text('deleted_at'),
-});
+}, (table) => ({
+  tenantIdx: index('idx_property_access_credentials_tenant').on(table.tenantId),
+  propertyIdx: index('idx_property_access_credentials_property').on(table.propertyId),
+}));
 
 export const serviceRequests = sqliteTable('service_requests', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   requestedBy: text('requested_by').notNull().references(() => users.id),
   title: text('title').notNull(),
@@ -776,7 +780,7 @@ export const serviceRequests = sqliteTable('service_requests', {
 
 export const bids = sqliteTable('bids', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   serviceRequestId: text('service_request_id').notNull().references(() => serviceRequests.id, { onDelete: 'cascade' }),
   providerId: text('provider_id').notNull().references(() => users.id),
   amount: real('amount').notNull(),
@@ -865,7 +869,7 @@ export const imageVariants = sqliteTable('image_variants', {
 
 export const serviceMessages = sqliteTable('service_messages', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   serviceOrderId: text('service_order_id').notNull().references(() => serviceOrders.id, { onDelete: 'cascade' }),
   authorId: text('author_id').notNull().references(() => users.id),
   body: text('body').notNull(),
@@ -881,7 +885,7 @@ export const serviceMessages = sqliteTable('service_messages', {
 
 export const providerRatings = sqliteTable('provider_ratings', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   providerId: text('provider_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   serviceOrderId: text('service_order_id').notNull().references(() => serviceOrders.id, { onDelete: 'cascade' }),
@@ -914,7 +918,7 @@ export const providerAvailability = sqliteTable('provider_availability', {
 
 export const pixCharges = sqliteTable('pix_charges', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   serviceOrderId: text('service_order_id').references(() => serviceOrders.id, { onDelete: 'set null' }),
   propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   createdBy: text('created_by').notNull().references(() => users.id),
@@ -931,6 +935,7 @@ export const pixCharges = sqliteTable('pix_charges', {
   expiresAt: text('expires_at'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (table) => ({
+  tenantIdx: index('idx_pix_charges_tenant').on(table.tenantId),
   txidUnique: uniqueIndex('pix_charges_txid_unique').on(table.txid),
   serviceIdx: index('idx_pix_charges_service').on(table.serviceOrderId),
   propertyIdx: index('idx_pix_charges_property').on(table.propertyId),
@@ -945,7 +950,7 @@ export const aiCache = sqliteTable('ai_cache', {
 
 export const nfeImports = sqliteTable('nfe_imports', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').references(() => tenants.id),
+  tenantId: text('tenant_id').notNull().references(() => tenants.id),
   propertyId: text('property_id').notNull().references(() => properties.id, { onDelete: 'cascade' }),
   documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
   expenseId: text('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
@@ -957,6 +962,7 @@ export const nfeImports = sqliteTable('nfe_imports', {
   rawSummary: text('raw_summary', { mode: 'json' }).$type<Record<string, unknown> | null>(),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 }, (table) => ({
+  tenantIdx: index('idx_nfe_imports_tenant').on(table.tenantId),
   chaveUnique: uniqueIndex('nfe_imports_chave_acesso_unique').on(table.chaveAcesso),
   propertyIdx: index('idx_nfe_property').on(table.propertyId),
 }));
