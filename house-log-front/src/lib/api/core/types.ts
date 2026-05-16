@@ -229,6 +229,7 @@ export type AccessCredential = {
   integration_config: Record<string, unknown> | null;
   share_with_os: boolean;
   has_secret: boolean;
+  has_integration_secret: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -246,6 +247,7 @@ export type AccessCredentialPayload = {
 
 export type RevealedAccessCredential = AccessCredential & {
   secret: string;
+  integration_secret?: string | null;
   secret_revealed: true;
 };
 

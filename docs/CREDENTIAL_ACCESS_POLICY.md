@@ -122,6 +122,14 @@ Deve:
 - registrar auditoria;
 - nunca gravar o segredo no audit payload;
 - retornar `secret_revealed: true`.
+- quando houver segredo de integracao, retornar apenas neste reveal explicito, nunca na listagem.
+
+## Segredos de integracao
+
+- `integration_config` deve conter apenas campos nao sensiveis, como `host` e `username`.
+- senha, PIN administrativo ou segredo de integracao equivalente deve ser armazenado criptografado em campo separado.
+- listagem normal de credenciais nunca deve incluir `integration_config.password`.
+- updates podem omitir o segredo de integracao para preservar o valor atual sem reexposicao.
 
 Regra de migracao:
 

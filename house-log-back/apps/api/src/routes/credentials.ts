@@ -15,6 +15,11 @@ import {
 import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { applyRateLimit } from '../middleware/rateLimit';
 import { encryptSecret, decryptSecret, getCredentialKey, isEncrypted } from '../lib/credential-crypto';
+import {
+  hasCredentialIntegrationSecret,
+  sanitizeCredentialIntegrationConfig,
+  splitCredentialIntegrationConfig,
+} from '../lib/credential-integration';
 import { getDb } from '../db/client';
 import { propertyAccessCredentials } from '../db/schema';
 import { credentialCreateSchema, credentialRevealSchema } from '@houselog/contracts';
@@ -33,38 +38,44 @@ const createSchema = credentialCreateSchema;
 
 type CredentialRecord = {
   id: string;
+  tenant_id: string | null;
   property_id: string;
   created_by: string;
   category: string;
   label: string;
   username: string | null;
+  secret: string;
   notes: string | null;
   integration_type: string | null;
   integration_config: Record<string, unknown> | null;
+  integration_secret: string | null;
   share_with_os: number;
   created_at: string;
   updated_at: string;
 };
 
-type RevealedCredentialRecord = CredentialRecord & {
-  secret: string;
-};
+type RevealedCredentialRecord = CredentialRecord;
 
-type CredentialResponse = Omit<CredentialRecord, 'share_with_os'> & {
+type CredentialResponse = Omit<CredentialRecord, 'share_with_os' | 'tenant_id' | 'secret' | 'integration_secret'> & {
+  integration_config: Record<string, unknown> | null;
   share_with_os: boolean;
   has_secret: boolean;
+  has_integration_secret: boolean;
 };
 
 const credentialSelect = {
   id: propertyAccessCredentials.id,
+  tenant_id: propertyAccessCredentials.tenantId,
   property_id: propertyAccessCredentials.propertyId,
   created_by: propertyAccessCredentials.createdBy,
   category: propertyAccessCredentials.category,
   label: propertyAccessCredentials.label,
   username: propertyAccessCredentials.username,
+  secret: propertyAccessCredentials.secret,
   notes: propertyAccessCredentials.notes,
   integration_type: propertyAccessCredentials.integrationType,
   integration_config: propertyAccessCredentials.integrationConfig,
+  integration_secret: propertyAccessCredentials.integrationSecret,
   share_with_os: propertyAccessCredentials.shareWithOs,
   created_at: propertyAccessCredentials.createdAt,
   updated_at: propertyAccessCredentials.updatedAt,
@@ -76,11 +87,13 @@ const credentialRevealSelect = {
 };
 
 function toCredentialResponse(row: CredentialRecord): CredentialResponse {
+  const { tenant_id: _tenantId, secret: _secret, integration_secret: _integrationSecret, ...safeRow } = row;
   return {
-    ...row,
-    integration_config: row.integration_config ?? null,
+    ...safeRow,
+    integration_config: sanitizeCredentialIntegrationConfig(row.integration_config),
     share_with_os: row.share_with_os === 1,
     has_secret: true,
+    has_integration_secret: hasCredentialIntegrationSecret(row.integration_secret, row.integration_config),
   };
 }
 
@@ -96,6 +109,73 @@ function credentialAuditData(propertyId: string, row: CredentialRecord, actorId:
   };
 }
 
+async function decryptStoredSecret(
+  value: string,
+  key: string
+): Promise<string> {
+  if (!isEncrypted(value)) return value;
+  return decryptSecret(value, key);
+}
+
+async function migrateLegacyStoredSecretIfNeeded(
+  db: ReturnType<typeof getDb>,
+  row: CredentialRecord | RevealedCredentialRecord,
+  key: string
+): Promise<CredentialRecord | RevealedCredentialRecord> {
+  if (!row.tenant_id || isEncrypted(row.secret)) return row;
+
+  const encryptedSecret = await encryptSecret(row.secret, key);
+  await db
+    .update(propertyAccessCredentials)
+    .set({
+      secret: encryptedSecret,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(eq(propertyAccessCredentials.id, row.id), eq(propertyAccessCredentials.tenantId, row.tenant_id)));
+
+  return {
+    ...row,
+    secret: encryptedSecret,
+  };
+}
+
+async function migrateLegacyIntegrationSecretIfNeeded(
+  db: ReturnType<typeof getDb>,
+  row: CredentialRecord | RevealedCredentialRecord,
+  key: string
+): Promise<CredentialRecord | RevealedCredentialRecord> {
+  if (!row.tenant_id) {
+    return {
+      ...row,
+      integration_config: sanitizeCredentialIntegrationConfig(row.integration_config),
+    };
+  }
+
+  const { publicConfig, secretPlaintext } = splitCredentialIntegrationConfig(row.integration_config);
+  if (!secretPlaintext) {
+    return {
+      ...row,
+      integration_config: publicConfig,
+    };
+  }
+
+  const encryptedSecret = await encryptSecret(secretPlaintext, key);
+  await db
+    .update(propertyAccessCredentials)
+    .set({
+      integrationConfig: publicConfig,
+      integrationSecret: encryptedSecret,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(eq(propertyAccessCredentials.id, row.id), eq(propertyAccessCredentials.tenantId, row.tenant_id)));
+
+  return {
+    ...row,
+    integration_config: publicConfig,
+    integration_secret: encryptedSecret,
+  };
+}
+
 async function revealCredentialSecret(c: CredentialsContext) {
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
@@ -106,12 +186,10 @@ async function revealCredentialSecret(c: CredentialsContext) {
   const revealBody = credentialRevealSchema.safeParse(await c.req.json().catch(() => null));
 
   if (!revealBody.success) {
-    return err(c, 'Motivo obrigatório para revelar credencial', 'VALIDATION_ERROR', 422, revealBody.error.flatten());
+    return err(c, 'Motivo obrigatorio para revelar credencial', 'VALIDATION_ERROR', 422, revealBody.error.flatten());
   }
 
   const reason = revealBody.data.reason;
-
-  // Rate-limit reveals per user to prevent bulk extraction
   const rlKey = `rl:reveal:${userId}`;
   const allowed = await applyRateLimit(c.env.KV, rlKey, REVEAL_MAX, REVEAL_WINDOW);
   if (!allowed) {
@@ -125,10 +203,16 @@ async function revealCredentialSecret(c: CredentialsContext) {
       actorIp: c.req.header('CF-Connecting-IP'),
       newData: { reason: 'RATE_LIMITED', property_id: propertyId, tenant_id: tenantId },
     });
-    return err(c, 'Limite de revelações atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
+    return err(c, 'Limite de revelacoes atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
   }
 
-  const decision = await canRevealCredential(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  const decision = await canRevealCredential(c.env.DB, {
+    propertyId,
+    userId,
+    role,
+    tenantId,
+    tenantRole: c.get('tenantRole'),
+  });
   if (!decision.allowed) {
     await writeAuditLog(c.env.DB, {
       tenantId,
@@ -143,7 +227,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
     return err(c, 'Sem acesso', decision.code, decision.status);
   }
 
-  const [cred] = await db
+  const [rawCred] = await db
     .select(credentialRevealSelect)
     .from(propertyAccessCredentials)
     .where(
@@ -156,20 +240,21 @@ async function revealCredentialSecret(c: CredentialsContext) {
     )
     .limit(1) as RevealedCredentialRecord[];
 
-  if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+  if (!rawCred) return err(c, 'Credencial nao encontrada', 'NOT_FOUND', 404);
 
-  // getCredentialKey throws (→ 500 via global error handler) if misconfigured;
-  // keep it outside the try/catch so config errors are not masked as DECRYPT_ERROR.
   const credKey = getCredentialKey(c.env);
+  const withEncryptedSecret = await migrateLegacyStoredSecretIfNeeded(db, rawCred, credKey);
+  const cred = await migrateLegacyIntegrationSecretIfNeeded(db, withEncryptedSecret, credKey);
 
-  // Decrypt if stored as encrypted; pass through legacy plaintext transparently.
-  let plainSecret = cred.secret;
-  if (isEncrypted(cred.secret)) {
-    try {
-      plainSecret = await decryptSecret(cred.secret, credKey);
-    } catch {
-      return err(c, 'Erro ao decifrar credencial', 'DECRYPT_ERROR', 500);
+  let plainSecret: string;
+  let integrationSecret: string | null = null;
+  try {
+    plainSecret = await decryptStoredSecret(rawCred.secret, credKey);
+    if (cred.integration_secret) {
+      integrationSecret = await decryptStoredSecret(cred.integration_secret, credKey);
     }
+  } catch {
+    return err(c, 'Erro ao decifrar credencial', 'DECRYPT_ERROR', 500);
   }
 
   await writeAuditLog(c.env.DB, {
@@ -177,7 +262,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
     propertyId,
     entityType: 'property_access_credential',
     entityId: cred.id,
-    action: 'credential_secret_revealed',
+    action: 'secret_reveal',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
     newData: {
@@ -194,12 +279,14 @@ async function revealCredentialSecret(c: CredentialsContext) {
     credential: {
       ...toCredentialResponse(cred),
       secret: plainSecret,
+      integration_secret: integrationSecret,
       secret_revealed: true,
     },
   });
 }
 
-// ── GET /properties/:propertyId/credentials ──────────────────────────────────
+
+// â”€â”€ GET /properties/:propertyId/credentials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 credentials.get('/', async (c) => {
   const db = getDb(c.env.DB);
@@ -223,10 +310,18 @@ credentials.get('/', async (c) => {
     )
     .orderBy(asc(propertyAccessCredentials.category), asc(propertyAccessCredentials.label)) as CredentialRecord[];
 
-  return ok(c, { credentials: results.map(toCredentialResponse) });
+  const credKey = getCredentialKey(c.env);
+  const sanitizedResults = await Promise.all(
+    results.map(async (row) => {
+      const withEncryptedSecret = await migrateLegacyStoredSecretIfNeeded(db, row, credKey);
+      return migrateLegacyIntegrationSecretIfNeeded(db, withEncryptedSecret, credKey);
+    })
+  );
+
+  return ok(c, { credentials: sanitizedResults.map(toCredentialResponse) });
 });
 
-// ── POST /properties/:propertyId/credentials ─────────────────────────────────
+// â”€â”€ POST /properties/:propertyId/credentials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 credentials.post('/', async (c) => {
   const db = getDb(c.env.DB);
@@ -239,15 +334,22 @@ credentials.post('/', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
-  if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
+  if (!body) return err(c, 'Body invÃ¡lido', 'INVALID_BODY');
 
   const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+  if (!parsed.success) return err(c, 'Dados invÃ¡lidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
 
   const { category, label, username, secret, notes, integration_type, integration_config, share_with_os } = parsed.data;
   const id = nanoid();
-
-  const encryptedSecret = await encryptSecret(secret, getCredentialKey(c.env));
+  const credKey = getCredentialKey(c.env);
+  const encryptedSecret = await encryptSecret(secret, credKey);
+  const {
+    publicConfig: publicIntegrationConfig,
+    secretPlaintext: integrationSecretPlaintext,
+  } = splitCredentialIntegrationConfig(integration_config);
+  const encryptedIntegrationSecret = integrationSecretPlaintext
+    ? await encryptSecret(integrationSecretPlaintext, credKey)
+    : null;
 
   await db.insert(propertyAccessCredentials).values({
     id,
@@ -260,7 +362,8 @@ credentials.post('/', async (c) => {
     secret: encryptedSecret,
     notes: notes ?? null,
     integrationType: integration_type ?? null,
-    integrationConfig: integration_config ?? null,
+    integrationConfig: publicIntegrationConfig,
+    integrationSecret: encryptedIntegrationSecret,
     shareWithOs: share_with_os ? 1 : 0,
   });
 
@@ -286,7 +389,7 @@ credentials.post('/', async (c) => {
   return ok(c, { credential: toCredentialResponse(row) }, 201);
 });
 
-// ── GET /properties/:propertyId/credentials/:credId/secret ───────────────────
+// â”€â”€ GET /properties/:propertyId/credentials/:credId/secret â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Blocked to prevent cache/log/preload exposure of credential secrets.
 
 credentials.get('/:credId/secret', async (c) => {
@@ -294,14 +397,14 @@ credentials.get('/:credId/secret', async (c) => {
   return c.json({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
 });
 
-// ── POST /properties/:propertyId/credentials/:credId/reveal ────────────────
+// â”€â”€ POST /properties/:propertyId/credentials/:credId/reveal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 credentials.post('/:credId/reveal', revealCredentialSecret);
 
 // Backward-compatible alias while consumers migrate to /reveal.
 credentials.post('/:credId/secret/reveal', revealCredentialSecret);
 
-// ── PUT /properties/:propertyId/credentials/:credId ──────────────────────────
+// â”€â”€ PUT /properties/:propertyId/credentials/:credId â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 credentials.put('/:credId', async (c) => {
   const db = getDb(c.env.DB);
@@ -315,10 +418,10 @@ credentials.put('/:credId', async (c) => {
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
 
   const body = await c.req.json().catch(() => null);
-  if (!body) return err(c, 'Body inválido', 'INVALID_BODY');
+  if (!body) return err(c, 'Body invÃ¡lido', 'INVALID_BODY');
 
   const parsed = createSchema.partial().safeParse(body);
-  if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
+  if (!parsed.success) return err(c, 'Dados invÃ¡lidos', 'VALIDATION_ERROR', 422, parsed.error.flatten());
 
   const [existing] = await db
     .select(credentialSelect)
@@ -332,9 +435,10 @@ credentials.put('/:credId', async (c) => {
       )
     )
     .limit(1) as CredentialRecord[];
-  if (!existing) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+  if (!existing) return err(c, 'Credencial nÃ£o encontrada', 'NOT_FOUND', 404);
 
   const { category, label, username, secret, notes, integration_type, integration_config, share_with_os } = parsed.data;
+  const credKey = getCredentialKey(c.env);
 
   const patch: Partial<typeof propertyAccessCredentials.$inferInsert> = {
     updatedAt: new Date().toISOString(),
@@ -343,10 +447,28 @@ credentials.put('/:credId', async (c) => {
   if (category !== undefined) patch.category = category;
   if (label !== undefined) patch.label = label;
   if (username !== undefined) patch.username = username ?? null;
-  if (secret !== undefined) patch.secret = await encryptSecret(secret, getCredentialKey(c.env));
+  if (secret !== undefined) patch.secret = await encryptSecret(secret, credKey);
   if (notes !== undefined) patch.notes = notes ?? null;
   if (integration_type !== undefined) patch.integrationType = integration_type ?? null;
-  if (integration_config !== undefined) patch.integrationConfig = integration_config ?? null;
+  if (integration_type === null) {
+    patch.integrationConfig = null;
+    patch.integrationSecret = null;
+  }
+  if (integration_config !== undefined) {
+    if (integration_config === null) {
+      patch.integrationConfig = null;
+      patch.integrationSecret = null;
+    } else {
+      const {
+        publicConfig: publicIntegrationConfig,
+        secretPlaintext: integrationSecretPlaintext,
+      } = splitCredentialIntegrationConfig(integration_config);
+      patch.integrationConfig = publicIntegrationConfig;
+      if (integrationSecretPlaintext !== null) {
+        patch.integrationSecret = await encryptSecret(integrationSecretPlaintext, credKey);
+      }
+    }
+  }
   if (share_with_os !== undefined) patch.shareWithOs = share_with_os ? 1 : 0;
 
   await db
@@ -360,28 +482,32 @@ credentials.put('/:credId', async (c) => {
     .where(and(eq(propertyAccessCredentials.id, credId), eq(propertyAccessCredentials.tenantId, tenantId), eq(propertyAccessCredentials.propertyId, propertyId), isNull(propertyAccessCredentials.deletedAt)))
     .limit(1) as CredentialRecord[];
 
-  if (!row) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+  if (!row) return err(c, 'Credencial nÃ£o encontrada', 'NOT_FOUND', 404);
+
+  const withEncryptedSecret = await migrateLegacyStoredSecretIfNeeded(db, row, credKey);
+  const sanitizedRow = await migrateLegacyIntegrationSecretIfNeeded(db, withEncryptedSecret, credKey);
 
   await writeAuditLog(c.env.DB, {
     tenantId,
     propertyId,
     entityType: 'property_access_credential',
-    entityId: row.id,
+    entityId: sanitizedRow.id,
     action: 'credential_updated',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
     oldData: credentialAuditData(propertyId, existing, userId),
     newData: {
-      ...credentialAuditData(propertyId, row, userId),
+      ...credentialAuditData(propertyId, sanitizedRow, userId),
       changed_fields: Object.keys(parsed.data).filter((field) => field !== 'secret'),
       secret_changed: secret !== undefined,
+      integration_secret_changed: integration_config !== undefined && splitCredentialIntegrationConfig(integration_config).secretPlaintext !== null,
     },
   });
 
-  return ok(c, { credential: toCredentialResponse(row) });
+  return ok(c, { credential: toCredentialResponse(sanitizedRow) });
 });
 
-// ── DELETE /properties/:propertyId/credentials/:credId ───────────────────────
+// â”€â”€ DELETE /properties/:propertyId/credentials/:credId â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 credentials.delete('/:credId', async (c) => {
   const db = getDb(c.env.DB);
@@ -435,8 +561,8 @@ credentials.delete('/:credId', async (c) => {
   return ok(c, { deleted: true });
 });
 
-// ── POST /properties/:propertyId/credentials/:credId/generate-temp-code ──────
-// Intelbras smart lock: generate a temporary PIN (stub — real call done client-side
+// â”€â”€ POST /properties/:propertyId/credentials/:credId/generate-temp-code â”€â”€â”€â”€â”€â”€
+// Intelbras smart lock: generate a temporary PIN (stub â€” real call done client-side
 // or via a dedicated worker; here we demonstrate the flow).
 
 credentials.post('/:credId/generate-temp-code', async (c) => {
@@ -453,7 +579,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
   const body = await c.req.json().catch(() => ({})) as { expires_hours?: number; provider_name?: string };
   const expiresHours = body.expires_hours ?? 24;
 
-  // Load metadata only — secret is not used until real Intelbras API call is implemented
+  // Load metadata only â€” secret is not used until real Intelbras API call is implemented
   const [cred] = await db
     .select(credentialSelect)
     .from(propertyAccessCredentials)
@@ -467,9 +593,9 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
     )
     .limit(1) as CredentialRecord[];
 
-  if (!cred) return err(c, 'Credencial não encontrada', 'NOT_FOUND', 404);
+  if (!cred) return err(c, 'Credencial nÃ£o encontrada', 'NOT_FOUND', 404);
   if (cred.integration_type !== 'intelbras') {
-    return err(c, 'Esta credencial não tem integração Intelbras configurada', 'INVALID_INTEGRATION', 400);
+    return err(c, 'Esta credencial nÃ£o tem integraÃ§Ã£o Intelbras configurada', 'INVALID_INTEGRATION', 400);
   }
 
   const tempPin = String(Math.floor(100000 + Math.random() * 900000));
@@ -500,7 +626,7 @@ credentials.post('/:credId/generate-temp-code', async (c) => {
     temp_pin: tempPin,
     expires_at: expiresAt,
     expires_hours: expiresHours,
-    note: 'PIN temporário gerado. Configure no painel Intelbras se necessário.',
+    note: 'PIN temporÃ¡rio gerado. Configure no painel Intelbras se necessÃ¡rio.',
   });
 });
 
