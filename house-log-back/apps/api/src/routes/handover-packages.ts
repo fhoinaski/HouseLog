@@ -847,8 +847,21 @@ handoverPackagesRoute.post('/:id/issue', async (c) => {
     action: 'handover_package_issued',
     actorId: userId,
     actorIp: c.req.header('CF-Connecting-IP'),
-    oldData: handoverPackage,
-    newData: issuedPackage,
+    oldData: {
+      id: handoverPackage.id,
+      property_id: handoverPackage.property_id,
+      status: handoverPackage.status,
+      issued_at: handoverPackage.issued_at,
+    },
+    newData: {
+      id: issuedPackage.id,
+      property_id: issuedPackage.property_id,
+      status: issuedPackage.status,
+      issued_at: issuedPackage.issued_at,
+      issued_by: issuedPackage.issued_by,
+      expires_at: issuedPackage.expires_at,
+      public_link_created: true,
+    },
   });
 
   return ok(c, { package: issuedPackage, publicAccessUrl });
