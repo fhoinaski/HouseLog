@@ -8,6 +8,8 @@ export type { CredentialCategory, CredentialIntegrationType, DocumentType };
 
 export type User = {
   id: string;
+  active_tenant_id?: string | null;
+  activeTenantId?: string | null;
   email: string;
   name: string;
   role: 'admin' | 'owner' | 'provider' | 'temp_provider';
@@ -103,6 +105,7 @@ export type ProviderPublicProfile = {
 
 export type Property = {
   id: string;
+  tenant_id?: string;
   owner_id: string;
   manager_id: string | null;
   name: string;

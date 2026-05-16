@@ -237,6 +237,37 @@ export async function clearByUser(tenantId: string, userId: string): Promise<voi
  * attempts=3 → ~40 s
  * attempts=4+ → ~80–120 s
  */
+/**
+ * Remove TODOS os itens de um usuario em todos os tenants.
+ * Usar apenas no logout quando o tenant ativo nao esta disponivel de forma confiavel.
+ * Preserva itens de outros usuarios no mesmo dispositivo.
+ */
+export async function clearByUserAcrossTenants(userId: string): Promise<void> {
+  if (!userId) return;
+
+  const readStore = await getStore('readonly');
+  const all = await new Promise<OqItem[]>((resolve, reject) => {
+    const req = readStore.getAll();
+    req.onsuccess = () => resolve(req.result as OqItem[]);
+    req.onerror = () => reject(req.error);
+  });
+
+  const owned = all.filter((item) => item.userId === userId);
+  if (owned.length === 0) return;
+
+  const writeStore = await getStore('readwrite');
+  await Promise.all(
+    owned.map(
+      (item) =>
+        new Promise<void>((resolve, reject) => {
+          const req = writeStore.delete(item.id);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        })
+    )
+  );
+}
+
 export function getNextRetryDelay(attempts: number): number {
   const base = Math.min(5_000 * Math.pow(2, attempts), 120_000);
   const jitter = base * 0.1 * (Math.random() * 2 - 1);

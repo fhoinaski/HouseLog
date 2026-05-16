@@ -3,9 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { authApi, setToken, clearToken, isMfaChallenge, type User } from './api';
 import { clearLegacyAuthStorage } from './api/core/storage';
-import { clearOfflineQueue } from './use-offline-sync';
-import { clearOfflineQueueByUser } from './use-offline-queue-sync';
-import { clearIDBCache } from './idb-cache';
+import { clearOfflineStateForLogout } from './auth-logout-cleanup';
 
 export class MfaRequiredError extends Error {
   challengeToken: string;
@@ -205,21 +203,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Lê o userId do localStorage antes de limpar — o callback não fecha sobre user state
     // porque tem deps=[]. O localStorage ainda contém o perfil neste momento.
     const stored = localStorage.getItem(USER_KEY);
-    const currentUserId = stored
-      ? (() => { try { return (JSON.parse(stored) as User).id; } catch { return null; } })()
+    const currentUser = stored
+      ? (() => { try { return JSON.parse(stored) as User; } catch { return null; } })()
       : null;
 
-    // Fila nova (houselog-oq): limpa apenas itens do usuário que está saindo.
-    // Fallback para clearOfflineQueue (que usa clearAll) quando userId não está disponível.
-    if (currentUserId) {
-      void clearOfflineQueueByUser(currentUserId, currentUserId).catch(() => {});
-    }
-    // Fila legada (houselog-eq) — sempre limpa tudo (sem isolamento por usuário).
-    void clearOfflineQueue().catch(() => {});
-
-    // Cache SWR no IDB — limpa para evitar que dados do usuário atual sejam
-    // hidratados no próximo login de outro usuário no mesmo dispositivo.
-    void clearIDBCache().catch(() => {});
+    void clearOfflineStateForLogout(currentUser).catch(() => {});
 
     clearAll();
     setUser(null);

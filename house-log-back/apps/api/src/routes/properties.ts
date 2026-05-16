@@ -86,6 +86,7 @@ properties.get('/', async (c) => {
   const results = await db
     .select({
       id: propertiesTable.id,
+      tenant_id: propertiesTable.tenantId,
       owner_id: propertiesTable.ownerId,
       manager_id: propertiesTable.managerId,
       name: propertiesTable.name,
@@ -167,6 +168,7 @@ properties.post('/', requireRole('admin', 'owner'), async (c) => {
   const [property] = await db
     .select({
       id: propertiesTable.id,
+      tenant_id: propertiesTable.tenantId,
       owner_id: propertiesTable.ownerId,
       manager_id: propertiesTable.managerId,
       name: propertiesTable.name,

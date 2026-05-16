@@ -187,6 +187,7 @@ export default function ServiceDetailPage({
 
   const { data: propData } = useSWR(['property', propertyId], () => propertiesApi.get(propertyId));
   const property = propData?.property;
+  const activeTenantId = property?.tenant_id ?? null;
   const order = data?.order;
   const canManageTeamSuggestion = user?.role === 'owner' || user?.role === 'admin';
   const { data: teamData, mutate: mutateTeam } = useSWR(
@@ -195,7 +196,7 @@ export default function ServiceDetailPage({
   );
   const offlineSync = useOfflineSync();
   // Nova fila unificada — isolada por userId (usado como tenantId enquanto backend não expõe tenantId)
-  const offlineQueueSync = useOfflineQueueSync(user?.id ?? null, user?.id ?? null);
+  const offlineQueueSync = useOfflineQueueSync(activeTenantId, user?.id ?? null);
 
   useEffect(() => {
     if (!order) {
@@ -217,7 +218,7 @@ export default function ServiceDetailPage({
         try {
           await enqueueOffline({
             type: 'os-update',
-            tenantId: user?.id ?? '',
+            tenantId: activeTenantId ?? '',
             userId: user?.id ?? '',
             propertyId,
             serviceOrderId: serviceId,
@@ -247,7 +248,7 @@ export default function ServiceDetailPage({
         try {
           await enqueueOffline({
             type: 'photo-upload',
-            tenantId: user?.id ?? '',
+            tenantId: activeTenantId ?? '',
             userId: user?.id ?? '',
             propertyId,
             serviceOrderId: serviceId,

@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   clearByUser,
+  clearByUserAcrossTenants,
   clearSyncedByUser,
   getPendingByUser,
   getNextRetryDelay,
@@ -209,6 +210,22 @@ export async function clearOfflineQueueByUser(
     await clearByUser(tenantId, userId);
   } catch {
     // IDB indisponível — falha silenciosa no logout
+  }
+}
+
+/**
+ * Fallback explicito para logout quando o tenantId ativo nao esta disponivel.
+ * Remove somente itens do userId informado, preservando filas de outros usuarios.
+ */
+export async function clearOfflineQueueForUserAcrossTenants(
+  userId: string | null | undefined
+): Promise<void> {
+  if (!userId) return;
+  if (typeof indexedDB === 'undefined') return;
+  try {
+    await clearByUserAcrossTenants(userId);
+  } catch {
+    // IDB indisponivel — falha silenciosa no logout
   }
 }
 
