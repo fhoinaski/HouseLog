@@ -16,6 +16,7 @@ import {
   getPending,
   updateItem,
 } from './offline-evidence-queue';
+import { clearAll as clearNewQueueAll } from './offline-queue';
 import { getToken } from './api/core/storage';
 
 const API_BASE =
@@ -153,14 +154,19 @@ export function useOfflineSync(): OfflineSyncState {
 }
 
 /**
- * Limpa toda a fila de evidências.
- * Deve ser chamado no logout para não deixar dados do usuário no dispositivo.
+ * Limpa ambas as filas de evidências no logout.
+ *
+ * - houselog-eq (fila legada de fotos)
+ * - houselog-oq (fila unificada de fotos + rascunhos de OS)
+ *
+ * Nota: clearAll() na fila nova remove TODOS os itens independente de tenant,
+ * pois o tenantId não está disponível no logout sem mudança do tipo User.
+ * Prefira clearByUser(tenantId, userId) quando o tenantId for conhecido.
  */
 export async function clearOfflineQueue(): Promise<void> {
   if (typeof indexedDB === 'undefined') return;
-  try {
-    await clearQueueAll();
-  } catch {
-    // IDB indisponível — falha silenciosa no logout
-  }
+  await Promise.allSettled([
+    clearQueueAll().catch(() => {}),
+    clearNewQueueAll().catch(() => {}),
+  ]);
 }
