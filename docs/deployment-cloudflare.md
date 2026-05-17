@@ -5,6 +5,12 @@ Backend roda em Cloudflare Workers com D1, R2, KV, Queues, Workers AI e Resend.
 Antes de qualquer deploy de producao, siga tambem o checklist seguro em
 `docs/deploy/CLOUDFLARE_DEPLOY_CHECKLIST.md`.
 
+Production permanece bloqueado enquanto `wrangler.toml` tiver placeholders
+intencionais de D1/KV. `npm run check:deploy-config:prod` deve falhar nesse
+estado; faca deploy somente depois que os recursos reais existirem, os IDs
+forem aplicados na copia usada para deploy e os secrets forem cadastrados via
+`wrangler secret put`.
+
 Comandos principais:
 
 ```bash
@@ -14,6 +20,17 @@ npm --prefix house-log-back/apps/api run build
 npm --prefix house-log-back/apps/api run deploy
 npm --prefix house-log-back/apps/api run db:migrate
 ```
+
+Ordem manual minima para production:
+
+1. Criar D1 production (`houselog-db`).
+2. Criar KV production.
+3. Criar R2 production (`houselog-assets`) com public access desabilitado por padrao.
+4. Criar queues production (`houselog-jobs` e `houselog-document-ingestion`).
+5. Configurar secrets com `wrangler secret put`.
+6. Configurar `APP_ORIGIN` e `API_ORIGIN` para custom domains same-site.
+7. Rodar `npm run check:deploy-config:prod`.
+8. Somente depois rodar `npm --prefix house-log-back/apps/api run deploy`.
 
 Ambiente dev:
 

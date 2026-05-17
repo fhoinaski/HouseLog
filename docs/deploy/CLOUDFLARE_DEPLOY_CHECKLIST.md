@@ -45,6 +45,17 @@ wrangler queues create houselog-document-ingestion-staging
 wrangler queues create houselog-document-ingestion
 ```
 
+Para production, a ordem segura e:
+
+1. Criar D1 production.
+2. Criar KV production.
+3. Criar R2 production.
+4. Criar as duas queues production.
+5. Aplicar os IDs reais de D1/KV somente na copia usada para deploy.
+6. Configurar secrets e origins.
+7. Rodar `npm run check:deploy-config:prod`.
+8. Fazer deploy apenas se o check passar.
+
 ## Secrets obrigatorios
 
 Configure por ambiente com `wrangler secret put`. Nunca grave estes valores em `wrangler.toml`, `.env.local`, docs ou commits.
@@ -60,6 +71,14 @@ wrangler secret put VAPID_PRIVATE_KEY
 ```
 
 Para dev remoto ou staging, acrescente `--env dev` ou `--env staging`.
+
+Configure tambem os origins de production antes do deploy:
+
+- `APP_ORIGIN=https://app.houselog.app`
+- `API_ORIGIN=https://api.houselog.app`
+
+Eles devem apontar para custom domains same-site reais. Nao use `workers.dev`
+em production porque o refresh token HttpOnly depende de SameSite=Lax.
 
 `R2_PUBLIC_URL` e opcional. Configure apenas quando o bucket publico for
 intencionalmente habilitado para Image Resizing/avatars, tambem via secret:
@@ -108,8 +127,17 @@ node scripts/check-deploy-config.mjs --staging-ready
 - [ ] Secrets foram cadastrados por `wrangler secret put`.
 - [ ] `.wrangler/`, `.wrangler/cache/` e `wrangler.log` nao estao versionados.
 - [ ] `R2_PUBLIC_URL` nao esta hardcoded no `wrangler.toml`; se necessario, foi configurado por secret.
+- [ ] `APP_ORIGIN` e `API_ORIGIN` apontam para custom domains same-site reais em production.
 - [ ] `npm run check:deploy-config:prod` passou antes de `npm --prefix house-log-back/apps/api run deploy`.
 - [ ] Backups/export do D1 foram planejados antes de migracoes em production.
+
+## Identificadores versionados
+
+Resource IDs e URLs de infraestrutura nao sao secrets de autenticacao, mas
+podem expor topologia. Se um ID ou URL real de dev/staging aparecer em arquivo
+versionado, trate como identificador: substitua por placeholder quando isso nao
+quebrar o ambiente remoto e mantenha o valor real fora do commit ou em copia
+local usada para deploy.
 
 ## Proibicoes
 

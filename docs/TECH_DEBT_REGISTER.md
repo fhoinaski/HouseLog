@@ -268,6 +268,7 @@ Este registro deve ser lido em conjunto com:
 - **Area**: Deploy / Operacao / Cloudflare
 - **Status**: Mitigado parcialmente
 - **Evidencia**: `wrangler.toml` foi separado para usar D1, KV, R2 e queues distintos entre dev e production; o bug de filas foi corrigido; secrets sensiveis sairam do arquivo versionado; arquivos `.wrangler/` foram removidos do indice do git; `.github/workflows/ci.yml` e `npm run check:deploy-config` foram adicionados. Production ainda usa placeholders invalidos intencionais para D1/KV ate os recursos reais serem criados manualmente.
+- **Evidencia adicional (2026-05-17)**: `npm run check:deploy-config` passa para CI/local com avisos; `npm run check:deploy-config:prod` falha corretamente enquanto D1/KV production usam placeholders. `wrangler.toml` nao contem secrets sensiveis; IDs/URLs reais de dev/staging sao identificadores de infraestrutura, nao credenciais. `docs/deploy/CLOUDFLARE_DEPLOY_CHECKLIST.md` e `docs/deployment-cloudflare.md` documentam a ordem manual para production antes de liberar deploy.
 - **Impacto**: a configuracao perigosa que misturava dev/prod foi bloqueada, mas production ainda nao deve receber deploy ate substituir placeholders por IDs reais e cadastrar secrets via `wrangler secret put`.
 - **Recomendacao**:
   - criar D1/KV/R2/queues reais de production;

@@ -41,7 +41,13 @@
 - Documents and Evidence.
 - Frontend Product Shell.
 
+## Deploy Cloudflare
+
+Production deve permanecer bloqueado enquanto D1/KV usarem placeholders em
+`wrangler.toml`. Antes de deploy production, siga
+`docs/deploy/CLOUDFLARE_DEPLOY_CHECKLIST.md` e rode
+`npm run check:deploy-config:prod`.
+
 ## Regra de mudanca
 
 Se uma tarefa atravessa fronteiras, identifique ownership, contrato, autorizacao, auditoria, impacto frontend e teste antes de editar.
-
