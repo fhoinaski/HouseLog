@@ -1254,10 +1254,10 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   ];
 
   return (
-    <div className="mx-auto max-w-[1180px] space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="mx-auto min-h-full max-w-[1180px] space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
 
       {/* ── EDITORIAL HERO ──────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-[var(--radius-2xl)] bg-[var(--surface-base)]">
+      <div className="relative overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface shadow-hl-subtle">
 
         {/* Cover photo or gradient backdrop */}
         {property.cover_url ? (
@@ -1269,10 +1269,10 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               backgroundPosition: 'center',
             }}
           >
-            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(11,19,38,0.60) 0%, rgba(11,19,38,0.75) 50%, rgba(11,19,38,0.96) 100%)' }} />
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(247,245,240,0.10) 0%, rgba(247,245,240,0.72) 58%, rgba(247,245,240,0.98) 100%)' }} />
           </div>
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-[rgba(184,195,255,0.06)] via-transparent to-[rgba(78,222,163,0.04)]" />
+          <div className="absolute inset-0 bg-hl-surface-muted" />
         )}
 
         <div className="relative z-10 px-4 pb-0 pt-4 sm:px-6 sm:pt-5 md:px-7 md:pt-6">
@@ -1322,7 +1322,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </div>
 
           {/* Stats trio + health */}
-          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-xl)] border border-border-subtle bg-border-subtle sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-border sm:grid-cols-4">
             {/* Saúde */}
             <div className="flex flex-col gap-1 bg-[var(--surface-base)] px-3 py-3 sm:px-4 sm:py-3.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-text-tertiary">Saúde</p>

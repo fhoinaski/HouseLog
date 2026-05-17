@@ -54,6 +54,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 
 - `src/app/(app)/dashboard/page.tsx`: entrada owner/manager alinhada ao Calm OS via surfaces claras e componentes compartilhados.
 - `src/app/(app)/properties/page.tsx`: lista de imoveis recebeu base Calm OS em shell/header/cards e reducao de overlay dark/glass pesado.
+- `src/app/(app)/properties/[id]/page.tsx`: detalhe do imovel recebeu base Calm OS no wrapper e hero, reduzindo overlay escuro sem alterar abas/modulos.
 
 ## Auth/Public Calm OS (2026-05-17)
 
