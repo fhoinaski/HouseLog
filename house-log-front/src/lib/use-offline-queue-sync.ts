@@ -25,7 +25,9 @@ import {
   getPendingByUser,
   getNextRetryDelay,
   manualActionReason,
+  removeItem as removeItemFromDb,
   requiresManualAction,
+  retryManualItem as retryManualItemInDb,
   updateItem,
   type OqItem,
   type OqPhotoItem,
@@ -155,6 +157,25 @@ export async function syncOfflineQueueOnce(
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
+/** Visão segura de um item da fila — sem Blob, sem token, sem campos internos. */
+export type OqItemView = {
+  id: string;
+  type: OqItem['type'];
+  filename?: string;
+  errorMessage?: string;
+  createdAt: string;
+};
+
+function toItemView(item: OqItem): OqItemView {
+  return {
+    id: item.id,
+    type: item.type,
+    filename: item.type === 'photo-upload' ? item.filename : undefined,
+    errorMessage: item.errorMessage,
+    createdAt: item.createdAt,
+  };
+}
+
 export type OfflineQueueSyncState = {
   /** Total de itens pendentes + com falha para o tenant+usuário. */
   pendingCount: number;
@@ -165,10 +186,16 @@ export type OfflineQueueSyncState = {
   /** Número de itens com status 'os-update' pendentes. */
   osUpdatePendingCount: number;
   requiresActionCount: number;
+  /** Itens que requerem ação manual — visão segura sem Blob. */
+  manualActionItems: OqItemView[];
   /** true enquanto um ciclo de sync está em andamento. */
   isSyncing: boolean;
   /** Dispara sync manual. Seguro chamar múltiplas vezes — o mutex previne concorrência. */
   sync: () => Promise<void>;
+  /** Recoloca um item requires_action como pending. Valida ownership antes de mutar. */
+  retryManualItem: (id: string) => Promise<void>;
+  /** Remove um item requires_action após confirmação de ownership. */
+  removeManualItem: (id: string) => Promise<void>;
 };
 
 /**
@@ -186,6 +213,7 @@ export function useOfflineQueueSync(
   const [photoPendingCount, setPhotoPendingCount] = useState(0);
   const [osUpdatePendingCount, setOsUpdatePendingCount] = useState(0);
   const [requiresActionCount, setRequiresActionCount] = useState(0);
+  const [manualActionItems, setManualActionItems] = useState<OqItemView[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const syncingRef = useRef(false);
 
@@ -200,10 +228,25 @@ export function useOfflineQueueSync(
       setPhotoPendingCount(pending.filter((i) => i.type === 'photo-upload').length);
       setOsUpdatePendingCount(pending.filter((i) => i.type === 'os-update').length);
       setRequiresActionCount(manual.length);
+      setManualActionItems(manual.map(toItemView));
     } catch {
       // IDB indisponível — estado permanece
     }
   }, [tenantId, userId]);
+
+  const retryManualItem = useCallback(async (id: string) => {
+    if (!tenantId || !userId) return;
+    if (typeof indexedDB === 'undefined') return;
+    await retryManualItemInDb(id, tenantId, userId);
+    await refreshCounts();
+  }, [tenantId, userId, refreshCounts]);
+
+  const removeManualItem = useCallback(async (id: string) => {
+    if (!tenantId || !userId) return;
+    if (typeof indexedDB === 'undefined') return;
+    await removeItemFromDb(id, tenantId, userId);
+    await refreshCounts();
+  }, [tenantId, userId, refreshCounts]);
 
   const sync = useCallback(async () => {
     if (syncingRef.current) return;
@@ -240,8 +283,11 @@ export function useOfflineQueueSync(
     photoPendingCount,
     osUpdatePendingCount,
     requiresActionCount,
+    manualActionItems,
     isSyncing,
     sync,
+    retryManualItem,
+    removeManualItem,
   };
 }
 

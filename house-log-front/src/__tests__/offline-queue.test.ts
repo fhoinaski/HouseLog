@@ -36,8 +36,11 @@ import {
   clearSyncedByUser,
   enqueue,
   getByUser,
+  getManualActionByUser,
   getNextRetryDelay,
   getPendingByUser,
+  removeItem,
+  retryManualItem,
   updateItem,
   type OqItem,
   type OqPhotoItem,
@@ -535,5 +538,79 @@ describe('Extras', () => {
     expect(localStorageMock.length).toBe(0);
     const all = await getByUser('tenant-a', 'user-1');
     expect(JSON.stringify(all)).not.toContain('token-secreto');
+  });
+});
+
+// ── TD-018: requires_action — getManualActionByUser, retryManualItem, removeItem ─
+
+describe('requires_action — ações manuais', () => {
+  it('getManualActionByUser retorna apenas itens requires_action do tenant+usuario correto', async () => {
+    const item = await enqueue(makePhoto());
+    await updateItem(item.id, { status: 'requires_action', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+    // Item de outro usuário — não deve aparecer
+    const other = await enqueue({ ...makePhoto(), userId: 'user-2' });
+    await updateItem(other.id, { status: 'requires_action', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+
+    const manual = await getManualActionByUser('tenant-a', 'user-1');
+
+    expect(manual).toHaveLength(1);
+    expect(manual[0].id).toBe(item.id);
+  });
+
+  it('getManualActionByUser nao retorna itens de outro tenant', async () => {
+    const item = await enqueue({ ...makePhoto(), tenantId: 'tenant-b' });
+    await updateItem(item.id, { status: 'requires_action', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+
+    const manual = await getManualActionByUser('tenant-a', 'user-1');
+
+    expect(manual).toHaveLength(0);
+  });
+
+  it('retryManualItem reseta para pending com attempts=0 e limpa errorMessage', async () => {
+    const item = await enqueue(makePhoto());
+    await updateItem(item.id, {
+      status: 'requires_action',
+      attempts: OFFLINE_QUEUE_MAX_ATTEMPTS,
+      errorMessage: 'Limite atingido',
+    });
+
+    const result = await retryManualItem(item.id, 'tenant-a', 'user-1');
+
+    expect(result).toBe(true);
+    const all = await getByUser('tenant-a', 'user-1');
+    expect(all[0].status).toBe('pending');
+    expect(all[0].attempts).toBe(0);
+    expect(all[0].errorMessage).toBeUndefined();
+  });
+
+  it('retryManualItem retorna false e nao afeta item de outro tenant+usuario', async () => {
+    const item = await enqueue(makePhoto());
+    await updateItem(item.id, { status: 'requires_action', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+
+    const result = await retryManualItem(item.id, 'tenant-b', 'user-2');
+
+    expect(result).toBe(false);
+    const all = await getByUser('tenant-a', 'user-1');
+    expect(all[0].status).toBe('requires_action');
+  });
+
+  it('removeItem remove item do tenant+usuario correto', async () => {
+    const item = await enqueue(makePhoto());
+    await updateItem(item.id, { status: 'requires_action', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+
+    const result = await removeItem(item.id, 'tenant-a', 'user-1');
+
+    expect(result).toBe(true);
+    expect(await getByUser('tenant-a', 'user-1')).toHaveLength(0);
+  });
+
+  it('removeItem retorna false e nao remove item de outro tenant+usuario', async () => {
+    const item = await enqueue(makePhoto());
+    await updateItem(item.id, { status: 'requires_action', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+
+    const result = await removeItem(item.id, 'tenant-b', 'user-2');
+
+    expect(result).toBe(false);
+    expect(await getByUser('tenant-a', 'user-1')).toHaveLength(1);
   });
 });

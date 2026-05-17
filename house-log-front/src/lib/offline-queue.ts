@@ -324,6 +324,34 @@ export async function clearAll(): Promise<void> {
 }
 
 /**
+ * Recoloca um item `requires_action` na fila como `pending` com attempts zerados.
+ * Valida ownership (tenantId + userId) antes de qualquer mutação.
+ * Retorna false se o item não for encontrado ou não pertencer ao tenant+usuário.
+ */
+export async function retryManualItem(id: string, tenantId: string, userId: string): Promise<boolean> {
+  const all = await getByUser(tenantId, userId);
+  const item = all.find((i) => i.id === id && i.status === 'requires_action');
+  if (!item) return false;
+  await updateItem(id, { status: 'pending', attempts: 0, errorMessage: undefined, lastAttemptAt: undefined });
+  return true;
+}
+
+/**
+ * Remove um item da fila após validar ownership (tenantId + userId).
+ * Retorna false se o item não for encontrado ou não pertencer ao tenant+usuário.
+ */
+export async function removeItem(id: string, tenantId: string, userId: string): Promise<boolean> {
+  const all = await getByUser(tenantId, userId);
+  if (!all.some((i) => i.id === id)) return false;
+  const store = await getStore('readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.delete(id);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
  * Reseta a conexão IDB cacheada.
  * Uso EXCLUSIVO em testes — garante isolamento entre casos de teste.
  */

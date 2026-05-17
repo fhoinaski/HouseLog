@@ -47,6 +47,7 @@ Sistema oficial: The Architectural Lens. Use componentes e tokens existentes. Na
 - Para documentos/upload, nao expor URLs privadas diretamente.
 - Fila offline de OS usa `src/lib/offline-queue.ts` (`houselog-oq`) com `tenantId + userId + propertyId + serviceOrderId`; a fila legada `houselog-eq` deve ser limpa, nao migrada sem contexto confiavel. `OqPhotoItem` tem campo opcional `useProviderRoute?: boolean` — quando `true`, o sync usa `POST /provider/services/:id/photos` em vez da rota de property.
 - Sync offline e foreground-only: roda com access token em memoria no mount/`online`; nao implementar Background Sync sem redesenho de auth.
+- Itens `requires_action` (max attempts ou idade > 7 dias) expoe UX explicita em `OfflineSyncStatus`: painel expansivel com "Tentar novamente" e "Remover pendencia" (com confirmacao inline). `retryManualItem` e `removeItem` em `offline-queue.ts` validam `tenantId + userId` antes de qualquer mutacao — Blob nunca removido sem confirmacao. Hook `useOfflineQueueSync` expoe `manualActionItems: OqItemView[]` (sem Blob, sem token), `retryManualItem(id)` e `removeManualItem(id)`.
 
 ## Validacao comum
 

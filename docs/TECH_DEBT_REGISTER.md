@@ -565,9 +565,13 @@ Este registro deve ser lido em conjunto com:
   - Itens com `attempts >= 5` ou idade acima de 7 dias passam para `requires_action`, preservando o Blob para decisao manual em vez de retry infinito.
   - `OfflineSyncStatus` diferencia pendente, sincronizando, falha e requer acao.
   - Testes de fila offline cobrem limite de Blob, sync com/sem token, token nao persistido, max attempts, idade maxima e limpeza da fila legada.
+- **Mitigacao adicional (2026-05-17) — UX requires_action**:
+  - `offline-queue.ts`: `retryManualItem(id, tenantId, userId)` valida ownership antes de resetar item para `pending` com `attempts=0`; `removeItem(id, tenantId, userId)` valida ownership antes de deletar do IDB — Blob nunca removido sem confirmacao explicita do usuario.
+  - `use-offline-queue-sync.ts`: tipo `OqItemView` (sem Blob, sem token), `manualActionItems: OqItemView[]`, `retryManualItem` e `removeManualItem` adicionados ao estado do hook `useOfflineQueueSync`.
+  - `offline-sync-status.tsx`: botao `requires_action` agora expande painel (`role="dialog"`, `aria-expanded`) com lista de itens, botao "Tentar novamente" (RotateCcw) e botao "Remover pendencia" (X) com confirmacao inline — sem delecao silenciosa.
+  - 6 novos testes em `offline-queue.test.ts` cobrindo `getManualActionByUser`, `retryManualItem` e `removeItem` com isolamento de tenant/usuario.
 - **Risco residual apos hardening**:
   - Background Sync permanece fora do escopo por seguranca: o service worker nao tem acesso ao access token em memoria e o token nao deve ser persistido em IndexedDB/localStorage.
-  - Itens `requires_action` ainda precisam de UX futura para remover/recriar explicitamente a evidencia pelo usuario.
 - **Documentacao**: SECURITY.md secao sobre armazenamento de dados no dispositivo.
 
 ---
