@@ -32,6 +32,11 @@ O frontend tambem aceita formato legado preservado pelo helper antigo.
 - Public/tokenized: audit links, service share, invite e handover publico.
 - Documents, credentials, expenses, maintenance, inventory, warranties, renovations, systems, technical points e handover seguem escopo por property quando aplicavel.
 
+## Provider — rotas de upload (2026-05-17)
+
+- `POST /api/v1/provider/services/:id/invoice` — nota fiscal; qualquer status.
+- `POST /api/v1/provider/services/:id/photos` — evidencia pos-execucao (`type: 'after'`); requer status `approved` ou `in_progress` e provider atribuido. Retorna `{ url, type }` onde `url` aponta para `/api/v1/properties/:propertyId/services/:id/media/:key` (sem R2 key exposta).
+
 ## Regras para IA
 
 - Nao inventar endpoint.

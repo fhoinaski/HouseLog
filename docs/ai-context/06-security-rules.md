@@ -37,6 +37,10 @@ Rotas publicas tokenizadas devem aplicar rate limit granular por fluxo, IP e pre
 
 Mutacoes criticas usam `writeAuditLog`. Dados antigos e novos devem passar por sanitizacao. Inclua `tenantId` e `propertyId` quando aplicavel.
 
+## Provider — autorizacao de upload
+
+`canUploadProviderEvidence` (authorization.ts): admin sempre pode (se nao deletado); provider deve estar atribuido (`assignedTo === userId`) e OS deve ter status `approved` ou `in_progress`. Nao usar `canManageProperty` para upload de evidencia de prestador — esse helper bloqueia todos os `isProviderRole`. Audit log de upload nao deve conter R2 key, signed URL ou conteudo do arquivo.
+
 ## Checklist rapido
 
 - A rota privada usa auth?

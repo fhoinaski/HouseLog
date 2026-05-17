@@ -31,6 +31,11 @@ Search usa `src/lib/search-field-policy.ts` para controlar campos permitidos e p
 
 Public links usam `src/lib/public-link-rate-limit.ts` para rate limit granular em KV por `flow + action + IP + tokenHashPrefix`. O helper recebe hash de token, nunca token plaintext. Acoes publicas de mutacao usam limite menor que leitura.
 
+## Provider — rotas de upload (2026-05-17)
+
+- `POST /provider/services/:id/invoice` — `canUploadProviderInvoice` (alias de `canViewAssignedProviderService`); cria documento no D1.
+- `POST /provider/services/:id/photos` — `canUploadProviderEvidence`; requer `assigned_to === userId` + status `approved`|`in_progress`; salva R2 key em `serviceOrders.afterPhotos`; audit sem R2 key. NAO usar `canManageProperty` para provider — bloqueia todos os roles de prestador.
+
 ## Regras para IA
 
 - Nao inventar rota, entidade ou payload.

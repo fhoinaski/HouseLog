@@ -4,6 +4,7 @@ import { ok, err, paginate } from '../lib/response';
 import { writeAuditLog } from '../lib/audit';
 import {
   canAccessProviderPortal,
+  canUploadProviderEvidence,
   canUploadProviderInvoice,
   canViewAssignedProviderService,
   canViewProviderOpportunity,
@@ -500,6 +501,90 @@ provider.post('/services/:id/invoice', async (c) => {
   });
 
   return ok(c, { invoice_url: `/api/v1/properties/${order.property_id}/documents/${docId}/download`, document_id: docId });
+});
+
+// POST /provider/services/:id/photos — provider envia evidência (foto pós-execução)
+provider.post('/services/:id/photos', async (c) => {
+  const db = getDb(c.env.DB);
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const id = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
+
+  const whereClause = role === 'admin'
+    ? and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), isNull(serviceOrders.deletedAt))
+    : and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
+
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      assigned_to: serviceOrders.assignedTo,
+      deleted_at: serviceOrders.deletedAt,
+      status: serviceOrders.status,
+      after_photos: serviceOrders.afterPhotos,
+    })
+    .from(serviceOrders)
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .where(whereClause)
+    .limit(1) as Array<{ id: string; property_id: string; assigned_to: string | null; deleted_at: string | null; status: string; after_photos: string[] | null }>;
+
+  if (!order) return err(c, 'OS não encontrada ou sem acesso', 'NOT_FOUND', 404);
+
+  if (!canUploadProviderEvidence({
+    userId,
+    role,
+    assignedProviderId: order.assigned_to,
+    deletedAt: order.deleted_at,
+    serviceOrderStatus: order.status,
+  })) {
+    return err(c, 'OS não encontrada ou sem acesso', 'NOT_FOUND', 404);
+  }
+
+  const formData = await c.req.formData().catch(() => null);
+  if (!formData) return err(c, 'Form data inválido', 'INVALID_BODY');
+
+  const file = formData.get('file') as File | null;
+  if (!file) return err(c, 'Arquivo não encontrado', 'MISSING_FILE');
+
+  const { buildR2Key, uploadToR2, preparePrivateUpload } = await import('../lib/r2');
+  const validation = await preparePrivateUpload(file);
+  if (!validation.ok) return err(c, validation.error, 'INVALID_FILE', 422);
+
+  const key = buildR2Key({ propertyId: order.property_id, category: 'photos', filename: file.name });
+  await uploadToR2(c.env.STORAGE, key, validation.buffer, validation.mimeType);
+
+  const afterPhotos = [...(order.after_photos ?? []), key];
+  await db
+    .update(serviceOrders)
+    .set({ afterPhotos })
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId)));
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId: order.property_id,
+    entityType: 'service_order',
+    entityId: id,
+    action: 'service_order_evidence_uploaded',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      property_id: order.property_id,
+      service_order_id: id,
+      evidence_type: 'photo',
+      photo_type: 'after',
+      file_mime_type: validation.mimeType,
+      file_size: validation.size,
+      actor_id: userId,
+      actor_role: role,
+    },
+  });
+
+  return ok(c, { url: `/api/v1/properties/${order.property_id}/services/${id}/media/${encodeURIComponent(key)}`, type: 'after' });
 });
 
 export default provider;

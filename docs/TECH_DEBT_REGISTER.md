@@ -173,10 +173,10 @@ Este registro deve ser lido em conjunto com:
   - Provider dashboard (`/provider/dashboard`): separados estados de loading (skeleton), erro (mensagem + retry) e vazio real; metricas nao exibem zero silencioso em erro.
   - Oportunidades (`/provider/opportunities`): chips de filtro receberam `aria-pressed` e `role="group"` acessivel.
   - Settings (`/provider/settings`): chips de hard skills receberam `aria-pressed`.
-- **Lacuna confirmada — upload de evidencia pelo prestador**: `canUploadServiceEvidence` → `canManageServiceOrder` → `canManageProperty` com `accessLevel='manage'` retorna 403 para qualquer `isProviderRole`. Nao ha rota dedicada de fotos no provider backend (`/provider/services/:id/photos`). O botao de envio de evidencia foi omitido da tela de detalhe do prestador; `after_photos` ja existentes sao exibidos normalmente via dados da OS. Para habilitar upload pelo prestador sera necessario criar rota dedicada em `apps/api/src/routes/provider.ts` com escopo de autorizacao proprio (ex: `assigned_service`).
+- **Upload de evidencia pelo prestador (resolvido 2026-05-17)**: criada rota dedicada `POST /provider/services/:id/photos` em `apps/api/src/routes/provider.ts` com `canUploadProviderEvidence` (requer `assigned_to === userId` + status `approved`|`in_progress`). A rota opera com `accessLevel` equivalente a `assigned_service`, sem tocar `canManageProperty`. Audit log registrado sem R2 key. Frontend deve re-habilitar botao de envio de evidencia via offline queue apontando para a nova rota.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
-  - verificar permissao de upload de foto pelo prestador no backend antes do release;
+  - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;
   - registrar componentes consolidados no guia operacional;
   - evitar criar componentes paralelos quando um estrutural existente resolve.
 - **Relacionamento com roadmap/ADRs**: Fase 5; ADR-002.
