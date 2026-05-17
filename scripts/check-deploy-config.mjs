@@ -6,6 +6,7 @@ const PRODUCTION_READY = process.argv.includes('--production-ready');
 const STAGING_READY = process.argv.includes('--staging-ready');
 const DEV_READY = process.argv.includes('--dev-ready');
 const content = readFileSync(WRANGLER_PATH, 'utf8');
+const tomlLinesByLine = content.split('\n');
 
 const errors = [];
 const warnings = [];
@@ -56,6 +57,22 @@ function trackedWranglerFiles() {
     return output ? output.split(/\r?\n/) : [];
   } catch {
     warnings.push('Nao foi possivel consultar git ls-files para arquivos locais do Wrangler.');
+    return [];
+  }
+}
+
+function trackedDevVarsFiles() {
+  try {
+    const output = execFileSync(
+      'git',
+      ['ls-files', '--', '**/.dev.vars', '.dev.vars'],
+      { encoding: 'utf8' }
+    ).trim();
+    return output
+      ? output.split(/\r?\n/).filter((f) => f.length > 0 && !f.endsWith('.example'))
+      : [];
+  } catch {
+    warnings.push('Nao foi possivel consultar git ls-files para .dev.vars.');
     return [];
   }
 }
@@ -194,6 +211,65 @@ for (const [envName, actualQueues, expectedQueues] of expectedQueuesByEnv) {
 const trackedWrangler = trackedWranglerFiles();
 if (trackedWrangler.length > 0) {
   errors.push(`Arquivos locais do Wrangler ainda estao versionados: ${trackedWrangler.join(', ')}`);
+}
+
+// ── Secret scan ──────────────────────────────────────────────────────────────
+
+// 1. .dev.vars com possiveis secrets versionados
+const trackedDevVars = trackedDevVarsFiles();
+if (trackedDevVars.length > 0) {
+  errors.push(
+    `Arquivos .dev.vars com possiveis secrets estao versionados: ${trackedDevVars.join(', ')}. ` +
+      'Adicione **/.dev.vars ao .gitignore e remova com: git rm --cached <arquivo>.'
+  );
+}
+
+// 2. R2_PUBLIC_URL hardcoded (linha nao comentada) no wrangler.toml
+const r2UrlInToml = content.match(/^R2_PUBLIC_URL\s*=\s*"([^"]+)"/m);
+if (r2UrlInToml) {
+  errors.push(
+    `R2_PUBLIC_URL="${r2UrlInToml[1]}" esta hardcoded no wrangler.toml. ` +
+      'Configure exclusivamente via: wrangler secret put R2_PUBLIC_URL.'
+  );
+}
+
+// 3. Account subdomain em workers.dev hardcoded (formato <worker>.<account>.workers.dev)
+// Esse padrao indica URL de conta Cloudflare — nao deve ficar em config versionada
+const accountSubdomainRe = /[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev/i;
+for (const line of tomlLinesByLine) {
+  const trimmed = line.trim();
+  if (trimmed.startsWith('#')) continue;
+  if (accountSubdomainRe.test(trimmed)) {
+    errors.push(
+      `Subdomain de conta Cloudflare detectado no wrangler.toml: "${trimmed}". ` +
+        'Use custom domain (ex: api.houselog.app) ou hostname sem account subdomain.'
+    );
+  }
+}
+
+// 4. IDs reais conhecidos documentados em TD-016 — aviso se presentes em linhas ativas.
+// Sao resource IDs (nao credenciais); politica do projeto (CLOUDFLARE_DEPLOY_CHECKLIST.md)
+// recomenda substituir por placeholders no repo. Reportado como aviso para nao bloquear
+// deploys de dev que ainda dependam dos IDs reais localmente.
+const KNOWN_REAL_IDS = [
+  ['62bd81c4-77da-4867-a996-22fff5e0d258', 'D1 database UUID dev (TD-016)'],
+  ['30d1ccabab2349e79151d3dec9eb11de', 'KV namespace UUID dev legado (TD-016)'],
+  ['3ff8849243ae4ec2b6f124cf71160801', 'prefixo da URL do bucket R2 dev (TD-016)'],
+  ['sukinodoncai', 'account subdomain Cloudflare (TD-016)'],
+];
+
+for (const [id, label] of KNOWN_REAL_IDS) {
+  for (const line of tomlLinesByLine) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('#')) continue;
+    if (trimmed.includes(id)) {
+      warnings.push(
+        `Identificador real conhecido presente em linha ativa do wrangler.toml ` +
+          `(${label}). Substituir por placeholder intencional antes de tornar o repo publico.`
+      );
+      break;
+    }
+  }
 }
 
 const invalidResourcePlaceholders = [
