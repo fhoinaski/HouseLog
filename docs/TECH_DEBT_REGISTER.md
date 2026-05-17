@@ -206,15 +206,41 @@ Este registro deve ser lido em conjunto com:
 
 - **Severidade**: Critica
 - **Area**: Backend / Seguranca / Boundary Architecture
-- **Status**: Aberto
-- **Evidencia**: o roadmap define necessidade de um modulo central com regras como `canAccessProperty`, `canManageProperty`, `canViewServiceOrder`, `canAccessCredential`, `canCreateShareLink` e `canBidOnOpportunity`; hoje ainda ha checagens mais distribuidas e helpers parciais.
-- **Impacto**: aumenta risco de acesso indevido, divergencia entre rotas e dificuldade de evoluir provider network, public links, credenciais e multi-tenant.
+- **Status**: Mitigado parcialmente
+- **Evidencia (2026-05-16 — auditoria TD-010 Phase 1+2)**:
+
+  **Auditoria Phase 1 — funcoes existentes:**
+  - `tenant-authorization.ts`: `canUseTenantPropertyAccess` (pura), `canAccessTenantProperty` (DB-backed), `listAccessibleTenantPropertyIds`
+  - `authorization.ts`: 50+ funcoes cobrindo property, service order, documents, credentials, provider, share, search e audit log
+  - As funcoes retornam ou `TenantScopedDecision` (union discriminada com status/code) ou `boolean`; inconsistencia de tipo e interna ao modulo
+
+  **Rotas ja usando authorization.ts:** documents.ts, rooms.ts (via `requireTenantPropertyAccess`), properties.ts (via `assertPropertyAccess`), share.ts (pos-migracao)
+
+  **Gaps confirmados na auditoria:**
+  1. `canCreateShareLink` — AUSENTE, implementado inline em share.ts (CORRIGIDO nesta sessao)
+  2. `canUserOpenOS` em `middleware/auth.ts` — duplica logica de `canCreateServiceOrder`; dead code
+  3. "Legacy paths" sem tenantId em `canAccessProperty`, `canCreateServiceOrder`, `canCreateServiceRequest` — inalcancaveis via middleware mas compilam sem isolamento
+  4. `properties.ts GET /` — usa SQL inline para listar properties acessiveis em vez de `listAccessiblePropertyIds`
+
+  **Phase 2 — correcoes aplicadas (2026-05-16):**
+  - Adicionado `canCreateShareLink` em `authorization.ts` com dois gates: manage-level property access + verificacao de que a OS pertence ao tenant+property
+  - `share.ts` migrado: substituiu `assertPropertyAccess` + check inline por chamada unica a `canCreateShareLink`
+  - Criado `routes/share-idor.test.ts` com 4 testes: cross-tenant IDOR (404), cross-property IDOR (404), collaborator viewer (403), criacao autorizada (201)
+
+  **Phase 2 controlada — delta (2026-05-17):**
+  - Adicionado `canAccessDocument` em `authorization.ts` com gates `tenantId + propertyId + documentId` e validacao da cadeia de `serviceOrderId` quando o documento esta vinculado a OS.
+  - `documents.ts` migrado em rotas P0 de leitura/download/OCR para usar `canAccessDocument`.
+  - `properties.ts GET /` migrado para `listAccessiblePropertyIds`, removendo a decisao inline de propriedades acessiveis.
+  - `handover-checklist-items.ts` passou a ler referencias opcionais com `tenantId + propertyId + resourceId`, evitando fetch inicial por id isolado.
+  - Criado `lib/authorization-document.test.ts` com cobertura de documento autorizado, OS fora da cadeia tenant/property e property cross-tenant.
+
+- **Impacto residual**: aumenta risco de acesso indevido se novos endpoints nao seguirem o padrao; legacy paths sem tenant sao tecnicamente presentes mas bloqueados por middleware
 - **Recomendacao**:
-  - criar modulo central de authorization;
-  - migrar rotas sensiveis gradualmente;
-  - cobrir property, service, provider, credentials, share e search;
-  - adicionar testes de permissao por papel/contexto;
-  - alinhar com `BOUNDARY_MAP.md`.
+  - remover `canUserOpenOS` de `middleware/auth.ts` (dead code);
+  - substituir legacy paths por chamada direta a `canAccessTenantProperty` (requer que o contexto de tenant seja obrigatorio — depende de maturidade multi-tenant);
+  - padronizar retorno de authorization.ts para `TenantScopedDecision` em vez de `boolean` onde aplicavel;
+  - migrar `properties.ts GET /` para usar `listAccessiblePropertyIds`;
+  - cobrir `canBidOnOpportunity` com DB validation se oportunidades forem ativadas.
 - **Relacionamento com roadmap/ADRs**: Fase 3; `SECURITY_REVIEW.md`, ADR-003, ADR-004 e ADR-005.
 
 ---

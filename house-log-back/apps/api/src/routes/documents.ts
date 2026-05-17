@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
-import { canDeleteDocument, canRequestDocumentIngestion, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
+import { canAccessDocument, canDeleteDocument, canRequestDocumentIngestion, canRequestDocumentOCR, canUploadDocument } from '../lib/authorization';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { buildR2Key, uploadToR2, extractR2KeyFromPublicUrl, preparePrivateUpload } from '../lib/r2';
@@ -252,10 +252,11 @@ documents.get('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
-  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
-
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const access = await canAccessDocument(c.env.DB, { propertyId, documentId: id, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  if (!access.allowed) {
+    const message = access.code === 'NOT_FOUND' ? 'Documento nao encontrado' : 'Sem acesso';
+    return err(c, message, access.code, access.status);
+  }
 
   const [doc] = await db
     .select({
@@ -298,10 +299,11 @@ documents.get('/:id/download', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
-  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
-
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const access = await canAccessDocument(c.env.DB, { propertyId, documentId: id, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  if (!access.allowed) {
+    const message = access.code === 'NOT_FOUND' ? 'Documento nao encontrado' : 'Sem acesso';
+    return err(c, message, access.code, access.status);
+  }
 
   const [doc] = await db
     .select({
@@ -358,7 +360,6 @@ documents.delete('/:id', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
-  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   const permission = await canDeleteDocument(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!permission.allowed) {
@@ -426,7 +427,11 @@ documents.post('/:id/ocr', async (c) => {
   const role = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
-  if (!(await ensureTenantProperty(db, tenantId, propertyId))) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+  const access = await canAccessDocument(c.env.DB, { propertyId, documentId: id, userId, role, tenantId, tenantRole: c.get('tenantRole') });
+  if (!access.allowed) {
+    const message = access.code === 'NOT_FOUND' ? 'Documento nao encontrado' : 'Sem acesso';
+    return err(c, message, access.code, access.status);
+  }
 
   const hasAccess = await canRequestDocumentOCR(c.env.DB, { propertyId, userId, role, tenantId, tenantRole: c.get('tenantRole') });
   if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);

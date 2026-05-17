@@ -37,6 +37,7 @@ vi.mock('../lib/audit', () => ({
 vi.mock('../lib/authorization', () => ({
   canCreateAuditLink: vi.fn(async () => true),
   canManageTenantUsers: vi.fn(async () => ({ allowed: true })),
+  canCreateShareLink: vi.fn(async () => ({ allowed: true, reason: 'share_link_manager' })),
   canAccessTenantProperty: vi.fn(async () => true),
   canUseTenantPropertyAccess: vi.fn(() => ({ allowed: true })),
   assertPropertyAccess: vi.fn(async () => true),

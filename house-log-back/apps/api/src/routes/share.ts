@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
-import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
+import { authMiddleware, resolveTenant } from '../middleware/auth';
+import { canCreateShareLink } from '../lib/authorization';
 import { getDb } from '../db/client';
 import { properties, rooms, serviceOrders, serviceShareLinks } from '../db/schema';
 import { writeAuditLog } from '../lib/audit';
@@ -27,12 +28,21 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
   const propertyId = c.req.param('propertyId');
   const serviceId  = c.req.param('serviceId');
   const userId = c.get('userId');
-  const role   = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
-  const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  const decision = await canCreateShareLink(c.env.DB, {
+    tenantId,
+    tenantRole: c.get('tenantRole'),
+    propertyId,
+    userId,
+    role: c.get('userRole'),
+    serviceOrderId: serviceId,
+  });
+  if (!decision.allowed) {
+    const message = decision.code === 'NOT_FOUND' ? 'OS não encontrada' : 'Sem acesso';
+    return err(c, message, decision.code, decision.status);
+  }
 
   const body = await c.req.json().catch(() => ({})) as {
     expires_hours?: number;
@@ -44,24 +54,6 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
 
   const expiresHours = Math.min(body.expires_hours ?? 72, 720); // max 30 days
   const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000).toISOString();
-
-  // Check service belongs to this property
-  const [service] = await db
-    .select({ id: serviceOrders.id })
-    .from(serviceOrders)
-    .innerJoin(properties, eq(properties.id, serviceOrders.propertyId))
-    .where(
-      and(
-        eq(serviceOrders.id, serviceId),
-        eq(serviceOrders.tenantId, tenantId),
-        eq(serviceOrders.propertyId, propertyId),
-        eq(properties.tenantId, tenantId),
-        isNull(serviceOrders.deletedAt),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-  if (!service) return err(c, 'OS não encontrada', 'NOT_FOUND', 404);
 
   // Revoke any existing active link so only one is active at a time
   const [existing] = await db

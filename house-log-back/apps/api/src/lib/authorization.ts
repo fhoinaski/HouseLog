@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { properties, propertyCollaborators, serviceOrders } from '../db/schema';
+import { documents, properties, propertyCollaborators, serviceOrders } from '../db/schema';
 import {
   canAccessTenantProperty,
   type TenantPropertyAccessDecision,
@@ -100,6 +100,51 @@ export async function canDeleteDocument(
   return canManageProperty(db, input);
 }
 
+export async function canAccessDocument(
+  db: D1Database,
+  input: PropertyAuthorizationInput & {
+    documentId: string;
+    accessLevel?: Extract<TenantPropertyAccessLevel, 'view' | 'manage'>;
+  }
+): Promise<TenantScopedDecision> {
+  const propertyDecision = await resolvePropertyDecision(db, input, input.accessLevel ?? 'view');
+  if (!propertyDecision.allowed) return propertyDecision;
+  if (!input.tenantId) return { allowed: false, status: 400, code: 'TENANT_REQUIRED' };
+
+  const drizzle = getDb(db);
+  const [document] = await drizzle
+    .select({ serviceId: documents.serviceId })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.id, input.documentId),
+        eq(documents.tenantId, input.tenantId),
+        eq(documents.propertyId, input.propertyId),
+        isNull(documents.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!document) return { allowed: false, status: 404, code: 'NOT_FOUND' };
+  if (!document.serviceId) return { allowed: true, reason: 'document_property_access' };
+
+  const [serviceOrder] = await drizzle
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(
+      and(
+        eq(serviceOrders.id, document.serviceId),
+        eq(serviceOrders.tenantId, input.tenantId),
+        eq(serviceOrders.propertyId, input.propertyId),
+        isNull(serviceOrders.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!serviceOrder) return { allowed: false, status: 404, code: 'NOT_FOUND' };
+  return { allowed: true, reason: 'document_service_order_access' };
+}
+
 export async function canRevealCredential(
   db: D1Database,
   input: PropertyAuthorizationInput
@@ -140,6 +185,37 @@ export async function canProviderRevealCredential(
 
   if (!os) return { allowed: false, status: 403, code: 'FORBIDDEN' };
   return { allowed: true, reason: 'provider_active_service_order' };
+}
+
+export type ShareLinkAuthorizationInput = PropertyAuthorizationInput & {
+  serviceOrderId: string;
+};
+
+// Requires manage-level property access AND verifies the service order belongs
+// to the same tenant+property. Encapsulates both gates so routes don't inline them.
+export async function canCreateShareLink(
+  db: D1Database,
+  input: ShareLinkAuthorizationInput
+): Promise<TenantScopedDecision> {
+  const propertyDecision = await resolvePropertyDecision(db, input, 'manage');
+  if (!propertyDecision.allowed) return propertyDecision;
+
+  const drizzle = getDb(db);
+  const [os] = await drizzle
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(
+      and(
+        eq(serviceOrders.id, input.serviceOrderId),
+        eq(serviceOrders.tenantId, input.tenantId!),
+        eq(serviceOrders.propertyId, input.propertyId),
+        isNull(serviceOrders.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!os) return { allowed: false, status: 404, code: 'NOT_FOUND' };
+  return { allowed: true, reason: 'share_link_manager' };
 }
 
 export async function canManageServiceOrder(

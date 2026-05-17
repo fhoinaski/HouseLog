@@ -119,6 +119,7 @@ vi.mock('../lib/authorization', () => ({
   canSendInternalServiceMessage: vi.fn(() => true),
   canViewServiceMessages: vi.fn(() => true),
   canViewInternalServiceMessages: vi.fn(() => true),
+  canAccessDocument: vi.fn(async () => ({ allowed: true, reason: 'document_property_access' })),
   canDeleteDocument: vi.fn(async () => ({ allowed: true, status: 200, code: 'OK' })),
   canSubmitProviderProposal: vi.fn(async () => ({ allowed: true })),
 }));
@@ -727,11 +728,6 @@ describe('GET /properties/:propertyId/documents/:id/download', () => {
     };
     return {
       select: vi.fn()
-        .mockReturnValueOnce({
-          from: vi.fn(() => ({
-            where: vi.fn(() => ({ limit: vi.fn(async () => [{ id: 'prop-1' }]) })),
-          })),
-        })
         .mockReturnValueOnce({
           from: vi.fn(() => ({
             where: vi.fn(() => ({ limit: vi.fn(async () => [docRow]) })),

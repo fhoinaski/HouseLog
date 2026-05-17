@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err, paginate } from '../lib/response';
 import { authMiddleware, requireRole, assertPropertyAccess, resolveTenant, assertTenantAccess } from '../middleware/auth';
+import { listAccessiblePropertyIds } from '../lib/authorization';
 import { canCreatePropertyInTenant } from '../lib/property-tenant';
 import { buildR2Key, uploadToR2, preparePrivateUpload } from '../lib/r2';
 import { getDb } from '../db/client';
@@ -51,34 +52,34 @@ function countValue(value: number | string | bigint | null | undefined): number 
 properties.get('/', async (c) => {
   const db = getDb(c.env.DB);
   const userId = c.get('userId');
+  const role = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
   const limit = Math.min(Number(c.req.query('limit') ?? 20), 100);
+  const accessiblePropertyIds = await listAccessiblePropertyIds(c.env.DB, {
+    userId,
+    role,
+    tenantId,
+    tenantRole: c.get('tenantRole'),
+  });
+  if (accessiblePropertyIds.length === 0) return ok(c, paginate([], limit, 'created_at'));
   const cursor = c.req.query('cursor');
   const search = c.req.query('search');
 
-  const filters = [
+  const filters: SQL[] = [
     eq(propertiesTable.tenantId, tenantId),
     isNull(propertiesTable.deletedAt),
-    or(
-      eq(propertiesTable.ownerId, userId),
-      eq(propertiesTable.managerId, userId),
-      sql`EXISTS (
-        SELECT 1 FROM property_collaborators pc
-        WHERE pc.property_id = ${propertiesTable.id}
-          AND pc.tenant_id = ${tenantId}
-          AND pc.user_id = ${userId}
-      )`
-    ),
+    inArray(propertiesTable.id, accessiblePropertyIds),
   ];
 
   if (search) {
-    filters.push(
+    const searchFilter = or(
       or(
         sql`${propertiesTable.name} LIKE ${`%${search}%`}`,
         sql`${propertiesTable.city} LIKE ${`%${search}%`}`
       )
     );
+    if (searchFilter) filters.push(searchFilter);
   }
 
   if (cursor) filters.push(sql`${propertiesTable.createdAt} < ${cursor}`);
