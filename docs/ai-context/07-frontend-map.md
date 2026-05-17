@@ -24,6 +24,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 ## Provider Flow (2026-05-17)
 
 - `src/app/provider/services/[serviceId]/page.tsx`: exibe `after_photos` alem das `before_photos`, checklist read-only com progresso. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`. Upload de evidencia: botao "Enviar evidencia" visivel apenas para OS em `approved`|`in_progress`; enfileira na `houselog-oq` com `useProviderRoute: true` — o sync usa `POST /provider/services/:id/photos` (nao a rota de property, que 403 para providers).
+- `src/app/provider/services/page.tsx`: migrada para `HouseLog Calm OS`; usa fundo claro, filtros acessiveis com `aria-pressed`, cards Link mobile-first, loading skeleton, erro com retry, vazio real e aviso simples de offline.
 - `src/app/provider/dashboard/page.tsx`: tela piloto do `HouseLog Calm OS`; usa fundo claro, cards brancos, nav clara via escopo da pagina, MetricCards com skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
 - `src/app/provider/opportunities/page.tsx`: chips de filtro tem `aria-pressed` e `role="group"`.
 - `src/app/provider/settings/page.tsx`: chips de hard skills tem `aria-pressed`.
