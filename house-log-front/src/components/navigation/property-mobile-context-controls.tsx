@@ -83,7 +83,7 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
 
       <nav aria-label="Navegacao do imovel" className="fixed bottom-0 left-0 right-0 z-sticky px-4 pb-3 md:hidden">
         <div
-          className="nav-dock mx-auto flex max-w-md items-center justify-around rounded-[var(--radius-xl)] bg-nav-bg/95 px-2 pt-2 shadow-[0_16px_40px_-18px_rgba(0,0,0,0.7)] backdrop-blur-[var(--surface-blur)]"
+          className="nav-dock mx-auto flex max-w-md items-center justify-around rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-2 pt-2 shadow-hl-soft"
           style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom))' }}
         >
           {mainItems.map((item) => {
@@ -97,7 +97,7 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
                 data-active={active}
                 className={cn(
                   'nav-dock-item tap-highlight-none flex min-h-11 min-w-14 flex-col items-center justify-center gap-[3px] rounded-[var(--radius-md)] px-2 transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
-                  active ? 'bg-white/10' : 'hover:bg-white/5'
+                  active ? 'bg-hl-surface-muted' : 'hover:bg-hl-surface-muted'
                 )}
               >
                 <Icon
@@ -126,7 +126,7 @@ export function PropertyMobileContextControls({ propertyId }: PropertyMobileCont
             onClick={() => setMoreOpen(true)}
             className={cn(
               'nav-dock-item tap-highlight-none flex min-h-11 min-w-14 flex-col items-center justify-center gap-[3px] rounded-[var(--radius-md)] px-2 transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
-              moreActive ? 'bg-white/10' : 'hover:bg-white/5'
+              moreActive ? 'bg-hl-surface-muted' : 'hover:bg-hl-surface-muted'
             )}
           >
             <Menu

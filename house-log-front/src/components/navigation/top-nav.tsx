@@ -36,19 +36,19 @@ export function TopNav() {
     <>
       <div className="hidden h-16 shrink-0 md:block" aria-hidden="true" />
 
-      <header className="top-nav-header fixed left-0 right-0 top-0 z-sticky hidden h-16 items-center bg-nav-bg/95 px-4 shadow-[0_12px_30px_-22px_rgba(0,0,0,0.55)] backdrop-blur-[var(--surface-blur)] md:flex">
+      <header className="top-nav-header fixed left-0 right-0 top-0 z-sticky hidden h-16 items-center border-b border-hl-border bg-hl-surface px-4 shadow-hl-subtle md:flex">
         <Link
           href={user?.role === 'provider' || user?.role === 'temp_provider' ? '/provider/dashboard' : '/dashboard'}
-          className="top-nav-brand flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] px-1 py-1 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+          className="top-nav-brand flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] px-1 py-1 transition-colors hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
         >
-          <div className="top-nav-brand-icon flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-white/5">
+          <div className="top-nav-brand-icon flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-hl-surface-muted">
             <Home size={16} strokeWidth={1.8} className="text-nav-text-active" />
           </div>
           <span className="top-nav-brand-text text-md font-medium text-text-inverse">HouseLog</span>
         </Link>
 
         <nav
-          className="top-nav-list absolute left-1/2 flex h-11 -translate-x-1/2 items-center rounded-[var(--radius-lg)] bg-white/5 p-1"
+          className="top-nav-list absolute left-1/2 flex h-11 -translate-x-1/2 items-center rounded-[var(--radius-lg)] bg-hl-surface-muted p-1"
           aria-label="Navegação principal"
         >
           {items.map((item) => {
@@ -62,8 +62,8 @@ export function TopNav() {
                 className={
                   'top-nav-item flex h-full items-center gap-1.5 rounded-[var(--radius-md)] px-4 text-sm font-medium transition-colors duration-150 ' +
                   (active
-                    ? 'bg-white/10 text-nav-text-active'
-                    : 'text-nav-text-inactive hover:bg-white/5 hover:text-text-inverse')
+                    ? 'bg-hl-surface text-hl-primary'
+                    : 'text-hl-text-muted hover:bg-hl-surface-muted hover:text-hl-text')
                 }
               >
                 <Icon size={16} strokeWidth={1.8} aria-hidden="true" className="hidden md:block" />
@@ -75,7 +75,7 @@ export function TopNav() {
 
         <Link
           href={profileHref}
-          className="top-nav-profile group ml-auto flex shrink-0 items-center gap-2 rounded-full px-2 py-1.5 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+          className="top-nav-profile group ml-auto flex shrink-0 items-center gap-2 rounded-full px-2 py-1.5 transition-colors hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
         >
           <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: avatarColors.bg }}>
             <span className="text-xs font-medium" style={{ color: avatarColors.fg }}>{initials}</span>
