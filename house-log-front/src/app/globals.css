@@ -783,63 +783,68 @@ body {
   border-top: 0.5px solid var(--border-default);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) {
+.hl-calm-os {
+  background: var(--hl-bg);
+  color: var(--hl-text);
+}
+
+.hl-calm-os main {
   background: var(--hl-bg);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock {
+.hl-calm-os .nav-dock {
   background: color-mix(in srgb, var(--hl-surface) 94%, transparent);
   border: 1px solid var(--hl-border);
   box-shadow: var(--hl-shadow-soft);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="true"] {
+.hl-calm-os .nav-dock-item[data-active="true"] {
   background: var(--hl-surface-muted);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="true"] svg,
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="true"] span {
+.hl-calm-os .nav-dock-item[data-active="true"] svg,
+.hl-calm-os .nav-dock-item[data-active="true"] span {
   color: var(--hl-primary);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="false"] svg,
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="false"] span {
+.hl-calm-os .nav-dock-item[data-active="false"] svg,
+.hl-calm-os .nav-dock-item[data-active="false"] span {
   color: var(--hl-text-muted);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="false"]:hover {
+.hl-calm-os .nav-dock-item[data-active="false"]:hover {
   background: var(--hl-surface-muted);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-header {
+.hl-calm-os .top-nav-header {
   background: color-mix(in srgb, var(--hl-surface) 94%, transparent);
   border-bottom: 1px solid var(--hl-border);
   box-shadow: var(--hl-shadow-subtle);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand:hover,
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-profile:hover,
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-item:hover {
+.hl-calm-os .top-nav-brand:hover,
+.hl-calm-os .top-nav-profile:hover,
+.hl-calm-os .top-nav-item:hover {
   background: var(--hl-surface-muted);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand-icon,
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-list {
+.hl-calm-os .top-nav-brand-icon,
+.hl-calm-os .top-nav-list {
   background: var(--hl-surface-muted);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand-text,
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-profile span,
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-item[data-active="false"] {
+.hl-calm-os .top-nav-brand-text,
+.hl-calm-os .top-nav-profile span,
+.hl-calm-os .top-nav-item[data-active="false"] {
   color: var(--hl-text-muted);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-item[data-active="true"] {
+.hl-calm-os .top-nav-item[data-active="true"] {
   background: var(--hl-surface);
   color: var(--hl-primary);
 }
 
-body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand-icon svg {
+.hl-calm-os .top-nav-brand-icon svg {
   color: var(--hl-primary);
 }
 

@@ -33,23 +33,25 @@
 - Fonte de verdade: `house-log-front/src/app/tokens.css`.
 - Ponte Tailwind: `house-log-front/src/app/globals.css` em `@theme inline`.
 - Classes Tailwind disponiveis incluem `bg-hl-bg`, `bg-hl-surface`, `border-hl-border`, `text-hl-text`, `text-hl-text-muted`, `text-hl-primary`, `shadow-hl-subtle` e `shadow-hl-soft`.
+- Wrapper oficial: `.hl-calm-os`, aplicado pelo `AppShell` autenticado para fundo, texto e navegacao clara.
 - Tokens antigos continuam ativos ate cada area ser migrada.
 
 ## Piloto
 
 O primeiro piloto e `/provider/dashboard`.
 
-Escopo do piloto:
+Escopo inicial:
 - fundo claro;
 - cards brancos;
 - badges e icones suaves;
-- bottom nav clara quando a tela piloto esta ativa;
+- bottom/top nav claras via `.hl-calm-os`;
 - cards clicaveis de propostas;
 - layout mobile-first.
 
 ## Regras De Migracao
 
 - Migrar por tela ou componente, nao por troca global.
+- Preferir wrapper explicito (`.hl-calm-os`) em vez de seletores `:has()` para novos blocos.
 - Nao apagar tokens antigos antes de mapear consumidores.
 - Nao alterar contrato de API como parte da migracao visual.
 - Preservar loading, empty e error states.

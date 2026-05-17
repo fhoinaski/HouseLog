@@ -177,6 +177,7 @@ Este registro deve ser lido em conjunto com:
 - **Hardening adicional do upload provider (2026-05-17)**: o frontend provider passou a usar `providerApi.uploadEvidence` online e a fila `houselog-oq` apenas offline/falha de rede; o backend passou a retornar evidencias do detalhe provider como URLs autenticadas `/provider/services/:id/media/*` e a expor `can_upload_evidence`. A rota de midia provider valida `tenantId + serviceId + assignedTo + propertyId` e key registrada na OS, sem R2 key bruta ou signed URL.
 - **HouseLog Calm OS base (2026-05-17)**: tokens globais `--hl-*` foram adicionados de forma aditiva em `house-log-front/src/app/tokens.css`, expostos ao Tailwind em `globals.css` e documentados em `docs/design/house-log-calm-os.md`; `/provider/dashboard` virou tela piloto clara, sem migracao global.
 - **Provider services Calm OS (2026-05-17)**: `/provider/services` foi migrada para Calm OS com cards Link mobile-first, filtros acessiveis, loading skeleton, erro com retry, vazio real e aviso de offline sem alterar API.
+- **Calm OS shell (2026-05-17)**: `AppShell` passou a aplicar o wrapper explicito `.hl-calm-os`; top nav, bottom nav e property mobile nav usam navegacao clara sem depender do seletor `:has()` do piloto.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;

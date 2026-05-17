@@ -17,7 +17,7 @@ export function AppShell({
   withBottomNav = true,
 }: AppShellProps) {
   return (
-    <div className={cn('flex min-h-screen flex-col bg-bg-page text-text-primary', className)}>
+    <div className={cn('hl-calm-os flex min-h-screen flex-col bg-hl-bg text-hl-text', className)}>
       {withTopNav && <TopNav />}
       <main className={cn('safe-top safe-bottom flex flex-1 flex-col', mainClassName)}>
         {children}
