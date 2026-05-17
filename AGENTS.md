@@ -1,49 +1,77 @@
-# AGENTS.md — HouseLog
+# AGENTS.md - HouseLog
 
 ## Purpose
 
 HouseLog is a SaaS for property technical management, maintenance, service orders, documents, expenses, providers, credentials, handover, diagnostics, warranties and operational history.
 
-It is not an open marketplace. It is a private technical operating system for premium properties, owners, managers, builders and vetted providers.
+It is a private premium technical operating system for properties, owners, managers, builders and vetted providers.
+
+It is not:
+- an open marketplace;
+- a generic CRUD app;
+- a public classified platform;
+- a mass service-ticket system.
 
 Main domains:
-- `house-log-front` → frontend/PWA
-- `house-log-back` → backend/API
+- `house-log-front` -> frontend/PWA;
+- `house-log-back` -> backend/API.
 
 Domain-specific instructions may exist in:
-- `house-log-front/AGENTS.md`
-- `house-log-back/AGENTS.md`
-- subdirectories closer to the task
+- `house-log-front/AGENTS.md`;
+- `house-log-back/AGENTS.md`;
+- subdirectories closer to the task.
 
 Nearest `AGENTS.md` rules override broader rules when they conflict.
 
 ---
 
-## Token efficiency
+## AI Context First
 
-Work with minimum context.
+Before any analysis, audit or implementation, read:
 
-Do not scan the whole repository unless explicitly requested.
+`docs/ai-context/00-index.md`
 
-Before opening files:
-1. Search first.
-2. Open only files directly related to the task.
-3. Read only relevant sections.
-4. Do not re-read files already inspected in the same session.
-5. Do not inspect unrelated routes, tests, docs, configs or migrations.
-6. Do not summarize large files unless requested.
-7. Do not perform broad exploration without a concrete reason.
+Then read only the specific `docs/ai-context/*` files required by the task.
 
-For technical debt tasks:
-- Start from `docs/TECH_DEBT_REGISTER.md`.
-- Locate the exact TD item.
-- Search by the TD id and related keywords.
-- Open only files explicitly mentioned by the TD or directly matched by search.
-- Do not inspect all routes just because routes are mentioned.
+Do not scan the whole repository before checking the AI context maps.
+
+If a change affects architecture, domain, API, database, security, frontend, backend, tests or workflow, update the related file in `docs/ai-context/`.
+
+Follow:
+
+`docs/ai-context/11-update-protocol.md`
 
 ---
 
-## Architecture rules
+## Token Efficiency Rules
+
+Work with minimum context.
+
+Before opening files:
+1. Read `docs/ai-context/00-index.md`.
+2. Read only the task-specific AI context map.
+3. Search first by the most specific identifier.
+4. Open only files directly related to the task.
+5. Read only relevant sections.
+6. Do not re-read files already inspected in the same session.
+
+Do not:
+- scan the whole repository unless explicitly requested;
+- inspect all routes;
+- inspect all migrations;
+- inspect all tests;
+- inspect unrelated docs, configs or generated files;
+- summarize large files unless requested.
+
+For technical debt tasks:
+- start from `docs/TECH_DEBT_REGISTER.md`;
+- locate the exact TD item;
+- search by TD id and related keywords;
+- open only files explicitly mentioned or directly matched.
+
+---
+
+## Architecture Rules
 
 Do not treat HouseLog as a generic app.
 
@@ -67,7 +95,7 @@ Never:
 
 ---
 
-## Security rules
+## Security Rules
 
 Always follow these rules:
 
@@ -75,18 +103,15 @@ Always follow these rules:
 - Always derive `tenantId` from authenticated context.
 - Never query sensitive resources only by `id`.
 - Always validate `tenantId + resourceId`.
-- For nested resources, validate the full chain when applicable:
+- For property resources, validate `tenantId + propertyId`.
+- For nested resources, validate the full parent chain when applicable:
   - `tenantId`;
   - `propertyId`;
   - `roomId`;
   - `serviceOrderId`;
   - `documentId`;
   - `credentialId`.
-- Do not leak secrets, credential values, tokens, signed URLs or plaintext in:
-  - responses;
-  - logs;
-  - audit logs;
-  - test snapshots.
+- Do not leak secrets, credential values, tokens, signed URLs, plaintext, authorization headers, cookies or R2 private keys in responses, logs, audit logs or test snapshots.
 - Do not store public link tokens in plaintext.
 - Do not use internal resource IDs as public access tokens.
 - Do not use `Math.random()` for security-sensitive values.
@@ -97,14 +122,36 @@ Always follow these rules:
 
 ---
 
-## Implementation rules
+## AI Context Update Rule
+
+When a completed change modifies project context, update the related AI context map:
+
+| Change type | Required file |
+|---|---|
+| Product behavior | `01-product-context.md` |
+| Architecture | `02-architecture-context.md` |
+| Domain/entity | `03-domain-map.md` |
+| API route/contract | `04-api-map.md` |
+| Database/table/migration | `05-database-map.md` |
+| Security/authorization | `06-security-rules.md` |
+| Frontend structure/screen | `07-frontend-map.md` |
+| Backend structure/route/helper | `08-backend-map.md` |
+| Tests/validation commands | `09-testing-guide.md` |
+| Agent workflow | `10-ai-workflow.md` |
+| Update process | `11-update-protocol.md` |
+
+Keep AI context updates short, factual and linked to real project names.
+
+---
+
+## Implementation Rules
 
 Before editing:
 - identify the affected domain;
 - search for existing patterns;
 - check related contracts;
 - choose the smallest safe change;
-- identify the regression test to add or update.
+- identify the regression test or validation to add or update.
 
 During implementation:
 - prefer targeted edits;
@@ -114,7 +161,7 @@ During implementation:
 - follow existing naming, structure and error patterns.
 
 For frontend:
-- respect the official design system: **The Architectural Lens**;
+- respect the official design system: The Architectural Lens;
 - use existing components/tokens when available;
 - always handle loading, empty and error states when touching UI;
 - do not create frontend flows unsupported by backend contracts.
@@ -130,12 +177,12 @@ For backend:
 
 ---
 
-## Work mode
+## Work Mode
 
 Before editing files, respond briefly with:
 1. cause/root issue;
 2. files you will touch;
-3. test you will add or update.
+3. test or validation you will add or run.
 
 Keep this under 8 lines.
 
@@ -149,19 +196,15 @@ Keep final responses short.
 
 ---
 
-## Audit mode
+## Audit Mode
 
 When asked to audit:
-- Do not alter files.
-- Read only the requested files unless a direct dependency is necessary.
-- Return a compact table:
-  - finding;
-  - file;
-  - risk;
-  - fix now: yes/no;
-  - reason.
-- Do not explain general concepts.
-- Do not generate long reports unless explicitly requested.
+- read `docs/ai-context/00-index.md` first;
+- do not alter files;
+- read only the requested files unless a direct dependency is necessary;
+- return a compact table with finding, file, risk, fix now and reason;
+- do not explain general concepts;
+- do not generate long reports unless explicitly requested.
 
 ---
 
@@ -169,21 +212,28 @@ When asked to audit:
 
 Run only validations relevant to changed files first.
 
-Use full validation only when the change justifies it or before final delivery.
+For docs-only changes:
 
-Prefer:
-- targeted tests;
-- type-check;
-- lint/build only when related or requested;
-- `git diff --check`.
+```bash
+git diff --check
+git status --short
+```
 
-Do not run expensive commands repeatedly.
+For backend/API changes, prefer:
 
-Suggested validation by area:
-
-Backend/API:
 ```bash
 npm run type-check
 npm run test:api
 npm run build
 git diff --check
+```
+
+For frontend changes, prefer:
+
+```bash
+npm run type-check
+npm run lint
+npm run test
+npm run build
+git diff --check
+```

@@ -1,32 +1,57 @@
-# AGENTS.md — HouseLog Frontend
+# AGENTS.md - HouseLog Frontend
 
 ## Scope
 
 Applies to `house-log-front`.
 
 Stack:
-- Next.js App Router
-- React
-- TypeScript
-- Tailwind
-- SWR
-- React Hook Form
-- Zod
-- PWA
+- Next.js App Router;
+- React;
+- TypeScript;
+- Tailwind;
+- SWR;
+- React Hook Form;
+- Zod;
+- PWA.
 
 Design system:
-**The Architectural Lens**
+
+`The Architectural Lens`
 
 Follow the root `AGENTS.md` first. This file adds frontend-specific rules.
 
 ---
 
-## Token efficiency — mandatory
+## AI Context First
+
+Before any frontend analysis, audit or implementation, read:
+
+`../docs/ai-context/00-index.md`
+
+Then read only the frontend-specific context required by the task, usually:
+
+- `../docs/ai-context/07-frontend-map.md`
+- `../docs/ai-context/04-api-map.md`
+- `../docs/ai-context/06-security-rules.md`
+- `../docs/ai-context/09-testing-guide.md`
+- `../docs/ai-context/10-ai-workflow.md`
+
+Do not scan `src/app`, `src/components`, `src/lib`, hooks or tests before checking the AI context maps.
+
+If the frontend change affects screens, components, API usage, auth flow, offline behavior, tests or structure, update the related file in `../docs/ai-context/`.
+
+Follow:
+
+`../docs/ai-context/11-update-protocol.md`
+
+---
+
+## Token Efficiency Rules
 
 Use minimum context.
 
 Before opening files:
-1. Search first.
+1. Search first by route segment, component name, hook name, API client method, schema name, test name, error message, storage key or SWR key.
 2. Open only files directly related to the task.
 3. Read only relevant sections.
 4. Do not inspect all pages.
@@ -34,46 +59,21 @@ Before opening files:
 6. Do not inspect all hooks.
 7. Do not inspect all tests.
 8. Do not re-read files already inspected in this session.
-9. Do not summarize large files unless requested.
-
-If more than 3 files seem necessary, stop and briefly state why each file is needed before opening more.
 
 Do not open broad directories just to understand the project.
 
 Do not inspect all files in:
-- `src/app`
-- `src/components`
-- `src/lib`
-- `src/__tests__`
-
-unless explicitly requested.
+- `src/app`;
+- `src/components`;
+- `src/lib`;
+- `src/__tests__`.
 
 ---
 
-## Search-first rules
-
-For any task, search by the most specific identifier first:
-- route segment;
-- component name;
-- hook name;
-- API client method;
-- schema name;
-- test name;
-- error message;
-- storage key;
-- SWR key.
-
-For technical debt tasks:
-- Start from the exact TD id if provided.
-- Search by TD id and related keywords.
-- Open only files directly matched by search.
-- Do not inspect unrelated pages, components, hooks or tests.
-
----
-
-## UI rules
+## Frontend Architecture Rules
 
 Preserve:
+- Next.js App Router conventions;
 - mobile-first layout;
 - accessibility;
 - loading states;
@@ -82,7 +82,10 @@ Preserve:
 - existing tokens/components;
 - role-aware flows;
 - property context;
+- tenant-aware behavior;
+- API contract compatibility;
 - responsive behavior;
+- premium visual quality;
 - The Architectural Lens visual direction.
 
 Never:
@@ -103,14 +106,15 @@ When touching UI:
 
 ---
 
-## Contract rules
+## Contract Rules
 
 Before changing frontend API usage:
-1. Check the API client/helper.
-2. Check local types/schemas.
-3. Check backend route only if request/response shape changes.
-4. Check direct consumers only if contract changes.
-5. Preserve existing cache behavior where possible.
+1. Check `../docs/ai-context/04-api-map.md`.
+2. Check the API client/helper.
+3. Check local types/schemas.
+4. Check backend route only if request/response shape changes.
+5. Check direct consumers only if contract changes.
+6. Preserve SWR cache keys unless the change explicitly requires invalidation.
 
 Never:
 - invent API fields;
@@ -121,39 +125,40 @@ Never:
 
 ---
 
-## Auth and storage rules
+## Auth and Storage Rules
 
-- Do not store refresh tokens in localStorage.
+- Do not store refresh tokens in `localStorage`.
 - Do not reintroduce `hl_refresh`.
 - Access token should remain in memory unless architecture changes explicitly.
 - Use existing auth/session helpers.
 - Do not create new auth storage behavior without backend compatibility.
+- Do not persist plaintext credentials.
 - Do not expose secrets or credential values in UI state longer than necessary.
 - Credential reveal must call the explicit backend reveal endpoint.
 - Do not fake authorization in the frontend.
-- Do not store credential plaintext in persistent browser storage.
 - Do not log tokens, cookies, authorization headers or credential values.
 
 ---
 
-## Offline/PWA rules
+## Offline/PWA Rules
 
 When touching offline flows:
-
-- Preserve tenant/user isolation in local queues.
-- Do not mix offline data between tenants.
-- Do not use `userId` as `tenantId`.
-- Offline queue keys must include tenant/user context when applicable.
-- Failed sync must not delete pending data.
-- Successful sync must not duplicate uploads/actions.
-- Keep clear pending/sync/error states.
-- Do not silently discard offline work.
-- Do not create a second offline queue unless explicitly requested.
-- Do not change service worker caching broadly unless the task is specifically about PWA caching.
+- preserve tenant/user isolation in local queues;
+- do not mix offline data between tenants;
+- do not use `userId` as `tenantId`;
+- offline queue keys must include tenant/user context when applicable;
+- do not cache credential reveal;
+- do not cache signed URLs;
+- failed sync must not delete pending data;
+- successful sync must not duplicate uploads/actions;
+- keep clear pending/sync/error states;
+- do not silently discard offline work;
+- do not create a second offline queue unless explicitly requested;
+- do not change service worker caching broadly unless the task is specifically about PWA caching.
 
 ---
 
-## API/client rules
+## API/Client Rules
 
 - Do not invent API fields.
 - Check the API client/helper before changing payloads.
@@ -165,62 +170,72 @@ When touching offline flows:
 
 ---
 
-## Forms and validation rules
+## Forms and Validation Rules
 
 When touching forms:
-
-- Use existing React Hook Form/Zod patterns.
-- Preserve server-side validation compatibility.
-- Do not trust client validation as security.
-- Keep field names aligned with backend contracts.
-- Show actionable errors.
-- Avoid uncontrolled/controlled inconsistencies.
-- Do not use `defaultValue` where controlled `value` is required for editable reset flows.
+- use existing React Hook Form/Zod patterns;
+- preserve server-side validation compatibility;
+- do not trust client validation as security;
+- keep field names aligned with backend contracts;
+- show actionable errors;
+- avoid uncontrolled/controlled inconsistencies;
+- do not use `defaultValue` where controlled `value` is required for editable reset flows.
 
 ---
 
-## Credential UI rules
+## Credential UI Rules
 
 When touching credential screens:
-
-- List views must not display secrets.
-- Reveal must be explicit.
-- Do not persist revealed secrets.
-- Do not log revealed secrets.
-- Do not expose secrets in test snapshots.
-- Respect backend reveal policy.
-- Keep audit reason flow if present.
-- Provider reveal must include service order context when required by backend contract.
+- list views must not display secrets;
+- reveal must be explicit;
+- do not persist revealed secrets;
+- do not log revealed secrets;
+- do not expose secrets in test snapshots;
+- respect backend reveal policy;
+- keep audit reason flow if present;
+- provider reveal must include service order context when required by backend contract.
 
 ---
 
-## Upload/document UI rules
+## Upload/Document UI Rules
 
 When touching document or upload screens:
-
-- Preserve upload error handling.
-- Do not assume upload success before API confirmation.
-- Do not expose private URLs directly.
-- Do not log signed URLs.
-- Preserve property/document context.
-- Keep empty/error/loading states.
-- Do not weaken delete confirmation when touching destructive document actions.
+- preserve upload error handling;
+- do not assume upload success before API confirmation;
+- do not expose private URLs directly;
+- do not log signed URLs;
+- preserve property/document context;
+- keep empty/error/loading states;
+- do not weaken delete confirmation when touching destructive document actions.
 
 ---
 
-## Performance rules
+## Performance Rules
 
 When touching provider/mobile flows:
-
-- Avoid expensive blur/shadow/animation changes.
-- Do not add heavy charts above the fold unless needed.
-- Prefer dynamic import for heavy visual components when appropriate.
-- Avoid unnecessary client components.
-- Avoid broad memoization unless profiling or obvious repeated rendering justifies it.
+- avoid expensive blur/shadow/animation changes;
+- do not add heavy charts above the fold unless needed;
+- prefer dynamic import for heavy visual components when appropriate;
+- avoid unnecessary client components;
+- avoid broad memoization unless profiling or obvious repeated rendering justifies it.
 
 ---
 
-## Implementation rules
+## AI Context Update Rule
+
+| Change type | Required file |
+|---|---|
+| New/changed screen | `07-frontend-map.md` |
+| New/changed component pattern | `07-frontend-map.md` |
+| New/changed API usage | `04-api-map.md` |
+| New/changed auth behavior | `06-security-rules.md` |
+| New/changed offline/PWA behavior | `07-frontend-map.md` |
+| New/changed tests/scripts | `09-testing-guide.md` |
+| New/changed workflow rule | `10-ai-workflow.md` |
+
+---
+
+## Implementation Rules
 
 Before editing:
 - identify affected frontend domain;
@@ -246,14 +261,19 @@ Run targeted validation first.
 
 Only run scripts that exist in `package.json`.
 
-Common validations:
-- `npm run type-check`
-- `npm run test`
-- `npm run build`
-- `git diff --check`
+Common frontend validations:
 
-For small type-only/client changes:
-
-```powershell
+```bash
 npm run type-check
+npm run lint
+npm run test
+npm run build
 git diff --check
+```
+
+For docs-only changes:
+
+```bash
+git diff --check
+git status --short
+```

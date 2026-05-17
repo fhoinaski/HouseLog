@@ -1,32 +1,57 @@
-# AGENTS.md — HouseLog Backend
+# AGENTS.md - HouseLog Backend
 
 ## Scope
 
 Applies to `house-log-back`.
 
 Stack:
-- Cloudflare Workers
-- Hono
-- D1/SQLite
-- Drizzle
-- R2
-- KV
-- Queues
-- Resend
-- Workers AI when applicable
+- Cloudflare Workers;
+- Hono;
+- D1/SQLite;
+- Drizzle;
+- R2;
+- KV;
+- Queues;
+- Resend;
+- Workers AI when applicable.
 
 Follow the root `AGENTS.md` first. This file adds backend-specific rules.
 
 ---
 
-## Token efficiency — mandatory
+## AI Context First
+
+Before any backend analysis, audit or implementation, read:
+
+`../docs/ai-context/00-index.md`
+
+Then read only the backend-specific context required by the task, usually:
+
+- `../docs/ai-context/08-backend-map.md`
+- `../docs/ai-context/06-security-rules.md`
+- `../docs/ai-context/04-api-map.md`
+- `../docs/ai-context/05-database-map.md`
+- `../docs/ai-context/09-testing-guide.md`
+- `../docs/ai-context/10-ai-workflow.md`
+
+Do not scan `src/routes`, migrations, tests or scripts before checking the AI context maps.
+
+If the backend change affects routes, helpers, services, authorization, security, database, API contracts, tests or structure, update the related file in `../docs/ai-context/`.
+
+Follow:
+
+`../docs/ai-context/11-update-protocol.md`
+
+---
+
+## Token Efficiency Rules
 
 Use minimum context.
 
 Do not scan the whole backend.
 
 Before opening files:
-1. Search first.
+1. Search first by TD id, route name, helper name, schema name, function name, test name, error code, env var name or config key.
 2. Open only files directly related to the task.
 3. Read only relevant sections.
 4. Do not inspect all routes.
@@ -34,39 +59,17 @@ Before opening files:
 6. Do not inspect all tests.
 7. Do not re-read files already inspected in this session.
 8. Do not summarize large files unless requested.
-9. Do not delegate parallel reading of many files unless explicitly requested.
-
-If more than 3 files seem necessary, stop and briefly state why each file is needed before opening more.
-
----
-
-## Search-first rules
-
-For any task, search by the most specific identifier first:
-- TD id;
-- route name;
-- helper name;
-- schema name;
-- function name;
-- test name;
-- error code;
-- env var name;
-- config key.
-
-Never open broad directories just to understand the project.
 
 Do not inspect all files in:
-- `src/routes`
-- `src/db/migrations`
-- `src/tests`
-- `docs`
-- `scripts`
-
-unless explicitly requested.
+- `src/routes`;
+- `src/db/migrations`;
+- `src/tests`;
+- `docs`;
+- `scripts`.
 
 ---
 
-## Technical debt tasks
+## Technical Debt Tasks
 
 For TD tasks:
 1. Start from `docs/TECH_DEBT_REGISTER.md`.
@@ -79,7 +82,7 @@ Do not inspect unrelated routes, tests, docs or configs.
 
 ---
 
-## Backend architecture rules
+## Backend Architecture Rules
 
 Always preserve:
 - tenant isolation;
@@ -89,7 +92,8 @@ Always preserve:
 - audit logging for sensitive flows;
 - secret redaction;
 - stable error codes;
-- frontend/backend contract compatibility.
+- frontend/backend contract compatibility;
+- private media/document access.
 
 Never:
 - invent routes;
@@ -120,34 +124,34 @@ Sensitive areas:
 
 ---
 
-## Tenant and authorization rules
+## Tenant and Authorization Rules
 
 For backend changes:
-
-- Never accept `tenantId` from request body.
-- Always derive `tenantId` from authenticated context.
-- Never query sensitive resources only by `id`.
-- Always scope sensitive reads/writes by `tenantId`.
-- For property resources, validate `tenantId + propertyId`.
-- For nested resources, validate the full parent chain when applicable:
+- never accept `tenantId` from request body;
+- always derive `tenantId` from authenticated context;
+- never query sensitive resources only by `id`;
+- always scope sensitive reads/writes by `tenantId`;
+- for property resources, validate `tenantId + propertyId`;
+- validate the full parent chain when applicable:
   - `tenantId`;
   - `propertyId`;
   - `roomId`;
   - `serviceOrderId`;
   - `documentId`;
-  - `credentialId`.
-- Prefer shared authorization helpers over duplicated manual checks.
-- If a manual authorization check remains, document why and add a regression test.
-- Do not change role semantics unless explicitly requested.
-- Do not expose whether a cross-tenant resource exists.
-- Preserve existing 400/403/404 behavior unless there is a security reason to change it.
+  - `credentialId`;
+- prefer shared authorization helpers over duplicated manual checks;
+- if a manual authorization check remains, document why and add a regression test;
+- provider access must be explicitly scoped;
+- owner and manager access must respect tenant, property and resource boundaries;
+- do not change role semantics unless explicitly requested;
+- do not expose whether a cross-tenant resource exists;
+- preserve existing 400/403/404 behavior unless there is a security reason to change it.
 
 ---
 
-## Sensitive data rules
+## Sensitive Data Rules
 
 Never include in responses, logs, audit logs or test snapshots:
-
 - credential plaintext;
 - integration secrets;
 - public link tokens;
@@ -156,6 +160,7 @@ Never include in responses, logs, audit logs or test snapshots:
 - private R2 keys;
 - refresh tokens;
 - authorization headers;
+- cookies;
 - raw cookies;
 - encryption keys;
 - API keys;
@@ -175,62 +180,79 @@ Do not log decrypted credential values.
 
 ---
 
-## Credentials rules
+## Credentials Rules
 
 When touching credential flows:
-
-- List endpoints must never return secrets.
-- Reveal must be an explicit action.
-- Reveal must validate tenant, property, role and resource access.
-- Provider reveal must be scoped to an authorized service order when applicable.
-- `share_with_os` must be enforced when provider access depends on service order context.
-- Reveal must write audit log without plaintext.
-- Audit log must not contain secret, token, token hash or signed URL.
-- Do not reintroduce GET-based secret reveal.
-- Do not bypass rate limits for reveal endpoints.
-- Do not change encryption algorithm unless explicitly requested.
+- list endpoints must never return secrets;
+- reveal must be an explicit action;
+- reveal must validate tenant, property, role and resource access;
+- provider reveal must be scoped to an authorized service order when applicable;
+- `share_with_os` must be enforced when provider access depends on service order context;
+- reveal must write audit log without plaintext;
+- audit log must not contain secret, token, token hash or signed URL;
+- do not reintroduce GET-based secret reveal;
+- do not bypass rate limits for reveal endpoints;
+- do not create plaintext fallback;
+- do not change encryption algorithm unless explicitly requested.
 
 ---
 
-## Public links and token rules
+## Public Links and Token Rules
 
 When touching public links, invites, handover, audit links or share links:
-
-- Generate token once and return it only at creation time.
-- Store hash, not plaintext, when the current pattern supports it.
-- Do not use internal IDs as public tokens.
-- Support expiration and revocation when the domain requires it.
-- Public payloads must be minimal.
-- Public payloads must never include property credentials.
-- Public token errors must not reveal sensitive resource existence.
-- Do not log full public URLs containing tokens.
-- Do not add plaintext token fallback unless explicitly required for legacy migration.
+- generate token once and return it only at creation time;
+- store hash, not plaintext, when the current pattern supports it;
+- do not use internal IDs as public tokens;
+- support expiration and revocation when the domain requires it;
+- public payloads must be minimal;
+- public payloads must never include property credentials;
+- public token errors must not reveal sensitive resource existence;
+- do not log full public URLs containing tokens;
+- do not add plaintext token fallback unless explicitly required for legacy migration.
 
 ---
 
-## Upload and media rules
+## Upload and Media Rules
 
 When touching documents/media/uploads:
-
-- Validate tenant/property access before file access.
-- Do not expose internal R2 object keys unless the existing contract requires it.
-- Prefer signed/private access patterns.
-- Validate input and file metadata according to existing helpers.
-- Do not make private files public by default.
-- Do not log signed URLs.
-- Preserve document sensitivity rules.
+- validate tenant/property access before file access;
+- do not expose internal R2 object keys unless the existing contract requires it;
+- prefer private/signed access patterns;
+- validate input and file metadata according to existing helpers;
+- do not trust client MIME blindly;
+- do not make private files public by default;
+- do not log signed URLs;
+- preserve document sensitivity rules.
 
 ---
 
-## API rules
+## Database and Migration Rules
+
+Before database work, read:
+
+`../docs/ai-context/05-database-map.md`
+
+Rules:
+- do not create migration without explicit need;
+- do not alter already-applied migrations;
+- do not remove tenant fields;
+- do not weaken indexes tied to tenant/resource lookup;
+- preserve idempotent backfills;
+- do not use legacy `tenant_id = null` as universal access fallback;
+- confirm schema, migration and tests are aligned when database behavior changes.
+
+---
+
+## API Rules
 
 Do not invent routes, payloads, entities or behavior.
 
 Before changing an API contract:
-1. Check the route.
-2. Check validation/schema.
-3. Check direct consumers only if the contract changes.
-4. Check nearby tests only if behavior changes.
+1. Check `../docs/ai-context/04-api-map.md`.
+2. Check the route.
+3. Check validation/schema.
+4. Check direct consumers only if the contract changes.
+5. Check nearby tests only if behavior changes.
 
 Use existing helpers and patterns before creating new ones.
 
@@ -238,7 +260,7 @@ Avoid broad refactors unless explicitly requested.
 
 ---
 
-## Cloudflare/deploy rules
+## Cloudflare/Deploy Rules
 
 Do not create Cloudflare resources automatically.
 
@@ -268,7 +290,24 @@ Resource IDs are not secrets, but treat production identifiers carefully.
 
 ---
 
-## Implementation rules
+## AI Context Update Rule
+
+| Change type | Required file |
+|---|---|
+| New/changed route | `04-api-map.md` |
+| New/changed API contract | `04-api-map.md` |
+| New/changed table/column/migration | `05-database-map.md` |
+| New/changed authorization rule | `06-security-rules.md` |
+| New/changed security behavior | `06-security-rules.md` |
+| New/changed backend helper/service | `08-backend-map.md` |
+| New/changed upload/media behavior | `08-backend-map.md` |
+| New/changed credential/public link behavior | `06-security-rules.md` |
+| New/changed tests/scripts | `09-testing-guide.md` |
+| New/changed workflow rule | `10-ai-workflow.md` |
+
+---
+
+## Implementation Rules
 
 Before editing:
 - identify the affected backend domain;
@@ -297,20 +336,19 @@ Before running a script:
 - prefer targeted validation first;
 - avoid repeating expensive commands.
 
-Common validations:
-- `npm run type-check`
-- `npm run test`
-- `npm run test:api`
-- `npm run build`
-- `npm run check:deploy-config`
-- `npm run check:deploy-config:prod`
-- `git diff --check`
+Common backend validations:
 
-Run full test/build only when the change justifies it or when explicitly requested.
-
-Suggested backend validation:
-```powershell
+```bash
 npm run type-check
+npm run test
 npm run test:api
 npm run build
 git diff --check
+```
+
+For docs-only changes:
+
+```bash
+git diff --check
+git status --short
+```
