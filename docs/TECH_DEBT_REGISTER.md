@@ -185,6 +185,7 @@ Este registro deve ser lido em conjunto com:
 - **Owner entry Calm OS (2026-05-17)**: dashboard owner/manager e lista de imoveis receberam base Calm OS em surfaces, cards e reducao de overlays dark/glass sem alterar APIs.
 - **Property detail Calm OS (2026-05-17)**: detalhe do imovel recebeu wrapper/hero Calm OS, reduzindo overlay dark sem alterar tabs, modulos ou contratos.
 - **Auth/public Calm OS (2026-05-17)**: `EntryShell` e `/splash` migraram para base clara Calm OS, reduzindo gradientes/glass pesados sem alterar fluxo de auth.
+- **Invite public Calm OS (2026-05-17)**: `/invite/[token]` recebeu wrapper/card principal Calm OS sem alterar contrato do convite.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;

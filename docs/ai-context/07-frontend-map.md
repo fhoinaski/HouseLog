@@ -61,6 +61,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 
 - `src/components/auth/entry-shell.tsx`: login/register usam base Calm OS clara, cards brancos e sem glass pesado.
 - `src/app/splash/page.tsx`: splash usa fundo Calm OS claro e reduz gradientes/glass pesados.
+- `src/app/invite/[token]/page.tsx`: convite publico usa base Calm OS clara no wrapper, logo e card principal.
 
 ## Regras para IA
 

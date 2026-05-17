@@ -120,20 +120,20 @@ export default function InvitePage({ params }: { params: Promise<{ token: string
   if (invite.whatsapp) registerParams.set('phone', invite.whatsapp);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-hl-bg p-6 text-hl-text">
       <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600">
-            <Building2 className="h-6 w-6 text-white" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-[var(--hl-radius-control)] bg-hl-surface-muted text-hl-primary">
+            <Building2 className="h-6 w-6" />
           </div>
           <span className="text-2xl font-medium tracking-tight">HouseLog</span>
         </div>
 
         {/* Invite card */}
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+        <div className="overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface shadow-hl-soft">
           {/* Property banner */}
-          <div className="bg-(--color-primary) px-6 py-5 text-white">
+          <div className="border-b border-hl-border bg-hl-surface-muted px-6 py-5 text-hl-text">
             <p className="text-sm opacity-80 mb-1">{invite.invited_by_name} convidou você para</p>
             <h1 className="text-xl font-medium">{invite.property_name}</h1>
             <p className="text-sm opacity-70 mt-0.5">{invite.property_address}, {invite.property_city}</p>
