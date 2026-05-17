@@ -180,6 +180,7 @@ Este registro deve ser lido em conjunto com:
 - **Calm OS shell (2026-05-17)**: `AppShell` passou a aplicar o wrapper explicito `.hl-calm-os`; top nav, bottom nav e property mobile nav usam navegacao clara sem depender do seletor `:has()` do piloto.
 - **Provider service detail Calm OS (2026-05-17)**: `/provider/services/[serviceId]` foi migrada parcialmente para Calm OS em loading/error, detalhes, checklist, evidencias e historico de propostas sem alterar upload, chat, fila offline ou API.
 - **Provider opportunities/settings Calm OS (2026-05-17)**: `/provider/opportunities`, `/provider/opportunities/[serviceId]` e `/provider/settings` foram migradas parcial ou integralmente para Calm OS preservando proposta, chat, formularios e contratos.
+- **Shared visual variants Calm OS (2026-05-17)**: `visual-system.ts` migrou PageSection, MetricCard, ActionTile, ServiceOrderCard, PropertySummaryCard, EmptyState e ChatPanel para surface branca, borda suave e sombra discreta, reduzindo heterogeneidade em owner/manager sem alterar logica.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;

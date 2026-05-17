@@ -174,8 +174,8 @@ export const pageSectionVariants = cva('space-y-3', {
   variants: {
     tone: {
       plain: '',
-      surface: 'rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4',
-      strong: 'rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-4',
+      surface: 'rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle',
+      strong: 'rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle',
     },
     density: {
       compact: 'space-y-2',
@@ -191,16 +191,16 @@ export const pageSectionVariants = cva('space-y-3', {
 });
 
 export const metricCardVariants = cva(
-  'rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 text-text-primary transition-colors duration-150',
+  'rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 text-hl-text shadow-hl-subtle transition-colors duration-150',
   {
     variants: {
       tone: {
         default: '',
-        accent: 'bg-bg-accent-subtle',
-        success: 'bg-bg-success',
-        warning: 'bg-bg-warning',
-        danger: 'bg-bg-danger',
-        strong: 'bg-[var(--surface-strong)]',
+        accent: 'bg-hl-surface',
+        success: 'bg-hl-surface',
+        warning: 'bg-hl-surface',
+        danger: 'bg-hl-surface',
+        strong: 'bg-hl-surface-muted',
       },
       density: {
         compact: 'p-3',
@@ -216,16 +216,16 @@ export const metricCardVariants = cva(
 );
 
 export const metricIconVariants = cva(
-  'flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--hl-radius-control)] bg-hl-surface-muted',
   {
     variants: {
       tone: {
-        default: 'bg-[var(--surface-strong)] text-text-secondary',
-        accent: 'bg-bg-accent-subtle text-text-accent',
-        success: 'bg-bg-success text-text-success',
-        warning: 'bg-bg-warning text-text-warning',
-        danger: 'bg-bg-danger text-text-danger',
-        strong: 'bg-[var(--surface-strong)] text-text-primary',
+        default: 'text-hl-text-muted',
+        accent: 'text-hl-primary',
+        success: 'text-hl-success',
+        warning: 'text-hl-warning',
+        danger: 'text-hl-danger',
+        strong: 'text-hl-text',
       },
     },
     defaultVariants: {
@@ -235,7 +235,7 @@ export const metricIconVariants = cva(
 );
 
 export const actionTileVariants = cva(
-  'group/action-tile flex min-h-28 flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-center text-text-primary transition-[background-color,transform] duration-150 hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
+  'group/action-tile flex min-h-28 flex-col items-center justify-center gap-2 rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 text-center text-hl-text shadow-hl-subtle transition-[background-color,transform] duration-150 hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-focus active:scale-[0.98]',
   {
     variants: {
       tone: {
@@ -334,7 +334,7 @@ export const inventoryPhotoFrameVariants = cva('relative h-32 overflow-hidden bg
 });
 
 export const serviceOrderCardVariants = cva(
-  'group/service-order rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-4 py-3 text-text-primary transition-[background-color] duration-150 hover:bg-[var(--field-bg-hover)]',
+  'group/service-order rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-4 py-3 text-hl-text shadow-hl-subtle transition-[background-color,transform] duration-150 hover:-translate-y-0.5 hover:bg-hl-surface-muted',
   {
     variants: {
       density: {
@@ -354,7 +354,7 @@ export const serviceOrderCardVariants = cva(
   }
 );
 
-export const propertySummaryCardVariants = cva('rounded-[var(--radius-xl)] bg-[var(--surface-base)] text-text-primary', {
+export const propertySummaryCardVariants = cva('rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface text-hl-text shadow-hl-subtle', {
   variants: {
     density: {
       compact: 'p-4',
@@ -367,11 +367,11 @@ export const propertySummaryCardVariants = cva('rounded-[var(--radius-xl)] bg-[v
   },
 });
 
-export const propertySummaryItemVariants = cva('rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3', {
+export const propertySummaryItemVariants = cva('rounded-[var(--hl-radius-control)] bg-hl-surface-muted p-3', {
   variants: {
     tone: {
       default: '',
-      muted: 'bg-[var(--surface-base)]',
+      muted: 'bg-hl-surface',
     },
   },
   defaultVariants: {
@@ -380,13 +380,13 @@ export const propertySummaryItemVariants = cva('rounded-[var(--radius-lg)] bg-[v
 });
 
 export const emptyStateVariants = cva(
-  'flex flex-col items-center justify-center rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-6 py-12 text-center text-text-primary',
+  'flex flex-col items-center justify-center rounded-[var(--hl-radius-card)] bg-hl-surface px-6 py-12 text-center text-hl-text',
   {
     variants: {
       tone: {
         default: '',
-        subtle: 'bg-[var(--surface-base)]',
-        strong: 'bg-[var(--surface-strong)]',
+        subtle: 'bg-hl-surface',
+        strong: 'bg-hl-surface-muted',
       },
       density: {
         compact: 'py-8',
@@ -402,12 +402,12 @@ export const emptyStateVariants = cva(
 );
 
 export const chatPanelVariants = cva(
-  'min-h-56 max-h-[24rem] overflow-y-auto rounded-[var(--radius-xl)] p-3 text-text-primary sm:p-4',
+  'min-h-56 max-h-[24rem] overflow-y-auto rounded-[var(--hl-radius-card)] border border-hl-border p-3 text-hl-text sm:p-4',
   {
     variants: {
       tone: {
-        default: 'bg-[var(--surface-strong)]',
-        subtle: 'bg-[var(--surface-base)]',
+        default: 'bg-hl-surface-muted',
+        subtle: 'bg-hl-surface',
       },
       density: {
         compact: 'space-y-2',

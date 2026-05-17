@@ -46,6 +46,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - Tokens globais ficam em `src/app/tokens.css` (`--hl-bg`, `--hl-surface`, `--hl-border`, `--hl-text`, `--hl-primary`, status e sombras).
 - Ponte Tailwind fica em `src/app/globals.css` com classes como `bg-hl-bg`, `bg-hl-surface`, `border-hl-border`, `text-hl-text`, `text-hl-text-muted`, `text-hl-primary`, `shadow-hl-subtle` e `shadow-hl-soft`.
 - `AppShell` aplica o wrapper explicito `.hl-calm-os` para fundo, texto e navegacao autenticada clara. Nao usar novos seletores `:has()` como mecanismo principal de tema.
+- `src/components/ui/visual-system.ts`: variantes compartilhadas de `PageSection`, `MetricCard`, `ActionTile`, `ServiceOrderCard`, `PropertySummaryCard`, `EmptyState` e `ChatPanel` usam base Calm OS (surface branca, borda suave, sombra discreta).
 - `The Architectural Lens` permanece como base legada ate a migracao gradual. Nao apagar tokens antigos sem mapear consumidores.
 - Migrar por tela/componente, preservando loading, empty, error states e contratos de API.
 

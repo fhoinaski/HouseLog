@@ -52,6 +52,8 @@ Escopo inicial:
 
 - Migrar por tela ou componente, nao por troca global.
 - Preferir wrapper explicito (`.hl-calm-os`) em vez de seletores `:has()` para novos blocos.
+- Componentes compartilhados de layout/lista devem preferir `bg-hl-surface`, `border-hl-border`, `shadow-hl-subtle`, `text-hl-text` e `text-hl-text-muted`.
+- Cards clicaveis devem usar `Link` ou `button`, ter `focus-visible` claro e area de toque confortavel.
 - Nao apagar tokens antigos antes de mapear consumidores.
 - Nao alterar contrato de API como parte da migracao visual.
 - Preservar loading, empty e error states.
