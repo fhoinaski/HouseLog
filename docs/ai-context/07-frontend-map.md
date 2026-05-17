@@ -23,7 +23,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 
 ## Provider Flow (2026-05-17)
 
-- `src/app/provider/services/[serviceId]/page.tsx`: exibe `after_photos` alem das `before_photos`, checklist read-only com progresso. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`. Upload de evidencia: backend agora tem `POST /provider/services/:id/photos` com `canUploadProviderEvidence` (status `approved`|`in_progress`); o botao de envio via fila offline (`houselog-oq`) ainda precisa ser re-habilitado no frontend.
+- `src/app/provider/services/[serviceId]/page.tsx`: exibe `after_photos` alem das `before_photos`, checklist read-only com progresso. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`. Upload de evidencia: botao "Enviar evidencia" visivel apenas para OS em `approved`|`in_progress`; enfileira na `houselog-oq` com `useProviderRoute: true` — o sync usa `POST /provider/services/:id/photos` (nao a rota de property, que 403 para providers).
 - `src/app/provider/dashboard/page.tsx`: MetricCards tem skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
 - `src/app/provider/opportunities/page.tsx`: chips de filtro tem `aria-pressed` e `role="group"`.
 - `src/app/provider/settings/page.tsx`: chips de hard skills tem `aria-pressed`.
@@ -45,7 +45,7 @@ Sistema oficial: The Architectural Lens. Use componentes e tokens existentes. Na
 - Nao persistir tokens ou credenciais em storage.
 - Nao exibir secrets em listagens.
 - Para documentos/upload, nao expor URLs privadas diretamente.
-- Fila offline de OS usa `src/lib/offline-queue.ts` (`houselog-oq`) com `tenantId + userId + propertyId + serviceOrderId`; a fila legada `houselog-eq` deve ser limpa, nao migrada sem contexto confiavel.
+- Fila offline de OS usa `src/lib/offline-queue.ts` (`houselog-oq`) com `tenantId + userId + propertyId + serviceOrderId`; a fila legada `houselog-eq` deve ser limpa, nao migrada sem contexto confiavel. `OqPhotoItem` tem campo opcional `useProviderRoute?: boolean` — quando `true`, o sync usa `POST /provider/services/:id/photos` em vez da rota de property.
 - Sync offline e foreground-only: roda com access token em memoria no mount/`online`; nao implementar Background Sync sem redesenho de auth.
 
 ## Validacao comum
