@@ -85,14 +85,13 @@ export type {
 // Credentials
 export { credentialsApi } from '@/lib/api/credentials';
 
-// Provider / Marketplace
+// Provider network
 export {
   providerApi,
   providerNetworkApi,
   PROVIDER_CATEGORY_OPTIONS,
 } from '@/lib/api/provider';
 export { shareApi } from '@/lib/api/share';
-export { providerNetworkApi as marketplaceApi } from '@/lib/api/provider';
 
 // Rooms
 export { roomsApi } from '@/lib/api/rooms';

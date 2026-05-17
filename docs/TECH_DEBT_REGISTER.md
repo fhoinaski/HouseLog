@@ -146,18 +146,16 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
-### TD-007 - `marketplaceApi` permanece como alias legado
+### TD-007 - Alias legado `marketplaceApi` removido
 
 - **Severidade**: Media
 - **Area**: Produto / Frontend / Provider Network
-- **Status**: Mitigado parcialmente
-- **Evidencia**: `marketplaceApi` permanece como alias para `providerNetworkApi` por compatibilidade, enquanto ADR-001 e ADR-003 definem que HouseLog nao e marketplace aberto.
-- **Impacto**: nomes legados podem induzir novas implementacoes desalinhadas com rede homologada, elegibilidade e operacao privada.
+- **Status**: Mitigado
+- **Evidencia**: auditoria confirmou que nao havia consumidores reais de `marketplaceApi`; o alias legado foi removido de `house-log-front/src/lib/api.ts` e o frontend mantem apenas `providerNetworkApi`.
+- **Impacto**: nomes legados deixam de ser exportados pelo barrel publico do frontend, reduzindo risco de novas implementacoes desalinhadas com rede homologada, elegibilidade e operacao privada.
 - **Recomendacao**:
-  - mapear consumidores restantes de `marketplaceApi`;
-  - migrar imports para `providerNetworkApi`;
-  - manter alias apenas durante janela de compatibilidade;
-  - remover alias quando nao houver consumo.
+  - manter novos consumidores usando `providerNetworkApi`;
+  - evitar reintroduzir nomenclatura de marketplace aberto no frontend.
 - **Relacionamento com roadmap/ADRs**: Fase 4; ADR-001 e ADR-003.
 
 ---
@@ -290,7 +288,7 @@ Este registro deve ser lido em conjunto com:
 ### Medio prazo
 
 1. TD-009 - iniciar base multi-tenant incremental.
-2. TD-007 - reduzir e remover alias `marketplaceApi`.
+2. TD-007 - manter nomenclatura `providerNetworkApi` sem alias legado.
 3. TD-008 - seguir consolidacao visual por rota.
 4. TD-011 - evoluir allowlist local de search antes de novos indices.
 5. TD-001 - automatizar verificacao de encoding.
