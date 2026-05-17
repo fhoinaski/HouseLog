@@ -31,6 +31,14 @@ Search usa `src/lib/search-field-policy.ts` para controlar campos permitidos e p
 
 Public links usam `src/lib/public-link-rate-limit.ts` para rate limit granular em KV por `flow + action + IP + tokenHashPrefix`. O helper recebe hash de token, nunca token plaintext. Acoes publicas de mutacao usam limite menor que leitura.
 
+## Propostas de OS — bids.ts (2026-05-17)
+
+- `GET/POST/PATCH /properties/:propertyId/services/:serviceId/bids` montados em `index.ts`.
+- `loadTenantServiceOrder` valida `tenantId + propertyId + serviceId` com innerJoin antes de qualquer operação de bid.
+- `PATCH /:bidId/status` guarda contra `role === 'provider'` logo no início do handler (antes de `assertPropertyAccess`), retornando 403 imediatamente.
+- Aceitar bid: `UPDATE serviceOrders SET assigned_to, cost, status='approved'` + `db.run(sql...)` para rejeitar outros bids pending do mesmo serviceId.
+- Audit log: `provider_proposal_submitted` no POST. Sem audit no PATCH (a OS já audita mutações de status).
+
 ## Provider — rotas de upload (2026-05-17)
 
 - `POST /provider/services/:id/invoice` — `canUploadProviderInvoice` (alias de `canViewAssignedProviderService`); cria documento no D1.

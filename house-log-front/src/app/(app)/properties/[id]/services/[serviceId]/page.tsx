@@ -11,6 +11,7 @@ import {
   Calendar,
   Camera,
   CheckCircle2,
+  Coins,
   Copy,
   DollarSign,
   Download,
@@ -20,6 +21,8 @@ import {
   Send,
   Share2,
   ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
   User,
   UserPlus,
   Video,
@@ -36,7 +39,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { invitesApi, normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
+import { bidsApi, invitesApi, normalizeMediaUrl, propertiesApi, servicesApi, shareApi } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { enqueue as enqueueOffline } from '@/lib/offline-queue';
 import { useOfflineSync } from '@/lib/use-offline-sync';
@@ -180,6 +183,7 @@ export default function ServiceDetailPage({
   const [shareProviderEmail, setShareProviderEmail] = useState('');
   const [checklist, setChecklist] = useState<{ item: string; done: boolean }[]>([]);
   const [addingTeamMember, setAddingTeamMember] = useState(false);
+  const [updatingBidId, setUpdatingBidId] = useState<string | null>(null);
 
   const { data, mutate } = useSWR(['service', propertyId, serviceId], () =>
     servicesApi.get(propertyId, serviceId)
@@ -194,6 +198,11 @@ export default function ServiceDetailPage({
     order?.assigned_to && canManageTeamSuggestion ? ['team', propertyId] : null,
     () => invitesApi.list(propertyId)
   );
+  const { data: bidsData, mutate: mutateBids } = useSWR(
+    ['bids', propertyId, serviceId],
+    () => bidsApi.list(propertyId, serviceId)
+  );
+
   const offlineSync = useOfflineSync();
   // Nova fila unificada — isolada por userId (usado como tenantId enquanto backend não expõe tenantId)
   const offlineQueueSync = useOfflineQueueSync(activeTenantId, user?.id ?? null);
@@ -347,6 +356,20 @@ export default function ServiceDetailPage({
     }
   }
 
+  async function handleBidStatus(bidId: string, status: 'accepted' | 'rejected') {
+    setUpdatingBidId(bidId);
+    try {
+      await bidsApi.updateStatus(propertyId, serviceId, bidId, status);
+      await Promise.all([mutateBids(), mutate()]);
+      void globalMutate(['dashboard', propertyId]);
+      toast.success(status === 'accepted' ? 'Proposta aceita' : 'Proposta recusada');
+    } catch (e) {
+      toast.error('Erro ao processar proposta', { description: (e as Error).message });
+    } finally {
+      setUpdatingBidId(null);
+    }
+  }
+
   if (!order) {
     return (
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
@@ -367,6 +390,10 @@ export default function ServiceDetailPage({
   const beforePhotos = safeParseStringArray(order.before_photos);
   const afterPhotos = safeParseStringArray(order.after_photos);
   const nextStatuses = STATUS_TRANSITIONS[order.status] ?? [];
+  const bids = bidsData?.bids ?? [];
+  const pendingBids = bids.filter((b) => b.status === 'pending');
+  const canReviewBids = user?.role === 'owner' || user?.role === 'admin';
+  const showBidsSection = order.status === 'requested' || (bidsData !== undefined && bids.length > 0);
   const completedChecklistItems = checklist.filter((item) => item.done).length;
   const checklistProgress = checklist.length ? (completedChecklistItems / checklist.length) * 100 : 0;
   const shouldSuggestTeamMember =
@@ -489,6 +516,90 @@ export default function ServiceDetailPage({
           />
         )}
       </PageSection>
+
+      {showBidsSection && (
+        <PageSection
+          title="Propostas recebidas"
+          description="Orçamentos enviados por prestadores para esta ordem de serviço."
+          tone="surface"
+          density="editorial"
+          actions={
+            pendingBids.length > 0 ? (
+              <Badge variant="urgent">
+                {pendingBids.length} {pendingBids.length === 1 ? 'pendente' : 'pendentes'}
+              </Badge>
+            ) : undefined
+          }
+        >
+          {bids.length === 0 ? (
+            <EmptyState
+              icon={<Coins className="h-5 w-5" />}
+              title="Nenhuma proposta recebida"
+              description="Quando um prestador enviar um orçamento, ele aparecerá aqui para análise."
+              tone="subtle"
+              density="compact"
+            />
+          ) : (
+            <div className="space-y-3">
+              {bids.map((bid) => (
+                <div
+                  key={bid.id}
+                  className={cn(
+                    'rounded-[var(--radius-lg)] border p-4',
+                    bid.status === 'pending'
+                      ? 'border-border-default bg-[var(--surface-base)]'
+                      : bid.status === 'accepted'
+                        ? 'border-border-default bg-bg-success/10'
+                        : 'border-border-default bg-bg-subtle opacity-60'
+                  )}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text-primary">
+                        {bid.provider_name ?? 'Prestador'}
+                      </p>
+                      <p className="mt-0.5 text-xs text-text-tertiary">{formatDate(bid.created_at)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-semibold text-text-primary">
+                        {formatCurrency(bid.amount)}
+                      </span>
+                      <StatusBadge
+                        status={bid.status}
+                        label={bid.status === 'pending' ? 'Pendente' : bid.status === 'accepted' ? 'Aceita' : 'Recusada'}
+                      />
+                    </div>
+                  </div>
+                  {bid.notes && (
+                    <p className="mt-2 text-xs leading-5 text-text-secondary">{bid.notes}</p>
+                  )}
+                  {bid.status === 'pending' && canReviewBids && (
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        loading={updatingBidId === bid.id}
+                        onClick={() => handleBidStatus(bid.id, 'accepted')}
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                        Aceitar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        loading={updatingBidId === bid.id}
+                        onClick={() => handleBidStatus(bid.id, 'rejected')}
+                      >
+                        <ThumbsDown className="h-3.5 w-3.5" />
+                        Recusar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </PageSection>
+      )}
 
       {shouldSuggestTeamMember && (
         <PageSection

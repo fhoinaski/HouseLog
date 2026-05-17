@@ -32,6 +32,14 @@ O frontend tambem aceita formato legado preservado pelo helper antigo.
 - Public/tokenized: audit links, service share, invite e handover publico.
 - Documents, credentials, expenses, maintenance, inventory, warranties, renovations, systems, technical points e handover seguem escopo por property quando aplicavel.
 
+## Propostas de OS (service_bids) — (2026-05-17)
+
+Tabela `service_bids` ligada a `serviceOrders.id` via `service_id`. Status: `pending`, `accepted`, `rejected`.
+
+- `GET  /api/v1/properties/:propertyId/services/:serviceId/bids` — lista propostas; requer `assertPropertyAccess` (owner/manager/admin). Valida `tenantId + propertyId + serviceId` via `loadTenantServiceOrder`.
+- `POST /api/v1/properties/:propertyId/services/:serviceId/bids` — provider envia proposta; requer `role === 'provider'` e OS com `status === 'requested'` sem `assigned_to`. Bloqueia bid duplicado por provider. Body: `{ amount: number, notes?: string }`. Retorna `{ bid }` 201. Dispara email ao owner (non-blocking).
+- `PATCH /api/v1/properties/:propertyId/services/:serviceId/bids/:bidId/status` — owner aceita/recusa; `role === 'provider'` bloqueado (403). Body: `{ status: 'accepted' | 'rejected' }`. Aceitar: seta `assignedTo`, `cost`, `status=approved` na OS e rejeita outros bids pending. Retorna `{ success, status }`.
+
 ## Provider — rotas de upload (2026-05-17)
 
 - `POST /api/v1/provider/services/:id/invoice` — nota fiscal; qualquer status.

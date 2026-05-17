@@ -244,12 +244,15 @@ bids.post('/', async (c) => {
 
 // PATCH /properties/:propertyId/services/:serviceId/bids/:bidId/status
 bids.patch('/:bidId/status', async (c) => {
+  const role = c.get('userRole');
+  // Providers submit bids — they cannot accept or reject them
+  if (role === 'provider') return err(c, 'Apenas proprietários podem processar orçamentos', 'FORBIDDEN', 403);
+
   const db = getDb(c.env.DB);
   const propertyId = c.req.param('propertyId')!;
   const serviceId = c.req.param('serviceId')!;
   const bidId = c.req.param('bidId')!;
   const userId = c.get('userId');
-  const role = c.get('userRole');
   const tenantId = c.get('tenantId');
   if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
 
