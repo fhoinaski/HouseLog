@@ -23,7 +23,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 
 ## Provider Flow (2026-05-17)
 
-- `src/app/provider/services/[serviceId]/page.tsx`: exibe `OfflineSyncStatus`, barra de acoes em campo (upload de evidencia via fila unificada `houselog-oq`), `after_photos`, checklist read-only. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`.
+- `src/app/provider/services/[serviceId]/page.tsx`: exibe `after_photos` alem das `before_photos`, checklist read-only com progresso. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`. Upload de evidencia pelo prestador NAO esta disponivel — backend bloqueia `isProviderRole` em `canManageServiceOrder` (403); sera necessaria rota dedicada em `provider.ts` para habilitar.
 - `src/app/provider/dashboard/page.tsx`: MetricCards tem skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
 - `src/app/provider/opportunities/page.tsx`: chips de filtro tem `aria-pressed` e `role="group"`.
 - `src/app/provider/settings/page.tsx`: chips de hard skills tem `aria-pressed`.

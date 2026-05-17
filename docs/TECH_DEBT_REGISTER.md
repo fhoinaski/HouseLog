@@ -173,7 +173,7 @@ Este registro deve ser lido em conjunto com:
   - Provider dashboard (`/provider/dashboard`): separados estados de loading (skeleton), erro (mensagem + retry) e vazio real; metricas nao exibem zero silencioso em erro.
   - Oportunidades (`/provider/opportunities`): chips de filtro receberam `aria-pressed` e `role="group"` acessivel.
   - Settings (`/provider/settings`): chips de hard skills receberam `aria-pressed`.
-- **Lacuna de permissao documentada**: o upload de fotos via fila offline (`POST /properties/:propertyId/services/:serviceOrderId/photos`) usa a mesma rota do fluxo do proprietario. Nao foi verificado se o backend autoriza o prestador a chamar esse endpoint diretamente. Se a sync retornar 403, o `OfflineSyncStatus` exibe o erro. Verificar regra de autorizacao em `apps/api/src/routes/services.ts` (endpoint de fotos) antes de release.
+- **Lacuna confirmada — upload de evidencia pelo prestador**: `canUploadServiceEvidence` → `canManageServiceOrder` → `canManageProperty` com `accessLevel='manage'` retorna 403 para qualquer `isProviderRole`. Nao ha rota dedicada de fotos no provider backend (`/provider/services/:id/photos`). O botao de envio de evidencia foi omitido da tela de detalhe do prestador; `after_photos` ja existentes sao exibidos normalmente via dados da OS. Para habilitar upload pelo prestador sera necessario criar rota dedicada em `apps/api/src/routes/provider.ts` com escopo de autorizacao proprio (ex: `assigned_service`).
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - verificar permissao de upload de foto pelo prestador no backend antes do release;
