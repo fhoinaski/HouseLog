@@ -55,6 +55,11 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - `src/app/(app)/dashboard/page.tsx`: entrada owner/manager alinhada ao Calm OS via surfaces claras e componentes compartilhados.
 - `src/app/(app)/properties/page.tsx`: lista de imoveis recebeu base Calm OS em shell/header/cards e reducao de overlay dark/glass pesado.
 
+## Auth/Public Calm OS (2026-05-17)
+
+- `src/components/auth/entry-shell.tsx`: login/register usam base Calm OS clara, cards brancos e sem glass pesado.
+- `src/app/splash/page.tsx`: splash usa fundo Calm OS claro e reduz gradientes/glass pesados.
+
 ## Regras para IA
 
 - Nao inventar endpoint ou campo.

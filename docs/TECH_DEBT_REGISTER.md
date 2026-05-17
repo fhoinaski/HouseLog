@@ -182,6 +182,7 @@ Este registro deve ser lido em conjunto com:
 - **Provider opportunities/settings Calm OS (2026-05-17)**: `/provider/opportunities`, `/provider/opportunities/[serviceId]` e `/provider/settings` foram migradas parcial ou integralmente para Calm OS preservando proposta, chat, formularios e contratos.
 - **Shared visual variants Calm OS (2026-05-17)**: `visual-system.ts` migrou PageSection, MetricCard, ActionTile, ServiceOrderCard, PropertySummaryCard, EmptyState e ChatPanel para surface branca, borda suave e sombra discreta, reduzindo heterogeneidade em owner/manager sem alterar logica.
 - **Owner entry Calm OS (2026-05-17)**: dashboard owner/manager e lista de imoveis receberam base Calm OS em surfaces, cards e reducao de overlays dark/glass sem alterar APIs.
+- **Auth/public Calm OS (2026-05-17)**: `EntryShell` e `/splash` migraram para base clara Calm OS, reduzindo gradientes/glass pesados sem alterar fluxo de auth.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;
