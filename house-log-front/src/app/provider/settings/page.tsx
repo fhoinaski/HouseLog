@@ -45,7 +45,7 @@ type PortfolioCase = {
   afterImageUrl?: string;
 };
 
-const labelClass = 'text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary';
+const labelClass = 'text-[11px] font-medium uppercase tracking-[0.08em] text-hl-text-muted';
 
 export default function ProviderSettingsPage() {
   const { user } = useAuth();
@@ -164,23 +164,24 @@ export default function ProviderSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="mx-auto min-h-full max-w-5xl space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
       <PageHeader
         density="compact"
         eyebrow="Rede homologada"
         title="Perfil profissional"
         actions={
-          <div className="rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-4 py-3 text-left">
-            <p className="text-xl font-medium leading-none text-text-primary">{filledProfileFields}</p>
-            <p className="mt-1 text-xs text-text-tertiary">sinais preenchidos</p>
+          <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface px-4 py-3 text-left shadow-hl-subtle">
+            <p className="text-xl font-medium leading-none text-hl-text">{filledProfileFields}</p>
+            <p className="mt-1 text-xs text-hl-text-muted">sinais preenchidos</p>
           </div>
         }
       />
 
       <PageSection
         title="Pontuação e confiança"
-        tone="strong"
+        tone="surface"
         density="compact"
+        className="border border-hl-border bg-hl-surface shadow-hl-subtle"
         actions={<Badge variant="outline">Provider network</Badge>}
       >
         {profileError ? (
@@ -217,11 +218,11 @@ export default function ProviderSettingsPage() {
                 />
               ) : (
                 (profileData?.reviews ?? []).slice(0, 5).map((review, index) => (
-                  <article key={`${review.created_at}-${index}`} className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
-                    <p className="text-xs text-text-tertiary">
+                  <article key={`${review.created_at}-${index}`} className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-4">
+                    <p className="text-xs text-hl-text-muted">
                       {formatDate(review.created_at)} - {review.stars} estrelas
                     </p>
-                    <p className="mt-1 text-sm leading-6 text-text-secondary">
+                    <p className="mt-1 text-sm leading-6 text-hl-text-muted">
                       {review.comment || 'Sem comentario textual'}
                     </p>
                   </article>
@@ -230,7 +231,7 @@ export default function ProviderSettingsPage() {
             </div>
           </div>
         ) : (
-          <div className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
+          <div className="hl-skeleton h-24 rounded-[var(--hl-radius-card)]" />
         )}
       </PageSection>
 
@@ -238,7 +239,8 @@ export default function ProviderSettingsPage() {
         title="Perfil profissional e serviços"
         tone="surface"
         density="compact"
-        actions={<Settings2 className="h-4 w-4 text-text-tertiary" />}
+        className="border border-hl-border bg-hl-surface shadow-hl-subtle"
+        actions={<Settings2 className="h-4 w-4 text-hl-text-muted" />}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -498,9 +500,10 @@ export default function ProviderSettingsPage() {
 
       <PageSection
         title="Segurança da conta"
-        tone="strong"
+        tone="surface"
         density="compact"
-        actions={<KeyRound className="h-4 w-4 text-text-tertiary" />}
+        className="border border-hl-border bg-hl-surface shadow-hl-subtle"
+        actions={<KeyRound className="h-4 w-4 text-hl-text-muted" />}
       >
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">

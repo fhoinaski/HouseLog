@@ -51,9 +51,9 @@ function DetailItem({
   value: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3">
-      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">{label}</dt>
-      <dd className="mt-2 flex min-w-0 items-center gap-2 text-sm font-medium text-text-primary">
+    <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-3">
+      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">{label}</dt>
+      <dd className="mt-2 flex min-w-0 items-center gap-2 text-sm font-medium text-hl-text">
         {icon}
         <span className="min-w-0 truncate">{value}</span>
       </dd>
@@ -100,7 +100,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
   if (isLoading && !order) {
     return (
-      <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+      <div className="min-h-full space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Rede homologada"
@@ -113,10 +113,10 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             </Button>
           }
         />
-        <PageSection tone="strong" density="editorial">
+        <PageSection tone="surface" density="editorial" className="border border-hl-border bg-hl-surface shadow-hl-subtle">
           <div className="space-y-3">
-            <div className="hl-skeleton h-28 rounded-[var(--radius-xl)]" />
-            <div className="hl-skeleton h-44 rounded-[var(--radius-xl)]" />
+            <div className="hl-skeleton h-28 rounded-[var(--hl-radius-card)]" />
+            <div className="hl-skeleton h-44 rounded-[var(--hl-radius-card)]" />
           </div>
         </PageSection>
       </div>
@@ -125,7 +125,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
   if (error || !order) {
     return (
-      <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+      <div className="min-h-full space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
         <PageHeader
           density="editorial"
           eyebrow="Rede homologada"
@@ -149,7 +149,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
   }
 
   return (
-    <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="min-h-full space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
       <PageHeader
         density="compact"
         eyebrow="Oportunidade"
@@ -164,8 +164,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="space-y-5">
           <PageSection
-            tone="strong"
+            tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
             actions={
               <div className="flex flex-wrap gap-2">
                 <Badge variant={PRIORITY_VARIANT[order.priority]}>{SERVICE_PRIORITY_LABELS[order.priority]}</Badge>
@@ -176,12 +177,12 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             <dl className="grid gap-3 sm:grid-cols-2">
               <DetailItem label="Sistema" value={SYSTEM_TYPE_LABELS[order.system_type]} />
               <DetailItem
-                icon={<Clock className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                icon={<Clock className="h-3.5 w-3.5 shrink-0 text-hl-text-muted" />}
                 label="Criada em"
                 value={formatDate(order.created_at)}
               />
               <DetailItem
-                icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-hl-text-muted" />}
                 label="Imovel"
                 value={order.property_name}
               />
@@ -189,12 +190,12 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             </dl>
 
             {order.description ? (
-              <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
-                <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">
+              <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-4">
+                <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">
                   <FileText className="h-3.5 w-3.5" />
                   Descricao tecnica
                 </p>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{order.description}</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-hl-text-muted">{order.description}</p>
               </div>
             ) : (
               <EmptyState
@@ -207,7 +208,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             )}
           </PageSection>
 
-          <PageSection density="compact">
+          <PageSection density="compact" className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
             <ServiceChat serviceOrderId={serviceId} title="Chat da operacao privada" />
           </PageSection>
         </div>
@@ -217,6 +218,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             title={hasPendingBid ? 'Proposta em análise' : 'Enviar proposta'}
             tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
           >
             {hasPendingBid ? (
               <EmptyState
@@ -238,7 +240,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                     aria-invalid={Boolean(errors.amount)}
                     {...register('amount')}
                   />
-                  {errors.amount && <p className="text-xs text-text-danger">{errors.amount.message}</p>}
+                  {errors.amount && <p className="text-xs text-hl-danger">{errors.amount.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="bid-notes">Observacoes tecnicas</Label>
@@ -249,7 +251,7 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
                     aria-invalid={Boolean(errors.notes)}
                     {...register('notes')}
                   />
-                  {errors.notes && <p className="text-xs text-text-danger">{errors.notes.message}</p>}
+                  {errors.notes && <p className="text-xs text-hl-danger">{errors.notes.message}</p>}
                 </div>
                 <Button type="submit" loading={submittingBid} className="w-full">
                   <Send className="h-4 w-4" />
@@ -261,8 +263,9 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
 
           <PageSection
             title="Histórico de propostas"
-            tone="strong"
+            tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
           >
             {myBids.length === 0 ? (
               <EmptyState
@@ -275,15 +278,15 @@ export default function ProviderOpportunityDetailPage({ params }: { params: Prom
             ) : (
               <div className="space-y-3">
                 {myBids.map((bid: ServiceBid) => (
-                  <article key={bid.id} className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
+                  <article key={bid.id} className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-lg font-medium text-text-primary">{formatCurrency(bid.amount)}</p>
-                        <p className="mt-1 text-xs text-text-tertiary">{formatDate(bid.created_at)}</p>
+                        <p className="text-lg font-medium text-hl-text">{formatCurrency(bid.amount)}</p>
+                        <p className="mt-1 text-xs text-hl-text-muted">{formatDate(bid.created_at)}</p>
                       </div>
                       <StatusBadge status={bid.status} label={BID_STATUS_LABEL[bid.status]} className="shrink-0" />
                     </div>
-                    {bid.notes && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{bid.notes}</p>}
+                    {bid.notes && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-hl-text-muted">{bid.notes}</p>}
                   </article>
                 ))}
               </div>
