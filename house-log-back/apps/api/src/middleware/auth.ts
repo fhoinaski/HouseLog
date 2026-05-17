@@ -1,8 +1,8 @@
 import { createMiddleware } from 'hono/factory';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { verifyJwt } from '../lib/jwt';
 import { getDb } from '../db/client';
-import { properties, propertyCollaborators, tenantMembers, tenants } from '../db/schema';
+import { tenantMembers, tenants } from '../db/schema';
 import {
   canAccessProperty,
   canRevealCredentialSecret,
@@ -219,51 +219,4 @@ export async function assertPropertySecretAccess(
     return decision.allowed;
   }
   return canRevealCredentialSecret(db, { propertyId, userId, role });
-}
-
-// Returns whether a user is allowed to open (create) a service order on a property.
-// - Owner or manager_id: always allowed
-// - Collaborator with role='manager' or 'provider': allowed only if can_open_os = 1
-// - Collaborator with role='viewer': never allowed
-export async function canUserOpenOS(
-  db: D1Database,
-  propertyId: string,
-  userId: string
-): Promise<boolean> {
-  const drizzle = getDb(db);
-  const [owned] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, propertyId),
-        or(eq(properties.ownerId, userId), eq(properties.managerId, userId)),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-  if (owned) return true;
-
-  try {
-    const [collab] = await drizzle
-      .select({
-        role: propertyCollaborators.role,
-        canOpenOs: propertyCollaborators.canOpenOs,
-      })
-      .from(propertyCollaborators)
-      .where(
-        and(
-          eq(propertyCollaborators.propertyId, propertyId),
-          eq(propertyCollaborators.userId, userId)
-        )
-      )
-      .limit(1);
-
-    if (!collab) return false;
-    if (collab.role === 'viewer') return false;
-    return collab.canOpenOs === 1;
-  } catch (e) {
-    if (String(e).includes('property_collaborators')) return false;
-    throw e;
-  }
 }

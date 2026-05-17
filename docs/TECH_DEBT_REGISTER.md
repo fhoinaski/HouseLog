@@ -232,13 +232,16 @@ Este registro deve ser lido em conjunto com:
   - `handover-checklist-items.ts` passou a ler referencias opcionais com `tenantId + propertyId + resourceId`, evitando fetch inicial por id isolado.
   - Criado `lib/authorization-document.test.ts` com cobertura de documento autorizado, OS fora da cadeia tenant/property e property cross-tenant.
 
-- **Impacto residual**: aumenta risco de acesso indevido se novos endpoints nao seguirem o padrao; legacy paths sem tenant sao tecnicamente presentes mas bloqueados por middleware
+  **Phase 3 incremental — residuos removidos (2026-05-17):**
+  - Removido `canUserOpenOS` de `middleware/auth.ts` por dead code comprovado.
+  - `canAccessProperty`, `canCreateServiceOrder` e `canCreateServiceRequest` deixaram de manter fallback legado sem tenant; agora delegam apenas ao helper tenant-aware e negam quando `tenantId`/`tenantRole` ausente.
+  - Criado `lib/authorization-core.test.ts` com cobertura de caminho autorizado, sem permissao, cross-tenant, property invalida e ausencia de tenant sem query legada.
+
+- **Impacto residual**: aumenta risco de acesso indevido se novos endpoints nao seguirem o padrao; rotas com `assertPropertyAccess` inline ainda devem ser migradas gradualmente para helpers de action quando houver mudanca no modulo.
 - **Recomendacao**:
-  - remover `canUserOpenOS` de `middleware/auth.ts` (dead code);
-  - substituir legacy paths por chamada direta a `canAccessTenantProperty` (requer que o contexto de tenant seja obrigatorio — depende de maturidade multi-tenant);
   - padronizar retorno de authorization.ts para `TenantScopedDecision` em vez de `boolean` onde aplicavel;
-  - migrar `properties.ts GET /` para usar `listAccessiblePropertyIds`;
   - cobrir `canBidOnOpportunity` com DB validation se oportunidades forem ativadas.
+  - migrar autorizacoes inline restantes por modulo, priorizando documentos, financas/despesas, inventario e propriedades.
 - **Relacionamento com roadmap/ADRs**: Fase 3; `SECURITY_REVIEW.md`, ADR-003, ADR-004 e ADR-005.
 
 ---

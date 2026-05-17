@@ -41,3 +41,6 @@ Mutacoes criticas usam `writeAuditLog`. Dados antigos e novos devem passar por s
 - Response remove dados sensiveis?
 - Mutacao sensivel audita?
 
+## Authorization Core
+
+Helpers de autorizacao para property e abertura de OS dependem de tenant ativo. Nao adicionar fallback por `propertyId + userId` sem `tenantId`.

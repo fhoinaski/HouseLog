@@ -21,6 +21,8 @@ Cloudflare Workers, Hono, TypeScript, D1/SQLite, Drizzle, R2, KV, Queues, Resend
 6. Mutacao sensivel com `writeAuditLog`.
 7. Response sem dados sensiveis.
 
+Helpers de autorizacao compartilhados devem receber `tenantId` e `tenantRole` do contexto resolvido. Nao criar caminhos legados sem tenant em helpers novos.
+
 ## Areas sensiveis
 
 Auth, tenant authorization, credentials, documents/media, service orders, bids/messages, audit log, deploy config, public links, handover, uploads e offline sync.
@@ -37,4 +39,3 @@ Auth, tenant authorization, credentials, documents/media, service orders, bids/m
 ## Validacao comum
 
 Para backend, use scripts existentes: `npm run type-check`, `npm run test:api`, `npm run build` quando justificado, e `git diff --check`.
-

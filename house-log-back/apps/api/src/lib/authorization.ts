@@ -63,6 +63,23 @@ function isPropertyDashboardRole(role: Role): boolean {
   return role !== 'provider' && role !== 'temp_provider';
 }
 
+async function resolvePropertyBoolean(
+  db: D1Database,
+  input: PropertyAuthorizationInput,
+  accessLevel: TenantPropertyAccessLevel
+): Promise<boolean> {
+  const decision = await canAccessTenantProperty(db, {
+    tenantId: input.tenantId,
+    tenantRole: input.tenantRole,
+    propertyId: input.propertyId,
+    userId: input.userId,
+    userRole: input.role,
+    accessLevel,
+    assignedProviderId: input.assignedProviderId,
+  });
+  return decision.allowed;
+}
+
 async function resolvePropertyDecision(
   db: D1Database,
   input: PropertyAuthorizationInput,
@@ -277,50 +294,7 @@ export async function canAccessProperty(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  if (input.tenantId && input.tenantRole) {
-    const decision = await canAccessTenantProperty(db, {
-      tenantId: input.tenantId,
-      tenantRole: input.tenantRole,
-      propertyId: input.propertyId,
-      userId: input.userId,
-      userRole: input.role,
-      accessLevel: input.accessLevel ?? 'view',
-    });
-    return decision.allowed;
-  }
-
-  if (!isPropertyDashboardRole(input.role)) return false;
-
-  const drizzle = getDb(db);
-  const [owned] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, input.propertyId),
-        or(eq(properties.ownerId, input.userId), eq(properties.managerId, input.userId)),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-  if (owned) return true;
-
-  try {
-    const [collab] = await drizzle
-      .select({ id: propertyCollaborators.id })
-      .from(propertyCollaborators)
-      .where(
-        and(
-          eq(propertyCollaborators.propertyId, input.propertyId),
-          eq(propertyCollaborators.userId, input.userId)
-        )
-      )
-      .limit(1);
-    return !!collab;
-  } catch (e) {
-    if (String(e).includes('property_collaborators')) return false;
-    throw e;
-  }
+  return resolvePropertyBoolean(db, input, input.accessLevel ?? 'view');
 }
 
 export async function canRevealCredentialSecret(
@@ -432,89 +406,14 @@ export async function canCreateServiceOrder(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  if (input.tenantId && input.tenantRole) {
-    const decision = await canAccessTenantProperty(db, {
-      tenantId: input.tenantId,
-      tenantRole: input.tenantRole,
-      propertyId: input.propertyId,
-      userId: input.userId,
-      userRole: input.role,
-      accessLevel: 'open_service_order',
-    });
-    return decision.allowed;
-  }
-
-  if (!isPropertyDashboardRole(input.role)) return false;
-
-  const drizzle = getDb(db);
-  const [owned] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, input.propertyId),
-        or(eq(properties.ownerId, input.userId), eq(properties.managerId, input.userId)),
-        isNull(properties.deletedAt)
-      )
-    )
-    .limit(1);
-  if (owned) return true;
-
-  try {
-    const [collab] = await drizzle
-      .select({
-        role: propertyCollaborators.role,
-        canOpenOs: propertyCollaborators.canOpenOs,
-      })
-      .from(propertyCollaborators)
-      .where(
-        and(
-          eq(propertyCollaborators.propertyId, input.propertyId),
-          eq(propertyCollaborators.userId, input.userId)
-        )
-      )
-      .limit(1);
-
-    if (!collab) return false;
-    if (collab.role === 'viewer') return false;
-    return collab.canOpenOs === 1;
-  } catch (e) {
-    if (String(e).includes('property_collaborators')) return false;
-    throw e;
-  }
+  return resolvePropertyBoolean(db, input, 'open_service_order');
 }
 
 export async function canCreateServiceRequest(
   db: D1Database,
   input: PropertyAuthorizationInput
 ): Promise<boolean> {
-  if (input.tenantId && input.tenantRole) {
-    const decision = await canAccessTenantProperty(db, {
-      tenantId: input.tenantId,
-      tenantRole: input.tenantRole,
-      propertyId: input.propertyId,
-      userId: input.userId,
-      userRole: input.role,
-      accessLevel: 'open_service_order',
-    });
-    return decision.allowed;
-  }
-
-  if (input.role !== 'owner') return false;
-
-  const drizzle = getDb(db);
-  const [property] = await drizzle
-    .select({ id: properties.id })
-    .from(properties)
-    .where(
-      and(
-        eq(properties.id, input.propertyId),
-        eq(properties.ownerId, input.userId)
-      )
-    )
-    .limit(1);
-
-  return !!property;
+  return resolvePropertyBoolean(db, input, 'open_service_order');
 }
 
 export async function canViewServiceOrder(
