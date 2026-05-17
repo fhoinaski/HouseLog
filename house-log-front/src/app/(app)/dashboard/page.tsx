@@ -522,36 +522,36 @@ export default function DashboardPage() {
   const isLoadingDashboard = propertiesLoading || servicesLoading;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] space-y-6 px-4 py-4 md:px-6 md:py-6 md:pb-8">
+    <div className="mx-auto min-h-full w-full max-w-[1180px] space-y-6 bg-hl-bg px-4 py-4 text-hl-text md:px-6 md:py-6 md:pb-8">
       <PageHeader
         density="editorial"
-        eyebrow="The Architectural Lens"
+        eyebrow="HouseLog Calm OS"
         title={`${getGreeting()} ${firstName}`}
         description="Visao operacional dos imoveis, ordens de servico e decisoes pendentes em uma leitura rapida."
         actions={
-          <div className="rounded-[var(--radius-lg)] bg-[var(--surface-strong)] px-4 py-3 text-left">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">{formatDashboardDate()}</p>
-            <p className="mt-1 text-sm text-text-secondary">{activeServices} OS abertas</p>
+          <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface px-4 py-3 text-left shadow-hl-subtle">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">{formatDashboardDate()}</p>
+            <p className="mt-1 text-sm text-hl-text-muted">{activeServices} OS abertas</p>
           </div>
         }
       />
 
-      <PageSection tone="strong" density="editorial">
+      <PageSection tone="surface" density="editorial">
         <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
-          <div className="hidden rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-5 md:block">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Sistema operacional privado</p>
-            <h2 className="mt-3 text-2xl font-medium leading-tight text-text-primary md:text-3xl">
+          <div className="hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-5 md:block">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Sistema operacional privado</p>
+            <h2 className="mt-3 text-2xl font-medium leading-tight text-hl-text md:text-3xl">
               Clareza tecnica para cada decisao do imovel.
             </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-hl-text-muted">
               Acompanhe portfolio, demandas abertas, agenda e aprovacoes sem sair do contexto real dos ativos.
             </p>
           </div>
 
-          <div className="rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-5">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Lente operacional</p>
-            <p className="mt-2 text-2xl font-medium leading-tight text-text-primary">{activeServices} OS abertas</p>
-            <p className="mt-2 text-sm leading-6 text-text-secondary">
+          <div className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-5">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Lente operacional</p>
+            <p className="mt-2 text-2xl font-medium leading-tight text-hl-text">{activeServices} OS abertas</p>
+            <p className="mt-2 text-sm leading-6 text-hl-text-muted">
               {pendingBids.length > 0
                 ? `${pendingBids.length} orcamento(s) precisam de analise.`
                 : 'Sem orcamentos pendentes para aprovacao.'}

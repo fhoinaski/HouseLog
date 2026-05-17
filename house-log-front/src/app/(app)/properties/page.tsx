@@ -61,13 +61,13 @@ function PropertyVisual({ property }: { property: Property }) {
   if (property.cover_url) {
     return (
       <div
-        className="relative min-h-32 overflow-hidden rounded-[var(--radius-lg)] bg-cover bg-center shadow-[var(--shadow-sm)] sm:min-h-36 xl:min-h-44"
+        className="relative min-h-32 overflow-hidden rounded-[var(--hl-radius-card)] bg-cover bg-center shadow-hl-subtle sm:min-h-36 xl:min-h-44"
         style={{
-          backgroundImage: `linear-gradient(180deg, rgba(6,14,32,0.02), rgba(6,14,32,0.58)), url(${property.cover_url})`,
+          backgroundImage: `linear-gradient(180deg, rgba(247,245,240,0.08), rgba(31,41,51,0.42)), url(${property.cover_url})`,
         }}
         aria-label={property.name}
       >
-        <div className="absolute bottom-3 left-3 rounded-full bg-[rgba(6,14,32,0.72)] px-3 py-1 text-xs font-medium text-white backdrop-blur-[var(--surface-blur)]">
+        <div className="absolute bottom-3 left-3 rounded-full bg-hl-surface px-3 py-1 text-xs font-medium text-hl-text shadow-hl-subtle">
           {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
         </div>
       </div>
@@ -75,10 +75,9 @@ function PropertyVisual({ property }: { property: Property }) {
   }
 
   return (
-    <div className="relative flex min-h-32 items-center justify-center overflow-hidden rounded-[var(--radius-lg)] bg-[linear-gradient(135deg,rgba(184,195,255,0.18),rgba(78,222,163,0.08))] shadow-[var(--shadow-sm)] sm:min-h-36 xl:min-h-44">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_15%,rgba(255,255,255,0.14),transparent_13rem)]" />
-      <span className="relative text-4xl font-medium text-text-accent">{getInitials(property.name)}</span>
-      <div className="absolute bottom-3 left-3 rounded-full bg-[rgba(6,14,32,0.60)] px-3 py-1 text-xs font-medium text-white backdrop-blur-[var(--surface-blur)]">
+    <div className="relative flex min-h-32 items-center justify-center overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface-muted shadow-hl-subtle sm:min-h-36 xl:min-h-44">
+      <span className="relative text-4xl font-medium text-hl-primary">{getInitials(property.name)}</span>
+      <div className="absolute bottom-3 left-3 rounded-full bg-hl-surface px-3 py-1 text-xs font-medium text-hl-text shadow-hl-subtle">
         {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
       </div>
     </div>
@@ -114,7 +113,7 @@ function PropertyCard({ property }: { property: Property }) {
   ];
 
   return (
-    <Card variant="glass" density="compact" className="property-card overflow-hidden shadow-[var(--shadow-md)]">
+    <Card variant="section" density="compact" className="property-card overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle">
       <CardContent className="grid gap-3.5 p-3.5 sm:gap-4 sm:p-4 xl:grid-cols-[168px_minmax(0,1fr)]">
         <PropertyVisual property={property} />
 
@@ -125,9 +124,9 @@ function PropertyCard({ property }: { property: Property }) {
                 <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Imóvel gerenciado</p>
                 <Badge variant={getHealthVariant(property.health_score)}>{getHealthLabel(property.health_score)}</Badge>
               </div>
-              <CardTitle className="mt-2 text-xl leading-tight text-text-primary sm:text-[22px]">{property.name}</CardTitle>
-              <p className="mt-2.5 flex items-start gap-2 text-sm leading-6 text-text-secondary">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-text-tertiary" strokeWidth={1.8} />
+              <CardTitle className="mt-2 text-xl leading-tight text-hl-text sm:text-[22px]">{property.name}</CardTitle>
+              <p className="mt-2.5 flex items-start gap-2 text-sm leading-6 text-hl-text-muted">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-hl-text-muted" strokeWidth={1.8} />
                 <span className="min-w-0 break-words">{property.address}, {property.city}</span>
               </p>
             </div>
@@ -151,9 +150,9 @@ function PropertyCard({ property }: { property: Property }) {
             ))}
           </div>
 
-          <div className="mt-4 rounded-[var(--radius-lg)] bg-[var(--surface-strong)] p-3">
+          <div className="mt-4 rounded-[var(--hl-radius-control)] bg-hl-surface-muted p-3">
             <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div className="grid grid-cols-2 gap-2 text-xs text-text-tertiary">
+              <div className="grid grid-cols-2 gap-2 text-xs text-hl-text-muted">
                 <span>
                   <span className="block text-[10px] uppercase tracking-[0.08em]">Área</span>
                   <span className="mt-0.5 block text-sm text-text-secondary">
@@ -271,8 +270,8 @@ export default function PropertiesPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1240px] space-y-5 px-4 py-4 sm:px-6 md:px-8 md:py-5 lg:px-10">
-      <Card variant="raised" density="compact" className="overflow-hidden shadow-[var(--shadow-lg)]">
+    <div className="mx-auto min-h-full w-full max-w-[1240px] space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-6 md:px-8 md:py-5 lg:px-10">
+      <Card variant="section" density="compact" className="overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(17rem,auto)] sm:items-center sm:p-5">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-accent">Portfólio operacional</p>
@@ -290,11 +289,11 @@ export default function PropertiesPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-2 shadow-[var(--shadow-xs)]">
+          <div className="grid grid-cols-3 gap-2 rounded-[var(--hl-radius-card)] bg-hl-surface-muted p-2 shadow-hl-subtle">
             {portfolioMetrics.map((metric) => (
-              <div key={metric.label} className="min-w-0 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3">
-                <p className="truncate text-xl font-medium leading-none text-text-primary sm:text-2xl">{metric.value}</p>
-                <p className="mt-1.5 truncate text-xs text-text-tertiary">{metric.label}</p>
+              <div key={metric.label} className="min-w-0 rounded-[var(--hl-radius-control)] bg-hl-surface px-3 py-3">
+                <p className="truncate text-xl font-medium leading-none text-hl-text sm:text-2xl">{metric.value}</p>
+                <p className="mt-1.5 truncate text-xs text-hl-text-muted">{metric.label}</p>
               </div>
             ))}
           </div>

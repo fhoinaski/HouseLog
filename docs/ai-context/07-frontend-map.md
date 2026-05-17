@@ -50,6 +50,11 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - `The Architectural Lens` permanece como base legada ate a migracao gradual. Nao apagar tokens antigos sem mapear consumidores.
 - Migrar por tela/componente, preservando loading, empty, error states e contratos de API.
 
+## Owner/Manager Calm OS (2026-05-17)
+
+- `src/app/(app)/dashboard/page.tsx`: entrada owner/manager alinhada ao Calm OS via surfaces claras e componentes compartilhados.
+- `src/app/(app)/properties/page.tsx`: lista de imoveis recebeu base Calm OS em shell/header/cards e reducao de overlay dark/glass pesado.
+
 ## Regras para IA
 
 - Nao inventar endpoint ou campo.
