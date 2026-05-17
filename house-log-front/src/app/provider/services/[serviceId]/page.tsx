@@ -181,6 +181,13 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
     }
     setUploadingPhoto(true);
     try {
+      if (navigator.onLine) {
+        await providerApi.uploadEvidence(serviceId, file);
+        await mutate();
+        toast.success('Evidencia enviada');
+        return;
+      }
+
       await enqueue({
         type: 'photo-upload',
         tenantId,
@@ -193,11 +200,30 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
         file,
         useProviderRoute: true,
       });
-      toast.success('Evidência enfileirada', { description: 'Será enviada quando houver conexão.' });
-      await offlineQueueSyncState.sync();
-      await mutate();
+      toast.info('Sem conexao - evidencia salva para envio automatico quando voltar online');
     } catch (err) {
-      toast.error('Erro ao enfileirar evidência', { description: (err as Error).message });
+      if (err instanceof TypeError) {
+        try {
+          await enqueue({
+            type: 'photo-upload',
+            tenantId,
+            userId,
+            propertyId: order.property_id,
+            serviceOrderId: serviceId,
+            evidenceType: 'after',
+            filename: file.name,
+            mimeType: file.type,
+            file,
+            useProviderRoute: true,
+          });
+          toast.info('Sem conexao - evidencia salva para envio automatico quando voltar online');
+          return;
+        } catch (queueErr) {
+          toast.error('Erro ao salvar evidencia offline', { description: (queueErr as Error).message });
+          return;
+        }
+      }
+      toast.error('Erro ao enviar evidencia', { description: (err as Error).message });
     } finally {
       setUploadingPhoto(false);
     }
@@ -255,7 +281,8 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
   const beforePhotos = safeParseStringArray(order.before_photos);
   const afterPhotos = safeParseStringArray(order.after_photos);
-  const canUpload = (UPLOAD_ALLOWED_STATUSES as readonly string[]).includes(order.status);
+  const canUpload = order.can_upload_evidence === true
+    || (order.can_upload_evidence === undefined && (UPLOAD_ALLOWED_STATUSES as readonly string[]).includes(order.status));
 
   return (
     <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">

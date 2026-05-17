@@ -13,11 +13,41 @@ import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { documents, properties, rooms, serviceBids, serviceOrders, users } from '../db/schema';
 import { normalizeProviderCategories } from '../lib/provider-categories';
-import type { Bindings, Variables, ServiceOrder } from '../lib/types';
+import type { Bindings, Variables, ServiceOrder, Role } from '../lib/types';
 
 const provider = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 provider.use('*', authMiddleware);
 provider.use('*', resolveTenant);
+
+type ProviderServiceRow = ServiceOrder & {
+  requested_by_name: string;
+  room_name: string | null;
+  property_name: string;
+  property_address: string;
+};
+
+function providerServiceMediaUrl(serviceId: string, key: string): string {
+  const value = key.trim();
+  if (!value || /^https?:\/\//i.test(value) || value.startsWith('/api/v1/')) return value;
+  return `/api/v1/provider/services/${serviceId}/media/${encodeURIComponent(value.replace(/^\/+/, ''))}`;
+}
+
+function mapProviderServiceMedia(row: ProviderServiceRow, userId: string, role: Role) {
+  return {
+    ...row,
+    before_photos: (row.before_photos ?? []).map((key) => providerServiceMediaUrl(row.id, key)),
+    after_photos: (row.after_photos ?? []).map((key) => providerServiceMediaUrl(row.id, key)),
+    video_url: row.video_url ? providerServiceMediaUrl(row.id, row.video_url) : row.video_url,
+    audio_url: row.audio_url ? providerServiceMediaUrl(row.id, row.audio_url) : row.audio_url,
+    can_upload_evidence: canUploadProviderEvidence({
+      userId,
+      role,
+      assignedProviderId: row.assigned_to,
+      deletedAt: row.deleted_at,
+      serviceOrderStatus: row.status,
+    }),
+  };
+}
 
 // GET /provider/services
 provider.get('/services', async (c) => {
@@ -75,10 +105,7 @@ provider.get('/services', async (c) => {
       sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`,
       desc(serviceOrders.createdAt)
     )
-    .limit(limit + 1) as Array<ServiceOrder & {
-    requested_by_name: string; room_name: string | null;
-    property_name: string; property_address: string;
-  }>;
+    .limit(limit + 1) as ProviderServiceRow[];
 
   const visibleResults = results.filter((row) => canViewAssignedProviderService({
     userId,
@@ -87,7 +114,7 @@ provider.get('/services', async (c) => {
     deletedAt: row.deleted_at,
   }));
 
-  return ok(c, paginate(visibleResults, limit, 'created_at'));
+  return ok(c, paginate(visibleResults.map((row) => mapProviderServiceMedia(row, userId, role)), limit, 'created_at'));
 });
 
 // GET /provider/opportunities
@@ -167,12 +194,7 @@ provider.get('/opportunities', async (c) => {
       sql`CASE ${serviceOrders.priority} WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END`,
       desc(serviceOrders.createdAt)
     )
-    .limit(limit + 1) as Array<ServiceOrder & {
-    requested_by_name: string;
-    room_name: string | null;
-    property_name: string;
-    property_address: string;
-  }>;
+    .limit(limit + 1) as ProviderServiceRow[];
 
   const visibleResults = results.filter((row) => canViewProviderOpportunity({
     userId,
@@ -366,7 +388,7 @@ provider.get('/services/:id', async (c) => {
     .where(and(eq(serviceBids.tenantId, tenantId), eq(serviceBids.serviceId, id), eq(serviceBids.providerId, userId)))
     .orderBy(desc(serviceBids.createdAt));
 
-  return ok(c, { order, my_bids: myBids });
+  return ok(c, { order: mapProviderServiceMedia(order as ProviderServiceRow, userId, role), my_bids: myBids });
 });
 
 // GET /provider/stats
@@ -515,10 +537,6 @@ provider.post('/services/:id/photos', async (c) => {
     return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
   }
 
-  const whereClause = role === 'admin'
-    ? and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), isNull(serviceOrders.deletedAt))
-    : and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt));
-
   const [order] = await db
     .select({
       id: serviceOrders.id,
@@ -530,10 +548,18 @@ provider.post('/services/:id/photos', async (c) => {
     })
     .from(serviceOrders)
     .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
-    .where(whereClause)
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)))
     .limit(1) as Array<{ id: string; property_id: string; assigned_to: string | null; deleted_at: string | null; status: string; after_photos: string[] | null }>;
 
   if (!order) return err(c, 'OS não encontrada ou sem acesso', 'NOT_FOUND', 404);
+
+  if (role !== 'provider') {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
+
+  if (!['approved', 'in_progress'].includes(order.status)) {
+    return err(c, 'Esta OS ainda nao permite envio de evidencias', 'FORBIDDEN', 403);
+  }
 
   if (!canUploadProviderEvidence({
     userId,
@@ -562,7 +588,7 @@ provider.post('/services/:id/photos', async (c) => {
   await db
     .update(serviceOrders)
     .set({ afterPhotos })
-    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId)));
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.propertyId, order.property_id)));
 
   await writeAuditLog(c.env.DB, {
     tenantId,
@@ -584,7 +610,79 @@ provider.post('/services/:id/photos', async (c) => {
     },
   });
 
-  return ok(c, { url: `/api/v1/properties/${order.property_id}/services/${id}/media/${encodeURIComponent(key)}`, type: 'after' });
+  return ok(c, { url: providerServiceMediaUrl(id, key), type: 'after' });
+});
+
+// GET /provider/services/:id/media/* - provider visualiza midia privada de OS atribuida
+provider.get('/services/:id/media/*', async (c) => {
+  const db = getDb(c.env.DB);
+  const userId = c.get('userId');
+  const role = c.get('userRole');
+  const id = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+  if (!(await canAccessProviderPortal(c.env.DB, { userId, role }))) {
+    return err(c, 'Acesso restrito a prestadores', 'FORBIDDEN', 403);
+  }
+
+  const key = decodeURIComponent(c.req.path.split(`/services/${id}/media/`)[1] ?? '');
+  if (!key || key.includes('..')) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  const [order] = await db
+    .select({
+      id: serviceOrders.id,
+      property_id: serviceOrders.propertyId,
+      assigned_to: serviceOrders.assignedTo,
+      deleted_at: serviceOrders.deletedAt,
+      before_photos: serviceOrders.beforePhotos,
+      after_photos: serviceOrders.afterPhotos,
+      video_url: serviceOrders.videoUrl,
+      audio_url: serviceOrders.audioUrl,
+    })
+    .from(serviceOrders)
+    .innerJoin(properties, and(eq(properties.id, serviceOrders.propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
+    .where(and(eq(serviceOrders.id, id), eq(serviceOrders.tenantId, tenantId), eq(serviceOrders.assignedTo, userId), isNull(serviceOrders.deletedAt)))
+    .limit(1) as Array<{
+      id: string;
+      property_id: string;
+      assigned_to: string | null;
+      deleted_at: string | null;
+      before_photos: string[] | null;
+      after_photos: string[] | null;
+      video_url: string | null;
+      audio_url: string | null;
+    }>;
+
+  if (!order) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  if (!key.startsWith(`${order.property_id}/`)) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  if (!canViewAssignedProviderService({
+    userId,
+    role,
+    assignedProviderId: order.assigned_to,
+    deletedAt: order.deleted_at,
+  })) {
+    return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+  }
+
+  const allowedKeys = new Set([
+    ...(order.before_photos ?? []),
+    ...(order.after_photos ?? []),
+    order.video_url,
+    order.audio_url,
+  ].filter((value): value is string => Boolean(value)));
+
+  if (!allowedKeys.has(key)) return err(c, 'Arquivo nao encontrado', 'NOT_FOUND', 404);
+
+  const object = await c.env.STORAGE.get(key);
+  if (!object) return err(c, 'Arquivo nao encontrado', 'STORAGE_ERROR', 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=60');
+
+  return new Response(object.body, { headers });
 });
 
 export default provider;

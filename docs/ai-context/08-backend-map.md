@@ -46,6 +46,13 @@ Public links usam `src/lib/public-link-rate-limit.ts` para rate limit granular e
 
 ## Regras para IA
 
+## Provider evidence upload delta (2026-05-17)
+
+- `routes/provider.ts`: `POST /provider/services/:id/photos` e o endpoint dedicado de upload de evidencia do provider. Busca OS por `tenantId + serviceId + assignedTo` com join em `properties` por tenant; status permitido `approved`/`in_progress`.
+- `routes/provider.ts`: `GET /provider/services/:id/media/*` serve R2 privado somente para provider atribuido e somente para keys registradas em `beforePhotos`, `afterPhotos`, `videoUrl` ou `audioUrl`.
+- `GET /provider/services/:id` mapeia keys privadas para URLs `/provider/services/:id/media/*` e inclui `can_upload_evidence`.
+- `authorization.ts`: `canUploadProviderEvidence` exige provider atribuido e status operacional; admin nao recebe bypass nessa acao provider.
+
 - Nao inventar rota, entidade ou payload.
 - Preferir helpers compartilhados de autorizacao.
 - Preservar status codes salvo motivo de seguranca.

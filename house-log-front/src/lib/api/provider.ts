@@ -1,5 +1,20 @@
-import { qs, request } from './_core';
+import { BASE, getToken, normalizeApiMediaUrls, qs, request } from './_core';
 import type { CursorPage, ProviderNetworkOpportunity, ProviderPublicProfile, ProviderServiceOrder, ServiceBid } from './_core';
+
+type ProviderEvidenceUploadResponse = {
+  url: string;
+  type: 'after';
+};
+
+type UploadErrorBody = {
+  error?: string | { message?: string };
+};
+
+async function parseUploadError(res: Response): Promise<Error> {
+  const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` })) as UploadErrorBody;
+  const message = typeof body.error === 'object' ? body.error.message : body.error;
+  return new Error(message ?? `HTTP ${res.status}`);
+}
 
 export const providerApi = {
   services: (params?: { status?: string; cursor?: string }) =>
@@ -13,6 +28,20 @@ export const providerApi = {
 
   getService: (id: string) =>
     request<{ order: ProviderServiceOrder; my_bids: ServiceBid[] }>(`/provider/services/${id}`),
+
+  uploadEvidence: async (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('type', 'after');
+    const token = getToken();
+    const res = await fetch(`${BASE}/provider/services/${id}/photos`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    if (!res.ok) throw await parseUploadError(res);
+    return normalizeApiMediaUrls(await res.json() as ProviderEvidenceUploadResponse);
+  },
 
   stats: () => request<{ stats: Record<string, number>; total: number; recent_bids: ServiceBid[] }>('/provider/stats'),
 };

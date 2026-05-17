@@ -569,7 +569,6 @@ export type UploadProviderEvidenceInput = AssignedProviderServiceAuthorizationIn
 const PROVIDER_EVIDENCE_ALLOWED_STATUSES = ['approved', 'in_progress'] as const;
 
 export function canUploadProviderEvidence(input: UploadProviderEvidenceInput): boolean {
-  if (input.role === 'admin') return !input.deletedAt;
   if (!canViewAssignedProviderService(input)) return false;
   return (PROVIDER_EVIDENCE_ALLOWED_STATUSES as readonly string[]).includes(input.serviceOrderStatus);
 }

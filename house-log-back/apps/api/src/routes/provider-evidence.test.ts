@@ -91,27 +91,22 @@ function buildDb(
 ) {
   let i = 0;
 
-  function whereResult(rows: unknown[]) {
-    return {
-      limit: vi.fn(async () => rows),
+  function chain(rows: unknown[]) {
+    const query = {
+      where: vi.fn(() => query),
+      innerJoin: vi.fn(() => query),
+      leftJoin: vi.fn(() => query),
       orderBy: vi.fn(async () => rows),
+      limit: vi.fn(async () => rows),
     };
+    return query;
   }
 
   return {
     select: vi.fn(() => {
       const rows = selectCalls[i++] ?? [];
       return {
-        from: vi.fn(() => ({
-          where: vi.fn(() => whereResult(rows)),
-          innerJoin: vi.fn(() => ({
-            where: vi.fn(() => whereResult(rows)),
-            leftJoin: vi.fn(() => ({ where: vi.fn(() => whereResult(rows)) })),
-          })),
-          leftJoin: vi.fn(() => ({ where: vi.fn(() => whereResult(rows)) })),
-          orderBy: vi.fn(async () => rows),
-          limit: vi.fn(async () => rows),
-        })),
+        from: vi.fn(() => chain(rows)),
       };
     }),
     insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
@@ -181,7 +176,7 @@ describe('POST /provider/services/:id/photos — provider atribuído', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { url: string; type: string };
     expect(body.type).toBe('after');
-    expect(body.url).toContain('/api/v1/properties/prop-a/services/os-1/media/');
+    expect(body.url).toContain('/api/v1/provider/services/os-1/media/');
     expect(uploadToR2).toHaveBeenCalledOnce();
   });
 
@@ -268,7 +263,7 @@ describe('POST /provider/services/:id/photos — isolamento cross-property', () 
 // ════════════════════════════════════════════════════════════════════════════════
 
 describe('POST /provider/services/:id/photos — status da OS', () => {
-  it('retorna 404 para OS com status completed', async () => {
+  it('retorna 403 para OS com status completed', async () => {
     vi.mocked(getDb).mockReturnValue(buildDb([
       [tenantRow()],
       [orderRow({ status: 'completed' })],
@@ -279,11 +274,11 @@ describe('POST /provider/services/:id/photos — status da OS', () => {
       buildEnv()
     );
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
     expect(uploadToR2).not.toHaveBeenCalled();
   });
 
-  it('retorna 404 para OS com status requested', async () => {
+  it('retorna 403 para OS com status requested', async () => {
     vi.mocked(getDb).mockReturnValue(buildDb([
       [tenantRow()],
       [orderRow({ status: 'requested' })],
@@ -294,7 +289,7 @@ describe('POST /provider/services/:id/photos — status da OS', () => {
       buildEnv()
     );
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
     expect(uploadToR2).not.toHaveBeenCalled();
   });
 });
@@ -348,5 +343,25 @@ describe('POST /provider/services/:id/photos — audit log', () => {
     expect(newDataStr).not.toContain('signed');
     expect(newDataStr).not.toContain('https://');
     expect(auditPayload.newData.tenantId).toBeUndefined();
+  });
+});
+describe('GET /provider/services/:id - evidencias privadas', () => {
+  it('retorna URLs provider para evidencias sem expor R2 key bruta', async () => {
+    vi.mocked(getDb).mockReturnValue(buildDb([
+      [tenantRow()],
+      [orderRow({ after_photos: ['prop-a/photos/evidence-123.jpg'] })],
+      [],
+    ]) as never);
+
+    const res = await buildApp().fetch(
+      authed('http://localhost/provider/services/os-1'),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { order: { after_photos: string[]; can_upload_evidence: boolean } };
+    expect(body.order.after_photos).toEqual(['/api/v1/provider/services/os-1/media/prop-a%2Fphotos%2Fevidence-123.jpg']);
+    expect(JSON.stringify(body)).not.toContain('"prop-a/photos/evidence-123.jpg"');
+    expect(body.order.can_upload_evidence).toBe(true);
   });
 });

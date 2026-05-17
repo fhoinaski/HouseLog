@@ -55,7 +55,8 @@ async function uploadPhoto(item: OqPhotoItem, token: string): Promise<void> {
   );
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: 'Erro no upload' }));
-    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+    const apiError = (body as { error?: string | { message?: string } }).error;
+    throw new Error((typeof apiError === 'object' ? apiError.message : apiError) ?? `HTTP ${res.status}`);
   }
 }
 
@@ -75,7 +76,8 @@ async function uploadOsUpdate(
   );
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: 'Erro ao salvar OS' }));
-    throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+    const apiError = (body as { error?: string | { message?: string } }).error;
+    throw new Error((typeof apiError === 'object' ? apiError.message : apiError) ?? `HTTP ${res.status}`);
   }
 }
 

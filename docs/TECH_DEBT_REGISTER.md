@@ -174,6 +174,7 @@ Este registro deve ser lido em conjunto com:
   - Oportunidades (`/provider/opportunities`): chips de filtro receberam `aria-pressed` e `role="group"` acessivel.
   - Settings (`/provider/settings`): chips de hard skills receberam `aria-pressed`.
 - **Upload de evidencia pelo prestador (resolvido 2026-05-17)**: criada rota dedicada `POST /provider/services/:id/photos` em `apps/api/src/routes/provider.ts` com `canUploadProviderEvidence` (requer `assigned_to === userId` + status `approved`|`in_progress`). A rota opera com `accessLevel` equivalente a `assigned_service`, sem tocar `canManageProperty`. Audit log registrado sem R2 key. Frontend deve re-habilitar botao de envio de evidencia via offline queue apontando para a nova rota.
+- **Hardening adicional do upload provider (2026-05-17)**: o frontend provider passou a usar `providerApi.uploadEvidence` online e a fila `houselog-oq` apenas offline/falha de rede; o backend passou a retornar evidencias do detalhe provider como URLs autenticadas `/provider/services/:id/media/*` e a expor `can_upload_evidence`. A rota de midia provider valida `tenantId + serviceId + assignedTo + propertyId` e key registrada na OS, sem R2 key bruta ou signed URL.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;

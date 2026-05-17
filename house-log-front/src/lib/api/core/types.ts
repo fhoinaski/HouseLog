@@ -210,6 +210,7 @@ export type ProviderServiceOrder = ServiceOrder & {
   property_name: string;
   property_address: string;
   property_id: string;
+  can_upload_evidence?: boolean;
 };
 
 export type ProviderNetworkOpportunity = ProviderServiceOrder & {

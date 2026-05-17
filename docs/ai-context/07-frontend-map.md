@@ -55,4 +55,10 @@ Sistema oficial: The Architectural Lens. Use componentes e tokens existentes. Na
 
 ## Validacao comum
 
+## Provider evidence upload delta (2026-05-17)
+
+- `/provider/services/[serviceId]`: botao "Enviar evidencia" usa `order.can_upload_evidence` quando presente. Online chama `providerApi.uploadEvidence(serviceId, file)` em `POST /provider/services/:id/photos`, mostra loading, faz `mutate()` e exibe toast de sucesso. Offline/falha de rede enfileira em `houselog-oq` com `useProviderRoute: true`; erros HTTP mostram feedback e nao fingem sucesso.
+- `providerApi.uploadEvidence`: upload multipart provider dedicado, sem rota owner/manager.
+- `useOfflineQueueSync`: quando `useProviderRoute=true`, sincroniza em `/provider/services/:id/photos` e normaliza erro novo/legado.
+
 Para mudancas frontend, preferir `npm run type-check`, `npm run lint`, testes relevantes e `git diff --check`.

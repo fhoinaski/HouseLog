@@ -39,9 +39,16 @@ Mutacoes criticas usam `writeAuditLog`. Dados antigos e novos devem passar por s
 
 ## Provider — autorizacao de upload
 
-`canUploadProviderEvidence` (authorization.ts): admin sempre pode (se nao deletado); provider deve estar atribuido (`assignedTo === userId`) e OS deve ter status `approved` ou `in_progress`. Nao usar `canManageProperty` para upload de evidencia de prestador — esse helper bloqueia todos os `isProviderRole`. Audit log de upload nao deve conter R2 key, signed URL ou conteudo do arquivo.
+`canUploadProviderEvidence` (authorization.ts): provider deve estar atribuido (`assignedTo === userId`) e OS deve ter status `approved` ou `in_progress`; admin nao tem bypass nessa acao provider. Nao usar `canManageProperty` para upload de evidencia de prestador - esse helper bloqueia todos os `isProviderRole`. Audit log de upload nao deve conter R2 key, signed URL ou conteudo do arquivo.
 
 ## Checklist rapido
+
+## Provider evidence upload (2026-05-17)
+
+- Upload de evidencia de provider usa somente `/api/v1/provider/services/:id/photos`; nao usa `canManageProperty`.
+- Autorizacao exige tenant ativo, `role=provider`, OS por `tenantId + serviceId`, provider atribuido (`assignedTo === userId`) e status `approved` ou `in_progress`.
+- Midia de evidencia do provider e servida por `/api/v1/provider/services/:id/media/*`, validando `tenantId + serviceId + assignedTo + propertyId` e key registrada na OS.
+- Respostas e audit log nao incluem R2 key bruta, signed URL, URL publica permanente ou conteudo do arquivo.
 
 - A rota privada usa auth?
 - Tenant foi resolvido no backend?

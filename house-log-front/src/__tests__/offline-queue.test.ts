@@ -459,6 +459,25 @@ describe('Extras', () => {
     expect((opts.headers as Record<string, string>)['Authorization']).toBe('Bearer meu-token');
   });
 
+  it('processPendingItems: usa rota provider quando useProviderRoute=true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: '/api/v1/provider/services/os-999/media/prop-888%2Fphotos%2Fafter.jpg' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await enqueue(
+      makePhoto({ evidenceType: 'after', serviceOrderId: 'os-999', propertyId: 'prop-888', useProviderRoute: true })
+    );
+    await processPendingItems('tenant-a', 'user-1', 'meu-token');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, opts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/provider/services/os-999/photos');
+    expect(url).not.toContain('/properties/prop-888/services/os-999/photos');
+    expect((opts.headers as Record<string, string>)['Authorization']).toBe('Bearer meu-token');
+  });
+
   it('processPendingItems não processa itens de outro tenant', async () => {
     await enqueue(makePhoto({ tenantId: 'tenant-b', userId: 'user-2', filename: 'outros.jpg' }));
 

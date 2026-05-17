@@ -47,10 +47,16 @@ Tabela `service_bids` ligada a `serviceOrders.id` via `service_id`. Status: `pen
 
 ## Regras para IA
 
+## Provider evidence upload delta (2026-05-17)
+
+- `POST /api/v1/provider/services/:id/photos` e a rota dedicada para evidencia pos-execucao de provider. Requer `role=provider`, tenant ativo, OS por `tenantId + serviceId`, provider atribuido e status `approved` ou `in_progress`.
+- A resposta retorna `{ url, type }` com `url` em `/api/v1/provider/services/:id/media/*`; nao retorna R2 key bruta nem signed URL.
+- `GET /api/v1/provider/services/:id/media/*` serve midia privada apenas se a key estiver registrada na OS e a OS estiver atribuida ao provider autenticado.
+- `GET /api/v1/provider/services/:id` retorna evidencias como URLs provider autenticadas e inclui `can_upload_evidence`.
+
 - Nao inventar endpoint.
 - Nao inventar payload.
 - Nao aceitar `tenantId` do cliente.
 - Conferir consumidor direto antes de mudar response.
 - Conferir contracts antes de mudar backend ou frontend.
 - Public routes devem ter token seguro, expiracao, escopo minimo e payload minimo.
-
