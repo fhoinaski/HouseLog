@@ -53,13 +53,14 @@ export default function ProviderOpportunitiesPage() {
         title="Oportunidades"
       />
 
-      <div className="flex flex-wrap gap-2">
+      <div role="group" aria-label="Filtrar por sistema" className="flex flex-wrap gap-2">
         {SYSTEM_FILTERS.map((system) => (
           <button
             key={system || 'all'}
             type="button"
             className="hl-chip"
             data-active={systemFilter === system ? 'true' : undefined}
+            aria-pressed={systemFilter === system}
             onClick={() => setSystemFilter(system)}
           >
             {system ? SYSTEM_TYPE_LABELS[system] : 'Todos'}

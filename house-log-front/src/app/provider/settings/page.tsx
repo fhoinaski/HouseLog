@@ -291,6 +291,7 @@ export default function ProviderSettingsPage() {
                 key={item.value}
                 type="button"
                 onClick={() => toggle(item.value)}
+                aria-pressed={selectedSet.has(item.value)}
                 className={cn(chipVariants({ active: selectedSet.has(item.value) }), 'focus-visible:outline-none')}
               >
                 {item.label}

@@ -21,6 +21,17 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - Provider: `src/app/provider`.
 - Publicas tokenizadas: `src/app/audit/[token]`, `src/app/share/service/[token]`, `src/app/invite/[token]`, `src/app/handover/[token]`.
 
+## Provider Flow (2026-05-17)
+
+- `src/app/provider/services/[serviceId]/page.tsx`: exibe `OfflineSyncStatus`, barra de acoes em campo (upload de evidencia via fila unificada `houselog-oq`), `after_photos`, checklist read-only. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`.
+- `src/app/provider/dashboard/page.tsx`: MetricCards tem skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
+- `src/app/provider/opportunities/page.tsx`: chips de filtro tem `aria-pressed` e `role="group"`.
+- `src/app/provider/settings/page.tsx`: chips de hard skills tem `aria-pressed`.
+
+## Padrao de Chat (ServiceChat)
+
+- `src/components/services/service-chat.tsx`: Textarea tem label acessivel via `aria-labelledby` (label `sr-only`). Composer desativado quando `forbidden=true` (403/404). Padding inferior `pb-[env(safe-area-inset-bottom,0px)]` evita sobreposicao pelo teclado virtual mobile. Botao de envio tem `aria-label` contextual.
+
 ## Design system
 
 Sistema oficial: The Architectural Lens. Use componentes e tokens existentes. Nao crie mini design system por pagina.

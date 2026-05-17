@@ -167,9 +167,16 @@ Este registro deve ser lido em conjunto com:
 - **Status**: Mitigado parcialmente
 - **Evidencia**: varias telas foram refatoradas para `AppShell`, `PageHeader`, `PageSection`, `MetricCard`, `ServiceOrderCard`, `EmptyState`, `PropertySummaryCard` e `ActionTile`, mas ainda ha areas com composicao local, cards antigos, copy heterogenea e tokens aplicados de forma desigual.
 - **Impacto**: aumenta custo de manutencao, dificulta consistencia mobile e enfraquece a narrativa do The Architectural Lens.
+- **Mitigacao aplicada (2026-05-17)**:
+  - Provider service detail (`/provider/services/[serviceId]`): adicionado `OfflineSyncStatus` + barra de acoes em campo (botao Enviar evidencia com fila offline), exibicao de `after_photos`, checklist read-only com progresso, imagens clicaveis migradas de `img onClick` para `button` + `img alt=""`.
+  - ServiceChat (`components/services/service-chat.tsx`): adicionado `aria-label` acessivel via `aria-labelledby` na Textarea, padding seguro para teclado virtual (`pb-[env(safe-area-inset-bottom,0px)]`), estado `forbidden` com mensagem explicita e `disabled` no composer, `aria-label` no botao de envio.
+  - Provider dashboard (`/provider/dashboard`): separados estados de loading (skeleton), erro (mensagem + retry) e vazio real; metricas nao exibem zero silencioso em erro.
+  - Oportunidades (`/provider/opportunities`): chips de filtro receberam `aria-pressed` e `role="group"` acessivel.
+  - Settings (`/provider/settings`): chips de hard skills receberam `aria-pressed`.
+- **Lacuna de permissao documentada**: o upload de fotos via fila offline (`POST /properties/:propertyId/services/:serviceOrderId/photos`) usa a mesma rota do fluxo do proprietario. Nao foi verificado se o backend autoriza o prestador a chamar esse endpoint diretamente. Se a sync retornar 403, o `OfflineSyncStatus` exibe o erro. Verificar regra de autorizacao em `apps/api/src/routes/services.ts` (endpoint de fotos) antes de release.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
-  - priorizar telas do nucleo do imovel e provider flow;
+  - verificar permissao de upload de foto pelo prestador no backend antes do release;
   - registrar componentes consolidados no guia operacional;
   - evitar criar componentes paralelos quando um estrutural existente resolve.
 - **Relacionamento com roadmap/ADRs**: Fase 5; ADR-002.
