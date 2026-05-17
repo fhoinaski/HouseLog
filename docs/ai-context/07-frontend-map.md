@@ -34,8 +34,9 @@ Sistema oficial: The Architectural Lens. Use componentes e tokens existentes. Na
 - Nao persistir tokens ou credenciais em storage.
 - Nao exibir secrets em listagens.
 - Para documentos/upload, nao expor URLs privadas diretamente.
+- Fila offline de OS usa `src/lib/offline-queue.ts` (`houselog-oq`) com `tenantId + userId + propertyId + serviceOrderId`; a fila legada `houselog-eq` deve ser limpa, nao migrada sem contexto confiavel.
+- Sync offline e foreground-only: roda com access token em memoria no mount/`online`; nao implementar Background Sync sem redesenho de auth.
 
 ## Validacao comum
 
 Para mudancas frontend, preferir `npm run type-check`, `npm run lint`, testes relevantes e `git diff --check`.
-

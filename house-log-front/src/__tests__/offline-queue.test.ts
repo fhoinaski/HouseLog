@@ -28,6 +28,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import {
+  OFFLINE_QUEUE_MAX_ATTEMPTS,
+  OFFLINE_QUEUE_MAX_BLOB_BYTES,
+  OFFLINE_QUEUE_MAX_AGE_MS,
   _resetDb,
   clearByUser,
   clearSyncedByUser,
@@ -40,7 +43,7 @@ import {
   type OqPhotoItem,
   type OqOsUpdateItem,
 } from '../lib/offline-queue';
-import { processPendingItems } from '../lib/use-offline-queue-sync';
+import { processPendingItems, syncOfflineQueueOnce } from '../lib/use-offline-queue-sync';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +75,21 @@ function makeOsUpdate(overrides?: Partial<OsUpdateInput>): OsUpdateInput {
     patch: { status: 'in_progress', notes: 'Iniciando serviço' },
     ...overrides,
   };
+}
+
+async function overwriteQueueItem(item: OqItem): Promise<void> {
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open('houselog-oq', 1);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('items', 'readwrite');
+    const req = tx.objectStore('items').put(item);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -131,6 +149,13 @@ describe('1. enqueue — adiciona item à fila', () => {
   it('lança erro se serviceOrderId ausente', async () => {
     await expect(enqueue(makePhoto({ serviceOrderId: '' }))).rejects.toThrow(
       'serviceOrderId é obrigatório'
+    );
+  });
+
+  it('rejeita Blob acima do limite de tamanho offline', async () => {
+    const oversized = new Blob([new Uint8Array(OFFLINE_QUEUE_MAX_BLOB_BYTES + 1)], { type: 'image/jpeg' });
+    await expect(enqueue(makePhoto({ file: oversized }))).rejects.toThrow(
+      'Arquivo excede o limite de 5MB para envio offline'
     );
   });
 });
@@ -305,6 +330,39 @@ describe('5. Mantém item quando sync falha', () => {
     const saved = all[0] as Extract<OqItem, { type: 'os-update' }>;
     expect(saved.patch.notes).toBe('Rascunho');
   });
+
+  it('item excedendo max attempts nao entra em retry infinito', async () => {
+    const item = await enqueue(makePhoto());
+    await updateItem(item.id, { status: 'failed', attempts: OFFLINE_QUEUE_MAX_ATTEMPTS });
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: '/media/foto.jpg' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await processPendingItems('tenant-a', 'user-1', 'token-valido');
+
+    const all = await getByUser('tenant-a', 'user-1');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(all).toHaveLength(1);
+    expect(all[0].status).toBe('requires_action');
+  });
+
+  it('item antigo demais e marcado para acao manual sem upload', async () => {
+    const item = await enqueue(makePhoto());
+    await overwriteQueueItem({
+      ...item,
+      createdAt: new Date(Date.now() - OFFLINE_QUEUE_MAX_AGE_MS - 1_000).toISOString(),
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: '/media/foto.jpg' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await processPendingItems('tenant-a', 'user-1', 'token-valido');
+
+    const all = await getByUser('tenant-a', 'user-1');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(all).toHaveLength(1);
+    expect(all[0].status).toBe('requires_action');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -325,6 +383,10 @@ describe('6. Evita duplicidade básica', () => {
     expect(all[0].id).toBe(originalId); // mesmo id
     expect(all[0].status).toBe('failed');
     expect(all[0].attempts).toBe(1);
+    await overwriteQueueItem({
+      ...all[0],
+      lastAttemptAt: new Date(Date.now() - 20_000).toISOString(),
+    });
 
     // 2ª tentativa: sucesso
     vi.unstubAllGlobals();
@@ -427,5 +489,51 @@ describe('Extras', () => {
 
     const remaining = await getByUser('tenant-a', 'user-1');
     expect(remaining).toHaveLength(0);
+  });
+
+  it('syncOfflineQueueOnce processa item pendente quando ha token', async () => {
+    await enqueue(makePhoto());
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: '/media/foto.jpg' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ran = await syncOfflineQueueOnce('tenant-a', 'user-1', 'token-valido');
+
+    expect(ran).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(await getByUser('tenant-a', 'user-1')).toHaveLength(0);
+  });
+
+  it('syncOfflineQueueOnce nao roda sem token', async () => {
+    await enqueue(makePhoto());
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: '/media/foto.jpg' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const ran = await syncOfflineQueueOnce('tenant-a', 'user-1', null);
+
+    expect(ran).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await getByUser('tenant-a', 'user-1')).toHaveLength(1);
+  });
+
+  it('sync nao persiste token em storage local ou IndexedDB', async () => {
+    const storage = new Map<string, string>();
+    const localStorageMock: Storage = {
+      get length() { return storage.size; },
+      clear: () => storage.clear(),
+      getItem: (key: string) => storage.get(key) ?? null,
+      key: (index: number) => Array.from(storage.keys())[index] ?? null,
+      removeItem: (key: string) => { storage.delete(key); },
+      setItem: (key: string, value: string) => { storage.set(key, value); },
+    };
+    vi.stubGlobal('localStorage', localStorageMock);
+
+    await enqueue(makePhoto());
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ url: '/media/foto.jpg' }) }));
+
+    await syncOfflineQueueOnce('tenant-a', 'user-1', 'token-secreto');
+
+    expect(localStorageMock.length).toBe(0);
+    const all = await getByUser('tenant-a', 'user-1');
+    expect(JSON.stringify(all)).not.toContain('token-secreto');
   });
 });

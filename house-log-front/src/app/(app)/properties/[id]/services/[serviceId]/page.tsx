@@ -258,8 +258,8 @@ export default function ServiceDetailPage({
             mimeType: file.type || 'image/jpeg',
           });
           toast.info('Sem conexão — foto salva para envio automático quando voltar online');
-        } catch {
-          toast.error('Erro no upload', { description: (err as Error).message });
+        } catch (queueErr) {
+          toast.error('Erro no upload', { description: (queueErr as Error).message });
         }
       } else {
         toast.error('Erro no upload', { description: (err as Error).message });

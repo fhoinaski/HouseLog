@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { and, eq, sql } from 'drizzle-orm';
 import { writeAuditLog } from '../lib/audit';
 import { publicTokenPlaceholder, sha256TokenHash } from '../lib/token-hash';
+import { applyPublicLinkRateLimit } from '../lib/public-link-rate-limit';
 import { ok, err } from '../lib/response';
 import { canCreateAuditLink } from '../lib/authorization';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
@@ -18,6 +19,10 @@ const auditLinks = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function publicLinkUnavailable(c: Parameters<typeof err>[0]) {
   return err(c, 'Link indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
+
+function publicLinkRateLimited(c: Parameters<typeof err>[0]) {
+  return err(c, 'Muitas tentativas. Tente novamente em alguns instantes.', 'RATE_LIMITED', 429);
 }
 
 // ── POST /properties/:propertyId/services/:serviceId/audit-link ──────────────
@@ -118,10 +123,19 @@ auditLinks.post('/', authMiddleware, resolveTenant, async (c) => {
 auditLinks.get('/public/:token', async (c) => {
   const db = getDb(c.env.DB);
   const rawToken = c.req.param('token')!;
-  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
 
   const tokenHash = await sha256TokenHash(rawToken);
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'audit',
+    action: 'read',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
+
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
 
   const [link] = await db
     .select({
@@ -209,10 +223,19 @@ auditLinks.get('/public/:token', async (c) => {
 auditLinks.post('/public/:token/submit', async (c) => {
   const db = getDb(c.env.DB);
   const rawToken = c.req.param('token')!;
-  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
   const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
 
   const tokenHash = await sha256TokenHash(rawToken);
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'audit',
+    action: 'mutate',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
+
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
 
   const [link] = await db
     .select({

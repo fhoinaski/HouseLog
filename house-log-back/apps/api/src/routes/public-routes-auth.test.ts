@@ -132,18 +132,18 @@ describe('GET /invite/:token — público (sem Authorization)', () => {
     expect(body.role).toBe('viewer');
   });
 
-  it('token inválido (curto) → 400 INVALID_TOKEN sem exigir auth', async () => {
+  it('token inválido (curto) → 404 generico sem exigir auth', async () => {
     const res = await buildApp().fetch(
       new Request('http://localhost/invite/abc'),
       buildEnv()
     );
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('INVALID_TOKEN');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
-  it('token não encontrado → 404 NOT_FOUND sem exigir auth', async () => {
+  it('token não encontrado → 404 generico sem exigir auth', async () => {
     vi.mocked(getDb).mockReturnValue({
       select: vi.fn().mockReturnValue({
         from: vi.fn(() => ({
@@ -165,7 +165,7 @@ describe('GET /invite/:token — público (sem Authorization)', () => {
 
     expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('NOT_FOUND');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('convite expirado → 410 LINK_EXPIRED sem exigir auth', async () => {

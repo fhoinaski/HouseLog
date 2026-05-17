@@ -419,10 +419,18 @@ Este registro deve ser lido em conjunto com:
   - 39 testes: `lib/public-links-hash.test.ts` — sha256, sanitize, audit GET/submit, share GET/PATCH/create, invite GET/listing/create, redaction INSERT, 410 expiry/revoke, invariante hash-only.
   - Migration `0028_redact_token_plaintext.sql`: idempotente, redige plaintext legado após backfill.
   - Script `db/backfill/phase_a_token_hash_backfill.ts`: TypeScript, calcula sha256 em lote por tabela; `verifyNoPlaintextRemaining()` confirma zero pendentes antes de aplicar 0028.
+- **Mitigação adicional (2026-05-17)**:
+  - `apps/api/src/lib/public-link-rate-limit.ts`: helper de rate limit granular para links publicos usando KV existente, com chave `flow + action + IP + tokenHashPrefix`.
+  - `audit-links.ts`: GET publico e submit/upload publico limitados antes do lookup por token.
+  - `share.ts`: GET publico e PATCH de status publico limitados antes do lookup por token.
+  - `invites.ts`: GET publico passa a limitar por hash do token recebido e usa resposta generica para token curto/inexistente, reduzindo enumeracao.
+  - `public-handover.ts`: GET publico e aceite publico limitados por hash do token recebido.
+  - Testes: `routes/public-link-rate-limit.test.ts`, ajustes em `lib/public-links-hash.test.ts` e `routes/public-routes-auth.test.ts`; cobertura inclui rate key sem token plaintext, limites GET/mutacao e resposta generica de invite invalido.
 - **Risco restante**:
   - Coluna `token TEXT` legada ainda presente nas três tabelas (NOT NULL UNIQUE mantida com valor `hash-only:<id>` ou plaintext para registros pré-existentes sem hash).
   - Backfill (`phase_a_token_hash_backfill.ts`) e migration `0028_redact_token_plaintext.sql` ainda não executados em produção.
   - Enquanto o fallback de lookup plaintext estiver ativo, registros sem `token_hash` ainda são acessíveis por token puro (protegido por expiração e soft delete).
+  - Rate limit granular usa Cloudflare KV, não contador atomico; pode subcontar sob concorrencia alta. Durable Object fica como opcao futura se houver abuso real.
 - **Próxima etapa (produção)**:
   1. Executar `phase_a_token_hash_backfill.ts` em produção.
   2. Confirmar `verifyNoPlaintextRemaining()` retorna `{ clean: true }` nas três tabelas.
@@ -543,6 +551,16 @@ Este registro deve ser lido em conjunto com:
   - Background Sync API nao implementada no service worker (`public/sw.js`). Sync e foreground-only (depende do token em memoria). Se o usuario fechar o app offline e abrir depois sem recarregar, a sync automatica so ocorre ao voltar online com o app aberto. Aceitavel para v1 — documentado.
   - Itens com status `failed` apos 3+ tentativas nao sao descartados automaticamente. Fila pode acumular falhas persistentes (ex: arquivo rejeitado pelo servidor). Melhoria futura: limite de tentativas + descarte automatico.
   - Blobs ficam no IndexedDB do dispositivo ate sync ou logout. Em dispositivos com armazenamento limitado, arquivos grandes podem causar quota errors. Mitigacao futura: validar tamanho antes de enfileirar.
+- **Mitigacao adicional (2026-05-17)**:
+  - A tela de OS usa a fila unificada `houselog-oq`, isolada por `tenantId + userId`; a fila legada `houselog-eq` nao e migrada sem contexto confiavel e passa a ser limpa no boot/logout.
+  - Sync foreground tenta rodar tambem no mount quando existe access token em memoria, alem do evento `window.online`; mutex continua impedindo concorrencia.
+  - Upload offline bloqueia Blob acima de 5 MB antes de persistir no IndexedDB.
+  - Itens com `attempts >= 5` ou idade acima de 7 dias passam para `requires_action`, preservando o Blob para decisao manual em vez de retry infinito.
+  - `OfflineSyncStatus` diferencia pendente, sincronizando, falha e requer acao.
+  - Testes de fila offline cobrem limite de Blob, sync com/sem token, token nao persistido, max attempts, idade maxima e limpeza da fila legada.
+- **Risco residual apos hardening**:
+  - Background Sync permanece fora do escopo por seguranca: o service worker nao tem acesso ao access token em memoria e o token nao deve ser persistido em IndexedDB/localStorage.
+  - Itens `requires_action` ainda precisam de UX futura para remover/recriar explicitamente a evidencia pelo usuario.
 - **Documentacao**: SECURITY.md secao sobre armazenamento de dados no dispositivo.
 
 ---

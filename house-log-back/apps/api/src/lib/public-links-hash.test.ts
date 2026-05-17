@@ -664,16 +664,18 @@ describe('GET /invite/:token — invite público (sem autenticação)', () => {
     // Deve chegar no handler (invite não encontrado → 404), nunca 401
     expect(res.status).toBe(404);
     const body = await res.json() as Record<string, unknown>;
-    expect(body.code).toBe('NOT_FOUND');
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
-  it('retorna 400 para token muito curto (sem auth)', async () => {
+  it('retorna 404 generico para token muito curto (sem auth)', async () => {
     const { default: invites } = await import('../routes/invites');
     const res = await invites.fetch(
       new Request('http://localhost/invite/abc'),
       buildEnv()
     );
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(404);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.code).toBe('PUBLIC_LINK_UNAVAILABLE');
   });
 
   it('retorna 404 quando invite não encontrado (hash não bate)', async () => {

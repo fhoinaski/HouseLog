@@ -7,12 +7,21 @@ import { authMiddleware, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import { writeAuditLog } from '../lib/audit';
 import { publicTokenPlaceholder, sha256TokenHash } from '../lib/token-hash';
+import { applyPublicLinkRateLimit } from '../lib/public-link-rate-limit';
 import { properties, propertyCollaborators, propertyInvites, serviceOrders, serviceShareLinks, users } from '../db/schema';
 import { canManageTenantUsers } from '../lib/authorization';
 import type { Bindings, Role, TenantRole, Variables } from '../lib/types';
 import { createId } from '../lib/id';
 
 const invites = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+function publicInviteUnavailable(c: Parameters<typeof err>[0]) {
+  return err(c, 'Convite indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
+
+function publicLinkRateLimited(c: Parameters<typeof err>[0]) {
+  return err(c, 'Muitas tentativas. Tente novamente em alguns instantes.', 'RATE_LIMITED', 429);
+}
 
 const createSchema = z.object({
   name: z.string().min(2).max(120).optional(),
@@ -97,9 +106,18 @@ async function canManagePropertyTeam(
 invites.get('/invite/:token', async (c) => {
   const db = getDb(c.env.DB);
   const { token: rawToken } = c.req.param();
-  if (!rawToken || rawToken.length < 8) return err(c, 'Convite inválido', 'INVALID_TOKEN', 400);
-
   const tokenHash = await sha256TokenHash(rawToken);
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'invite',
+    action: 'read',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
+
+  if (!rawToken || rawToken.length < 8) return publicInviteUnavailable(c);
 
   const [invite] = await db
     .select({
@@ -135,7 +153,7 @@ invites.get('/invite/:token', async (c) => {
     invited_by_name: string; property_id: string; tenant_id: string | null;
   }>;
 
-  if (!invite?.tenant_id) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (!invite?.tenant_id) return publicInviteUnavailable(c);
   if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
   if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
 
@@ -626,10 +644,20 @@ invites.delete('/properties/:propertyId/invites/:inviteId', authMiddleware, asyn
 invites.post('/invite/:token/accept', authMiddleware, async (c) => {
   const db = getDb(c.env.DB);
   const { token: rawToken } = c.req.param();
-  if (!rawToken || rawToken.length < 8) return err(c, 'Convite inválido', 'INVALID_TOKEN', 400);
   const userId = c.get('userId');
 
   const tokenHash = await sha256TokenHash(rawToken);
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'invite',
+    action: 'mutate',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
+
+  if (!rawToken || rawToken.length < 8) return publicInviteUnavailable(c);
 
   const [invite] = await db
     .select({
@@ -666,7 +694,7 @@ invites.post('/invite/:token/accept', authMiddleware, async (c) => {
     expires_at: string;
   }>;
 
-  if (!invite?.tenant_id) return err(c, 'Convite não encontrado', 'NOT_FOUND', 404);
+  if (!invite?.tenant_id) return publicInviteUnavailable(c);
   if (invite.accepted_at) return err(c, 'Convite já utilizado', 'GONE', 410);
   if (new Date(invite.expires_at) < new Date()) return err(c, 'Convite expirado', 'LINK_EXPIRED', 410);
 

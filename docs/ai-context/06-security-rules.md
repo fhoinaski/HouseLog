@@ -31,6 +31,7 @@ Listagens nao retornam segredo. Reveal deve ser acao explicita, autorizada, audi
 ## Public links
 
 Tokens publicos devem ser gerados uma vez, armazenados como hash quando suportado, ter expiracao/revogacao quando o dominio exigir e retornar payload minimo.
+Rotas publicas tokenizadas devem aplicar rate limit granular por fluxo, IP e prefixo do hash do token. Nunca usar token plaintext em chave de rate limit, audit log, logs ou snapshots. Respostas publicas devem evitar diferenciar token inexistente de token malformado quando isso facilitar enumeracao.
 
 ## Audit log
 

@@ -31,6 +31,7 @@ export function OfflineSyncStatus({ state, queueState, className }: Props) {
   const extraPending = queueState?.pendingCount ?? 0;
   const extraFailed = queueState?.failedCount ?? 0;
   const extraSyncing = queueState?.isSyncing ?? false;
+  const requiresActionCount = queueState?.requiresActionCount ?? 0;
 
   const pendingCount = legacyPending + extraPending;
   const failedCount = legacyFailed + extraFailed;
@@ -41,7 +42,7 @@ export function OfflineSyncStatus({ state, queueState, className }: Props) {
     if (queueState) void queueState.sync();
   };
 
-  if (!isSyncing && pendingCount === 0 && failedCount === 0) return null;
+  if (!isSyncing && pendingCount === 0 && failedCount === 0 && requiresActionCount === 0) return null;
 
   if (isSyncing) {
     return (
@@ -77,6 +78,25 @@ export function OfflineSyncStatus({ state, queueState, className }: Props) {
         <CloudOff className="h-3.5 w-3.5" aria-hidden />
         <span>
           {failedCount} {failedCount === 1 ? 'falha' : 'falhas'} — tentar novamente
+        </span>
+      </button>
+    );
+  }
+
+  if (requiresActionCount > 0) {
+    return (
+      <button
+        type="button"
+        onClick={handleSync}
+        className={cn(
+          'flex items-center gap-1.5 rounded-full bg-bg-warning px-3 py-1 text-xs font-medium text-text-warning transition-opacity hover:opacity-80',
+          className
+        )}
+        aria-label={`${requiresActionCount} ${requiresActionCount === 1 ? 'item requer acao manual' : 'itens requerem acao manual'}`}
+      >
+        <CloudOff className="h-3.5 w-3.5" aria-hidden />
+        <span>
+          {requiresActionCount} {requiresActionCount === 1 ? 'requer acao' : 'requerem acao'}
         </span>
       </button>
     );

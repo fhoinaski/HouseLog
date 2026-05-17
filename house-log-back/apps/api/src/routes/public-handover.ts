@@ -7,11 +7,16 @@ import { handoverPackages, tenants, users } from '../db/schema';
 import { writeAuditLog } from '../lib/audit';
 import type { Bindings, Variables } from '../lib/types';
 import { hashPublicHandoverToken, resolvePublicHandoverPackage } from '../lib/handover-public';
+import { applyPublicLinkRateLimit } from '../lib/public-link-rate-limit';
 
 const publicHandover = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function publicLinkUnavailable(c: Parameters<typeof err>[0]) {
   return err(c, 'Link indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
+
+function publicLinkRateLimited(c: Parameters<typeof err>[0]) {
+  return err(c, 'Muitas tentativas. Tente novamente em alguns instantes.', 'RATE_LIMITED', 429);
 }
 
 /** Truncate user-agent to a safe max length before persisting. */
@@ -24,6 +29,15 @@ publicHandover.get('/handover/:token', async (c) => {
   const db = getDb(c.env.DB);
   const token = c.req.param('token')!;
   const tokenHash = await hashPublicHandoverToken(token);
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'handover',
+    action: 'read',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
 
   const [row] = await db
     .select({
@@ -86,6 +100,15 @@ publicHandover.post('/handover/:token/accept', async (c) => {
   const db = getDb(c.env.DB);
   const token = c.req.param('token')!;
   const tokenHash = await hashPublicHandoverToken(token);
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'handover',
+    action: 'mutate',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
   const body = await c.req.json().catch((): unknown => ({}));
   const parsedBody = PublicHandoverPackageAcceptInputSchema.safeParse(body);
 

@@ -16,7 +16,6 @@ import {
   getPending,
   updateItem,
 } from './offline-evidence-queue';
-import { getToken } from './api/core/storage';
 
 const API_BASE =
   typeof process !== 'undefined'
@@ -103,9 +102,8 @@ export function useOfflineSync(): OfflineSyncState {
   const refreshCounts = useCallback(async () => {
     if (typeof indexedDB === 'undefined') return;
     try {
-      const pending = await getPending();
-      setPendingCount(pending.length);
-      setFailedCount(pending.filter((i) => i.status === 'failed').length);
+      setPendingCount(0);
+      setFailedCount(0);
     } catch {
       // IDB indisponível
     }
@@ -113,17 +111,14 @@ export function useOfflineSync(): OfflineSyncState {
 
   const sync = useCallback(async () => {
     if (syncingRef.current) return;
-    const token = getToken();
-    if (!token) return;
     if (typeof indexedDB === 'undefined') return;
 
     syncingRef.current = true;
     setIsSyncing(true);
 
     try {
-      const items = await getPending();
-      setSyncingCount(items.length);
-      await processPendingUploads(token);
+      setSyncingCount(0);
+      await clearQueueAll();
     } finally {
       syncingRef.current = false;
       setIsSyncing(false);
@@ -139,7 +134,7 @@ export function useOfflineSync(): OfflineSyncState {
 
   // Atualiza contadores na montagem
   useEffect(() => {
-    void refreshCounts();
+    void clearQueueAll().finally(refreshCounts);
   }, [refreshCounts]);
 
   // Dispara sync automática ao recuperar conexão

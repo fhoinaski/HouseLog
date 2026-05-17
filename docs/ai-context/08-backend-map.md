@@ -29,6 +29,8 @@ Auth, tenant authorization, credentials, documents/media, service orders, bids/m
 
 Search usa `src/lib/search-field-policy.ts` para controlar campos permitidos e proibidos por entidade. A rota nao deve adicionar campo pesquisavel fora dessa policy.
 
+Public links usam `src/lib/public-link-rate-limit.ts` para rate limit granular em KV por `flow + action + IP + tokenHashPrefix`. O helper recebe hash de token, nunca token plaintext. Acoes publicas de mutacao usam limite menor que leitura.
+
 ## Regras para IA
 
 - Nao inventar rota, entidade ou payload.

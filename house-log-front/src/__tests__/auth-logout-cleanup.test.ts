@@ -8,6 +8,11 @@ import {
   getByUser,
   type OqPhotoItem,
 } from '../lib/offline-queue';
+import {
+  _resetDb as resetLegacyDb,
+  enqueue as enqueueLegacy,
+  getAll as getLegacyAll,
+} from '../lib/offline-evidence-queue';
 import type { User } from '../lib/api';
 
 type PhotoInput = Omit<OqPhotoItem, 'id' | 'status' | 'attempts' | 'createdAt'>;
@@ -44,6 +49,7 @@ function makePhoto(overrides: Partial<PhotoInput> = {}): PhotoInput {
 beforeEach(() => {
   (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
   _resetDb();
+  resetLegacyDb();
 });
 
 describe('clearOfflineStateForLogout', () => {
@@ -71,5 +77,23 @@ describe('clearOfflineStateForLogout', () => {
     expect(await getByUser('tenant-a', 'user-1')).toHaveLength(0);
     expect(await getByUser('tenant-b', 'user-1')).toHaveLength(0);
     expect(await getByUser('tenant-a', 'user-2')).toHaveLength(1);
+  });
+
+  it('logout limpa fila legada sem migrar itens sem tenant/user', async () => {
+    await enqueueLegacy({
+      propertyId: 'prop-1',
+      serviceOrderId: 'os-1',
+      type: 'before',
+      file: new Blob(['foto'], { type: 'image/jpeg' }),
+      filename: 'legacy.jpg',
+      mimeType: 'image/jpeg',
+    });
+
+    expect(await getLegacyAll()).toHaveLength(1);
+
+    await clearOfflineStateForLogout(makeUser({ active_tenant_id: 'tenant-a' }));
+
+    expect(await getLegacyAll()).toHaveLength(0);
+    expect(await getByUser('tenant-a', 'user-1')).toHaveLength(0);
   });
 });

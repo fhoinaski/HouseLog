@@ -17,15 +17,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  OFFLINE_QUEUE_MAX_ATTEMPTS,
   clearByUser,
   clearByUserAcrossTenants,
   clearSyncedByUser,
+  getManualActionByUser,
   getPendingByUser,
   getNextRetryDelay,
+  manualActionReason,
+  requiresManualAction,
   updateItem,
   type OqItem,
   type OqPhotoItem,
 } from './offline-queue';
+import { clearAll as clearLegacyEvidenceQueue } from './offline-evidence-queue';
 import { getToken } from './api/core/storage';
 
 const API_BASE =
@@ -81,8 +86,25 @@ export async function processPendingItems(
   token: string
 ): Promise<void> {
   const items = await getPendingByUser(tenantId, userId);
+  const nowMs = Date.now();
 
   for (const item of items) {
+    if (requiresManualAction(item, nowMs)) {
+      await updateItem(item.id, {
+        status: 'requires_action',
+        errorMessage: manualActionReason(item, nowMs),
+      });
+      continue;
+    }
+
+    if (item.status === 'failed' && item.lastAttemptAt) {
+      const lastAttemptAt = Date.parse(item.lastAttemptAt);
+      const retryAt = Number.isFinite(lastAttemptAt)
+        ? lastAttemptAt + getNextRetryDelay(item.attempts)
+        : nowMs;
+      if (retryAt > nowMs) continue;
+    }
+
     const now = new Date().toISOString();
     try {
       await updateItem(item.id, { status: 'uploading', lastAttemptAt: now });
@@ -96,16 +118,36 @@ export async function processPendingItems(
       await updateItem(item.id, { status: 'synced' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+      const attempts = item.attempts + 1;
+      const status = attempts >= OFFLINE_QUEUE_MAX_ATTEMPTS ? 'requires_action' : 'failed';
       await updateItem(item.id, {
-        status: 'failed',
-        attempts: item.attempts + 1,
-        errorMessage: msg,
+        status,
+        attempts,
+        errorMessage: status === 'requires_action'
+          ? manualActionReason({ ...item, attempts }, nowMs)
+          : msg,
         lastAttemptAt: now,
       });
     }
   }
 
   await clearSyncedByUser(tenantId, userId);
+}
+
+export async function clearLegacyOfflineEvidenceQueue(): Promise<void> {
+  if (typeof indexedDB === 'undefined') return;
+  await clearLegacyEvidenceQueue().catch(() => {});
+}
+
+export async function syncOfflineQueueOnce(
+  tenantId: string | null | undefined,
+  userId: string | null | undefined,
+  token: string | null
+): Promise<boolean> {
+  if (!tenantId || !userId || !token) return false;
+  if (typeof indexedDB === 'undefined') return false;
+  await processPendingItems(tenantId, userId, token);
+  return true;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -119,6 +161,7 @@ export type OfflineQueueSyncState = {
   photoPendingCount: number;
   /** Número de itens com status 'os-update' pendentes. */
   osUpdatePendingCount: number;
+  requiresActionCount: number;
   /** true enquanto um ciclo de sync está em andamento. */
   isSyncing: boolean;
   /** Dispara sync manual. Seguro chamar múltiplas vezes — o mutex previne concorrência. */
@@ -139,6 +182,7 @@ export function useOfflineQueueSync(
   const [failedCount, setFailedCount] = useState(0);
   const [photoPendingCount, setPhotoPendingCount] = useState(0);
   const [osUpdatePendingCount, setOsUpdatePendingCount] = useState(0);
+  const [requiresActionCount, setRequiresActionCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const syncingRef = useRef(false);
 
@@ -147,26 +191,25 @@ export function useOfflineQueueSync(
     if (typeof indexedDB === 'undefined') return;
     try {
       const pending = await getPendingByUser(tenantId, userId);
+      const manual = await getManualActionByUser(tenantId, userId);
       setPendingCount(pending.length);
       setFailedCount(pending.filter((i) => i.status === 'failed').length);
       setPhotoPendingCount(pending.filter((i) => i.type === 'photo-upload').length);
       setOsUpdatePendingCount(pending.filter((i) => i.type === 'os-update').length);
+      setRequiresActionCount(manual.length);
     } catch {
       // IDB indisponível — estado permanece
     }
   }, [tenantId, userId]);
 
   const sync = useCallback(async () => {
-    if (!tenantId || !userId) return;
     if (syncingRef.current) return;
     const token = getToken();
-    if (!token) return;
-    if (typeof indexedDB === 'undefined') return;
 
     syncingRef.current = true;
     setIsSyncing(true);
     try {
-      await processPendingItems(tenantId, userId, token);
+      await syncOfflineQueueOnce(tenantId, userId, token);
     } finally {
       syncingRef.current = false;
       setIsSyncing(false);
@@ -177,7 +220,9 @@ export function useOfflineQueueSync(
   // Atualiza contadores na montagem e quando tenant/usuário muda
   useEffect(() => {
     void refreshCounts();
-  }, [refreshCounts]);
+    void clearLegacyOfflineEvidenceQueue();
+    void sync();
+  }, [refreshCounts, sync]);
 
   // Sync automática ao recuperar conexão
   useEffect(() => {
@@ -191,6 +236,7 @@ export function useOfflineQueueSync(
     failedCount,
     photoPendingCount,
     osUpdatePendingCount,
+    requiresActionCount,
     isSyncing,
     sync,
   };

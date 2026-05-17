@@ -9,6 +9,7 @@ import { getDb } from '../db/client';
 import { properties, rooms, serviceOrders, serviceShareLinks } from '../db/schema';
 import { writeAuditLog } from '../lib/audit';
 import { publicTokenPlaceholder, sha256TokenHash } from '../lib/token-hash';
+import { applyPublicLinkRateLimit } from '../lib/public-link-rate-limit';
 import type { Bindings, Variables } from '../lib/types';
 import { createId } from '../lib/id';
 
@@ -16,6 +17,10 @@ const share = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function publicLinkUnavailable(c: Parameters<typeof err>[0]) {
   return err(c, 'Link indisponivel', 'PUBLIC_LINK_UNAVAILABLE', 404);
+}
+
+function publicLinkRateLimited(c: Parameters<typeof err>[0]) {
+  return err(c, 'Muitas tentativas. Tente novamente em alguns instantes.', 'RATE_LIMITED', 429);
 }
 
 // ── POST /properties/:propertyId/services/:serviceId/share-link ──────────────
@@ -120,10 +125,19 @@ share.post('/properties/:propertyId/services/:serviceId/share-link', authMiddlew
 
 share.get('/public/share/service/:token', async (c) => {
   const db = getDb(c.env.DB);
-  const rawToken = c.req.param('token');
-  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
-
+  const rawToken = c.req.param('token') ?? '';
   const tokenHash = await sha256TokenHash(rawToken);
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'share',
+    action: 'read',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
+
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
 
   const [link] = await db
     .select({
@@ -223,10 +237,19 @@ const providerStatusSchema = z.object({
 
 share.patch('/public/share/service/:token/status', async (c) => {
   const db = getDb(c.env.DB);
-  const rawToken = c.req.param('token');
-  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
-
+  const rawToken = c.req.param('token') ?? '';
   const tokenHash = await sha256TokenHash(rawToken);
+  const ip = c.req.header('CF-Connecting-IP') ?? 'unknown';
+  const allowed = await applyPublicLinkRateLimit({
+    kv: c.env.KV,
+    flow: 'share',
+    action: 'mutate',
+    ip,
+    tokenHash,
+  });
+  if (!allowed) return publicLinkRateLimited(c);
+
+  if (!rawToken || rawToken.length < 8) return publicLinkUnavailable(c);
 
   const [link] = await db
     .select({

@@ -22,10 +22,13 @@
 const DB_NAME = 'houselog-oq';
 const STORE_NAME = 'items';
 const DB_VERSION = 1;
+export const OFFLINE_QUEUE_MAX_BLOB_BYTES = 5 * 1024 * 1024;
+export const OFFLINE_QUEUE_MAX_ATTEMPTS = 5;
+export const OFFLINE_QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
-export type OqStatus = 'pending' | 'uploading' | 'failed' | 'synced';
+export type OqStatus = 'pending' | 'uploading' | 'failed' | 'synced' | 'requires_action';
 export type OqType = 'photo-upload' | 'os-update';
 
 /**
@@ -71,6 +74,26 @@ export type OqOsUpdateItem = OqBase & {
 };
 
 export type OqItem = OqPhotoItem | OqOsUpdateItem;
+
+export function isExpired(item: Pick<OqItem, 'createdAt'>, now = Date.now()): boolean {
+  const createdAt = Date.parse(item.createdAt);
+  if (!Number.isFinite(createdAt)) return true;
+  return now - createdAt > OFFLINE_QUEUE_MAX_AGE_MS;
+}
+
+export function requiresManualAction(item: Pick<OqItem, 'attempts' | 'createdAt'>, now = Date.now()): boolean {
+  return item.attempts >= OFFLINE_QUEUE_MAX_ATTEMPTS || isExpired(item, now);
+}
+
+export function manualActionReason(item: Pick<OqItem, 'attempts' | 'createdAt'>, now = Date.now()): string {
+  if (item.attempts >= OFFLINE_QUEUE_MAX_ATTEMPTS) {
+    return 'Limite de tentativas atingido. Revise a conexao e tente reenviar manualmente.';
+  }
+  if (isExpired(item, now)) {
+    return 'Item offline antigo demais. Revise antes de reenviar.';
+  }
+  return 'Revisao manual necessaria.';
+}
 
 /**
  * Tipo de entrada para enfileirar — os campos gerenciados pela fila são omitidos.
@@ -119,6 +142,10 @@ export async function enqueue(item: OqEnqueueInput): Promise<OqItem> {
   if (!item.propertyId) throw new Error('propertyId é obrigatório');
   if (!item.serviceOrderId) throw new Error('serviceOrderId é obrigatório');
 
+  if (item.type === 'photo-upload' && item.file.size > OFFLINE_QUEUE_MAX_BLOB_BYTES) {
+    throw new Error('Arquivo excede o limite de 5MB para envio offline');
+  }
+
   const entry = {
     ...item,
     id: crypto.randomUUID(),
@@ -162,6 +189,11 @@ export async function getByUser(tenantId: string, userId: string): Promise<OqIte
 export async function getPendingByUser(tenantId: string, userId: string): Promise<OqItem[]> {
   const all = await getByUser(tenantId, userId);
   return all.filter((i) => i.status === 'pending' || i.status === 'failed');
+}
+
+export async function getManualActionByUser(tenantId: string, userId: string): Promise<OqItem[]> {
+  const all = await getByUser(tenantId, userId);
+  return all.filter((i) => i.status === 'requires_action');
 }
 
 /**
