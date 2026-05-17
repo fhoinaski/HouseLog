@@ -51,9 +51,9 @@ const BID_STATUS_LABEL: Record<ServiceBid['status'], string> = {
 };
 
 const BID_STATUS_ICON: Record<ServiceBid['status'], React.ReactNode> = {
-  accepted: <CheckCircle2 className="h-4 w-4 text-text-success" />,
-  pending: <Clock className="h-4 w-4 text-text-warning" />,
-  rejected: <XCircle className="h-4 w-4 text-text-danger" />,
+  accepted: <CheckCircle2 className="h-4 w-4 text-hl-success" />,
+  pending: <Clock className="h-4 w-4 text-hl-warning" />,
+  rejected: <XCircle className="h-4 w-4 text-hl-danger" />,
 };
 
 function safeParseStringArray(value: unknown): string[] {
@@ -107,9 +107,9 @@ function DetailItem({
   wide?: boolean;
 }) {
   return (
-    <div className={wide ? 'rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3 sm:col-span-2' : 'rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3'}>
-      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">{label}</dt>
-      <dd className="mt-2 flex min-w-0 items-center gap-2 text-sm font-medium text-text-primary">
+    <div className={wide ? 'rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-3 sm:col-span-2' : 'rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-3'}>
+      <dt className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">{label}</dt>
+      <dd className="mt-2 flex min-w-0 items-center gap-2 text-sm font-medium text-hl-text">
         {icon}
         <span className="min-w-0 truncate">{value}</span>
       </dd>
@@ -231,23 +231,26 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
   if (isLoading && !order) {
     return (
-      <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
-        <PageHeader
-          density="editorial"
-          eyebrow="Operacao privada"
-          title="Carregando servico"
-          description="Preparando o dossie operacional da ordem de servico."
-          actions={
+      <div className="min-h-full space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
+        <header className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-4 py-4 shadow-hl-subtle">
+          <p className="text-xs font-medium uppercase tracking-wide text-hl-primary">Operacao privada</p>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-medium leading-tight text-hl-text">Carregando servico</h1>
+              <p className="mt-1 max-w-sm text-sm leading-5 text-hl-text-muted">
+                Preparando o dossie operacional da ordem de servico.
+              </p>
+            </div>
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
               Voltar
             </Button>
-          }
-        />
-        <PageSection tone="strong" density="editorial">
+          </div>
+        </header>
+        <PageSection tone="surface" density="editorial" className="border border-hl-border bg-hl-surface shadow-hl-subtle">
           <div className="space-y-3">
-            <div className="hl-skeleton h-28 rounded-[var(--radius-xl)]" />
-            <div className="hl-skeleton h-44 rounded-[var(--radius-xl)]" />
+            <div className="hl-skeleton h-28 rounded-[var(--hl-radius-card)]" />
+            <div className="hl-skeleton h-44 rounded-[var(--hl-radius-card)]" />
           </div>
         </PageSection>
       </div>
@@ -256,25 +259,30 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
   if (error || !order) {
     return (
-      <div className="space-y-6 px-4 py-4 sm:px-5 sm:py-5">
-        <PageHeader
-          density="editorial"
-          eyebrow="Operacao privada"
-          title="Servico indisponivel"
-          description="Nao foi possivel carregar esta ordem de servico."
-          actions={
+      <div className="min-h-full space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
+        <header className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-4 py-4 shadow-hl-subtle">
+          <p className="text-xs font-medium uppercase tracking-wide text-hl-primary">Operacao privada</p>
+          <div className="mt-2 flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-medium leading-tight text-hl-text">Servico indisponivel</h1>
+              <p className="mt-1 max-w-sm text-sm leading-5 text-hl-text-muted">
+                Nao foi possivel carregar esta ordem de servico.
+              </p>
+            </div>
             <Button type="button" variant="ghost" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
               Voltar
             </Button>
-          }
-        />
-        <EmptyState
-          icon={<ShieldCheck className="h-6 w-6" />}
-          title="Ordem de servico nao encontrada"
-          description="A operacao pode ter sido encerrada, removida ou nao estar mais disponivel para o seu perfil."
-          tone="strong"
-        />
+          </div>
+        </header>
+        <div className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-5 py-8 shadow-hl-subtle">
+          <EmptyState
+            icon={<ShieldCheck className="h-6 w-6" />}
+            title="Ordem de servico nao encontrada"
+            description="A operacao pode ter sido encerrada, removida ou nao estar mais disponivel para o seu perfil."
+            tone="subtle"
+          />
+        </div>
       </div>
     );
   }
@@ -285,7 +293,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
     || (order.can_upload_evidence === undefined && (UPLOAD_ALLOWED_STATUSES as readonly string[]).includes(order.status));
 
   return (
-    <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
+    <div className="min-h-full space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
       <PageHeader
         density="compact"
         eyebrow="Operação privada"
@@ -303,8 +311,9 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="space-y-5">
           <PageSection
-            tone="strong"
+            tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
             actions={
               <div className="flex flex-wrap gap-2">
                 <StatusBadge status={order.status} label={SERVICE_STATUS_LABELS[order.status]} />
@@ -315,19 +324,19 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             <dl className="grid gap-3 sm:grid-cols-2">
               <DetailItem label="Sistema" value={SYSTEM_TYPE_LABELS[order.system_type]} />
               <DetailItem
-                icon={<Calendar className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                icon={<Calendar className="h-3.5 w-3.5 shrink-0 text-hl-text-muted" />}
                 label="Criada em"
                 value={formatDate(order.created_at)}
               />
               <DetailItem
-                icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                icon={<MapPin className="h-3.5 w-3.5 shrink-0 text-hl-text-muted" />}
                 label="Imovel"
                 value={`${order.property_name} - ${order.property_address}`}
                 wide
               />
               {order.scheduled_at && (
                 <DetailItem
-                  icon={<Clock className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />}
+                  icon={<Clock className="h-3.5 w-3.5 shrink-0 text-hl-text-muted" />}
                   label="Agendada para"
                   value={formatDate(order.scheduled_at)}
                 />
@@ -335,12 +344,12 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             </dl>
 
             {order.description ? (
-              <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
-                <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">
+              <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-4">
+                <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">
                   <FileText className="h-3.5 w-3.5" />
                   Descricao tecnica
                 </p>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-secondary">{order.description}</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-hl-text-muted">{order.description}</p>
               </div>
             ) : (
               <EmptyState
@@ -358,8 +367,9 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
               title="Checklist de execução"
               tone="surface"
               density="editorial"
+              className="border border-hl-border bg-hl-surface shadow-hl-subtle"
               actions={
-                <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+                <span className="flex items-center gap-1.5 text-xs text-hl-text-muted">
                   <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
                   {completedChecklistItems}/{checklist.length} concluídos
                 </span>
@@ -369,13 +379,13 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
                 {checklist.map((checkItem, index) => (
                   <li
                     key={`${checkItem.item}-${index}`}
-                    className="flex items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2 text-sm"
+                    className="flex items-center gap-3 rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface px-3 py-2 text-sm"
                   >
                     <CheckCircle2
-                      className={cn('h-4 w-4 shrink-0', checkItem.done ? 'text-text-success' : 'text-text-tertiary')}
+                      className={cn('h-4 w-4 shrink-0', checkItem.done ? 'text-hl-success' : 'text-hl-text-muted')}
                       aria-hidden="true"
                     />
-                    <span className={checkItem.done ? 'line-through text-text-tertiary' : 'text-text-primary'}>
+                    <span className={checkItem.done ? 'line-through text-hl-text-muted' : 'text-hl-text'}>
                       {checkItem.item}
                     </span>
                     {checkItem.done && <span className="sr-only">concluído</span>}
@@ -389,6 +399,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             title="Evidências"
             tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
             actions={
               canUpload ? (
                 <>
@@ -416,14 +427,14 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
           >
             {beforePhotos.length > 0 && (
               <>
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Antes</p>
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Antes</p>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {beforePhotos.map((url, index) => (
                     <button
                       key={url}
                       type="button"
                       aria-label={`Ver evidência inicial ${index + 1}`}
-                      className="aspect-square w-full overflow-hidden rounded-[var(--radius-lg)] bg-[var(--surface-strong)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                      className="aspect-square w-full overflow-hidden rounded-[var(--hl-radius-control)] bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-focus"
                       onClick={() => window.open(url, '_blank')}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -440,7 +451,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
             {afterPhotos.length > 0 && (
               <>
-                <p className={cn('text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary', beforePhotos.length > 0 && 'mt-3')}>
+                <p className={cn('text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted', beforePhotos.length > 0 && 'mt-3')}>
                   Após execução
                 </p>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -449,7 +460,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
                       key={url}
                       type="button"
                       aria-label={`Ver evidência de execução ${index + 1}`}
-                      className="aspect-square w-full overflow-hidden rounded-[var(--radius-lg)] bg-[var(--surface-strong)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                      className="aspect-square w-full overflow-hidden rounded-[var(--hl-radius-control)] bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-focus"
                       onClick={() => window.open(url, '_blank')}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -475,7 +486,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             )}
           </PageSection>
 
-          <PageSection density="compact">
+          <PageSection density="compact" className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
             <ServiceChat serviceOrderId={serviceId} title="Chat da operacao privada" />
           </PageSection>
         </div>
@@ -485,6 +496,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             title={isDirectExecution ? 'Execução direta' : hasPendingBid ? 'Proposta em análise' : 'Enviar proposta'}
             tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
           >
             {isDirectExecution ? (
               <EmptyState
@@ -522,7 +534,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
                     aria-invalid={Boolean(errors.amount)}
                     {...register('amount')}
                   />
-                  {errors.amount && <p className="text-xs text-text-danger">{errors.amount.message}</p>}
+                  {errors.amount && <p className="text-xs text-hl-danger">{errors.amount.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="bid-notes">Observacoes tecnicas</Label>
@@ -533,7 +545,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
                     aria-invalid={Boolean(errors.notes)}
                     {...register('notes')}
                   />
-                  {errors.notes && <p className="text-xs text-text-danger">{errors.notes.message}</p>}
+                  {errors.notes && <p className="text-xs text-hl-danger">{errors.notes.message}</p>}
                 </div>
                 <Button type="submit" loading={submittingBid} className="w-full">
                   <Send className="h-4 w-4" />
@@ -545,8 +557,9 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
           <PageSection
             title="Histórico de propostas"
-            tone="strong"
+            tone="surface"
             density="editorial"
+            className="border border-hl-border bg-hl-surface shadow-hl-subtle"
           >
             {myBids.length === 0 ? (
               <EmptyState
@@ -559,12 +572,12 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             ) : (
               <div className="space-y-3">
                 {myBids.map((bid: ServiceBid) => (
-                  <article key={bid.id} className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4">
+                  <article key={bid.id} className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-lg font-medium text-text-primary">{formatCurrency(bid.amount)}</p>
-                        {bid.notes && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{bid.notes}</p>}
-                        <p className="mt-1 text-xs text-text-tertiary">{formatDate(bid.created_at)}</p>
+                        <p className="text-lg font-medium text-hl-text">{formatCurrency(bid.amount)}</p>
+                        {bid.notes && <p className="mt-1 line-clamp-2 text-xs leading-5 text-hl-text-muted">{bid.notes}</p>}
+                        <p className="mt-1 text-xs text-hl-text-muted">{formatDate(bid.created_at)}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         {BID_STATUS_ICON[bid.status]}

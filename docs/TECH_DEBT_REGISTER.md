@@ -178,6 +178,7 @@ Este registro deve ser lido em conjunto com:
 - **HouseLog Calm OS base (2026-05-17)**: tokens globais `--hl-*` foram adicionados de forma aditiva em `house-log-front/src/app/tokens.css`, expostos ao Tailwind em `globals.css` e documentados em `docs/design/house-log-calm-os.md`; `/provider/dashboard` virou tela piloto clara, sem migracao global.
 - **Provider services Calm OS (2026-05-17)**: `/provider/services` foi migrada para Calm OS com cards Link mobile-first, filtros acessiveis, loading skeleton, erro com retry, vazio real e aviso de offline sem alterar API.
 - **Calm OS shell (2026-05-17)**: `AppShell` passou a aplicar o wrapper explicito `.hl-calm-os`; top nav, bottom nav e property mobile nav usam navegacao clara sem depender do seletor `:has()` do piloto.
+- **Provider service detail Calm OS (2026-05-17)**: `/provider/services/[serviceId]` foi migrada parcialmente para Calm OS em loading/error, detalhes, checklist, evidencias e historico de propostas sem alterar upload, chat, fila offline ou API.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;
