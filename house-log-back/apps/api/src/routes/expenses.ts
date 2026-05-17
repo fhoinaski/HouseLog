@@ -209,7 +209,13 @@ expenses.post('/', async (c) => {
   const [expense] = await db
     .select(expenseSelect)
     .from(expensesTable)
-    .where(eq(expensesTable.id, firstId))
+    .where(
+      and(
+        eq(expensesTable.id, firstId),
+        eq(expensesTable.tenantId, tenantId),
+        eq(expensesTable.propertyId, propertyId)
+      )
+    )
     .limit(1) as Expense[];
 
   if (!expense) {
@@ -280,8 +286,16 @@ expenses.put('/:id', async (c) => {
   const [updated] = await db
     .select(expenseSelect)
     .from(expensesTable)
-    .where(eq(expensesTable.id, id))
+    .where(
+      and(
+        eq(expensesTable.id, id),
+        eq(expensesTable.tenantId, tenantId),
+        eq(expensesTable.propertyId, propertyId)
+      )
+    )
     .limit(1) as Expense[];
+
+  if (!updated) return err(c, 'Despesa nÃ£o encontrada', 'NOT_FOUND', 404);
 
   await writeAuditLog(c.env.DB, {
     tenantId,

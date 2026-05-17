@@ -237,11 +237,23 @@ Este registro deve ser lido em conjunto com:
   - `canAccessProperty`, `canCreateServiceOrder` e `canCreateServiceRequest` deixaram de manter fallback legado sem tenant; agora delegam apenas ao helper tenant-aware e negam quando `tenantId`/`tenantRole` ausente.
   - Criado `lib/authorization-core.test.ts` com cobertura de caminho autorizado, sem permissao, cross-tenant, property invalida e ausencia de tenant sem query legada.
 
+  **Phase 3 incremental — Inventory IDOR (2026-05-17):**
+  - `routes/inventory.ts` passou a repetir `tenantId + propertyId + itemId` nas mutacoes finais de update/delete e nos updates de foto/QR.
+  - O select pos-update passou a buscar por `id + tenantId + propertyId`, mantendo a pre-validacao existente e sem alterar contrato publico.
+  - Criado `routes/inventory-idor.test.ts` com cobertura de update autorizado, update cross-tenant, update cross-property, delete cross-property e select pos-update sem retorno fora do property.
+  **Phase 3 incremental - Rooms write IDOR (2026-05-17):**
+  - `rooms.ts` passou a aplicar `id + tenantId + propertyId` tambem nos writes finais de PUT e DELETE; `routes/tenant-isolation.test.ts` cobre PUT/DELETE autorizado, cross-property e cross-tenant.
+
+  **Phase 3 incremental — Renovations reference IDOR (2026-05-17):**
+  - `routes/renovations.ts` passou a ler referencias vinculaveis (`room`, `service_order`, `document`) diretamente por `referenceId + tenantId + propertyId`, alinhado ao padrao de warranties.
+  - `canLinkRenovationReference` foi mantido como decisao defensiva apos a leitura escopada.
+  - Criado `routes/renovations-reference-idor.test.ts` com cobertura de referencia autorizada, outro tenant, outro imovel no mesmo tenant, referencia inexistente e update com referencia invalida.
+
 - **Impacto residual**: aumenta risco de acesso indevido se novos endpoints nao seguirem o padrao; rotas com `assertPropertyAccess` inline ainda devem ser migradas gradualmente para helpers de action quando houver mudanca no modulo.
 - **Recomendacao**:
   - padronizar retorno de authorization.ts para `TenantScopedDecision` em vez de `boolean` onde aplicavel;
   - cobrir `canBidOnOpportunity` com DB validation se oportunidades forem ativadas.
-  - migrar autorizacoes inline restantes por modulo, priorizando documentos, financas/despesas, inventario e propriedades.
+  - migrar autorizacoes inline restantes por modulo, priorizando documentos, financas, inventario e propriedades.
 - **Relacionamento com roadmap/ADRs**: Fase 3; `SECURITY_REVIEW.md`, ADR-003, ADR-004 e ADR-005.
 
 ---

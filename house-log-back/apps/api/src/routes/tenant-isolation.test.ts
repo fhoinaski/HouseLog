@@ -386,3 +386,216 @@ describe('GET/POST /properties/:propertyId/rooms — property de outro tenant re
     expect(insertValuesSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('PUT/DELETE /properties/:propertyId/rooms/:id - write scope estrito por property', () => {
+  const updateWhereSpy = vi.fn(async (_whereExpression: unknown) => undefined);
+  const updateSetSpy = vi.fn(() => ({ where: updateWhereSpy }));
+
+  const oldRoom = {
+    id: 'room-1',
+    property_id: 'prop-1',
+    name: 'Sala',
+    type: 'living',
+    floor: 0,
+    area_m2: null,
+    notes: null,
+    created_at: '2026-05-16T00:00:00.000Z',
+    deleted_at: null,
+  };
+
+  const updatedRoom = {
+    ...oldRoom,
+    name: 'Sala atualizada',
+  };
+
+  function limitedRows(rows: unknown[]) {
+    return {
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(async () => rows),
+        })),
+      })),
+    };
+  }
+
+  function membershipRows() {
+    return {
+      from: vi.fn(() => ({
+        innerJoin: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn(async () => [{ tenantId: 'tenant-a', role: 'owner' }]),
+          })),
+        })),
+      })),
+    };
+  }
+
+  function propertyRows(rows: unknown[]) {
+    return limitedRows(rows);
+  }
+
+  function collaboratorRows() {
+    return limitedRows([]);
+  }
+
+  function buildRoomsWriteDb(options: {
+    propertyRows: unknown[];
+    roomRows?: unknown[];
+    updatedRows?: unknown[];
+  }) {
+    const select = vi.fn()
+      .mockReturnValueOnce(membershipRows())
+      .mockReturnValueOnce(propertyRows(options.propertyRows));
+
+    if (options.propertyRows.length > 0) {
+      select
+        .mockReturnValueOnce(collaboratorRows())
+        .mockReturnValueOnce(limitedRows(options.roomRows ?? []));
+
+      if (options.updatedRows) {
+        select.mockReturnValueOnce(limitedRows(options.updatedRows));
+      }
+    }
+
+    return {
+      select,
+      update: vi.fn(() => ({ set: updateSetSpy })),
+    };
+  }
+
+  function expressionTokens(value: unknown): string[] {
+    if (value === null || typeof value !== 'object') return [];
+
+    const record = value as Record<string, unknown>;
+    const tokens: string[] = [];
+
+    if (Array.isArray(record.queryChunks)) {
+      for (const chunk of record.queryChunks) {
+        tokens.push(...expressionTokens(chunk));
+      }
+    }
+
+    if (typeof record.name === 'string' && typeof record.columnType === 'string') {
+      tokens.push(record.name);
+    }
+
+    if (typeof record.value === 'string') {
+      tokens.push(record.value);
+    } else if (Array.isArray(record.value)) {
+      tokens.push(...record.value.filter((item): item is string => typeof item === 'string'));
+    }
+
+    return tokens;
+  }
+
+  function expectRoomWriteScope(whereExpression: unknown) {
+    expect(expressionTokens(whereExpression)).toEqual(
+      expect.arrayContaining(['id', 'room-1', 'property_id', 'prop-1', 'tenant_id', 'tenant-a'])
+    );
+  }
+
+  beforeEach(() => {
+    updateWhereSpy.mockClear();
+    updateSetSpy.mockClear();
+  });
+
+  it('PUT autorizado atualiza usando id + propertyId + tenantId', async () => {
+    vi.mocked(getDb).mockReturnValue(buildRoomsWriteDb({
+      propertyRows: [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }],
+      roomRows: [oldRoom],
+      updatedRows: [updatedRoom],
+    }) as never);
+
+    const res = await buildRoomsApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/rooms/room-1', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Sala atualizada' }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateSetSpy).toHaveBeenCalledWith({ name: 'Sala atualizada' });
+    expect(updateWhereSpy).toHaveBeenCalledOnce();
+    expectRoomWriteScope(updateWhereSpy.mock.calls[0]?.[0]);
+  });
+
+  it('PUT cross-property retorna 404 e nao executa update', async () => {
+    vi.mocked(getDb).mockReturnValue(buildRoomsWriteDb({
+      propertyRows: [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }],
+      roomRows: [],
+    }) as never);
+
+    const res = await buildRoomsApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/rooms/room-2', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Sala atualizada' }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(404);
+    expect(updateSetSpy).not.toHaveBeenCalled();
+    expect(updateWhereSpy).not.toHaveBeenCalled();
+  });
+
+  it('DELETE autorizado remove usando id + propertyId + tenantId', async () => {
+    vi.mocked(getDb).mockReturnValue(buildRoomsWriteDb({
+      propertyRows: [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }],
+      roomRows: [oldRoom],
+    }) as never);
+
+    const res = await buildRoomsApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/rooms/room-1', {
+        method: 'DELETE',
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateSetSpy).toHaveBeenCalledWith({ deletedAt: expect.any(String) });
+    expect(updateWhereSpy).toHaveBeenCalledOnce();
+    expectRoomWriteScope(updateWhereSpy.mock.calls[0]?.[0]);
+  });
+
+  it('DELETE cross-property retorna 404 e nao executa update', async () => {
+    vi.mocked(getDb).mockReturnValue(buildRoomsWriteDb({
+      propertyRows: [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }],
+      roomRows: [],
+    }) as never);
+
+    const res = await buildRoomsApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/rooms/room-2', {
+        method: 'DELETE',
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(404);
+    expect(updateSetSpy).not.toHaveBeenCalled();
+    expect(updateWhereSpy).not.toHaveBeenCalled();
+  });
+
+  it('PUT e DELETE cross-tenant continuam bloqueados antes do update', async () => {
+    for (const method of ['PUT', 'DELETE']) {
+      updateWhereSpy.mockClear();
+      updateSetSpy.mockClear();
+      vi.mocked(getDb).mockReturnValue(buildRoomsWriteDb({ propertyRows: [] }) as never);
+
+      const res = await buildRoomsApp().fetch(
+        authedRequest('http://localhost/properties/prop-x/rooms/room-1', {
+          method,
+          headers: method === 'PUT' ? { 'Content-Type': 'application/json' } : undefined,
+          body: method === 'PUT' ? JSON.stringify({ name: 'Sala atualizada' }) : undefined,
+        }),
+        buildEnv()
+      );
+
+      expect(res.status).toBe(404);
+      expect(updateSetSpy).not.toHaveBeenCalled();
+      expect(updateWhereSpy).not.toHaveBeenCalled();
+    }
+  });
+});

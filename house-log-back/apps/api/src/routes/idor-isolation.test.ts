@@ -521,6 +521,92 @@ describe('PUT /properties/:propertyId/expenses/:id — propertyId no WHERE de up
     return app;
   }
 
+  function expenseRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'expense-x',
+      property_id: 'prop-1',
+      category: 'maintenance',
+      amount: 100,
+      type: 'expense',
+      reference_month: '2026-05',
+      is_recurring: 0,
+      recurrence_group: null,
+      receipt_url: null,
+      notes: null,
+      created_by: 'user-1',
+      created_at: '2026-05-16T00:00:00.000Z',
+      deleted_at: null,
+      ...overrides,
+    };
+  }
+
+  it('retorna 200 no update autorizado e devolve a despesa atualizada', async () => {
+    const authorizedUpdateWhereSpy = vi.fn(async () => undefined);
+    const updated = expenseRow({ amount: 250, notes: 'Ajuste autorizado' });
+
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn()
+        // 1Âª: resolveTenant
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            innerJoin: vi.fn(() => ({
+              where: vi.fn(() => ({
+                limit: vi.fn(async () => [membershipRow('tenant-a')]),
+              })),
+            })),
+          })),
+        })
+        // 2Âª: assertPropertyAccess
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => [{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }]),
+            })),
+          })),
+        })
+        // 3Âª: collaborator lookup
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+          })),
+        })
+        // 4Âª: expense fetch autorizada
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => [expenseRow()]) })),
+          })),
+        })
+        // 5Âª: select pos-update com escopo da mesma tenant/property
+        .mockReturnValueOnce({
+          from: vi.fn(() => ({
+            where: vi.fn(() => ({ limit: vi.fn(async () => [updated]) })),
+          })),
+        }),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({ where: authorizedUpdateWhereSpy })),
+      })),
+    } as never);
+
+    const res = await buildApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/expenses/expense-x', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: 250, notes: 'Ajuste autorizado' }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    expect(authorizedUpdateWhereSpy).toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({
+      expense: {
+        id: 'expense-x',
+        property_id: 'prop-1',
+        amount: 250,
+      },
+    });
+  });
+
   it('retorna 404 quando despesa não pertence à property/tenant (prior fetch guarda)', async () => {
     vi.mocked(getDb).mockReturnValue({
       select: vi.fn()
@@ -572,5 +658,69 @@ describe('PUT /properties/:propertyId/expenses/:id — propertyId no WHERE de up
     expect(res.status).toBe(404);
     // update não deve ter sido chamado
     expect(updateWhereSpy).not.toHaveBeenCalled();
+  });
+
+  it('retorna 404 quando o select pos-update nao encontra a despesa no mesmo tenant/property', async () => {
+    const scopedUpdateWhereSpy = vi.fn(async () => undefined);
+
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn()
+        .mockReturnValueOnce(selectStub([membershipRow('tenant-a')]))
+        .mockReturnValueOnce(selectStub([{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }]))
+        .mockReturnValueOnce(selectStub([]))
+        .mockReturnValueOnce(selectStub([expenseRow()]))
+        .mockReturnValueOnce(selectStub([])),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({ where: scopedUpdateWhereSpy })),
+      })),
+    } as never);
+
+    const res = await buildApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/expenses/expense-x', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: 999 }),
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(404);
+    expect(scopedUpdateWhereSpy).toHaveBeenCalled();
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+});
+
+describe('DELETE /properties/:propertyId/expenses/:id - cross-property bloqueado', () => {
+  function buildApp() {
+    const app = new Hono<{ Bindings: Bindings }>();
+    app.route('/properties/:propertyId/expenses', expensesRouter);
+    return app;
+  }
+
+  it('retorna 404 no delete cross-property e nao executa soft delete', async () => {
+    const deleteWhereSpy = vi.fn(async () => undefined);
+
+    vi.mocked(getDb).mockReturnValue({
+      select: vi.fn()
+        .mockReturnValueOnce(selectStub([membershipRow('tenant-a')]))
+        .mockReturnValueOnce(selectStub([{ tenantId: 'tenant-a', ownerId: 'user-1', managerId: null }]))
+        .mockReturnValueOnce(selectStub([]))
+        .mockReturnValueOnce(selectStub([])),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({ where: deleteWhereSpy })),
+      })),
+    } as never);
+
+    const res = await buildApp().fetch(
+      authedRequest('http://localhost/properties/prop-1/expenses/expense-x', {
+        method: 'DELETE',
+      }),
+      buildEnv()
+    );
+
+    expect(res.status).toBe(404);
+    expect(deleteWhereSpy).not.toHaveBeenCalled();
   });
 });

@@ -383,12 +383,22 @@ inventory.put('/:id', async (c) => {
   await db
     .update(inventoryItems)
     .set(patch)
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId)));
+    .where(and(
+      eq(inventoryItems.id, id),
+      eq(inventoryItems.propertyId, propertyId),
+      eq(inventoryItems.tenantId, tenantId),
+      isNull(inventoryItems.deletedAt)
+    ));
 
   const [updated] = await db
     .select(inventorySelect)
     .from(inventoryItems)
-    .where(eq(inventoryItems.id, id))
+    .where(and(
+      eq(inventoryItems.id, id),
+      eq(inventoryItems.propertyId, propertyId),
+      eq(inventoryItems.tenantId, tenantId),
+      isNull(inventoryItems.deletedAt)
+    ))
     .limit(1) as InventoryItem[];
 
   if (!updated) return err(c, 'Erro ao atualizar item', 'UPDATE_ERROR', 500);
@@ -435,7 +445,12 @@ inventory.delete('/:id', async (c) => {
   await db
     .update(inventoryItems)
     .set({ deletedAt: new Date().toISOString() })
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId)));
+    .where(and(
+      eq(inventoryItems.id, id),
+      eq(inventoryItems.propertyId, propertyId),
+      eq(inventoryItems.tenantId, tenantId),
+      isNull(inventoryItems.deletedAt)
+    ));
 
   await writeAuditLog(c.env.DB, {
     tenantId,
@@ -504,7 +519,12 @@ inventory.post('/:itemId/photo', async (c) => {
   await db
     .update(inventoryItems)
     .set({ photoUrl: key })
-    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
+    .where(and(
+      eq(inventoryItems.id, itemId),
+      eq(inventoryItems.propertyId, propertyId),
+      eq(inventoryItems.tenantId, tenantId),
+      isNull(inventoryItems.deletedAt)
+    ));
 
   await writeAuditLog(c.env.DB, {
     tenantId,
@@ -634,7 +654,12 @@ inventory.post('/:itemId/qr', async (c) => {
   await db
     .update(inventoryItems)
     .set({ qrCode: qrValue })
-    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.tenantId, tenantId)));
+    .where(and(
+      eq(inventoryItems.id, itemId),
+      eq(inventoryItems.propertyId, propertyId),
+      eq(inventoryItems.tenantId, tenantId),
+      isNull(inventoryItems.deletedAt)
+    ));
 
   await writeAuditLog(c.env.DB, {
     tenantId,
