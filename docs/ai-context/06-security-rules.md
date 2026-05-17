@@ -20,6 +20,10 @@ Refresh token fica em cookie `HttpOnly` no escopo `/api/v1/auth`. Access token f
 
 Objetos R2 sao privados por padrao. Arquivos de dominio devem ser servidos por endpoint autenticado/autorizado. Nao retornar key interna ou URL publica permanente para midia privada.
 
+## Secrets e infra
+
+Nao versionar secrets. `.dev.vars` nunca deve ser rastreado; mantenha apenas `.dev.vars.example` com placeholders. Identificadores de infraestrutura nao sao secrets, mas devem ser tratados com cuidado em repositorio publico. Em Cloudflare Workers, secrets de producao devem ser configurados via `wrangler secret put`, nunca em `wrangler.toml`.
+
 ## Credenciais
 
 Listagens nao retornam segredo. Reveal deve ser acao explicita, autorizada, auditada e sem plaintext no audit log.

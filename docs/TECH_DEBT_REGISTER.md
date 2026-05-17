@@ -430,29 +430,39 @@ Este registro deve ser lido em conjunto com:
 
 - **Severidade**: Alta
 - **Area**: Segurança / Configuração / Infra
-- **Status**: Mitigado
+- **Status**: Mitigado parcialmente
 - **Evidencia** (encontrada em auditoria de secrets 2026-05-14):
   - `house-log-front/src/lib/api/core/config.ts`: URL real `houselog-api-dev.sukinodoncai.workers.dev` hardcoded como fallback — revelava subdomain Cloudflare e roteava silenciosamente builds sem `NEXT_PUBLIC_API_URL` para o Worker dev real.
   - `house-log-back/apps/api/wrangler.toml`: `R2_PUBLIC_URL` com domínio real do bucket dev (`pub-3ff8849…r2.dev`) no bloco `[env.dev.vars]` — contradizia política de R2 privado por padrão (SECURITY.md) e expunha URL do bucket público.
   - `house-log-back/apps/api/.dev.vars.example`: mesma URL R2 real no arquivo de exemplo rastreado.
   - `docs/auth-routing-security.md`: URL real do Worker dev na documentação.
   - `.gitignore` (detectado em auditoria 2026-05-16): padrão `apps/api/.dev.vars` usava caminho relativo errado — não cobria `house-log-back/apps/api/.dev.vars`. Arquivo `.dev.vars` com secrets reais seria commitado silenciosamente se criado.
-- **Classificação confirmada**: nenhum secret real (JWT_SECRET, chave de criptografia, API key, VAPID key) foi jamais commitado. As ocorrências no histórico são exclusivamente identificadores de recurso (resource IDs, URLs públicas de infra), não credenciais de autenticação.
+- **Classificação confirmada**: auditoria recente do histórico Git/infra confirmou que não há secret real versionado (JWT_SECRET, chave de criptografia, API key, VAPID key, token Cloudflare ou chave R2). As ocorrências são identificadores/URLs de infraestrutura: subdomínio `workers.dev` antigo, URL pública R2 dev antiga, D1 dev ID e KV dev IDs antigo/atual. Identificadores de infra não são credenciais de autenticação, mas exigem cuidado porque o repositório é público.
 - **Repositório público**: `https://github.com/fhoinaski/HouseLog.git` — múltiplos branches publicados. Todo o histórico com os identificadores está acessível publicamente.
+- **Decisão atual (2026-05-17)**: `ROTACIONAR/DESATIVAR RECURSO`. `git filter-repo` não é necessário agora e não deve ser tratado como ação emergencial.
 - **Mitigação aplicada (2026-05-14)**:
   - `config.ts`: fallback substituído por `http://localhost:8787/api/v1`.
   - `wrangler.toml`: `R2_PUBLIC_URL` removida do bloco `[env.dev.vars]`; substituída por comentário com placeholder.
   - `.dev.vars.example`: URL real substituída por placeholder `pub-YOUR_HASH.r2.dev`.
   - `docs/auth-routing-security.md`: URL real substituída por `<seu-subdomain>.workers.dev`.
-  - `wrangler.toml` D1 dev UUID (`62bd81c4-77da-4867-a996-22fff5e0d258`) e KV dev UUID (`30d1ccabab2349e79151d3dec9eb11de`) substituídos por placeholders intencionais (`00000000-0000-0000-0000-000000000101` / `00000000000000000000000000000101`) em commits posteriores (`90bbc4e`, `7f83e8b`).
+  - `wrangler.toml` production/staging usam placeholders intencionais para D1/KV até provisionamento manual seguro. O bloco `env.dev` atual mantém IDs reais de D1/KV dev, classificados como identificadores de infraestrutura, não secrets.
 - **Mitigação adicional (2026-05-16)**:
   - `.gitignore`: padrão corrigido de `apps/api/.dev.vars` para `**/.dev.vars`; negação corrigida para `!**/.dev.vars.example`. Agora cobre `.dev.vars` em qualquer subpasta do repositório.
   - `scripts/check-deploy-config.mjs`: adicionados checks de secret scan — `.dev.vars` versionado, `R2_PUBLIC_URL` hardcoded, account subdomain em `workers.dev`, IDs reais conhecidos.
   - `docs/HISTORY_CLEANUP.md`: plano documentado para `git filter-repo` caso o repositório precise ser aberto sem histórico de identificadores. Não executado.
+- **Proteções atuais**:
+  - `.gitignore` protege `.dev.vars` com `**/.dev.vars` e mantém apenas exemplos rastreáveis via `!**/.dev.vars.example`.
+  - `.dev.vars.example` usa placeholders e não contém secrets reais.
 - **Risco restante**:
-  - Histórico git contém os identificadores removidos: `sukinodoncai.workers.dev` (commits `0177ca8`, `adcb849`, `e0c050f`, `d1aa1fb`), `pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev` (commit `9b27477`), `62bd81c4`/`30d1ccab` (commits `338b26f` até `90bbc4e`). Risco baixo (resource IDs, não credenciais), mas permanece no histórico público.
-  - Bucket R2 dev com URL `pub-3ff8849...r2.dev`: verificar se ainda está público no painel Cloudflare; se sim, desabilitar public access ou excluir o bucket.
-  - Limpeza do histórico com `git filter-repo` é ação futura opcional — ver `docs/HISTORY_CLEANUP.md`. Não executada automaticamente.
+  - Histórico git contém os identificadores removidos: `sukinodoncai.workers.dev` (commits `0177ca8`, `adcb849`, `e0c050f`, `d1aa1fb`), `pub-3ff8849243ae4ec2b6f124cf71160801.r2.dev` (commit `9b27477`), `62bd81c4`/`30d1ccab` (commits `338b26f` até `90bbc4e`) e KV dev atual (`348ed46bc04c4921a5874a5254957e45`) em `wrangler.toml`.
+  - Risco técnico: médio-baixo, porque os itens são resource IDs/URLs e não permitem autenticação sem credenciais Cloudflare.
+  - Risco reputacional/processual: médio, porque identificadores reais em histórico público podem gerar questionamento em due diligence, investidor, transferência de repositório ou auditoria formal.
+- **Ação recomendada**:
+  - Desativar public access ou excluir o bucket R2 dev antigo (`pub-3ff8849...r2.dev`) no painel Cloudflare.
+  - Excluir/recriar recursos dev expostos se houver preocupação com enumeração ou vínculo público: D1 dev e KV dev antigo/atual.
+  - Manter secret scan e bloqueio de `.dev.vars` versionado.
+  - Redigir documentação pública externa se ela não precisar preservar evidências internas.
+  - Tratar `git filter-repo` como limpeza opcional, não emergencial. Executar apenas se due diligence/investidor, transferência do repositório ou auditoria formal exigirem histórico limpo, ou se o bucket R2 exposto não puder ser desativado/deletado.
 - **Regras de rotação de segredos**:
   - Secrets Cloudflare Workers (`JWT_SECRET`, `CREDENTIALS_ENCRYPTION_KEY`, `RESEND_API_KEY`, credenciais R2): rotar via `wrangler secret put <KEY> [--env dev]` por ambiente. Nunca gravar em `wrangler.toml`, `.dev.vars` commitado ou código-fonte.
   - `NEXT_PUBLIC_API_URL`: configurar em variáveis de ambiente da plataforma (Vercel environment variables) por ambiente; em dev local, usar `.env.local` (gitignored).
