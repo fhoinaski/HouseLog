@@ -1,6 +1,6 @@
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { getDb } from '../db/client';
-import { properties, propertyCollaborators } from '../db/schema';
+import { properties, propertyCollaborators, serviceOrders } from '../db/schema';
 import {
   canAccessTenantProperty,
   type TenantPropertyAccessDecision,
@@ -105,6 +105,41 @@ export async function canRevealCredential(
   input: PropertyAuthorizationInput
 ): Promise<TenantScopedDecision> {
   return resolvePropertyDecision(db, input, 'secret');
+}
+
+// Statuses that represent an active engagement where a provider may access credentials.
+// 'approved' = bid accepted, provider confirmed. 'in_progress' = work underway.
+// User policy used 'accepted'/'scheduled' — actual schema enums are 'approved'/'in_progress'.
+// 'requested', 'completed', 'verified' are intentionally excluded.
+const PROVIDER_REVEAL_ALLOWED_STATUSES = ['approved', 'in_progress'] as const;
+
+export async function canProviderRevealCredential(
+  db: D1Database,
+  input: {
+    tenantId: string;
+    propertyId: string;
+    userId: string;
+    serviceOrderId: string;
+  }
+): Promise<TenantScopedDecision> {
+  const drizzle = getDb(db);
+  const [os] = await drizzle
+    .select({ id: serviceOrders.id })
+    .from(serviceOrders)
+    .where(
+      and(
+        eq(serviceOrders.id, input.serviceOrderId),
+        eq(serviceOrders.tenantId, input.tenantId),
+        eq(serviceOrders.propertyId, input.propertyId),
+        eq(serviceOrders.assignedTo, input.userId),
+        inArray(serviceOrders.status, [...PROVIDER_REVEAL_ALLOWED_STATUSES]),
+        isNull(serviceOrders.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!os) return { allowed: false, status: 403, code: 'FORBIDDEN' };
+  return { allowed: true, reason: 'provider_active_service_order' };
 }
 
 export async function canManageServiceOrder(

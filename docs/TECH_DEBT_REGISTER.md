@@ -104,14 +104,28 @@ Este registro deve ser lido em conjunto com:
 
 - **Severidade**: Critica
 - **Area**: Backend / Authorization Core / Credenciais
-- **Status**: Mitigado parcialmente
-- **Evidencia**: existe `assertPropertySecretAccess`, mas ainda nao ha `CredentialAccessPolicy` formal, regra por contexto operacional, motivo de revelacao, escopo por OS ou politica granular por tenant/organizacao.
-- **Impacto**: credenciais sao dados sensiveis centrais para imoveis premium; sem policy granular, o sistema depende de regra ampla e dificulta governanca, auditoria e venda para operacoes institucionais.
-- **Recomendacao**:
-  - criar modelo de policy para acesso a credenciais;
-  - diferenciar visualizar metadados, revelar segredo, compartilhar em OS e gerar codigo temporario;
-  - registrar contexto da revelacao sem gravar segredo;
-  - integrar com Authorization Core e multi-tenant.
+- **Status**: Mitigado
+- **Mitigado em**: 2026-05-16
+- **Evidencia**: policy granular implementada com as seguintes garantias:
+  - reveal é POST explícito (`POST /:credId/reveal`) — nenhum GET retorna segredo;
+  - `reason` obrigatório server-side: `z.string().trim().min(10).max(500)` em `credentialRevealSchema`;
+  - `serviceOrderId` opcional no body — registrado no audit log quando fornecido;
+  - caminho de provider: `canProviderRevealCredential` valida OS via `tenantId + propertyId + assignedTo + status IN ('approved','in_progress')` antes de liberar reveal;
+  - provider só revela se `share_with_os=true` na credencial;
+  - tenant `manager` bloqueado intencionalmente no reveal (documentado em `tenant-authorization.ts`);
+  - `has_secret` corrigido para refletir presença real do segredo (`!= null && !== ''`);
+  - audit log registra `reason`, `category`, `label`, `service_order_id` — nunca o plaintext;
+  - rate limit: 10 reveals/hora por userId;
+  - `tenantId` nunca vem do body — sempre do contexto autenticado.
+- **Status original**: Mitigado parcialmente — existia `canRevealCredential` mas sem path de provider, sem serviceOrderId, sem max em reason e com has_secret hardcoded.
+- **Risco residual**: sem MFA/TTL visual de reveal; provider não consegue revelar credenciais de OS em `requested` (pré-aprovação) — comportamento intencional.
+- **Arquivos alterados**:
+  - `packages/contracts/src/schemas/credential.ts` — reason max(500), serviceOrderId opcional
+  - `apps/api/src/lib/authorization.ts` — `canProviderRevealCredential` + `PROVIDER_REVEAL_ALLOWED_STATUSES`
+  - `apps/api/src/routes/credentials.ts` — provider path, has_secret fix, serviceOrderId no audit
+  - `apps/api/src/lib/tenant-authorization.ts` — comentário G4 (tenant manager bloqueado)
+  - `apps/api/src/routes/credential-reveal-provider.test.ts` — testes TD-005 fase 2
+- **Nota sobre status de OS**: o usuário especificou `accepted`/`scheduled`/`in_progress`; o schema real usa `approved`/`in_progress` (não existe status `accepted` nem `scheduled` — `scheduledAt` é timestamp, não status). Mapeamento: `accepted → approved`, `scheduled` sem equivalente direto (omitido).
 - **Relacionamento com roadmap/ADRs**: Fase 2 e Fase 3; ADR-004 e ADR-005.
 
 ---
@@ -243,10 +257,9 @@ Este registro deve ser lido em conjunto com:
 ### Curto prazo
 
 1. TD-012 - concluir IDs reais/secrets de producao e validar `check:deploy-config:prod`.
-2. TD-005 - iniciar policy granular para credenciais.
-3. TD-010 - desenhar e iniciar Authorization Core.
-4. TD-003 - adicionar confirmacao de exclusao documental.
-5. TD-002 - padronizar erro de upload multipart.
+2. TD-010 - desenhar e iniciar Authorization Core.
+3. TD-003 - adicionar confirmacao de exclusao documental.
+4. TD-002 - padronizar erro de upload multipart.
 
 ### Medio prazo
 

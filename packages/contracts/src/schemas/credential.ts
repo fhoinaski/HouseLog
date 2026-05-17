@@ -25,7 +25,8 @@ export const credentialCreateSchema = z.object({
 export const credentialUpdateSchema = credentialCreateSchema.partial();
 
 export const credentialRevealSchema = z.object({
-  reason: z.string().trim().min(10),
+  reason: z.string().trim().min(10).max(500),
+  serviceOrderId: z.string().optional(),
 });
 
 export type CredentialCategory = z.infer<typeof credentialCategorySchema>;

@@ -6,6 +6,7 @@ import { ok, err } from '../lib/response';
 import { writeAuditLog } from '../lib/audit';
 import {
   canRevealCredential,
+  canProviderRevealCredential,
   canCreateCredential,
   canDeleteCredential,
   canGenerateTemporaryCredentialAccess,
@@ -92,7 +93,7 @@ function toCredentialResponse(row: CredentialRecord): CredentialResponse {
     ...safeRow,
     integration_config: sanitizeCredentialIntegrationConfig(row.integration_config),
     share_with_os: row.share_with_os === 1,
-    has_secret: true,
+    has_secret: row.secret != null && row.secret !== '',
     has_integration_secret: hasCredentialIntegrationSecret(row.integration_secret, row.integration_config),
   };
 }
@@ -183,13 +184,15 @@ async function revealCredentialSecret(c: CredentialsContext) {
   const userId = c.get('userId');
   const tenantId = c.get('tenantId') as string;
   const role = c.get('userRole');
+  const tenantRole = c.get('tenantRole');
   const revealBody = credentialRevealSchema.safeParse(await c.req.json().catch(() => null));
 
   if (!revealBody.success) {
     return err(c, 'Motivo obrigatorio para revelar credencial', 'VALIDATION_ERROR', 422, revealBody.error.flatten());
   }
 
-  const reason = revealBody.data.reason;
+  const { reason, serviceOrderId } = revealBody.data;
+  const isProvider = role === 'provider' || role === 'temp_provider';
   const rlKey = `rl:reveal:${userId}`;
   const allowed = await applyRateLimit(c.env.KV, rlKey, REVEAL_MAX, REVEAL_WINDOW);
   if (!allowed) {
@@ -206,25 +209,42 @@ async function revealCredentialSecret(c: CredentialsContext) {
     return err(c, 'Limite de revelacoes atingido. Tente novamente em 1 hora.', 'RATE_LIMITED', 429);
   }
 
-  const decision = await canRevealCredential(c.env.DB, {
-    propertyId,
-    userId,
-    role,
-    tenantId,
-    tenantRole: c.get('tenantRole'),
-  });
-  if (!decision.allowed) {
-    await writeAuditLog(c.env.DB, {
+  if (isProvider) {
+    // Providers must supply a serviceOrderId from an active OS assigned to them.
+    // tenantId is never taken from the body — it comes from the authenticated context.
+    if (!serviceOrderId) {
+      return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+    }
+    const osDecision = await canProviderRevealCredential(c.env.DB, {
       tenantId,
       propertyId,
-      entityType: 'property_access_credential',
-      entityId: credId,
-      action: 'secret_reveal_denied',
-      actorId: userId,
-      actorIp: c.req.header('CF-Connecting-IP'),
-      newData: { reason: 'FORBIDDEN', property_id: propertyId, tenant_id: tenantId },
+      userId,
+      serviceOrderId,
     });
-    return err(c, 'Sem acesso', decision.code, decision.status);
+    if (!osDecision.allowed) {
+      return err(c, 'Sem acesso', osDecision.code, osDecision.status);
+    }
+  } else {
+    const decision = await canRevealCredential(c.env.DB, {
+      propertyId,
+      userId,
+      role,
+      tenantId,
+      tenantRole,
+    });
+    if (!decision.allowed) {
+      await writeAuditLog(c.env.DB, {
+        tenantId,
+        propertyId,
+        entityType: 'property_access_credential',
+        entityId: credId,
+        action: 'secret_reveal_denied',
+        actorId: userId,
+        actorIp: c.req.header('CF-Connecting-IP'),
+        newData: { reason: 'FORBIDDEN', property_id: propertyId, tenant_id: tenantId },
+      });
+      return err(c, 'Sem acesso', decision.code, decision.status);
+    }
   }
 
   const [rawCred] = await db
@@ -241,6 +261,11 @@ async function revealCredentialSecret(c: CredentialsContext) {
     .limit(1) as RevealedCredentialRecord[];
 
   if (!rawCred) return err(c, 'Credencial nao encontrada', 'NOT_FOUND', 404);
+
+  // Provider: credential must have share_with_os=true (checked after fetch to avoid timing leak)
+  if (isProvider && rawCred.share_with_os !== 1) {
+    return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  }
 
   const credKey = getCredentialKey(c.env);
   const withEncryptedSecret = await migrateLegacyStoredSecretIfNeeded(db, rawCred, credKey);
@@ -271,6 +296,7 @@ async function revealCredentialSecret(c: CredentialsContext) {
       category: cred.category,
       label: cred.label,
       reason,
+      ...(serviceOrderId !== undefined ? { service_order_id: serviceOrderId } : {}),
       user_agent: c.req.header('User-Agent') ?? null,
     },
   });

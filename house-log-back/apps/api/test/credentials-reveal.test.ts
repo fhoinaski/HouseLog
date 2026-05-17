@@ -208,6 +208,8 @@ describe('credentials secret reveal hardening', () => {
         notes: null,
         integration_type: null,
         integration_config: null,
+        integration_secret: null,
+        secret: 'v1:wifi-pass-encrypted',
         share_with_os: 1,
         created_at: '2026-05-11T10:00:00.000Z',
         updated_at: '2026-05-11T10:00:00.000Z',

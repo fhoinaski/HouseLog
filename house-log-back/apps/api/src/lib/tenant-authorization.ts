@@ -57,6 +57,9 @@ export function canUseTenantPropertyAccess(input: TenantPropertyAccessInput): Te
   }
 
   if (accessLevel === 'secret') {
+    // Intentional: tenant 'manager' role cannot reveal secrets even though they can manage properties.
+    // Only the tenant owner and the property's direct owner/manager have access.
+    // This limits blast radius if a tenant-level manager account is compromised.
     if (input.tenantRole === 'owner') return { allowed: true, reason: 'tenant_owner_secret' };
     if (input.propertyOwnerId === input.userId || input.propertyManagerId === input.userId) {
       return { allowed: true, reason: 'direct_property_secret' };
