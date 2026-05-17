@@ -1,3 +1,7 @@
+import { isSearchResultPayloadSafe } from './search-field-policy';
+
+export { isSearchResultPayloadSafe };
+
 export type SearchTimelineTenantDecision =
   | { allowed: true }
   | { allowed: false; status: 400 | 404; code: 'TENANT_REQUIRED' | 'NOT_FOUND' };
@@ -12,7 +16,6 @@ export function canUseTenantSearchProperty(input: {
   }
   return { allowed: true };
 }
-
 export function canUseTenantTimelineEvent(input: {
   activeTenantId?: string | null;
   propertyTenantId?: string | null;
@@ -35,22 +38,4 @@ export function canUseTenantTimelineEvent(input: {
   }
 
   return { allowed: true };
-}
-
-const FORBIDDEN_SEARCH_RESULT_FIELDS = new Set([
-  'file_url',
-  'fileUrl',
-  'media_key',
-  'mediaKey',
-  'r2_key',
-  'r2Key',
-  'secret',
-  'ciphertext',
-  'encryptedSecret',
-  'encrypted_secret',
-  'password',
-]);
-
-export function isSearchResultPayloadSafe(result: Record<string, unknown>): boolean {
-  return Object.keys(result).every((field) => !FORBIDDEN_SEARCH_RESULT_FIELDS.has(field));
 }

@@ -246,17 +246,17 @@ Este registro deve ser lido em conjunto com:
 
 ---
 
-### TD-011 - Search ainda nao possui policy formal por campo sensivel
+### TD-011 - Search possui policy formal por campo sensivel
 
 - **Severidade**: Media
 - **Area**: Backend / Search / Seguranca
-- **Status**: Mitigado parcialmente
-- **Evidencia**: `house-log-back/apps/api/src/routes/search.ts` centraliza busca por OS, documentos, inventario e manutencao. O search ja possui helpers por tipo no Authorization Core, busca ampla em OCR documental e descricao livre de OS foram removidas, e ha uma allowlist local de campos pesquisaveis por tipo.
-- **Impacto**: novos campos ou indices podem expor metadados sensiveis por inferencia, especialmente OCR, descricoes operacionais, evidencias, documentos criticos e futuros dados multi-tenant.
+- **Status**: Mitigado
+- **Evidencia**: `house-log-back/apps/api/src/lib/search-field-policy.ts` define `SEARCH_FIELD_POLICY` com campos permitidos, proibidos/sensiveis, nota por entidade e exigencia de tenant scope. `routes/search.ts` usa essa policy sem ampliar escopo: OS segue em `title/system_type`, documentos seguem em `title`, OCR e descricoes livres continuam fora, e credenciais/segredos nao entram em search.
+- **Impacto**: novos campos ou indices passam a ter barreira explicita e testavel antes de expor metadados sensiveis por inferencia.
 - **Recomendacao**:
   - manter credenciais e segredos fora de search;
   - so reintroduzir OCR com policy documental explicita por tipo, origem e sensibilidade;
-  - evoluir a allowlist local para policy formal se novos indices ou campos sensiveis forem adicionados;
+  - atualizar `SEARCH_FIELD_POLICY` e seus testes antes de qualquer novo campo pesquisavel;
   - considerar tenant/organization antes de search dedicado.
 - **Relacionamento com roadmap/ADRs**: Fase 3 e Fase 7; Authorization Core, AI-ready checklist e ADR-005.
 

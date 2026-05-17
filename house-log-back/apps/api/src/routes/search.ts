@@ -10,7 +10,8 @@ import {
   listAccessiblePropertyIds,
 } from '../lib/authorization';
 import { authMiddleware, resolveTenant } from '../middleware/auth';
-import { canUseTenantSearchProperty, isSearchResultPayloadSafe } from '../lib/search-timeline-tenant';
+import { assertSearchFieldAllowed, isSearchResultPayloadSafe, type SearchFieldEntity } from '../lib/search-field-policy';
+import { canUseTenantSearchProperty } from '../lib/search-timeline-tenant';
 import { getDb } from '../db/client';
 import {
   documents,
@@ -34,25 +35,14 @@ export type SearchResult = {
   href: string;
 };
 
-const SEARCH_FIELD_ALLOWLIST = {
-  service: ['title', 'system_type'],
-  document: ['title'],
-  inventory: ['name', 'brand', 'category'],
-  maintenance: ['title', 'system_type'],
-} as const;
-
-type SearchEntity = keyof typeof SEARCH_FIELD_ALLOWLIST;
 type AllowedSearchPredicate = ReturnType<typeof sqlLike>;
 
 function allowedSearchLike(
-  entity: SearchEntity,
+  entity: SearchFieldEntity,
   field: string,
   predicate: AllowedSearchPredicate
 ): AllowedSearchPredicate {
-  const allowedFields = SEARCH_FIELD_ALLOWLIST[entity] as readonly string[];
-  if (!allowedFields.includes(field)) {
-    throw new Error(`Search field not allowed: ${entity}.${field}`);
-  }
+  assertSearchFieldAllowed(entity, field);
   return predicate;
 }
 

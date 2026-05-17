@@ -44,3 +44,7 @@ Mutacoes criticas usam `writeAuditLog`. Dados antigos e novos devem passar por s
 ## Authorization Core
 
 Helpers de autorizacao para property e abertura de OS dependem de tenant ativo. Nao adicionar fallback por `propertyId + userId` sem `tenantId`.
+
+## Search
+
+Campos pesquisaveis ficam em `SEARCH_FIELD_POLICY`. Nao incluir OCR, descricoes livres, credenciais, segredos, URLs privadas ou R2 keys em search sem nova policy explicita e testes.

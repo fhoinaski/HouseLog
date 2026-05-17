@@ -27,6 +27,8 @@ Helpers de autorizacao compartilhados devem receber `tenantId` e `tenantRole` do
 
 Auth, tenant authorization, credentials, documents/media, service orders, bids/messages, audit log, deploy config, public links, handover, uploads e offline sync.
 
+Search usa `src/lib/search-field-policy.ts` para controlar campos permitidos e proibidos por entidade. A rota nao deve adicionar campo pesquisavel fora dessa policy.
+
 ## Regras para IA
 
 - Nao inventar rota, entidade ou payload.
