@@ -75,10 +75,20 @@ ENVIRONMENT=development
 # O refresh token é armazenado em cookie HttpOnly 'houselog_refresh'.
 # Em produção: Secure=true, SameSite=Lax, Path=/api/v1/auth.
 # Em desenvolvimento: Secure=false (localhost não requer HTTPS).
-# Compatibilidade cross-origin: se frontend e API estiverem em domínios distintos,
-# configure custom domain same-site OU mude para SameSite=None no ENVIRONMENT=production.
+# Compatibilidade cross-origin: frontend e API devem compartilhar o mesmo eTLD+1
+# para SameSite=Lax funcionar com fetch + credentials: include.
+# Solução definitiva: custom domain same-site (ex: app.houselog.app + api.houselog.app).
 # Dias até o refresh token expirar. Default: 30.
 # REFRESH_TOKEN_TTL_DAYS=30
+
+# -----------------------------------------------------------------------------
+# Custom domain same-site (TD-013)
+# -----------------------------------------------------------------------------
+# Obrigatório em ENVIRONMENT=production. Em dev, os valores padrão funcionam
+# com wrangler.toml [env.dev.vars]. Não definir em production causa erro no startup.
+# APP_ORIGIN é adicionado automaticamente ao allowlist do CORS.
+APP_ORIGIN=http://localhost:3000
+API_ORIGIN=http://localhost:8787
 
 # -----------------------------------------------------------------------------
 # Email transacional

@@ -24,6 +24,9 @@ export type Bindings = {
   R2_SECRET_ACCESS_KEY?: string;
   RESEND_API_KEY: string;
   APP_URL: string;
+  // Custom domain origins — required in production (validated by validateProductionConfig)
+  APP_ORIGIN?: string;
+  API_ORIGIN?: string;
   // Observabilidade (opcional)
   SENTRY_DSN?: string;
   // Web Push / VAPID

@@ -68,7 +68,7 @@ Regras:
 - O frontend usa `credentials: 'include'` em todas as chamadas à API para enviar o cookie automaticamente.
 - Em caso de 401 em endpoint privado, o frontend tenta uma renovação silenciosa via cookie antes de redirecionar para login (deduplicação via promise compartilhada em `session.ts`).
 
-Nota de compatibilidade de deployment: em ambientes onde frontend e API estão em domínios distintos (ex: vercel.app e workers.dev), `SameSite=Lax` não envia o cookie em POSTs cross-site. A solução definitiva é custom domain same-site (ex: api.houselog.app + app.houselog.app).
+**Custom domain same-site (TD-013):** Em deployments cross-origin (ex: `house-log.vercel.app` + `houselog-api.workers.dev`), `SameSite=Lax` não envia o cookie em requisições `fetch()` cross-site — o refresh token nunca chega à API. A solução definitiva é usar custom domains que compartilhem o mesmo eTLD+1: `app.houselog.app` (frontend) + `api.houselog.app` (API). O cookie host-only de `api.houselog.app` é enviado corretamente pelo browser em fetch same-site. Variáveis `APP_ORIGIN` e `API_ORIGIN` devem ser configuradas em produção — o Worker rejeita requests com erro se estiverem ausentes. Não usar `SameSite=None` sem implementar proteção CSRF.
 
 ## R2 — Armazenamento privado por padrão
 

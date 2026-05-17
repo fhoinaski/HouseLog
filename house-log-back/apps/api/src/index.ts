@@ -42,6 +42,7 @@ import { and, eq, lt, sql } from 'drizzle-orm';
 import type { Bindings, Variables, WorkerQueueMessage } from './lib/types';
 import { canServeDirectMediaKey } from './lib/media-security';
 import { buildCorsOriginHandler } from './lib/cors';
+import { validateProductionConfig } from './lib/env-validation';
 import {
   isDocumentIngestionQueueMessage,
   processFakeDocumentIngestionQueueMessage,
@@ -186,7 +187,10 @@ app.onError((err, c) => {
 });
 
 export default {
-  fetch: app.fetch.bind(app),
+  async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
+    validateProductionConfig(env);
+    return app.fetch(request, env, ctx);
+  },
 
   async scheduled(event: ScheduledEvent, env: Bindings, _ctx: ExecutionContext) {
     try {

@@ -299,10 +299,17 @@ Este registro deve ser lido em conjunto com:
   - `http.ts` agora faz retry silencioso em 401: tenta refresh antes de redirecionar para `/login`.
   - Testes novos em `auth-session.test.ts`: CORS real (`buildCorsOriginHandler`) + bloco "Armazenamento — refresh_token jamais exposto no body".
   - `SECURITY.md` atualizado para refletir access token em memória como estado atual.
+- **Mitigação adicional (TD-013 — 2026-05-16)**:
+  - `APP_ORIGIN` e `API_ORIGIN` adicionados ao tipo `Bindings` e ao `wrangler.toml` por ambiente.
+  - `validateProductionConfig()` em `apps/api/src/lib/env-validation.ts` lança erro fatal no startup se `APP_ORIGIN` ou `API_ORIGIN` estiverem ausentes em `ENVIRONMENT=production`.
+  - `cors.ts` atualizado: `APP_ORIGIN` é automaticamente incluído no allowlist de CORS além de `CORS_ORIGINS`.
+  - Produção configurada com `APP_ORIGIN=https://app.houselog.app` e `API_ORIGIN=https://api.houselog.app`.
+  - Testes em `apps/api/src/lib/env-validation.test.ts` cobrem: ausência de APP_ORIGIN/API_ORIGIN em production (lança), ausência em dev/staging (não lança), string vazia, APP_ORIGIN no allowlist CORS, sem wildcard, sem localhost em production.
+  - `docs/SECURITY.md` atualizado com política de custom domain.
+  - `.dev.vars.example` documenta APP_ORIGIN e API_ORIGIN com valores para dev.
 - **Risco restante**:
-  - Em deployment cross-origin (workers.dev ≠ vercel.app, domínios distintos), `SameSite=Lax` não envia o cookie em POSTs cross-site. Solução: custom domain same-site (ex: api.houselog.app + app.houselog.app) OU `SameSite=None; Secure`.
-- **Próxima etapa recomendada**:
-  - Configurar custom domain same-site para eliminar necessidade de `SameSite=None`.
+  - Custom domain `app.houselog.app` e `api.houselog.app` precisam ser configurados no painel Cloudflare e na Vercel antes do deploy de produção.
+  - Sem CSRF tokens — `SameSite=None` não é opção segura (correto manter `Lax`).
 - **Relacionamento com roadmap**: Sprint 3 do HOUSELOG_EXECUTION_MASTERPLAN.md.
 
 ---
