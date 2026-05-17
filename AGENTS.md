@@ -1,210 +1,189 @@
-# AGENTS.md — HouseLog (Root)
+# AGENTS.md — HouseLog
 
-## Objetivo
+## Purpose
 
-Este arquivo define as regras globais para qualquer agente que trabalhe no repositório HouseLog.
+HouseLog is a SaaS for property technical management, maintenance, service orders, documents, expenses, providers, credentials, handover, diagnostics, warranties and operational history.
 
-O HouseLog é um sistema SaaS de gestão operacional de imóveis com foco em:
-- ordens de serviço;
-- manutenção preventiva;
-- histórico técnico do imóvel;
-- documentos e anexos;
-- financeiro;
-- colaboração entre owner, manager e provider.
+It is not an open marketplace. It is a private technical operating system for premium properties, owners, managers, builders and vetted providers.
 
-Este arquivo é a autoridade global do repositório.
-Arquivos de agentes específicos por domínio complementam este documento:
-- `/house-log-front/AGENTS.md`
-- `/house-log-back/AGENTS.md`
-
-Quando houver conflito:
-1. este arquivo define a regra global;
-2. o agente específico do domínio define a execução local;
-3. nunca inventar comportamento fora da arquitetura real.
-
----
-
-## Estrutura oficial do repositório
-
-- `house-log-front` → frontend web/PWA
+Main domains:
+- `house-log-front` → frontend/PWA
 - `house-log-back` → backend/API
 
-Arquivos estratégicos:
-- `DOCUMENTACAO_COMPLETA_HOUSELOG.md`
-- `package.json`
+Domain-specific instructions may exist in:
 - `house-log-front/AGENTS.md`
 - `house-log-back/AGENTS.md`
+- subdirectories closer to the task
+
+Nearest `AGENTS.md` rules override broader rules when they conflict.
 
 ---
 
-## Princípios obrigatórios do projeto
+## Token efficiency
 
-Toda alteração deve:
-- respeitar o produto real;
-- respeitar os contratos existentes;
-- preservar clareza arquitetural;
-- evitar duplicação;
-- manter facilidade de manutenção;
-- favorecer evolução incremental;
-- preservar compatibilidade entre frontend e backend.
+Work with minimum context.
 
-É proibido:
-- inventar endpoints;
-- inventar entidades sem aderência ao domínio;
-- alterar payloads sem revisar impacto ponta a ponta;
-- criar fluxo visual que não exista no backend;
-- criar lógica paralela duplicando comportamento já existente;
-- quebrar tipagem por conveniência;
-- usar `any` sem justificativa forte;
-- criar solução “bonita” mas inconsistente com o produto real.
+Do not scan the whole repository unless explicitly requested.
 
----
+Before opening files:
+1. Search first.
+2. Open only files directly related to the task.
+3. Read only relevant sections.
+4. Do not re-read files already inspected in the same session.
+5. Do not inspect unrelated routes, tests, docs, configs or migrations.
+6. Do not summarize large files unless requested.
+7. Do not perform broad exploration without a concrete reason.
 
-## Fonte única de verdade por domínio
-
-### Produto e arquitetura geral
-- `DOCUMENTACAO_COMPLETA_HOUSELOG.md`
-
-### Frontend
-- `house-log-front/AGENTS.md`
-
-### Backend
-- `house-log-back/AGENTS.md`
+For technical debt tasks:
+- Start from `docs/TECH_DEBT_REGISTER.md`.
+- Locate the exact TD item.
+- Search by the TD id and related keywords.
+- Open only files explicitly mentioned by the TD or directly matched by search.
+- Do not inspect all routes just because routes are mentioned.
 
 ---
 
-## Regras globais de implementação
+## Architecture rules
 
-Antes de implementar qualquer coisa:
-1. identificar o domínio afetado;
-2. ler os arquivos relevantes;
-3. validar os contratos impactados;
-4. mapear riscos de regressão;
-5. só então alterar.
+Do not treat HouseLog as a generic app.
 
-Toda entrega deve:
-1. explicar o diagnóstico;
-2. explicar o plano;
-3. implementar com menor risco possível;
-4. listar arquivos alterados;
-5. apontar validações manuais necessárias.
+Always preserve:
+- multi-role flow: `owner`, `manager`, `provider`, `temp_provider`;
+- tenant isolation;
+- resource-level authorization;
+- property context;
+- service orders as the operational core;
+- bids, messages, documents, credentials and expenses as connected workflows;
+- frontend/backend contract consistency.
 
----
-
-## Regra global de naming e consistência
-
-O design system oficial do HouseLog chama-se:
-
-**The Architectural Lens**
-
-É proibido:
-- usar nomes paralelos para o design system;
-- introduzir outra identidade visual concorrente;
-- criar segunda convenção visual conflitando com a oficial.
-
-Toda linguagem visual nova deve seguir:
-- tokens semânticos;
-- componentes base reutilizáveis;
-- hierarquia editorial;
-- profundidade tonal;
-- mobile-first;
-- legibilidade operacional.
+Never:
+- invent endpoints;
+- invent entities;
+- change payloads without checking consumers;
+- duplicate existing logic;
+- create frontend flows unsupported by the backend;
+- use `any` without strong justification;
+- refactor outside the requested scope.
 
 ---
 
-## Regras globais de frontend + backend
+## Security rules
 
-Toda feature deve respeitar:
-- contrato real da API;
-- tipagem forte;
-- estados de erro previsíveis;
-- tratamento de loading/empty/error;
-- autorização por papel;
-- segurança mínima esperada;
-- UX consistente com o fluxo de negócio.
+Always follow these rules:
 
-Mudanças em contrato devem considerar:
-- rota backend;
-- schema e validação;
-- cliente frontend;
-- tipagem consumidora;
-- telas afetadas;
-- efeitos colaterais em cache, notificações e estados.
-
----
-
-## Regra obrigatória para agentes
-
-O agente nunca deve assumir que o projeto é genérico.
-
-Sempre considerar que HouseLog possui:
-- fluxo por papéis (`owner`, `manager`, `provider`, `temp_provider`);
-- contexto por imóvel;
-- ordens de serviço como eixo operacional;
-- bids/orçamentos;
-- mensagens por OS;
-- documentos e financeiro integrados;
-- PWA e uso mobile em campo.
-
-Toda solução deve parecer:
-- profissional;
-- implementável;
-- consistente;
-- escalável;
-- revisável.
+- Never accept `tenantId` from request body.
+- Always derive `tenantId` from authenticated context.
+- Never query sensitive resources only by `id`.
+- Always validate `tenantId + resourceId`.
+- For nested resources, validate the full chain when applicable:
+  - `tenantId`;
+  - `propertyId`;
+  - `roomId`;
+  - `serviceOrderId`;
+  - `documentId`;
+  - `credentialId`.
+- Do not leak secrets, credential values, tokens, signed URLs or plaintext in:
+  - responses;
+  - logs;
+  - audit logs;
+  - test snapshots.
+- Do not store public link tokens in plaintext.
+- Do not use internal resource IDs as public access tokens.
+- Do not use `Math.random()` for security-sensitive values.
+- Do not use `Date.now()` as an ID.
+- Do not use `ts-ignore` to hide type problems.
+- Do not silence TypeScript errors with unsafe casts.
+- Preserve audit logging for sensitive actions.
 
 ---
 
-## Método obrigatório de trabalho
+## Implementation rules
 
-### 1. Diagnóstico
-- ler os arquivos reais;
-- entender o fluxo atual;
-- identificar contratos;
-- identificar riscos;
-- identificar reaproveitamento possível.
+Before editing:
+- identify the affected domain;
+- search for existing patterns;
+- check related contracts;
+- choose the smallest safe change;
+- identify the regression test to add or update.
 
-### 2. Plano
-- listar arquivos a alterar;
-- listar o que será preservado;
-- listar o que será melhorado;
-- justificar aderência à arquitetura real.
+During implementation:
+- prefer targeted edits;
+- preserve existing behavior;
+- avoid broad refactors;
+- keep code typed, readable and maintainable;
+- follow existing naming, structure and error patterns.
 
-### 3. Implementação
-- preferir mudanças incrementais;
-- evitar refatoração destrutiva sem necessidade;
-- manter código legível;
-- manter coesão com o padrão já aceito no projeto.
+For frontend:
+- respect the official design system: **The Architectural Lens**;
+- use existing components/tokens when available;
+- always handle loading, empty and error states when touching UI;
+- do not create frontend flows unsupported by backend contracts.
 
-### 4. Entrega
-Sempre informar:
-- diagnóstico;
-- plano;
-- implementação;
-- arquivos alterados;
-- riscos;
-- validações manuais.
-
----
-
-## Critério de aceite global
-
-Uma alteração só está pronta se:
-- respeita a arquitetura do HouseLog;
-- respeita os contratos reais;
-- não cria fluxo fictício;
-- não duplica sistema;
-- melhora ou preserva manutenção;
-- mantém coerência entre frontend e backend;
-- está pronta para revisão humana.
+For backend:
+- preserve tenant isolation;
+- preserve role authorization;
+- validate inputs;
+- avoid leaking secrets or sensitive payloads;
+- keep API responses consistent with existing contracts;
+- prefer shared authorization helpers over duplicated manual checks;
+- preserve existing status codes unless there is a security reason to change them.
 
 ---
 
-## Em caso de ambiguidade
+## Work mode
 
-Se houver ambiguidade:
-- escolher a solução mais conservadora;
-- preservar o comportamento existente;
-- não inventar domínio novo;
-- deixar explícita a limitação;
-- aplicar a menor alteração segura possível.
+Before editing files, respond briefly with:
+1. cause/root issue;
+2. files you will touch;
+3. test you will add or update.
+
+Keep this under 8 lines.
+
+After implementation, final output must include only:
+1. files changed;
+2. what changed;
+3. validations run;
+4. remaining risks or manual steps.
+
+Keep final responses short.
+
+---
+
+## Audit mode
+
+When asked to audit:
+- Do not alter files.
+- Read only the requested files unless a direct dependency is necessary.
+- Return a compact table:
+  - finding;
+  - file;
+  - risk;
+  - fix now: yes/no;
+  - reason.
+- Do not explain general concepts.
+- Do not generate long reports unless explicitly requested.
+
+---
+
+## Validation
+
+Run only validations relevant to changed files first.
+
+Use full validation only when the change justifies it or before final delivery.
+
+Prefer:
+- targeted tests;
+- type-check;
+- lint/build only when related or requested;
+- `git diff --check`.
+
+Do not run expensive commands repeatedly.
+
+Suggested validation by area:
+
+Backend/API:
+```bash
+npm run type-check
+npm run test:api
+npm run build
+git diff --check

@@ -1,338 +1,316 @@
 # AGENTS.md — HouseLog Backend
 
-## Objetivo
+## Scope
 
-Este arquivo define as regras específicas de backend para qualquer agente que trabalhe em `house-log-back`.
+Applies to `house-log-back`.
 
-O agente deve atuar como:
-- engenheiro backend sênior;
-- especialista em APIs HTTP;
-- especialista em Hono;
-- especialista em Cloudflare Workers;
-- especialista em D1 + Drizzle;
-- especialista em segurança de aplicação;
-- especialista em modelagem incremental de domínio.
-
-Toda alteração no backend deve:
-- respeitar a arquitetura real;
-- preservar contratos existentes;
-- manter segurança e previsibilidade;
-- preservar tipagem forte;
-- evitar acoplamento desnecessário;
-- manter rastreabilidade e manutenção.
-
----
-
-## Stack obrigatória do backend
-
-O backend deve ser construído e mantido com:
+Stack:
 - Cloudflare Workers
 - Hono
-- TypeScript
-- D1 (SQLite)
-- Drizzle ORM
+- D1/SQLite
+- Drizzle
 - R2
 - KV
 - Queues
-- Workers AI
 - Resend
+- Workers AI when applicable
+
+Follow the root `AGENTS.md` first. This file adds backend-specific rules.
 
 ---
 
-## Arquitetura funcional do backend
+## Token efficiency — mandatory
 
-O backend do HouseLog atende um domínio real de gestão imobiliária operacional com foco em:
-- autenticação e autorização;
-- propriedades;
-- ordens de serviço;
-- bids/orçamentos;
-- mensagens por OS;
-- manutenção preventiva;
-- documentos;
-- financeiro;
-- provider portal;
-- marketplace;
-- auditoria e compartilhamento.
+Use minimum context.
 
-O agente nunca deve tratar a API como CRUD genérico sem contexto.
+Do not scan the whole backend.
 
----
+Before opening files:
+1. Search first.
+2. Open only files directly related to the task.
+3. Read only relevant sections.
+4. Do not inspect all routes.
+5. Do not inspect all migrations.
+6. Do not inspect all tests.
+7. Do not re-read files already inspected in this session.
+8. Do not summarize large files unless requested.
+9. Do not delegate parallel reading of many files unless explicitly requested.
 
-## Arquivos de referência prioritários
-
-Antes de alterar comportamento, ler quando aplicável:
-- `apps/api/src/index.ts`
-- `apps/api/src/routes/*`
-- `apps/api/src/db/schema.ts`
-- `apps/api/src/db/migrations/*`
-- `apps/api/src/lib/*`
-- `apps/api/src/middleware/*`
-- `apps/api/wrangler.toml`
-
-Também considerar:
-- `DOCUMENTACAO_COMPLETA_HOUSELOG.md`
+If more than 3 files seem necessary, stop and briefly state why each file is needed before opening more.
 
 ---
 
-## Regra crítica do backend
+## Search-first rules
 
-O agente nunca deve:
-- inventar endpoint;
-- inventar payload fora do domínio;
-- alterar contrato sem revisar impacto no frontend;
-- quebrar regra de autorização por papel;
-- misturar regra de negócio complexa diretamente na camada de rota sem necessidade;
-- usar tipagem fraca;
-- usar `any` sem necessidade real;
-- ocultar erro estrutural com gambiarra;
-- duplicar validação em múltiplos pontos sem motivo;
-- ignorar efeitos colaterais operacionais.
+For any task, search by the most specific identifier first:
+- TD id;
+- route name;
+- helper name;
+- schema name;
+- function name;
+- test name;
+- error code;
+- env var name;
+- config key.
 
-Sempre:
-1. entender a regra de negócio real;
-2. validar entidades e relações afetadas;
-3. revisar rotas, schema e consumidor;
-4. implementar com menor impacto seguro;
-5. manter coerência entre domínio, rota e persistência.
+Never open broad directories just to understand the project.
 
----
+Do not inspect all files in:
+- `src/routes`
+- `src/db/migrations`
+- `src/tests`
+- `docs`
+- `scripts`
 
-## Regras de contrato e compatibilidade
-
-Toda mudança deve preservar:
-- shape dos payloads quando possível;
-- semântica dos status HTTP;
-- autorização correta;
-- previsibilidade de erro;
-- coerência entre leitura e escrita;
-- compatibilidade com o frontend existente.
-
-Se um contrato precisar mudar:
-- revisar consumidor no frontend;
-- revisar tipagem;
-- revisar validações;
-- revisar documentação;
-- revisar efeitos sobre cache/notificações.
+unless explicitly requested.
 
 ---
 
-## Regras de modelagem
+## Technical debt tasks
 
-Ao evoluir o domínio:
-- preferir mudanças incrementais;
-- manter nomes claros;
-- evitar campos ambíguos;
-- respeitar o eixo de contexto por propriedade;
-- preservar a centralidade operacional de `serviceOrders`, `bids`, `messages`, `documents`, `expenses`.
+For TD tasks:
+1. Start from `docs/TECH_DEBT_REGISTER.md`.
+2. Locate the exact TD item.
+3. Search by the TD id and keywords from that item.
+4. Open only files explicitly mentioned or directly matched.
+5. Make the smallest safe change.
 
-Ao criar ou alterar tabelas:
-- manter aderência ao domínio real;
-- revisar impacto de migrations;
-- evitar redundância;
-- evitar colunas vagas sem função clara;
-- preferir estrutura rastreável.
+Do not inspect unrelated routes, tests, docs or configs.
 
 ---
 
-## Regras de rotas
+## Backend architecture rules
 
-As rotas devem:
-- ser orientadas ao domínio;
-- ter validação clara;
-- ter autorização explícita;
-- retornar payload consistente;
-- usar status HTTP coerentes;
-- evitar lógica inchada.
+Always preserve:
+- tenant isolation;
+- property scoping;
+- role-based authorization;
+- resource-level authorization;
+- audit logging for sensitive flows;
+- secret redaction;
+- stable error codes;
+- frontend/backend contract compatibility.
 
-É proibido:
-- colocar regra de negócio complexa diretamente no handler sem organização;
-- retornar shape inconsistente entre endpoints semelhantes;
-- aceitar entrada não validada;
-- expor dado além do necessário para o papel atual.
+Never:
+- invent routes;
+- invent entities;
+- invent payloads;
+- change API contracts without checking direct consumers;
+- duplicate existing logic;
+- bypass tenant checks;
+- introduce cross-tenant reads;
+- weaken auth;
+- use `any` without strong justification;
+- use `ts-ignore`;
+- refactor outside the requested scope.
 
----
-
-## Regras de autenticação e autorização
-
-O backend deve sempre considerar:
-- `admin`
-- `owner`
-- `manager` quando aplicável no fluxo
-- `provider`
-- `temp_provider`
-
-Toda alteração em rota deve revisar:
-- quem pode acessar;
-- em qual contexto;
-- em qual fase do fluxo;
-- quais campos podem ser lidos;
-- quais campos podem ser escritos.
-
-Nunca assumir acesso amplo por conveniência.
-
----
-
-## Regras de segurança
-
-Toda implementação deve priorizar:
-- validação de entrada;
-- autorização por papel e contexto;
-- minimização de exposição de dados;
-- previsibilidade em erros;
-- não vazamento de informação sensível;
-- tratamento seguro de arquivos, tokens e credenciais;
-- cuidado com logs.
-
-Nunca:
-- expor segredo em resposta;
-- logar credenciais, tokens ou payload sensível sem necessidade;
-- confiar em dados do cliente sem validação;
-- aceitar mutação sem checar contexto e papel.
+Sensitive areas:
+- auth helpers;
+- tenant authorization;
+- credentials;
+- documents/media;
+- service orders;
+- bids/messages;
+- audit log;
+- deploy config;
+- public links;
+- handover;
+- uploads;
+- offline sync endpoints.
 
 ---
 
-## Regras de persistência e migrations
+## Tenant and authorization rules
 
-Ao alterar schema:
-- revisar `schema.ts`;
-- revisar migrations existentes;
-- criar migração clara e incremental;
-- evitar mudança destrutiva sem necessidade;
-- preservar ambientes existentes;
-- validar impacto em dados legados.
+For backend changes:
 
-Toda migration deve:
-- ter objetivo específico;
-- ser reversível conceitualmente quando possível;
-- evitar ambiguidade;
-- respeitar ordem evolutiva do sistema.
-
----
-
-## Regras de organização de código
-
-Preferir separação clara entre:
-- rotas;
-- validação;
-- acesso a dados;
-- utilitários de domínio;
-- integrações externas.
-
-Evitar:
-- handlers gigantes;
-- lógica duplicada;
-- helpers genéricos demais sem semântica;
-- acoplamento circular;
-- abstração excessiva sem ganho real.
+- Never accept `tenantId` from request body.
+- Always derive `tenantId` from authenticated context.
+- Never query sensitive resources only by `id`.
+- Always scope sensitive reads/writes by `tenantId`.
+- For property resources, validate `tenantId + propertyId`.
+- For nested resources, validate the full parent chain when applicable:
+  - `tenantId`;
+  - `propertyId`;
+  - `roomId`;
+  - `serviceOrderId`;
+  - `documentId`;
+  - `credentialId`.
+- Prefer shared authorization helpers over duplicated manual checks.
+- If a manual authorization check remains, document why and add a regression test.
+- Do not change role semantics unless explicitly requested.
+- Do not expose whether a cross-tenant resource exists.
+- Preserve existing 400/403/404 behavior unless there is a security reason to change it.
 
 ---
 
-## Regras para integrações
+## Sensitive data rules
 
-Ao trabalhar com:
-- R2
-- KV
-- Queues
-- Workers AI
-- Resend
-- push notifications
+Never include in responses, logs, audit logs or test snapshots:
 
-O agente deve:
-- preservar contratos existentes;
-- tratar erro de integração explicitamente;
-- evitar side effects silenciosos;
-- manter comportamento previsível;
-- não quebrar fluxo principal sem necessidade.
+- credential plaintext;
+- integration secrets;
+- public link tokens;
+- token hashes;
+- signed URLs;
+- private R2 keys;
+- refresh tokens;
+- authorization headers;
+- raw cookies;
+- encryption keys;
+- API keys;
+- full invite/share/handover URLs when they contain tokens.
 
----
+Public links must use token hashes or safe token helpers.
 
-## Observabilidade e erro
+Internal resource IDs must not be used as public access tokens.
 
-Toda implementação deve:
-- falhar de forma compreensível;
-- retornar erro consistente;
-- permitir diagnóstico;
-- evitar mensagens vagas;
-- preservar logs úteis sem vazar dado sensível.
+Security-sensitive random values must use Web Crypto, not `Math.random()`.
 
-Erros devem:
-- ser específicos;
-- ser acionáveis;
-- respeitar o contexto da operação.
+Do not use `Date.now()` as an ID.
+
+Do not store new public link tokens in plaintext.
+
+Do not log decrypted credential values.
 
 ---
 
-## Regras técnicas obrigatórias
+## Credentials rules
 
-- manter TypeScript forte;
-- evitar `any`;
-- não quebrar contratos existentes sem revisar consumidores;
-- manter compatibilidade com Cloudflare Workers;
-- manter coerência com Drizzle;
-- preservar clareza de schema e migrations;
-- evitar duplicação de regra;
-- manter código limpo, legível e revisável.
+When touching credential flows:
 
----
-
-## Método obrigatório de trabalho
-
-### 1. Diagnóstico
-Antes de editar:
-- ler rotas afetadas;
-- ler schema relacionado;
-- ler middleware envolvido;
-- identificar consumidores;
-- identificar riscos de regressão.
-
-### 2. Plano
-Antes de implementar:
-- listar arquivos a alterar;
-- listar contratos afetados;
-- listar riscos;
-- justificar a solução mais segura.
-
-### 3. Implementação
-Implementar de forma:
-- incremental;
-- segura;
-- tipada;
-- consistente;
-- revisável.
-
-### 4. Entrega
-Sempre informar:
-1. diagnóstico
-2. plano
-3. implementação
-4. arquivos alterados
-5. riscos
-6. validações manuais
+- List endpoints must never return secrets.
+- Reveal must be an explicit action.
+- Reveal must validate tenant, property, role and resource access.
+- Provider reveal must be scoped to an authorized service order when applicable.
+- `share_with_os` must be enforced when provider access depends on service order context.
+- Reveal must write audit log without plaintext.
+- Audit log must not contain secret, token, token hash or signed URL.
+- Do not reintroduce GET-based secret reveal.
+- Do not bypass rate limits for reveal endpoints.
+- Do not change encryption algorithm unless explicitly requested.
 
 ---
 
-## Critério de aceite
+## Public links and token rules
 
-Uma alteração de backend só está pronta se:
-- respeita a arquitetura do HouseLog;
-- respeita o domínio real;
-- mantém autorização correta;
-- mantém contrato coerente;
-- mantém tipagem forte;
-- não cria endpoint fictício;
-- não duplica regra desnecessariamente;
-- está pronta para revisão humana.
+When touching public links, invites, handover, audit links or share links:
+
+- Generate token once and return it only at creation time.
+- Store hash, not plaintext, when the current pattern supports it.
+- Do not use internal IDs as public tokens.
+- Support expiration and revocation when the domain requires it.
+- Public payloads must be minimal.
+- Public payloads must never include property credentials.
+- Public token errors must not reveal sensitive resource existence.
+- Do not log full public URLs containing tokens.
+- Do not add plaintext token fallback unless explicitly required for legacy migration.
 
 ---
 
-## Em caso de ambiguidade
+## Upload and media rules
 
-Se houver ambiguidade:
-- escolher a solução mais conservadora;
-- preservar compatibilidade;
-- não inventar domínio;
-- não expandir escopo sem necessidade;
-- explicar a limitação antes de aplicar.
+When touching documents/media/uploads:
 
-Se houver bloqueio:
-- propor a menor correção segura possível.
+- Validate tenant/property access before file access.
+- Do not expose internal R2 object keys unless the existing contract requires it.
+- Prefer signed/private access patterns.
+- Validate input and file metadata according to existing helpers.
+- Do not make private files public by default.
+- Do not log signed URLs.
+- Preserve document sensitivity rules.
+
+---
+
+## API rules
+
+Do not invent routes, payloads, entities or behavior.
+
+Before changing an API contract:
+1. Check the route.
+2. Check validation/schema.
+3. Check direct consumers only if the contract changes.
+4. Check nearby tests only if behavior changes.
+
+Use existing helpers and patterns before creating new ones.
+
+Avoid broad refactors unless explicitly requested.
+
+---
+
+## Cloudflare/deploy rules
+
+Do not create Cloudflare resources automatically.
+
+Do not deploy production unless explicitly requested.
+
+For deploy/config tasks, inspect only what is relevant:
+- `wrangler.toml`;
+- deploy/check scripts;
+- `.dev.vars.example`;
+- `.env.example`;
+- CI only if deployment is affected;
+- related docs only if commands/checklists are affected.
+
+Production config must not accept placeholders when production deploy is requested.
+
+Secrets must be documented, never committed.
+
+Do not commit real secrets to:
+- `wrangler.toml`;
+- `.dev.vars`;
+- `.env`;
+- docs;
+- tests;
+- scripts.
+
+Resource IDs are not secrets, but treat production identifiers carefully.
+
+---
+
+## Implementation rules
+
+Before editing:
+- identify the affected backend domain;
+- search for existing patterns;
+- check related contracts;
+- choose the smallest safe change;
+- identify the regression test to add or update.
+
+During implementation:
+- prefer targeted edits;
+- preserve existing behavior;
+- avoid broad refactors;
+- keep code typed, readable and maintainable;
+- follow existing naming, structure and error patterns;
+- preserve existing API response shape unless the task requires a contract change;
+- update docs only when behavior, security or deployment changes.
+
+---
+
+## Validation
+
+Run only relevant scripts.
+
+Before running a script:
+- confirm it exists in `package.json`;
+- prefer targeted validation first;
+- avoid repeating expensive commands.
+
+Common validations:
+- `npm run type-check`
+- `npm run test`
+- `npm run test:api`
+- `npm run build`
+- `npm run check:deploy-config`
+- `npm run check:deploy-config:prod`
+- `git diff --check`
+
+Run full test/build only when the change justifies it or when explicitly requested.
+
+Suggested backend validation:
+```powershell
+npm run type-check
+npm run test:api
+npm run build
+git diff --check
