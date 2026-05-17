@@ -43,13 +43,17 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 
 Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-calm-os.md`.
 
+- Tema atual: `HouseLog Calm OS`.
+- Tema legado: dark/tech anterior (`The Architectural Lens` visual), mantido apenas para telas ainda nao migradas.
 - Tokens globais ficam em `src/app/tokens.css` (`--hl-bg`, `--hl-surface`, `--hl-border`, `--hl-text`, `--hl-primary`, status e sombras).
 - Ponte Tailwind fica em `src/app/globals.css` com classes como `bg-hl-bg`, `bg-hl-surface`, `border-hl-border`, `text-hl-text`, `text-hl-text-muted`, `text-hl-primary`, `shadow-hl-subtle` e `shadow-hl-soft`.
-- `AppShell` aplica o wrapper explicito `.hl-calm-os` para fundo, texto e navegacao autenticada clara. Nao usar novos seletores `:has()` como mecanismo principal de tema.
+- `AppShell` aplica o wrapper explicito `.hl-calm-os` para fundo, texto e navegacao autenticada clara. Novas telas devem usar `.hl-calm-os` ou tokens Calm OS; nao usar novos seletores `:has()` como mecanismo principal de tema.
+- Helpers globais em `globals.css`: `.hl-calm-card`, `.hl-calm-surface`, `.hl-calm-section`, `.hl-calm-muted`, `.hl-calm-border`, `.hl-calm-focus` e `.hl-calm-bottom-safe`.
 - `TopNav`, `BottomNav` e `PropertyMobileContextControls` usam classes Calm OS diretas (`bg-hl-surface`, `border-hl-border`, `shadow-hl-*`) alem do wrapper.
 - `src/components/ui/visual-system.ts`: variantes compartilhadas de `PageSection`, `MetricCard`, `ActionTile`, `ServiceOrderCard`, `PropertySummaryCard`, `EmptyState` e `ChatPanel` usam base Calm OS (surface branca, borda suave, sombra discreta).
+- Componentes novos devem usar tokens semanticos (`--hl-bg`, `--hl-surface`, `--hl-text`, `--hl-border`, `--hl-primary` e status tokens). Nao criar novos componentes com cores hardcoded.
 - `The Architectural Lens` permanece como base legada ate a migracao gradual. Nao apagar tokens antigos sem mapear consumidores.
-- Migrar por tela/componente, preservando loading, empty, error states e contratos de API.
+- Migrar por tela/componente, preservando loading, empty, error states e contratos de API. Prioridade atual: provider flow, owner dashboard, imoveis, OS/propostas, documentos/handover e auth/login.
 
 ## Owner/Manager Calm OS (2026-05-17)
 

@@ -792,6 +792,44 @@ body {
   background: var(--hl-bg);
 }
 
+.hl-calm-surface {
+  background: var(--hl-surface);
+  color: var(--hl-text);
+}
+
+.hl-calm-card,
+.hl-calm-section {
+  background: var(--hl-surface);
+  color: var(--hl-text);
+  border: 1px solid var(--hl-border);
+  border-radius: var(--hl-radius-card);
+  box-shadow: var(--hl-shadow-subtle);
+}
+
+.hl-calm-muted {
+  background: var(--hl-surface-muted);
+  color: var(--hl-text-muted);
+}
+
+.hl-calm-border {
+  border-color: var(--hl-border);
+}
+
+.hl-calm-focus:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.hl-calm-bottom-safe {
+  padding-bottom: calc(var(--nav-height-bottom) + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .hl-calm-bottom-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 .hl-calm-os .nav-dock {
   background: color-mix(in srgb, var(--hl-surface) 94%, transparent);
   border: 1px solid var(--hl-border);

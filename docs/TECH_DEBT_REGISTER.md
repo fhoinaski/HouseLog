@@ -176,6 +176,7 @@ Este registro deve ser lido em conjunto com:
 - **Upload de evidencia pelo prestador (resolvido 2026-05-17)**: criada rota dedicada `POST /provider/services/:id/photos` em `apps/api/src/routes/provider.ts` com `canUploadProviderEvidence` (requer `assigned_to === userId` + status `approved`|`in_progress`). A rota opera com `accessLevel` equivalente a `assigned_service`, sem tocar `canManageProperty`. Audit log registrado sem R2 key. Frontend deve re-habilitar botao de envio de evidencia via offline queue apontando para a nova rota.
 - **Hardening adicional do upload provider (2026-05-17)**: o frontend provider passou a usar `providerApi.uploadEvidence` online e a fila `houselog-oq` apenas offline/falha de rede; o backend passou a retornar evidencias do detalhe provider como URLs autenticadas `/provider/services/:id/media/*` e a expor `can_upload_evidence`. A rota de midia provider valida `tenantId + serviceId + assignedTo + propertyId` e key registrada na OS, sem R2 key bruta ou signed URL.
 - **HouseLog Calm OS base (2026-05-17)**: tokens globais `--hl-*` foram adicionados de forma aditiva em `house-log-front/src/app/tokens.css`, expostos ao Tailwind em `globals.css` e documentados em `docs/design/house-log-calm-os.md`; `/provider/dashboard` virou tela piloto clara, sem migracao global.
+- **HouseLog Calm OS tema oficial (2026-05-17)**: Calm OS foi promovido de piloto para tema visual atual do frontend. O dark/tech anterior passa a ser legado, mantido apenas em telas ainda nao migradas e sem remocao destrutiva de tokens antigos.
 - **Provider services Calm OS (2026-05-17)**: `/provider/services` foi migrada para Calm OS com cards Link mobile-first, filtros acessiveis, loading skeleton, erro com retry, vazio real e aviso de offline sem alterar API.
 - **Calm OS shell (2026-05-17)**: `AppShell` passou a aplicar o wrapper explicito `.hl-calm-os`; top nav, bottom nav e property mobile nav usam navegacao clara sem depender do seletor `:has()` do piloto.
 - **Calm OS nav markup (2026-05-17)**: `TopNav`, `BottomNav` e `PropertyMobileContextControls` removeram classes dark/glass diretas do markup e passaram a usar tokens `hl-*`.
@@ -186,9 +187,11 @@ Este registro deve ser lido em conjunto com:
 - **Property detail Calm OS (2026-05-17)**: detalhe do imovel recebeu wrapper/hero Calm OS, reduzindo overlay dark sem alterar tabs, modulos ou contratos.
 - **Auth/public Calm OS (2026-05-17)**: `EntryShell` e `/splash` migraram para base clara Calm OS, reduzindo gradientes/glass pesados sem alterar fluxo de auth.
 - **Invite public Calm OS (2026-05-17)**: `/invite/[token]` recebeu wrapper/card principal Calm OS sem alterar contrato do convite.
+- **Risco residual (Calm OS)**: ainda existem telas legadas com dark/tech; enquanto a migracao nao terminar, ha risco de inconsistencia visual, contraste ruim em telas antigas e mistura visual entre telas novas e legadas.
 - **Recomendacao**:
-  - continuar refatoracao incremental por rota;
-  - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;
+  - migrar por bloco, sem big bang visual;
+  - priorizar telas com maior impacto operacional: provider flow, owner dashboard, imoveis, OS/propostas, documentos/handover e auth/login;
+  - nao criar novas telas ou componentes com dark hardcoded como padrao;
   - registrar componentes consolidados no guia operacional;
   - evitar criar componentes paralelos quando um estrutural existente resolve.
 - **Relacionamento com roadmap/ADRs**: Fase 5; ADR-002.
