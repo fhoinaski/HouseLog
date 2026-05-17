@@ -1,16 +1,20 @@
 'use client';
 
 import type * as React from 'react';
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Calendar, CheckCircle2, Clock, FileText, ImageIcon, MapPin, Send, ShieldCheck, XCircle } from 'lucide-react';
+import {
+  ArrowLeft, Calendar, Camera, CheckCircle2, Clock,
+  FileText, ImageIcon, ListChecks, MapPin, Send, ShieldCheck, XCircle,
+} from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceChat } from '@/components/services/service-chat';
+import { OfflineSyncStatus } from '@/components/offline-sync-status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -19,10 +23,15 @@ import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Textarea } from '@/components/ui/textarea';
 import { bidsApi, normalizeMediaUrl, providerApi, type ServiceBid } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { useOfflineSync } from '@/lib/use-offline-sync';
+import { useOfflineQueueSync } from '@/lib/use-offline-queue-sync';
+import { enqueue, OFFLINE_QUEUE_MAX_BLOB_BYTES } from '@/lib/offline-queue';
 import {
   SERVICE_PRIORITY_LABELS,
   SERVICE_STATUS_LABELS,
   SYSTEM_TYPE_LABELS,
+  cn,
   formatCurrency,
   formatDate,
 } from '@/lib/utils';
@@ -68,6 +77,24 @@ function safeParseStringArray(value: unknown): string[] {
   }
 }
 
+function safeParseChecklist(value: unknown): { item: string; done: boolean }[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((i): i is { item: unknown; done: unknown } => typeof i === 'object' && i !== null)
+      .map((i) => ({ item: String(i.item ?? ''), done: Boolean(i.done) }));
+  }
+  if (typeof value !== 'string' || value.trim() === '') return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((i): i is { item: unknown; done: unknown } => typeof i === 'object' && i !== null)
+      .map((i) => ({ item: String(i.item ?? ''), done: Boolean(i.done) }));
+  } catch {
+    return [];
+  }
+}
+
 function DetailItem({
   icon,
   label,
@@ -93,7 +120,16 @@ function DetailItem({
 export default function ProviderServiceDetailPage({ params }: { params: Promise<{ serviceId: string }> }) {
   const { serviceId } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   const [submittingBid, setSubmittingBid] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const tenantId = user?.active_tenant_id ?? user?.activeTenantId ?? null;
+  const userId = user?.id ?? null;
+
+  const offlineSync = useOfflineSync();
+  const offlineQueueSync = useOfflineQueueSync(tenantId, userId);
 
   const { data, error, isLoading, mutate } = useSWR(['provider-service', serviceId], () =>
     providerApi.getService(serviceId)
@@ -112,6 +148,43 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
   const myBids = data?.my_bids ?? [];
   const hasPendingBid = myBids.some((bid: ServiceBid) => bid.status === 'pending');
   const isDirectExecution = Boolean(order?.assigned_to);
+
+  const checklist = safeParseChecklist(order?.checklist);
+  const completedChecklistItems = checklist.filter((i) => i.done).length;
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !order || !tenantId || !userId) return;
+    // Limpa o input para permitir reenvio do mesmo arquivo
+    e.target.value = '';
+
+    if (file.size > OFFLINE_QUEUE_MAX_BLOB_BYTES) {
+      toast.error('Arquivo muito grande', { description: 'O limite para envio offline é de 5 MB.' });
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      await enqueue({
+        type: 'photo-upload',
+        tenantId,
+        userId,
+        propertyId: order.property_id,
+        serviceOrderId: serviceId,
+        evidenceType: 'after',
+        file,
+        filename: file.name,
+        mimeType: file.type,
+      });
+      toast.success('Evidência salva', { description: 'Será enviada automaticamente ao sincronizar.' });
+      await offlineQueueSync.sync();
+      await mutate();
+    } catch (err) {
+      toast.error('Erro ao salvar evidência', { description: (err as Error).message });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function onBidSubmit(form: BidForm) {
     if (!order) return;
@@ -179,6 +252,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
   }
 
   const beforePhotos = safeParseStringArray(order.before_photos);
+  const afterPhotos = safeParseStringArray(order.after_photos);
 
   return (
     <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
@@ -191,6 +265,35 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             <ArrowLeft className="h-4 w-4" />
           </Button>
         }
+      />
+
+      {/* Barra de ações em campo — visível no topo para acesso imediato em mobile */}
+      {isDirectExecution && (
+        <div className="flex flex-wrap items-center gap-3">
+          <OfflineSyncStatus state={offlineSync} queueState={offlineQueueSync} />
+          <Button
+            type="button"
+            className="flex-1 sm:flex-none"
+            loading={uploadingPhoto}
+            disabled={!tenantId || !userId || uploadingPhoto}
+            onClick={() => photoInputRef.current?.click()}
+          >
+            <Camera className="h-4 w-4" />
+            Enviar evidência
+          </Button>
+        </div>
+      )}
+
+      {/* Input de arquivo oculto — acionado pelo botão acima */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={handlePhotoUpload}
       />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -246,26 +349,107 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             )}
           </PageSection>
 
-          {beforePhotos.length > 0 && (
+          {checklist.length > 0 && (
             <PageSection
-              title="Evidências iniciais"
+              title="Checklist de execução"
               tone="surface"
               density="editorial"
+              actions={
+                <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+                  <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
+                  {completedChecklistItems}/{checklist.length} concluídos
+                </span>
+              }
             >
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {beforePhotos.map((url, index) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={url}
-                    src={url}
-                    alt={`Evidencia ${index + 1}`}
-                    className="aspect-square w-full cursor-pointer rounded-[var(--radius-lg)] bg-[var(--surface-strong)] object-cover transition-opacity hover:opacity-90"
-                    onClick={() => window.open(url, '_blank')}
-                  />
+              <ul role="list" aria-label="Itens do checklist" className="space-y-1">
+                {checklist.map((checkItem, index) => (
+                  <li
+                    key={`${checkItem.item}-${index}`}
+                    className="flex items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2 text-sm"
+                  >
+                    <CheckCircle2
+                      className={cn('h-4 w-4 shrink-0', checkItem.done ? 'text-text-success' : 'text-text-tertiary')}
+                      aria-hidden="true"
+                    />
+                    <span className={checkItem.done ? 'line-through text-text-tertiary' : 'text-text-primary'}>
+                      {checkItem.item}
+                    </span>
+                    {checkItem.done && <span className="sr-only">concluído</span>}
+                  </li>
                 ))}
-              </div>
+              </ul>
             </PageSection>
           )}
+
+          <PageSection
+            title="Evidências"
+            tone="surface"
+            density="editorial"
+          >
+            {beforePhotos.length > 0 && (
+              <>
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Antes</p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {beforePhotos.map((url, index) => (
+                    <button
+                      key={url}
+                      type="button"
+                      aria-label={`Ver evidência inicial ${index + 1}`}
+                      className="aspect-square w-full overflow-hidden rounded-[var(--radius-lg)] bg-[var(--surface-strong)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                      onClick={() => window.open(url, '_blank')}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-full w-full object-cover transition-opacity hover:opacity-90"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {afterPhotos.length > 0 && (
+              <>
+                <p className={cn('text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary', beforePhotos.length > 0 && 'mt-3')}>
+                  Após execução
+                </p>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {afterPhotos.map((url, index) => (
+                    <button
+                      key={url}
+                      type="button"
+                      aria-label={`Ver evidência de execução ${index + 1}`}
+                      className="aspect-square w-full overflow-hidden rounded-[var(--radius-lg)] bg-[var(--surface-strong)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                      onClick={() => window.open(url, '_blank')}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-full w-full object-cover transition-opacity hover:opacity-90"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {beforePhotos.length === 0 && afterPhotos.length === 0 && (
+              <EmptyState
+                icon={<ImageIcon className="h-5 w-5" />}
+                title="Sem evidências registradas"
+                description={
+                  isDirectExecution
+                    ? 'Use o botão Enviar evidência para registrar fotos da execução.'
+                    : 'Evidências serão exibidas quando registradas.'
+                }
+                tone="subtle"
+                density="compact"
+              />
+            )}
+          </PageSection>
 
           <PageSection density="compact">
             <ServiceChat serviceOrderId={serviceId} title="Chat da operacao privada" />
