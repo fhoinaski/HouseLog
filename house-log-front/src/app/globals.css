@@ -29,6 +29,18 @@
   --color-bg-success-emphasis: var(--bg-success-emphasis);
   --color-bg-info: var(--bg-info);
   --color-bg-info-emphasis: var(--bg-info-emphasis);
+  --color-hl-bg: var(--hl-bg);
+  --color-hl-surface: var(--hl-surface);
+  --color-hl-surface-muted: var(--hl-surface-muted);
+  --color-hl-border: var(--hl-border);
+  --color-hl-text: var(--hl-text);
+  --color-hl-text-muted: var(--hl-text-muted);
+  --color-hl-primary: var(--hl-primary);
+  --color-hl-primary-blue: var(--hl-primary-blue);
+  --color-hl-success: var(--hl-success);
+  --color-hl-warning: var(--hl-warning);
+  --color-hl-danger: var(--hl-danger);
+  --color-hl-info: var(--hl-info);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
@@ -144,6 +156,8 @@
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
+  --shadow-hl-subtle: var(--hl-shadow-subtle);
+  --shadow-hl-soft: var(--hl-shadow-soft);
   --shadow-focus: var(--shadow-focus);
   --shadow-focus-danger: var(--shadow-focus-danger);
   --shadow-focus-accent: var(--shadow-focus-accent);
@@ -767,6 +781,66 @@ body {
   border-radius: 0;
   background: var(--card-bg);
   border-top: 0.5px solid var(--border-default);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) {
+  background: var(--hl-bg);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock {
+  background: color-mix(in srgb, var(--hl-surface) 94%, transparent);
+  border: 1px solid var(--hl-border);
+  box-shadow: var(--hl-shadow-soft);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="true"] {
+  background: var(--hl-surface-muted);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="true"] svg,
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="true"] span {
+  color: var(--hl-primary);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="false"] svg,
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="false"] span {
+  color: var(--hl-text-muted);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .nav-dock-item[data-active="false"]:hover {
+  background: var(--hl-surface-muted);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-header {
+  background: color-mix(in srgb, var(--hl-surface) 94%, transparent);
+  border-bottom: 1px solid var(--hl-border);
+  box-shadow: var(--hl-shadow-subtle);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand:hover,
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-profile:hover,
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-item:hover {
+  background: var(--hl-surface-muted);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand-icon,
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-list {
+  background: var(--hl-surface-muted);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand-text,
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-profile span,
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-item[data-active="false"] {
+  color: var(--hl-text-muted);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-item[data-active="true"] {
+  background: var(--hl-surface);
+  color: var(--hl-primary);
+}
+
+body:has([data-calm-os-pilot="provider-dashboard"]) .top-nav-brand-icon svg {
+  color: var(--hl-primary);
 }
 
 @layer base {

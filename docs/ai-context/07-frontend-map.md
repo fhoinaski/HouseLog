@@ -24,7 +24,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 ## Provider Flow (2026-05-17)
 
 - `src/app/provider/services/[serviceId]/page.tsx`: exibe `after_photos` alem das `before_photos`, checklist read-only com progresso. Imagens clicaveis usam `<button>` + `<img alt="">` sem `onClick` direto em `img`. Upload de evidencia: botao "Enviar evidencia" visivel apenas para OS em `approved`|`in_progress`; enfileira na `houselog-oq` com `useProviderRoute: true` — o sync usa `POST /provider/services/:id/photos` (nao a rota de property, que 403 para providers).
-- `src/app/provider/dashboard/page.tsx`: MetricCards tem skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
+- `src/app/provider/dashboard/page.tsx`: tela piloto do `HouseLog Calm OS`; usa fundo claro, cards brancos, nav clara via escopo da pagina, MetricCards com skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
 - `src/app/provider/opportunities/page.tsx`: chips de filtro tem `aria-pressed` e `role="group"`.
 - `src/app/provider/settings/page.tsx`: chips de hard skills tem `aria-pressed`.
 
@@ -38,7 +38,12 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 
 ## Design system
 
-Sistema oficial: The Architectural Lens. Use componentes e tokens existentes. Nao crie mini design system por pagina.
+Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-calm-os.md`.
+
+- Tokens globais ficam em `src/app/tokens.css` (`--hl-bg`, `--hl-surface`, `--hl-border`, `--hl-text`, `--hl-primary`, status e sombras).
+- Ponte Tailwind fica em `src/app/globals.css` com classes como `bg-hl-bg`, `bg-hl-surface`, `border-hl-border`, `text-hl-text`, `text-hl-text-muted`, `text-hl-primary`, `shadow-hl-subtle` e `shadow-hl-soft`.
+- `The Architectural Lens` permanece como base legada ate a migracao gradual. Nao apagar tokens antigos sem mapear consumidores.
+- Migrar por tela/componente, preservando loading, empty, error states e contratos de API.
 
 ## Regras para IA
 

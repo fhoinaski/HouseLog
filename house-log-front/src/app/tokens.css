@@ -79,6 +79,28 @@
      * TOKENS SEMÂNTICOS — USE ESSES NOS COMPONENTES
      * -------------------------------------------------- */
 
+    /* --------------------------------------------------
+     * HOUSELOG CALM OS
+     * Base visual clara premium para migracao gradual.
+     * Tokens antigos permanecem ativos ate cada tela migrar.
+     * -------------------------------------------------- */
+    --hl-bg: #F7F5F0;
+    --hl-surface: #FFFFFF;
+    --hl-surface-muted: #F1EFE8;
+    --hl-border: #E5E1D8;
+    --hl-text: #1F2933;
+    --hl-text-muted: #6B7280;
+    --hl-primary: #2F5D62;
+    --hl-primary-blue: #2563EB;
+    --hl-success: #16A34A;
+    --hl-warning: #D97706;
+    --hl-danger: #DC2626;
+    --hl-info: #2563EB;
+    --hl-shadow-subtle: 0 1px 2px rgba(31, 41, 51, 0.06), 0 8px 24px rgba(31, 41, 51, 0.05);
+    --hl-shadow-soft: 0 12px 32px rgba(31, 41, 51, 0.08);
+    --hl-radius-card: 16px;
+    --hl-radius-control: 12px;
+
     /* === BACKGROUNDS === */
     --bg-page:            var(--primitive-charcoal-50);   /* fundo da página */
     --bg-surface:         #FFFFFF;                        /* cards, modais, inputs */

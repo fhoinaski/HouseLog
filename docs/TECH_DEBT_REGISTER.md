@@ -166,7 +166,7 @@ Este registro deve ser lido em conjunto com:
 - **Area**: Frontend / Design System / UX
 - **Status**: Mitigado parcialmente
 - **Evidencia**: varias telas foram refatoradas para `AppShell`, `PageHeader`, `PageSection`, `MetricCard`, `ServiceOrderCard`, `EmptyState`, `PropertySummaryCard` e `ActionTile`, mas ainda ha areas com composicao local, cards antigos, copy heterogenea e tokens aplicados de forma desigual.
-- **Impacto**: aumenta custo de manutencao, dificulta consistencia mobile e enfraquece a narrativa do The Architectural Lens.
+- **Impacto**: aumenta custo de manutencao, dificulta consistencia mobile e enfraquece a narrativa visual premium do produto.
 - **Mitigacao aplicada (2026-05-17)**:
   - Provider service detail (`/provider/services/[serviceId]`): adicionado `OfflineSyncStatus` + barra de acoes em campo (botao Enviar evidencia com fila offline), exibicao de `after_photos`, checklist read-only com progresso, imagens clicaveis migradas de `img onClick` para `button` + `img alt=""`.
   - ServiceChat (`components/services/service-chat.tsx`): adicionado `aria-label` acessivel via `aria-labelledby` na Textarea, padding seguro para teclado virtual (`pb-[env(safe-area-inset-bottom,0px)]`), estado `forbidden` com mensagem explicita e `disabled` no composer, `aria-label` no botao de envio.
@@ -175,6 +175,7 @@ Este registro deve ser lido em conjunto com:
   - Settings (`/provider/settings`): chips de hard skills receberam `aria-pressed`.
 - **Upload de evidencia pelo prestador (resolvido 2026-05-17)**: criada rota dedicada `POST /provider/services/:id/photos` em `apps/api/src/routes/provider.ts` com `canUploadProviderEvidence` (requer `assigned_to === userId` + status `approved`|`in_progress`). A rota opera com `accessLevel` equivalente a `assigned_service`, sem tocar `canManageProperty`. Audit log registrado sem R2 key. Frontend deve re-habilitar botao de envio de evidencia via offline queue apontando para a nova rota.
 - **Hardening adicional do upload provider (2026-05-17)**: o frontend provider passou a usar `providerApi.uploadEvidence` online e a fila `houselog-oq` apenas offline/falha de rede; o backend passou a retornar evidencias do detalhe provider como URLs autenticadas `/provider/services/:id/media/*` e a expor `can_upload_evidence`. A rota de midia provider valida `tenantId + serviceId + assignedTo + propertyId` e key registrada na OS, sem R2 key bruta ou signed URL.
+- **HouseLog Calm OS base (2026-05-17)**: tokens globais `--hl-*` foram adicionados de forma aditiva em `house-log-front/src/app/tokens.css`, expostos ao Tailwind em `globals.css` e documentados em `docs/design/house-log-calm-os.md`; `/provider/dashboard` virou tela piloto clara, sem migracao global.
 - **Recomendacao**:
   - continuar refatoracao incremental por rota;
   - re-habilitar botao de upload de evidencia no service detail do provider (frontend) apos validacao da nova rota backend;
