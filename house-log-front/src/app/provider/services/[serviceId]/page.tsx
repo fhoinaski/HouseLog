@@ -1,14 +1,14 @@
 'use client';
 
 import type * as React from 'react';
-import { use, useState } from 'react';
+import { use, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  ArrowLeft, Calendar, CheckCircle2, Clock,
+  ArrowLeft, Calendar, Camera, CheckCircle2, Clock,
   FileText, ImageIcon, ListChecks, MapPin, Send, ShieldCheck, XCircle,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
@@ -21,7 +21,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Textarea } from '@/components/ui/textarea';
+import { OfflineSyncStatus } from '@/components/offline-sync-status';
 import { bidsApi, normalizeMediaUrl, providerApi, type ServiceBid } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { enqueue, OFFLINE_QUEUE_MAX_BLOB_BYTES } from '@/lib/offline-queue';
+import { useOfflineQueueSync } from '@/lib/use-offline-queue-sync';
+import { useOfflineSync } from '@/lib/use-offline-sync';
 import {
   SERVICE_PRIORITY_LABELS,
   SERVICE_STATUS_LABELS,
@@ -112,10 +117,21 @@ function DetailItem({
   );
 }
 
+const UPLOAD_ALLOWED_STATUSES = ['approved', 'in_progress'] as const;
+
 export default function ProviderServiceDetailPage({ params }: { params: Promise<{ serviceId: string }> }) {
   const { serviceId } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
   const [submittingBid, setSubmittingBid] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const tenantId = user?.active_tenant_id ?? user?.activeTenantId ?? null;
+  const userId = user?.id ?? null;
+
+  const offlineSyncState = useOfflineSync();
+  const offlineQueueSyncState = useOfflineQueueSync(tenantId, userId);
 
   const { data, error, isLoading, mutate } = useSWR(['provider-service', serviceId], () =>
     providerApi.getService(serviceId)
@@ -150,6 +166,40 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
       toast.error('Erro ao enviar proposta', { description: (e as Error).message });
     } finally {
       setSubmittingBid(false);
+    }
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!order || !tenantId || !userId) return;
+    const file = e.target.files?.[0];
+    if (!e.target) return;
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > OFFLINE_QUEUE_MAX_BLOB_BYTES) {
+      toast.error('Arquivo muito grande', { description: 'Tamanho máximo: 5 MB.' });
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      await enqueue({
+        type: 'photo-upload',
+        tenantId,
+        userId,
+        propertyId: order.property_id,
+        serviceOrderId: serviceId,
+        evidenceType: 'after',
+        filename: file.name,
+        mimeType: file.type,
+        file,
+        useProviderRoute: true,
+      });
+      toast.success('Evidência enfileirada', { description: 'Será enviada quando houver conexão.' });
+      await offlineQueueSyncState.sync();
+      await mutate();
+    } catch (err) {
+      toast.error('Erro ao enfileirar evidência', { description: (err as Error).message });
+    } finally {
+      setUploadingPhoto(false);
     }
   }
 
@@ -205,6 +255,7 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
 
   const beforePhotos = safeParseStringArray(order.before_photos);
   const afterPhotos = safeParseStringArray(order.after_photos);
+  const canUpload = (UPLOAD_ALLOWED_STATUSES as readonly string[]).includes(order.status);
 
   return (
     <div className="space-y-5 px-4 py-4 sm:px-5 sm:py-5">
@@ -213,9 +264,12 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
         eyebrow="Operação privada"
         title={order.title}
         actions={
-          <Button type="button" variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <OfflineSyncStatus state={offlineSyncState} queueState={offlineQueueSyncState} />
+            <Button type="button" variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </div>
         }
       />
 
@@ -308,6 +362,30 @@ export default function ProviderServiceDetailPage({ params }: { params: Promise<
             title="Evidências"
             tone="surface"
             density="editorial"
+            actions={
+              canUpload ? (
+                <>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    aria-label="Selecionar evidência de execução"
+                    onChange={(e) => void handlePhotoUpload(e)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    loading={uploadingPhoto}
+                    onClick={() => photoInputRef.current?.click()}
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    Enviar evidência
+                  </Button>
+                </>
+              ) : undefined
+            }
           >
             {beforePhotos.length > 0 && (
               <>

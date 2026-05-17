@@ -44,8 +44,11 @@ async function uploadPhoto(item: OqPhotoItem, token: string): Promise<void> {
   const fd = new FormData();
   fd.append('file', new File([item.file], item.filename, { type: item.mimeType }));
   fd.append('type', item.evidenceType);
+  const url = item.useProviderRoute
+    ? `${API_BASE}/provider/services/${item.serviceOrderId}/photos`
+    : `${API_BASE}/properties/${item.propertyId}/services/${item.serviceOrderId}/photos`;
   const res = await fetch(
-    `${API_BASE}/properties/${item.propertyId}/services/${item.serviceOrderId}/photos`,
+    url,
     { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd }
   );
   if (!res.ok) {

@@ -58,6 +58,8 @@ export type OqPhotoItem = OqBase & {
   mimeType: string;
   /** Blob completo da foto — preservado mesmo após falha para evitar perda de dados. */
   file: Blob;
+  /** Quando true, usa a rota provider (/provider/services/:id/photos) em vez da rota padrão de property. */
+  useProviderRoute?: boolean;
 };
 
 /**
