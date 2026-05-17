@@ -169,7 +169,12 @@ rooms.put('/:id', async (c) => {
   await db
     .update(roomsTable)
     .set(patch)
-    .where(and(eq(roomsTable.id, id), eq(roomsTable.propertyId, propertyId), eq(roomsTable.tenantId, tenantId)));
+    .where(and(
+      eq(roomsTable.id, id),
+      eq(roomsTable.propertyId, propertyId),
+      eq(roomsTable.tenantId, tenantId),
+      isNull(roomsTable.deletedAt)
+    ));
 
   const [updated] = await db
     .select(roomSelect)
@@ -216,7 +221,12 @@ rooms.delete('/:id', async (c) => {
   await db
     .update(roomsTable)
     .set({ deletedAt: new Date().toISOString() })
-    .where(and(eq(roomsTable.id, id), eq(roomsTable.propertyId, propertyId), eq(roomsTable.tenantId, tenantId)));
+    .where(and(
+      eq(roomsTable.id, id),
+      eq(roomsTable.propertyId, propertyId),
+      eq(roomsTable.tenantId, tenantId),
+      isNull(roomsTable.deletedAt)
+    ));
 
   await writeAuditLog(c.env.DB, {
     tenantId,

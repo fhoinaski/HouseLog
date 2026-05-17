@@ -209,7 +209,12 @@ inventory.post('/', async (c) => {
   const [item] = await db
     .select(inventorySelect)
     .from(inventoryItems)
-    .where(and(eq(inventoryItems.id, id), eq(inventoryItems.tenantId, tenantId), eq(inventoryItems.propertyId, propertyId)))
+    .where(and(
+      eq(inventoryItems.id, id),
+      eq(inventoryItems.tenantId, tenantId),
+      eq(inventoryItems.propertyId, propertyId),
+      isNull(inventoryItems.deletedAt)
+    ))
     .limit(1) as InventoryItem[];
 
   if (!item) return err(c, 'Erro ao criar item', 'CREATE_ERROR', 500);

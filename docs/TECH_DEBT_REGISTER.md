@@ -238,9 +238,9 @@ Este registro deve ser lido em conjunto com:
   - Criado `lib/authorization-core.test.ts` com cobertura de caminho autorizado, sem permissao, cross-tenant, property invalida e ausencia de tenant sem query legada.
 
   **Phase 3 incremental — Inventory IDOR (2026-05-17):**
-  - `routes/inventory.ts` passou a repetir `tenantId + propertyId + itemId` nas mutacoes finais de update/delete e nos updates de foto/QR.
-  - O select pos-update passou a buscar por `id + tenantId + propertyId`, mantendo a pre-validacao existente e sem alterar contrato publico.
-  - Criado `routes/inventory-idor.test.ts` com cobertura de update autorizado, update cross-tenant, update cross-property, delete cross-property e select pos-update sem retorno fora do property.
+  - `routes/inventory.ts` passou a repetir `tenantId + propertyId + itemId + deletedAt IS NULL` nas mutacoes finais de update/delete e nos updates de foto/QR.
+  - Selects pos-mutacao passaram a buscar por `id + tenantId + propertyId + deletedAt IS NULL`, mantendo a pre-validacao existente e sem alterar contrato publico.
+  - Criado/ajustado `routes/inventory-idor.test.ts` com cobertura de update autorizado, update cross-tenant, update cross-property, delete cross-property, select pos-update sem retorno fora do property, foto e QR.
   **Phase 3 incremental - Rooms write IDOR (2026-05-17):**
   - `rooms.ts` passou a aplicar `id + tenantId + propertyId` tambem nos writes finais de PUT e DELETE; `routes/tenant-isolation.test.ts` cobre PUT/DELETE autorizado, cross-property e cross-tenant.
 
@@ -249,7 +249,13 @@ Este registro deve ser lido em conjunto com:
   - `canLinkRenovationReference` foi mantido como decisao defensiva apos a leitura escopada.
   - Criado `routes/renovations-reference-idor.test.ts` com cobertura de referencia autorizada, outro tenant, outro imovel no mesmo tenant, referencia inexistente e update com referencia invalida.
 
-- **Impacto residual**: aumenta risco de acesso indevido se novos endpoints nao seguirem o padrao; rotas com `assertPropertyAccess` inline ainda devem ser migradas gradualmente para helpers de action quando houver mudanca no modulo.
+  **Phase 3 incremental — nested route residuals (2026-05-17):**
+  - `rooms.ts`: writes finais de PUT/DELETE mantem `id + tenantId + propertyId` e agora tambem repetem `deletedAt IS NULL`.
+  - `renovations.ts`: select pos-update e delete final repetem `id + tenantId + propertyId + deletedAt IS NULL`; `readReference` ja busca referencias por `id + tenantId + propertyId`.
+  - `expenses.ts`: update final, select pos-update e delete final repetem `expenseId + tenantId + propertyId + deletedAt IS NULL`.
+  - Criado `routes/expenses-idor.test.ts` com cobertura de update autorizado, cross-tenant, cross-property, recurso inexistente e select pos-update sem retorno fora do property.
+
+- **Impacto residual**: os residuos confirmados de nested routes em Rooms, Inventory, Renovations e Expenses foram endurecidos sem alterar contratos publicos. Permanece risco de regressao se novos endpoints nao repetirem `tenantId + propertyId + resourceId` nas mutacoes/selects finais; rotas com `assertPropertyAccess` inline ainda devem ser migradas gradualmente para helpers de action quando houver mudanca no modulo.
 - **Recomendacao**:
   - padronizar retorno de authorization.ts para `TenantScopedDecision` em vez de `boolean` onde aplicavel;
   - cobrir `canBidOnOpportunity` com DB validation se oportunidades forem ativadas.

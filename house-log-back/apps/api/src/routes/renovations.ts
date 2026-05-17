@@ -508,7 +508,12 @@ renovationsRoute.put('/:id', async (c) => {
   const [renovation] = await db
     .select(renovationSelect)
     .from(renovations)
-    .where(and(eq(renovations.id, id), eq(renovations.tenantId, tenantId), eq(renovations.propertyId, propertyId)))
+    .where(and(
+      eq(renovations.id, id),
+      eq(renovations.tenantId, tenantId),
+      eq(renovations.propertyId, propertyId),
+      isNull(renovations.deletedAt)
+    ))
     .limit(1) as RenovationRow[];
 
   await writeAuditLog(c.env.DB, {
@@ -555,7 +560,12 @@ renovationsRoute.delete('/:id', async (c) => {
   await db
     .update(renovations)
     .set({ deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
-    .where(and(eq(renovations.id, id), eq(renovations.tenantId, tenantId), eq(renovations.propertyId, propertyId)));
+    .where(and(
+      eq(renovations.id, id),
+      eq(renovations.tenantId, tenantId),
+      eq(renovations.propertyId, propertyId),
+      isNull(renovations.deletedAt)
+    ));
 
   await writeAuditLog(c.env.DB, {
     tenantId,
