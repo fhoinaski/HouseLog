@@ -11,7 +11,6 @@ import {
   ArrowLeft, Calendar, Camera, CheckCircle2, Clock,
   FileText, ImageIcon, ListChecks, MapPin, Send, ShieldCheck, XCircle,
 } from 'lucide-react';
-import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceChat } from '@/components/services/service-chat';

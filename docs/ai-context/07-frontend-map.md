@@ -54,6 +54,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - Tema legado: dark/tech anterior, mantido apenas para telas ainda nao migradas.
 - `ThemeProvider`: `defaultTheme="light"` com `enableSystem={false}` — sem classe `.dark` globalmente. Alterar de volta para `"dark"` quebra toda a paleta Calm OS.
 - Paleta refinada (2026-05-17): bloco `:root` unlayered no final de `globals.css` sobrescreve tokens de `tokens.css` com paleta "warm premium + petroleo profundo + texto forte". Ver tabela em `docs/design/house-log-calm-os.md`.
+- Tokens Calm OS canonicos (2026-05-18): `globals.css` expoe o vocabulario minimo `--hl-bg`, `--hl-bg-soft`, `--hl-surface`, `--hl-surface-soft`, `--hl-surface-strong`, `--hl-text`, `--hl-text-muted`, `--hl-border-soft`, `--hl-border-strong`, `--hl-accent`, `--hl-accent-muted`, `--hl-success`, `--hl-warning`, `--hl-danger`, `--hl-info`, `--hl-radius-sm/md/lg`, `--hl-shadow-soft` e `--hl-shadow-panel`. Aliases antigos (`--hl-primary`, `--hl-surface-muted`, `--hl-border`, `--hl-radius-card`, `--hl-radius-control`, `--hl-shadow-subtle`) continuam para compatibilidade.
 - Shadcn bridge em `@layer base :root` em `globals.css` aponta para tokens `--hl-*`. Nao reconectar ao bridge dark/legado.
 - `--field-focus-ring`, `--nav-text-active`, `--nav-text-inactive` sobrescritos no mesmo bloco de layer para resolver referencias inline em componentes de nav sem edita-los.
 - Tokens globais ficam em `src/app/tokens.css` (legado) + bloco unlayered de `globals.css` (Calm OS refinado).

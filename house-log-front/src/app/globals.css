@@ -30,11 +30,18 @@
   --color-bg-info: var(--bg-info);
   --color-bg-info-emphasis: var(--bg-info-emphasis);
   --color-hl-bg: var(--hl-bg);
+  --color-hl-bg-soft: var(--hl-bg-soft);
   --color-hl-surface: var(--hl-surface);
+  --color-hl-surface-soft: var(--hl-surface-soft);
+  --color-hl-surface-strong: var(--hl-surface-strong);
   --color-hl-surface-muted: var(--hl-surface-muted);
   --color-hl-border: var(--hl-border);
+  --color-hl-border-soft: var(--hl-border-soft);
+  --color-hl-border-strong: var(--hl-border-strong);
   --color-hl-text: var(--hl-text);
   --color-hl-text-muted: var(--hl-text-muted);
+  --color-hl-accent: var(--hl-accent);
+  --color-hl-accent-muted: var(--hl-accent-muted);
   --color-hl-primary: var(--hl-primary);
   --color-hl-primary-blue: var(--hl-primary-blue);
   --color-hl-success: var(--hl-success);
@@ -158,6 +165,7 @@
   --shadow-xl: var(--shadow-xl);
   --shadow-hl-subtle: var(--hl-shadow-subtle);
   --shadow-hl-soft: var(--hl-shadow-soft);
+  --shadow-hl-panel: var(--hl-shadow-panel);
   --shadow-focus: var(--shadow-focus);
   --shadow-focus-danger: var(--shadow-focus-danger);
   --shadow-focus-accent: var(--shadow-focus-accent);
@@ -189,14 +197,14 @@
     --accent-foreground: var(--hl-text);
     --destructive: var(--hl-danger);
     --destructive-foreground: #ffffff;
-    --border: var(--hl-border);
-    --input: var(--hl-border);
-    --ring: var(--hl-primary);
+    --border: var(--hl-border-soft);
+    --input: var(--hl-border-soft);
+    --ring: var(--hl-accent);
     --radius: var(--hl-radius-control);
 
     /* ---- Calm OS global overrides (resolve old token references) ---- */
-    --field-focus-ring:      0 0 0 3px color-mix(in srgb, var(--hl-primary) 15%, transparent);
-    --nav-text-active:       var(--hl-primary);
+    --field-focus-ring:      0 0 0 3px color-mix(in srgb, var(--hl-accent) 15%, transparent);
+    --nav-text-active:       var(--hl-accent);
     --nav-text-inactive:     var(--hl-text-muted);
 
     /* ---- legacy alias map (do not use in new code) ---- */
@@ -902,21 +910,32 @@ body {
 :root {
   /* ── Calm OS core ── */
   --hl-bg:             #f7f6f3;
+  --hl-bg-soft:        #fbfaf8;
   --hl-surface:        #ffffff;
-  --hl-surface-muted:  #f2f0eb;
-  --hl-border:         #e4e1d9;
+  --hl-surface-soft:   #f2f0eb;
+  --hl-surface-strong: #e8e5de;
+  --hl-surface-muted:  var(--hl-surface-soft);
   --hl-text:           #1c1a17;
   --hl-text-muted:     #706b62;
-  --hl-primary:        #1b4f6f;
-  --hl-primary-blue:   #1b4f6f;
+  --hl-border-soft:    #e4e1d9;
+  --hl-border-strong:  #cbc7be;
+  --hl-border:         var(--hl-border-soft);
+  --hl-accent:         #1b4f6f;
+  --hl-accent-muted:   color-mix(in srgb, var(--hl-accent) 10%, var(--hl-surface));
+  --hl-primary:        var(--hl-accent);
+  --hl-primary-blue:   var(--hl-accent);
   --hl-success:        #2a7a50;
   --hl-warning:        #b86b0e;
   --hl-danger:         #c0352c;
   --hl-info:           #1f5fa8;
-  --hl-shadow-subtle:  0 1px 2px rgba(28, 26, 23, 0.05), 0 1px 4px rgba(28, 26, 23, 0.04);
-  --hl-shadow-soft:    0 4px 20px rgba(28, 26, 23, 0.08), 0 1px 6px rgba(28, 26, 23, 0.04);
-  --hl-radius-card:    0.75rem;
-  --hl-radius-control: 0.5rem;
+  --hl-radius-sm:      0.375rem;
+  --hl-radius-md:      0.5rem;
+  --hl-radius-lg:      0.75rem;
+  --hl-radius-card:    var(--hl-radius-lg);
+  --hl-radius-control: var(--hl-radius-md);
+  --hl-shadow-soft:    0 1px 2px rgba(28, 26, 23, 0.05), 0 1px 4px rgba(28, 26, 23, 0.04);
+  --hl-shadow-panel:   0 12px 32px rgba(28, 26, 23, 0.08), 0 2px 8px rgba(28, 26, 23, 0.05);
+  --hl-shadow-subtle:  var(--hl-shadow-soft);
 
   /* ── Legacy text tokens → Calm OS light values ── */
   --text-primary:    #1c1a17;
@@ -931,16 +950,16 @@ body {
   --text-info:       #1f5fa8;
 
   /* ── Legacy background tokens → Calm OS light values ── */
-  --bg-page:              #f7f6f3;
+  --bg-page:              var(--hl-bg);
   --bg-surface:           #ffffff;
   --bg-surface-raised:    #ffffff;
   --bg-surface-overlay:   #ffffff;
-  --bg-subtle:            #f2f0eb;
-  --bg-muted:             #f2f0eb;
-  --card-bg:              #ffffff;
-  --surface-base:         #ffffff;
-  --surface-muted:        #f2f0eb;
-  --surface-strong:       #e8e5de;
+  --bg-subtle:            var(--hl-surface-soft);
+  --bg-muted:             var(--hl-surface-soft);
+  --card-bg:              var(--hl-surface);
+  --surface-base:         var(--hl-surface);
+  --surface-muted:        var(--hl-surface-soft);
+  --surface-strong:       var(--hl-surface-strong);
   --bg-accent:            color-mix(in srgb, var(--hl-primary) 12%, #ffffff);
   --bg-accent-subtle:     color-mix(in srgb, var(--hl-primary) 7%, #ffffff);
   --bg-accent-muted:      color-mix(in srgb, var(--hl-primary) 5%, #ffffff);
@@ -954,17 +973,17 @@ body {
   --bg-info-emphasis:     color-mix(in srgb, var(--hl-info) 16%, #ffffff);
 
   /* ── Legacy border tokens → Calm OS light values ── */
-  --border-default:  #e4e1d9;
-  --border-subtle:   color-mix(in srgb, #e4e1d9 70%, #ffffff);
-  --border-strong:   #cbc7be;
-  --border-focus:    #1b4f6f;
-  --border-accent:   color-mix(in srgb, var(--hl-primary) 30%, #e4e1d9);
-  --border-danger:   color-mix(in srgb, var(--hl-danger) 30%, #e4e1d9);
-  --border-warning:  color-mix(in srgb, var(--hl-warning) 30%, #e4e1d9);
-  --border-success:  color-mix(in srgb, var(--hl-success) 30%, #e4e1d9);
+  --border-default:  var(--hl-border-soft);
+  --border-subtle:   color-mix(in srgb, var(--hl-border-soft) 70%, #ffffff);
+  --border-strong:   var(--hl-border-strong);
+  --border-focus:    var(--hl-accent);
+  --border-accent:   color-mix(in srgb, var(--hl-accent) 30%, var(--hl-border-soft));
+  --border-danger:   color-mix(in srgb, var(--hl-danger) 30%, var(--hl-border-soft));
+  --border-warning:  color-mix(in srgb, var(--hl-warning) 30%, var(--hl-border-soft));
+  --border-success:  color-mix(in srgb, var(--hl-success) 30%, var(--hl-border-soft));
 
   /* ── Legacy interactive tokens ── */
-  --interactive-primary-bg:   #1b4f6f;
+  --interactive-primary-bg:   var(--hl-accent);
   --interactive-primary-hover:#143d59;
   --interactive-primary-text: #ffffff;
 }

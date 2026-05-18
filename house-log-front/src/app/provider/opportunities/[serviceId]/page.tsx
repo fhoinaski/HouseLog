@@ -8,7 +8,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Briefcase, CheckCircle2, Clock, FileText, MapPin, Send, ShieldCheck } from 'lucide-react';
-import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { ServiceChat } from '@/components/services/service-chat';

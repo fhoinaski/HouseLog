@@ -103,7 +103,7 @@ export default function ProviderOpportunitiesPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

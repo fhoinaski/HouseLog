@@ -522,6 +522,6 @@ export default function ProviderSettingsPage() {
           </Button>
         </div>
       </PageSection>
-    </div>
+    </PageContainer>
   );
 }

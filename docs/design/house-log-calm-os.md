@@ -37,6 +37,17 @@ Valores definidos como `@layer`-agnostic em `globals.css` (bloco `:root` unlayer
 | `--hl-shadow-soft` | ver globals.css | Sombra suave de modal/painel |
 | `--hl-radius-card` | `0.75rem` | Raio de cards e modais |
 | `--hl-radius-control` | `0.5rem` | Raio de inputs, botoes e chips |
+| `--hl-bg-soft` | `#fbfaf8` | Faixas muito sutis e estados vazios leves |
+| `--hl-surface-soft` | `#f2f0eb` | Hover, chips e surfaces secundarias |
+| `--hl-surface-strong` | `#e8e5de` | Blocos tonais, divisorias de painel e areas tecnicas |
+| `--hl-border-soft` | `#e4e1d9` | Bordas suaves padrao |
+| `--hl-border-strong` | `#cbc7be` | Bordas de separacao mais visiveis |
+| `--hl-accent` | `#1b4f6f` | Acao principal e destaque tecnico |
+| `--hl-accent-muted` | `color-mix(...)` | Destaque tonal leve |
+| `--hl-radius-sm` | `0.375rem` | Detalhes pequenos e indicadores |
+| `--hl-radius-md` | `0.5rem` | Inputs, botoes e chips |
+| `--hl-radius-lg` | `0.75rem` | Cards e modais |
+| `--hl-shadow-panel` | ver globals.css | Sombra de painel/modal elevado |
 
 ## Padroes de Input, Button, Modal e Badge (2026-05-17)
 
@@ -93,6 +104,8 @@ Valores definidos como `@layer`-agnostic em `globals.css` (bloco `:root` unlayer
 ## Implementacao
 
 - Paleta refinada: bloco `:root` unlayered no final de `globals.css`, com precedencia sobre `tokens.css`.
+- Tokens canonicos novos devem preferir o vocabulario `--hl-bg-soft`, `--hl-surface-soft`, `--hl-surface-strong`, `--hl-border-soft`, `--hl-border-strong`, `--hl-accent`, `--hl-accent-muted`, `--hl-radius-*` e `--hl-shadow-*`.
+- Aliases antigos (`--hl-primary`, `--hl-surface-muted`, `--hl-border`, `--hl-radius-card`, `--hl-radius-control`, `--hl-shadow-subtle`) permanecem para reduzir diff e proteger telas migradas.
 - Ponte Tailwind: `house-log-front/src/app/globals.css` em `@theme inline`.
 - Shadcn bridge: `@layer base :root` em `globals.css` aponta para tokens `--hl-*` (nao para tokens legados dark). Isso garante que componentes shadcn (`Card`, `Dialog`, `Popover`, etc.) usem a paleta Calm OS.
 - `ThemeProvider`: `defaultTheme="light"` com `enableSystem={false}` — sem classe `.dark` globalmente.
