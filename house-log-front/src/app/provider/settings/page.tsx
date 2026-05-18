@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { KeyRound, Medal, Plus, Settings2, ShieldCheck, Star, Trash2 } from 'lucide-react';
+import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -164,7 +165,7 @@ export default function ProviderSettingsPage() {
   }
 
   return (
-    <div className="mx-auto min-h-full max-w-5xl space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
+    <PageContainer variant="narrow" className="space-y-5">
       <PageHeader
         density="compact"
         eyebrow="Rede homologada"
