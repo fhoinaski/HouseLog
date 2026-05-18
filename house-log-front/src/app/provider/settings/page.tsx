@@ -336,11 +336,11 @@ export default function ProviderSettingsPage() {
           />
         </div>
 
-        <div className="space-y-3 rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-4">
+        <div className="space-y-3 rounded-[var(--hl-radius-card)] bg-hl-surface-muted p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Label className={labelClass}>Formacao e certificacoes</Label>
-              <p className="mt-1 text-sm leading-6 text-text-secondary">Registre evidencias formais de qualificacao tecnica.</p>
+              <p className="mt-1 text-sm leading-6 text-hl-text-muted">Registre evidencias formais de qualificacao tecnica.</p>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={addEducation} className="w-full sm:w-auto">
               <Plus className="h-4 w-4" />
@@ -359,7 +359,7 @@ export default function ProviderSettingsPage() {
           ) : (
             <div className="space-y-3">
               {education.map((entry, index) => (
-                <div key={`education-${index}`} className="space-y-2 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3">
+                <div key={`education-${index}`} className="space-y-2 rounded-[var(--hl-radius-control)] bg-hl-surface p-3">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Input
                       value={entry.institution}
@@ -412,11 +412,11 @@ export default function ProviderSettingsPage() {
           )}
         </div>
 
-        <div className="space-y-3 rounded-[var(--radius-xl)] bg-[var(--surface-strong)] p-4">
+        <div className="space-y-3 rounded-[var(--hl-radius-card)] bg-hl-surface-muted p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <Label className={labelClass}>Portfolio visual</Label>
-              <p className="mt-1 text-sm leading-6 text-text-secondary">Casos antes/depois ajudam a qualificar confianca e aderencia tecnica.</p>
+              <p className="mt-1 text-sm leading-6 text-hl-text-muted">Casos antes/depois ajudam a qualificar confianca e aderencia tecnica.</p>
             </div>
             <Button type="button" size="sm" variant="outline" onClick={addPortfolioCase} className="w-full sm:w-auto">
               <Plus className="h-4 w-4" />
@@ -435,7 +435,7 @@ export default function ProviderSettingsPage() {
           ) : (
             <div className="space-y-3">
               {portfolioCases.map((item, index) => (
-                <div key={`portfolio-case-${index}`} className="space-y-2 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3">
+                <div key={`portfolio-case-${index}`} className="space-y-2 rounded-[var(--hl-radius-control)] bg-hl-surface p-3">
                   <Input
                     value={item.title}
                     onChange={(e) => updatePortfolioCase(index, { title: e.target.value })}
@@ -465,15 +465,15 @@ export default function ProviderSettingsPage() {
                         { label: 'Antes', url: item.beforeImageUrl },
                         { label: 'Depois', url: item.afterImageUrl },
                       ].map((media) => (
-                        <div key={media.label} className="overflow-hidden rounded-[var(--radius-lg)] bg-[var(--surface-strong)]">
-                          <p className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-text-tertiary">
+                        <div key={media.label} className="overflow-hidden rounded-[var(--hl-radius-control)] bg-hl-surface-muted">
+                          <p className="px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-hl-text-muted">
                             {media.label}
                           </p>
                           {media.url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={media.url} alt={media.label} className="h-32 w-full object-cover" />
                           ) : (
-                            <div className="h-32 bg-[var(--surface-base)]" />
+                            <div className="h-32 bg-hl-surface-muted" />
                           )}
                         </div>
                       ))}

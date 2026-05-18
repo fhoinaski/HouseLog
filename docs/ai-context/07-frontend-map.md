@@ -29,7 +29,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - `src/app/provider/dashboard/page.tsx`: tela piloto do `HouseLog Calm OS`; usa fundo claro, cards brancos, nav clara via escopo da pagina, MetricCards com skeleton de loading, estado de erro com retry e zeros exibidos apenas quando dados validos.
 - `src/app/provider/opportunities/page.tsx`: migrada para `HouseLog Calm OS`; chips de filtro tem `aria-pressed` e `role="group"`, cards Link mobile-first e estados loading/empty claros.
 - `src/app/provider/opportunities/[serviceId]/page.tsx`: migrada parcialmente para `HouseLog Calm OS`; mantem proposta/chat e usa secoes claras.
-- `src/app/provider/settings/page.tsx`: migrada parcialmente para `HouseLog Calm OS`; chips de hard skills tem `aria-pressed`, sections claras e formularios preservados.
+- `src/app/provider/settings/page.tsx`: migrada integralmente para `HouseLog Calm OS`; chips de hard skills com `aria-pressed`, secoes claras e formularios preservados; secoes de educacao/portfolio/portfolio-visual migradas de `var(--surface-base/strong)` e `text-text-*` para tokens `--hl-*` (2026-05-17).
 
 ## Propostas recebidas — Owner Service Detail (2026-05-17)
 

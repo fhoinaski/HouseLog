@@ -895,8 +895,12 @@ body {
 /* ── Refined Calm OS palette ─────────────────────────────────────────────────
  * Unlayered :root — takes precedence over tokens.css (same source after import).
  * Direction: warm premium + petróleo profundo + texto forte.
+ * Also remaps old text/bg/border legacy tokens to light Calm OS values so that
+ * screens using text-text-* / bg-bg-* / border-border-* resolve correctly
+ * without needing file-by-file migration.
  * ──────────────────────────────────────────────────────────────────────────── */
 :root {
+  /* ── Calm OS core ── */
   --hl-bg:             #f7f6f3;
   --hl-surface:        #ffffff;
   --hl-surface-muted:  #f2f0eb;
@@ -913,6 +917,56 @@ body {
   --hl-shadow-soft:    0 4px 20px rgba(28, 26, 23, 0.08), 0 1px 6px rgba(28, 26, 23, 0.04);
   --hl-radius-card:    0.75rem;
   --hl-radius-control: 0.5rem;
+
+  /* ── Legacy text tokens → Calm OS light values ── */
+  --text-primary:    #1c1a17;
+  --text-secondary:  #706b62;
+  --text-tertiary:   #9c9790;
+  --text-disabled:   #b8b3aa;
+  --text-accent:     #1b4f6f;
+  --text-inverse:    #ffffff;
+  --text-danger:     #c0352c;
+  --text-warning:    #b86b0e;
+  --text-success:    #2a7a50;
+  --text-info:       #1f5fa8;
+
+  /* ── Legacy background tokens → Calm OS light values ── */
+  --bg-page:              #f7f6f3;
+  --bg-surface:           #ffffff;
+  --bg-surface-raised:    #ffffff;
+  --bg-surface-overlay:   #ffffff;
+  --bg-subtle:            #f2f0eb;
+  --bg-muted:             #f2f0eb;
+  --card-bg:              #ffffff;
+  --surface-base:         #ffffff;
+  --surface-muted:        #f2f0eb;
+  --surface-strong:       #e8e5de;
+  --bg-accent:            color-mix(in srgb, var(--hl-primary) 12%, #ffffff);
+  --bg-accent-subtle:     color-mix(in srgb, var(--hl-primary) 7%, #ffffff);
+  --bg-accent-muted:      color-mix(in srgb, var(--hl-primary) 5%, #ffffff);
+  --bg-warning:           color-mix(in srgb, var(--hl-warning) 10%, #ffffff);
+  --bg-warning-emphasis:  color-mix(in srgb, var(--hl-warning) 16%, #ffffff);
+  --bg-success:           color-mix(in srgb, var(--hl-success) 10%, #ffffff);
+  --bg-success-emphasis:  color-mix(in srgb, var(--hl-success) 16%, #ffffff);
+  --bg-danger:            color-mix(in srgb, var(--hl-danger) 10%, #ffffff);
+  --bg-danger-emphasis:   color-mix(in srgb, var(--hl-danger) 16%, #ffffff);
+  --bg-info:              color-mix(in srgb, var(--hl-info) 10%, #ffffff);
+  --bg-info-emphasis:     color-mix(in srgb, var(--hl-info) 16%, #ffffff);
+
+  /* ── Legacy border tokens → Calm OS light values ── */
+  --border-default:  #e4e1d9;
+  --border-subtle:   color-mix(in srgb, #e4e1d9 70%, #ffffff);
+  --border-strong:   #cbc7be;
+  --border-focus:    #1b4f6f;
+  --border-accent:   color-mix(in srgb, var(--hl-primary) 30%, #e4e1d9);
+  --border-danger:   color-mix(in srgb, var(--hl-danger) 30%, #e4e1d9);
+  --border-warning:  color-mix(in srgb, var(--hl-warning) 30%, #e4e1d9);
+  --border-success:  color-mix(in srgb, var(--hl-success) 30%, #e4e1d9);
+
+  /* ── Legacy interactive tokens ── */
+  --interactive-primary-bg:   #1b4f6f;
+  --interactive-primary-hover:#143d59;
+  --interactive-primary-text: #ffffff;
 }
 
 @layer base {
