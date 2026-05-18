@@ -102,7 +102,7 @@ export default function LoginPage() {
             />
             <button
               type="button"
-              className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-[var(--radius-md)] text-text-tertiary transition-colors hover:bg-[var(--interactive-ghost-hover)] hover:text-text-primary focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+              className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-[var(--radius-md)] text-hl-text-muted transition-colors hover:bg-hl-surface-muted hover:text-hl-text focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]"
               aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
               onClick={() => setShowPassword((prev) => !prev)}
             >
@@ -113,11 +113,11 @@ export default function LoginPage() {
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <label className="flex min-h-11 items-center gap-2 text-sm text-text-secondary">
-            <input type="checkbox" className="h-4 w-4 accent-[var(--provider-accent)]" {...register('remember')} />
+          <label className="flex min-h-11 items-center gap-2 text-sm text-hl-text-muted">
+            <input type="checkbox" className="h-4 w-4 accent-[var(--hl-primary)]" {...register('remember')} />
             Lembrar de mim
           </label>
-          <button type="button" className="min-h-11 rounded-[var(--radius-md)] px-1 text-sm font-medium text-text-accent transition-colors hover:text-text-accent-subtle focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]">
+          <button type="button" className="min-h-11 rounded-[var(--radius-md)] px-1 text-sm font-medium text-hl-primary transition-colors hover:text-hl-text focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]">
             Esqueceu a senha?
           </button>
         </div>
@@ -128,9 +128,9 @@ export default function LoginPage() {
         </Button>
 
         <div className="flex items-center gap-3 py-1">
-          <span className="h-px flex-1 bg-[var(--divider-color)]" />
-          <span className="text-xs text-text-tertiary">ou</span>
-          <span className="h-px flex-1 bg-[var(--divider-color)]" />
+          <span className="h-px flex-1 bg-hl-border" />
+          <span className="text-xs text-hl-text-muted">ou</span>
+          <span className="h-px flex-1 bg-hl-border" />
         </div>
 
         <Button type="button" variant="outline" size="lg" className="w-full">
@@ -140,9 +140,9 @@ export default function LoginPage() {
           Continuar com Google
         </Button>
 
-        <p className="pt-1 text-center text-sm text-text-secondary">
+        <p className="pt-1 text-center text-sm text-hl-text-muted">
           Não tem uma conta?{' '}
-          <Link href="/register" className="font-medium text-text-accent hover:text-text-accent-subtle">
+          <Link href="/register" className="font-medium text-hl-primary hover:text-hl-text">
             Criar conta
           </Link>
         </p>

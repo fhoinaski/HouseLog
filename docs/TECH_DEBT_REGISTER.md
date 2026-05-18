@@ -187,6 +187,7 @@ Este registro deve ser lido em conjunto com:
 - **Property detail Calm OS (2026-05-17)**: detalhe do imovel recebeu wrapper/hero Calm OS, reduzindo overlay dark sem alterar tabs, modulos ou contratos.
 - **Auth/public Calm OS (2026-05-17)**: `EntryShell` e `/splash` migraram para base clara Calm OS, reduzindo gradientes/glass pesados sem alterar fluxo de auth.
 - **Invite public Calm OS (2026-05-17)**: `/invite/[token]` recebeu wrapper/card principal Calm OS sem alterar contrato do convite.
+- **Componentes base Calm OS (2026-05-17)**: `.hl-input`, `.hl-textarea`, `.hl-select`, `.hl-label`, `.hl-btn-primary`, `.hl-btn-secondary`, `.hl-btn-ghost` e `.hl-badge-*` em `globals.css` foram migrados para tokens `--hl-*`, eliminando a dependencia dos tokens dark/tech herdados (`--input-bg`, `--text-secondary`, `--interactive-primary-bg`, etc.) nos componentes base `Button`, `Input`, `Label`, `Textarea`, `Select` e `Badge`. `Dialog` migrado para overlay `bg-black/40` e conteudo `bg-hl-surface`. Login e Register substituiram tokens antigos inline por Calm OS equivalentes.
 - **Risco residual (Calm OS)**: ainda existem telas legadas com dark/tech; enquanto a migracao nao terminar, ha risco de inconsistencia visual, contraste ruim em telas antigas e mistura visual entre telas novas e legadas.
 - **Recomendacao**:
   - migrar por bloco, sem big bang visual;

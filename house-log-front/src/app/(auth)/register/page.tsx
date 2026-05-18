@@ -80,7 +80,7 @@ function StepIndicator({ step }: { step: RegisterStep }) {
           key={dot}
           className={cn(
             'h-1.5 rounded-full transition-colors',
-            dot <= step ? 'bg-[var(--provider-accent)]' : 'bg-[var(--surface-muted)]'
+            dot <= step ? 'bg-hl-primary' : 'bg-hl-surface-muted'
           )}
         />
       ))}
@@ -200,7 +200,7 @@ export default function RegisterPage() {
       footer={
         <>
           Já tem conta?{' '}
-          <Link href="/login" className="font-medium text-text-accent hover:text-text-accent-subtle">
+          <Link href="/login" className="font-medium text-hl-primary hover:text-hl-text">
             Entrar
           </Link>
         </>
@@ -211,8 +211,8 @@ export default function RegisterPage() {
       {step === 1 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-xl font-medium text-text-primary">Como você usa o HouseLog?</h2>
-            <p className="mt-1 text-sm leading-6 text-text-secondary">Isso define a entrada inicial e os atalhos da operação.</p>
+            <h2 className="text-xl font-medium text-hl-text">Como você usa o HouseLog?</h2>
+            <p className="mt-1 text-sm leading-6 text-hl-text-muted">Isso define a entrada inicial e os atalhos da operação.</p>
           </div>
 
           <div className="grid gap-3">
@@ -226,24 +226,24 @@ export default function RegisterPage() {
                   type="button"
                   onClick={() => setRole(item.key)}
                   className={cn(
-                    'min-h-20 rounded-[var(--radius-xl)] p-4 text-left transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+                    'min-h-20 rounded-[var(--radius-xl)] p-4 text-left transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]',
                     selected
-                      ? 'bg-[var(--button-tonal-bg)] shadow-[var(--shadow-sm)]'
-                      : 'bg-[var(--surface-base)] hover:bg-[var(--surface-raised)]'
+                      ? 'bg-hl-surface-muted shadow-hl-subtle border border-hl-primary/30'
+                      : 'bg-hl-surface border border-hl-border hover:bg-hl-surface-muted'
                   )}
                 >
                   <span className="flex items-start gap-3">
                     <span
                       className={cn(
                         'flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
-                        selected ? 'bg-[var(--provider-accent)] text-text-inverse' : 'bg-[var(--surface-strong)] text-text-accent'
+                        selected ? 'bg-hl-primary text-white' : 'bg-hl-surface-muted text-hl-text-muted'
                       )}
                     >
                       <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
                     </span>
                     <span>
-                      <span className="block text-sm font-medium text-text-primary">{item.title}</span>
-                      <span className="mt-1 block text-sm leading-5 text-text-secondary">{item.desc}</span>
+                      <span className="block text-sm font-medium text-hl-text">{item.title}</span>
+                      <span className="mt-1 block text-sm leading-5 text-hl-text-muted">{item.desc}</span>
                     </span>
                   </span>
                 </button>
@@ -252,7 +252,7 @@ export default function RegisterPage() {
           </div>
 
           {needsInvite && (
-            <div className="rounded-[var(--radius-md)] bg-bg-warning px-3 py-3 text-sm leading-5 text-text-warning">
+            <div className="rounded-[var(--radius-md)] border border-hl-border bg-hl-surface-muted px-3 py-3 text-sm leading-5 text-hl-text-muted">
               Você precisa de um código de convite enviado pelo proprietário.
             </div>
           )}
@@ -266,8 +266,8 @@ export default function RegisterPage() {
       {step === 2 && (
         <form onSubmit={handleSubmit(submitRegistration)} className="space-y-4">
           <div>
-            <h2 className="text-xl font-medium text-text-primary">Dados de acesso</h2>
-            <p className="mt-1 text-sm leading-6 text-text-secondary">Use informações reais para convites, auditoria e comunicação.</p>
+            <h2 className="text-xl font-medium text-hl-text">Dados de acesso</h2>
+            <p className="mt-1 text-sm leading-6 text-hl-text-muted">Use informações reais para convites, auditoria e comunicação.</p>
           </div>
 
           <div>
@@ -315,15 +315,15 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <label className="flex items-start gap-2.5 pt-1 text-sm leading-6 text-text-secondary">
-            <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--provider-accent)]" {...register('terms')} />
+          <label className="flex items-start gap-2.5 pt-1 text-sm leading-6 text-hl-text-muted">
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--hl-primary)]" {...register('terms')} />
             <span>
               Aceito os{' '}
-              <a href="#" className="font-medium text-text-accent hover:text-text-accent-subtle">
+              <a href="#" className="font-medium text-hl-primary hover:text-hl-text">
                 termos de uso
               </a>{' '}
               e{' '}
-              <a href="#" className="font-medium text-text-accent hover:text-text-accent-subtle">
+              <a href="#" className="font-medium text-hl-primary hover:text-hl-text">
                 política de privacidade
               </a>
             </span>
@@ -343,12 +343,12 @@ export default function RegisterPage() {
 
       {step === 3 && role && (
         <div className="flex flex-col items-center text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-bg-success text-text-success">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-hl-surface-muted text-hl-success">
             <Check className="h-7 w-7" strokeWidth={2.4} />
           </div>
 
-          <h2 className="text-xl font-medium text-text-primary">Perfil criado</h2>
-          <p className="mt-2 text-sm leading-6 text-text-secondary">
+          <h2 className="text-xl font-medium text-hl-text">Perfil criado</h2>
+          <p className="mt-2 text-sm leading-6 text-hl-text-muted">
             Seu acesso está ativo. Entre na plataforma e complete a configuração operacional.
           </p>
 

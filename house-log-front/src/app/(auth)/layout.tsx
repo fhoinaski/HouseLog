@@ -15,8 +15,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   if (hasToken) {
     return (
-      <div className="safe-top safe-bottom flex h-screen items-center justify-center bg-bg-page">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-border-focus border-t-transparent" />
+      <div className="safe-top safe-bottom flex h-screen items-center justify-center bg-hl-bg">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-hl-primary border-t-transparent" />
       </div>
     );
   }

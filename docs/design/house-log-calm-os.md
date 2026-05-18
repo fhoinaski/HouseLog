@@ -24,13 +24,65 @@ O visual dark/tech anterior passa a ser legado: pode continuar existindo em tela
 | `--hl-surface-muted` | `#F1EFE8` | Hover, chips e surfaces secundarias |
 | `--hl-border` | `#E5E1D8` | Bordas suaves |
 | `--hl-text` | `#1F2933` | Texto principal |
-| `--hl-text-muted` | `#6B7280` | Texto secundario |
+| `--hl-text-muted` | `#6B7280` | Texto secundario e placeholder |
 | `--hl-primary` | `#2F5D62` | Acao principal HouseLog |
 | `--hl-primary-blue` | `#2563EB` | Acao informativa ou link importante |
 | `--hl-success` | `#16A34A` | Sucesso |
 | `--hl-warning` | `#D97706` | Atencao |
 | `--hl-danger` | `#DC2626` | Erro ou risco |
 | `--hl-info` | `#2563EB` | Informacao |
+
+## Padroes de Input, Button, Modal e Badge (2026-05-17)
+
+### Input / Textarea / Select
+
+- Fundo: `var(--hl-surface)` (branco)
+- Texto: `var(--hl-text)`
+- Borda: `1px solid var(--hl-border)`
+- Placeholder: `var(--hl-text-muted)` com opacity 0.7
+- Hover borda: `color-mix(in srgb, var(--hl-border) 40%, var(--hl-text-muted) 60%)`
+- Focus borda: `var(--hl-primary)` + ring `0 0 0 3px color-mix(in srgb, var(--hl-primary) 15%, transparent)`
+- Disabled: `var(--hl-surface-muted)` com opacity 0.6
+
+### Button primario
+
+- Background: `var(--hl-primary)` (`#2F5D62`)
+- Texto: `#ffffff`
+- Hover: `color-mix(in srgb, var(--hl-primary) 85%, #000 15%)`
+- Focus ring: `0 0 0 3px color-mix(in srgb, var(--hl-primary) 25%, transparent)`
+
+### Button secundario / outline
+
+- Background: `var(--hl-surface)`
+- Texto: `var(--hl-text)`
+- Borda: `1px solid var(--hl-border)`
+- Hover: `var(--hl-surface-muted)`
+
+### Button ghost
+
+- Background: transparent
+- Texto: `var(--hl-text-muted)`
+- Hover: `var(--hl-surface-muted)` + `var(--hl-text)`
+
+### Label
+
+- Cor: `var(--hl-text)` (nao secundario — label deve ter contraste total)
+
+### Dialog / Modal
+
+- Overlay: `bg-black/40`
+- Conteudo: `bg-hl-surface border border-hl-border shadow-hl-soft text-hl-text`
+- Titulo: `text-hl-text`
+- Descricao: `text-hl-text-muted`
+
+### Badge
+
+- Tokens de status usam `color-mix` contra `var(--hl-surface)` para criar versoes soft:
+  - Sucesso: `color-mix(in srgb, var(--hl-success) 12%, var(--hl-surface))`
+  - Atencao: `color-mix(in srgb, var(--hl-warning) 12%, var(--hl-surface))`
+  - Erro/urgente: `color-mix(in srgb, var(--hl-danger) 12%, var(--hl-surface))`
+  - Info: `color-mix(in srgb, var(--hl-info) 12%, var(--hl-surface))`
+  - Draft/neutro: `var(--hl-surface-muted)` + `var(--hl-text-muted)`
 
 ## Implementacao
 

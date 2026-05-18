@@ -394,14 +394,14 @@ body {
   }
 
   .hl-btn-primary {
-    background-color: var(--interactive-primary-bg);
-    color: var(--interactive-primary-text);
+    background-color: var(--hl-primary);
+    color: #ffffff;
     border: none;
     padding-inline: 16px;
   }
 
   .hl-btn-primary:hover {
-    background-color: var(--interactive-primary-hover);
+    background-color: color-mix(in srgb, var(--hl-primary) 85%, #000 15%);
   }
 
   .hl-btn-accent {
@@ -416,26 +416,26 @@ body {
   }
 
   .hl-btn-secondary {
-    background-color: var(--interactive-secondary-bg);
-    color: var(--interactive-secondary-text);
-    border: 0.5px solid var(--interactive-secondary-border);
+    background-color: var(--hl-surface);
+    color: var(--hl-text);
+    border: 1px solid var(--hl-border);
     padding-inline: 16px;
   }
 
   .hl-btn-secondary:hover {
-    background-color: var(--interactive-secondary-hover);
+    background-color: var(--hl-surface-muted);
   }
 
   .hl-btn-ghost {
     background-color: transparent;
-    color: var(--text-secondary);
+    color: var(--hl-text-muted);
     border: none;
     padding-inline: 12px;
   }
 
   .hl-btn-ghost:hover {
-    background-color: var(--interactive-ghost-hover);
-    color: var(--text-primary);
+    background-color: var(--hl-surface-muted);
+    color: var(--hl-text);
   }
 
   .hl-btn-danger {
@@ -460,7 +460,7 @@ body {
   .hl-btn-secondary:focus-visible,
   .hl-btn-ghost:focus-visible {
     outline: none;
-    box-shadow: var(--shadow-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hl-primary) 25%, transparent);
   }
 
   .hl-btn-accent:focus-visible {
@@ -479,9 +479,9 @@ body {
     width: 100%;
     min-height: var(--input-height-md);
     padding-inline: var(--input-padding-x);
-    background-color: var(--input-bg);
-    color: var(--input-text);
-    border: 0.5px solid var(--input-border);
+    background-color: var(--hl-surface);
+    color: var(--hl-text);
+    border: 1px solid var(--hl-border);
     border-radius: var(--input-radius);
     font-family: var(--font-sans);
     font-size: var(--input-font-size);
@@ -492,26 +492,27 @@ body {
 
   .hl-input::placeholder,
   .hl-textarea::placeholder {
-    color: var(--input-placeholder);
+    color: var(--hl-text-muted);
+    opacity: 0.7;
   }
 
   .hl-input:hover,
   .hl-select:hover,
   .hl-textarea:hover {
-    border-color: var(--input-border-hover);
+    border-color: color-mix(in srgb, var(--hl-border) 40%, var(--hl-text-muted) 60%);
   }
 
   .hl-input:focus,
   .hl-select:focus,
   .hl-textarea:focus {
-    border-color: var(--input-border-focus);
-    box-shadow: var(--input-shadow-focus);
+    border-color: var(--hl-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--hl-primary) 15%, transparent);
   }
 
   .hl-input:disabled,
   .hl-select:disabled,
   .hl-textarea:disabled {
-    background-color: var(--input-bg-disabled);
+    background-color: var(--hl-surface-muted);
     cursor: not-allowed;
     opacity: 0.6;
   }
@@ -528,9 +529,9 @@ body {
     width: 100%;
     min-height: 80px;
     padding: 10px var(--input-padding-x);
-    background-color: var(--input-bg);
-    color: var(--input-text);
-    border: 0.5px solid var(--input-border);
+    background-color: var(--hl-surface);
+    color: var(--hl-text);
+    border: 1px solid var(--hl-border);
     border-radius: var(--input-radius);
     font-family: var(--font-sans);
     font-size: var(--input-font-size);
@@ -543,7 +544,7 @@ body {
   .hl-label {
     display: block;
     margin-bottom: 6px;
-    color: var(--text-secondary);
+    color: var(--hl-text);
     font-size: var(--text-sm);
     font-weight: var(--font-medium);
     line-height: var(--leading-tight);
@@ -584,29 +585,29 @@ body {
   }
 
   .hl-badge-pending {
-    background-color: var(--bg-warning);
-    color: var(--text-warning);
+    background-color: color-mix(in srgb, var(--hl-warning) 12%, var(--hl-surface));
+    color: var(--hl-warning);
   }
 
   .hl-badge-progress {
-    background-color: var(--bg-info);
-    color: var(--text-info);
+    background-color: color-mix(in srgb, var(--hl-info) 12%, var(--hl-surface));
+    color: var(--hl-info);
   }
 
   .hl-badge-done {
-    background-color: var(--bg-success);
-    color: var(--text-success);
+    background-color: color-mix(in srgb, var(--hl-success) 12%, var(--hl-surface));
+    color: var(--hl-success);
   }
 
   .hl-badge-approval,
   .hl-badge-urgent {
-    background-color: var(--bg-danger);
-    color: var(--text-danger);
+    background-color: color-mix(in srgb, var(--hl-danger) 12%, var(--hl-surface));
+    color: var(--hl-danger);
   }
 
   .hl-badge-draft {
-    background-color: var(--bg-subtle);
-    color: var(--text-secondary);
+    background-color: var(--hl-surface-muted);
+    color: var(--hl-text-muted);
   }
 
   .hl-chip {

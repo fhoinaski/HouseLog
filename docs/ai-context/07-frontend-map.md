@@ -51,6 +51,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - Helpers globais em `globals.css`: `.hl-calm-card`, `.hl-calm-surface`, `.hl-calm-section`, `.hl-calm-muted`, `.hl-calm-border`, `.hl-calm-focus` e `.hl-calm-bottom-safe`.
 - `TopNav`, `BottomNav` e `PropertyMobileContextControls` usam classes Calm OS diretas (`bg-hl-surface`, `border-hl-border`, `shadow-hl-*`) alem do wrapper.
 - `src/components/ui/visual-system.ts`: variantes compartilhadas de `PageSection`, `MetricCard`, `ActionTile`, `ServiceOrderCard`, `PropertySummaryCard`, `EmptyState` e `ChatPanel` usam base Calm OS (surface branca, borda suave, sombra discreta).
+- `src/components/ui/dialog.tsx`: overlay migrado para `bg-black/40`; conteudo usa `bg-hl-surface border-hl-border text-hl-text shadow-hl-soft`; descricao usa `text-hl-text-muted`.
 - Componentes novos devem usar tokens semanticos (`--hl-bg`, `--hl-surface`, `--hl-text`, `--hl-border`, `--hl-primary` e status tokens). Nao criar novos componentes com cores hardcoded.
 - `The Architectural Lens` permanece como base legada ate a migracao gradual. Nao apagar tokens antigos sem mapear consumidores.
 - Migrar por tela/componente, preservando loading, empty, error states e contratos de API. Prioridade atual: provider flow, owner dashboard, imoveis, OS/propostas, documentos/handover e auth/login.
@@ -66,6 +67,9 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - `src/components/auth/entry-shell.tsx`: login/register usam base Calm OS clara, cards brancos e sem glass pesado.
 - `src/app/splash/page.tsx`: splash usa fundo Calm OS claro e reduz gradientes/glass pesados.
 - `src/app/invite/[token]/page.tsx`: convite publico usa base Calm OS clara no wrapper, logo e card principal.
+- `src/app/(auth)/login/page.tsx`: tokens antigos (`text-text-secondary`, `text-text-accent`, `var(--provider-accent)`, `var(--divider-color)`, `var(--field-focus-ring)`) substituidos por tokens Calm OS (`text-hl-text-muted`, `text-hl-primary`, `var(--hl-primary)`, `bg-hl-border`).
+- `src/app/(auth)/register/page.tsx`: mesma migracao de tokens antigos + role cards com superficie Calm OS, step indicator com `bg-hl-primary`, success state com `bg-hl-surface-muted text-hl-success`.
+- `src/app/(auth)/layout.tsx`: spinner de loading usa `bg-hl-bg` e `border-hl-primary`.
 
 ## Regras para IA
 
