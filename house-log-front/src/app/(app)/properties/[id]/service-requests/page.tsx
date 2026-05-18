@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle, ClipboardList, FileSearch, HandCoins, Loader2, XCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
+import { WorkOrderKanban } from '@/components/operations/work-order-kanban';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
@@ -22,6 +23,7 @@ const REQUEST_TABS = [
 ] as const;
 
 type RequestTabKey = (typeof REQUEST_TABS)[number]['key'];
+type ViewMode = 'list' | 'kanban';
 
 function getRequestStage(request: ServiceRequestSummary) {
   if (request.accepted_proposals_count > 0) return 'Aprovado';
@@ -49,7 +51,8 @@ function matchesTab(request: ServiceRequestSummary, tab: RequestTabKey) {
 export default function ServiceRequestsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [activeTab, setActiveTab] = useState<RequestTabKey>('all');
-  const { data: requests, isLoadingMore, hasMore, loadMore } = usePagination<ServiceRequestSummary>(
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const { data: requests, isLoading, isLoadingMore, hasMore, loadMore, error, mutate } = usePagination<ServiceRequestSummary>(
     `/properties/${id}/service-requests`,
     { limit: '50' }
   );
@@ -108,13 +111,54 @@ export default function ServiceRequestsPage({ params }: { params: Promise<{ id: 
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-2 shadow-[var(--hl-shadow-soft)]">
+        <div className="px-2">
+          <p className="text-sm font-semibold text-hl-text">Visualização operacional</p>
+          <p className="text-xs text-hl-text-muted">Kanban mostra o estágio comercial; Lista preserva a leitura completa.</p>
+        </div>
+        <div className="flex rounded-[var(--hl-radius-md)] bg-hl-surface-soft p-1" role="group" aria-label="Modo de visualização">
+          {(['kanban', 'list'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className="rounded-[var(--hl-radius-sm)] px-3 py-2 text-sm font-medium text-hl-text-muted transition data-[active=true]:bg-hl-surface data-[active=true]:text-hl-text data-[active=true]:shadow-[var(--hl-shadow-soft)]"
+              data-active={viewMode === mode}
+              aria-pressed={viewMode === mode}
+              onClick={() => setViewMode(mode)}
+            >
+              {mode === 'kanban' ? 'Kanban' : 'Lista'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <PageSection
         title="Solicitações de orçamento"
         description="Pedidos de orçamento ficam separados dos serviços já aprovados."
         tone="strong"
         density="default"
       >
-        {visibleRequests.length === 0 ? (
+        {error ? (
+          <EmptyState
+            icon={<AlertTriangle className="h-6 w-6" />}
+            title="Não foi possível carregar os chamados"
+            description="Tente novamente para atualizar o pipeline de orçamentos."
+            actions={
+              <Button variant="outline" onClick={() => void mutate()}>
+                Tentar novamente
+              </Button>
+            }
+            tone="subtle"
+            density="spacious"
+          />
+        ) : isLoading ? (
+          <div className="flex items-center justify-center gap-2 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface py-10 text-sm text-hl-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Carregando chamados...
+          </div>
+        ) : viewMode === 'kanban' ? (
+          <WorkOrderKanban propertyId={id} serviceRequests={requests} />
+        ) : visibleRequests.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="h-6 w-6" />}
             title="Nenhum orçamento encontrado"

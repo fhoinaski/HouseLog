@@ -3,9 +3,11 @@
 import { use, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSWRConfig } from 'swr';
+import { toast } from 'sonner';
 import { AlertTriangle, CheckCircle2, Clock, Loader2, Plus, ShieldCheck, Wrench } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
+import { WorkOrderKanban } from '@/components/operations/work-order-kanban';
 import { ServiceOrderCard } from '@/components/services/service-order-card';
 import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -14,7 +16,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { usePagination } from '@/hooks/usePagination';
-import { type ServiceOrder } from '@/lib/api';
+import { servicesApi, type ServiceOrder } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatDate } from '@/lib/utils';
 
 const SERVICE_TABS = [
@@ -26,6 +28,7 @@ const SERVICE_TABS = [
 ] as const;
 
 type ServiceTabKey = (typeof SERVICE_TABS)[number]['key'];
+type ViewMode = 'list' | 'kanban';
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -61,10 +64,13 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
   const { id } = use(params);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ServiceTabKey>('open');
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [createOpen, setCreateOpen] = useState(false);
+  const [movingOrderId, setMovingOrderId] = useState<string | null>(null);
+  const [kanbanError, setKanbanError] = useState<string | null>(null);
   const { mutate: globalMutate } = useSWRConfig();
 
-  const { data: orders, isLoadingMore, hasMore, loadMore, mutate } = usePagination<ServiceOrder>(
+  const { data: orders, isLoading, isLoadingMore, hasMore, loadMore, error, mutate } = usePagination<ServiceOrder>(
     `/properties/${id}/services`
   );
 
@@ -88,6 +94,25 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
 
   function openDetail(order: ServiceOrder) {
     router.push(`/properties/${id}/services/${order.id}`);
+  }
+
+  async function moveOrder(order: ServiceOrder, status: ServiceOrder['status']) {
+    if (movingOrderId) return;
+    setMovingOrderId(order.id);
+    setKanbanError(null);
+
+    try {
+      await servicesApi.updateStatus(id, order.id, status);
+      await mutate();
+      void globalMutate(['dashboard', id]);
+      toast.success('Status da OS atualizado');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Não foi possível atualizar o status da OS.';
+      setKanbanError(message);
+      toast.error('Erro ao atualizar status', { description: message });
+    } finally {
+      setMovingOrderId(null);
+    }
   }
 
   return (
@@ -154,8 +179,55 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
         ))}
       </div>
 
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-2 shadow-[var(--hl-shadow-soft)]">
+        <div className="px-2">
+          <p className="text-sm font-semibold text-hl-text">Visualização operacional</p>
+          <p className="text-xs text-hl-text-muted">Use Kanban para fluxo e Lista para leitura detalhada.</p>
+        </div>
+        <div className="flex rounded-[var(--hl-radius-md)] bg-hl-surface-soft p-1" role="group" aria-label="Modo de visualização">
+          {(['kanban', 'list'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className="rounded-[var(--hl-radius-sm)] px-3 py-2 text-sm font-medium text-hl-text-muted transition data-[active=true]:bg-hl-surface data-[active=true]:text-hl-text data-[active=true]:shadow-[var(--hl-shadow-soft)]"
+              data-active={viewMode === mode}
+              aria-pressed={viewMode === mode}
+              onClick={() => setViewMode(mode)}
+            >
+              {mode === 'kanban' ? 'Kanban' : 'Lista'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <PageSection tone="strong" density="default">
-        {visibleOrders.length === 0 ? (
+        {error ? (
+          <EmptyState
+            icon={<AlertTriangle className="h-6 w-6" />}
+            title="Não foi possível carregar as OS"
+            description="Tente novamente para atualizar o pipeline técnico."
+            actions={
+              <Button variant="outline" onClick={() => void mutate()}>
+                Tentar novamente
+              </Button>
+            }
+            tone="subtle"
+            density="spacious"
+          />
+        ) : isLoading ? (
+          <div className="flex items-center justify-center gap-2 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface py-10 text-sm text-hl-text-muted">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Carregando ordens de serviço...
+          </div>
+        ) : viewMode === 'kanban' ? (
+          <WorkOrderKanban
+            propertyId={id}
+            serviceOrders={orders}
+            onMoveServiceOrder={moveOrder}
+            movingOrderId={movingOrderId}
+            error={kanbanError}
+          />
+        ) : visibleOrders.length === 0 ? (
           <EmptyState
             icon={<Wrench className="h-6 w-6" />}
             title="Nenhum servico encontrado"
