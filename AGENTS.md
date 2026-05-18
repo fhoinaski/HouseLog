@@ -95,6 +95,43 @@ Never:
 
 ---
 
+## Frontend Visual Direction
+
+The current official frontend visual system is `HouseLog Calm OS`.
+
+`The Architectural Lens`, `Echelon Slate`, `DESIGN.md`, and older dark/tech visual references are legacy/context only. Do not use them as the default styling direction.
+
+New frontend work must prioritize:
+- calm premium light UI;
+- warm off-white backgrounds;
+- white/elevated surfaces;
+- strong readable text;
+- semantic Calm OS tokens;
+- mobile-first usability;
+- accessible forms, buttons and dialogs;
+- clear loading, error and empty states.
+
+Use `docs/design/house-log-calm-os.md` as the primary visual reference.
+
+Avoid by default:
+- `bg-slate-950`;
+- `bg-zinc-950`;
+- `bg-black`;
+- `text-white` on normal app surfaces;
+- `border-white/10`;
+- heavy glassmorphism;
+- dark cards inside Calm OS screens;
+- low-contrast labels/placeholders;
+- placeholder-only form fields.
+
+Dark UI may exist only as legacy, explicit dark mode, or isolated special surface with clear justification.
+
+When touching frontend screens, check:
+- `docs/design/house-log-calm-os.md`;
+- `docs/ai-context/07-frontend-map.md`.
+
+---
+
 ## Security Rules
 
 Always follow these rules:
@@ -161,10 +198,12 @@ During implementation:
 - follow existing naming, structure and error patterns.
 
 For frontend:
-- respect the official design system: The Architectural Lens;
-- use existing components/tokens when available;
+- use `HouseLog Calm OS` as the current official design system;
+- read `docs/design/house-log-calm-os.md` before visual work;
+- use existing Calm OS tokens/components when available;
 - always handle loading, empty and error states when touching UI;
-- do not create frontend flows unsupported by backend contracts.
+- do not create frontend flows unsupported by backend contracts;
+- do not introduce new hardcoded dark UI unless explicitly requested.
 
 For backend:
 - preserve tenant isolation;
@@ -231,9 +270,11 @@ git diff --check
 For frontend changes, prefer:
 
 ```bash
-npm run type-check
+npx tsc --noEmit
 npm run lint
 npm run test
 npm run build
 git diff --check
 ```
+
+Only run scripts that exist in the related `package.json`.

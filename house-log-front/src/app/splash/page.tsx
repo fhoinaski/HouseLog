@@ -25,7 +25,7 @@ export default function SplashPage() {
     <main className="relative min-h-screen overflow-hidden bg-hl-bg px-4 py-5 text-hl-text sm:px-6 lg:px-8">
       <section className="relative mx-auto flex min-h-[calc(100vh-2.5rem)] w-full max-w-[1180px] flex-col">
         <header className="flex items-center justify-between gap-4 py-2">
-          <Link href="/splash" className="inline-flex items-center gap-3 rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]">
+          <Link href="/splash" className="inline-flex items-center gap-3 rounded-[var(--hl-radius-control)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]">
             <span className="flex h-11 w-11 items-center justify-center rounded-[var(--hl-radius-control)] bg-hl-surface-muted text-hl-primary">
               <Building2 className="h-5 w-5" strokeWidth={1.8} />
             </span>
@@ -86,17 +86,17 @@ export default function SplashPage() {
             <div className="rounded-[var(--hl-radius-card)] bg-hl-surface p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Lente operacional</p>
-                  <h2 className="mt-2 text-2xl font-medium text-text-primary">Hoje</h2>
+                  <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Lente operacional</p>
+                  <h2 className="mt-2 text-2xl font-medium text-hl-text">Hoje</h2>
                 </div>
-                <span className="rounded-full bg-bg-success px-3 py-1 text-xs font-medium text-text-success">Estável</span>
+                <span className="rounded-full bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))] px-3 py-1 text-xs font-medium text-hl-success">Estável</span>
               </div>
 
               <div className="mt-6 grid grid-cols-3 gap-3">
                 {['Ativo', 'OS', 'Agenda'].map((label) => (
-                  <div key={label} className="rounded-[var(--radius-md)] bg-[var(--surface-strong)] p-3">
-                    <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">{label}</p>
-                    <div className="mt-4 h-1.5 rounded-full bg-[var(--button-tonal-bg)]" />
+                  <div key={label} className="rounded-[var(--hl-radius-control)] bg-hl-surface-muted p-3">
+                    <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">{label}</p>
+                    <div className="mt-4 h-1.5 rounded-full bg-hl-border" />
                   </div>
                 ))}
               </div>
@@ -107,21 +107,21 @@ export default function SplashPage() {
                   ['Orçamento em análise', 'Decisão clara antes da execução do serviço.'],
                   ['Execução documentada', 'Histórico preservado para auditoria operacional.'],
                 ].map(([title, subtitle]) => (
-                  <div key={title} className="rounded-[var(--radius-md)] bg-[var(--surface-strong)] px-3 py-3">
-                    <p className="text-sm font-medium text-text-primary">{title}</p>
-                    <p className="mt-1 text-xs text-text-secondary">{subtitle}</p>
+                  <div key={title} className="rounded-[var(--hl-radius-control)] bg-hl-surface-muted px-3 py-3">
+                    <p className="text-sm font-medium text-hl-text">{title}</p>
+                    <p className="mt-1 text-xs text-hl-text-muted">{subtitle}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <p className="mt-5 text-center text-xs leading-5 text-text-tertiary">
+            <p className="mt-5 text-center text-xs leading-5 text-hl-text-muted">
               Interface editorial, técnica e mobile-first para decisões de patrimônio.
             </p>
           </div>
         </div>
 
-        <footer className="pb-3 text-center text-xs text-text-tertiary">v 2.0.4 · Architectural Lens</footer>
+        <footer className="pb-3 text-center text-xs text-hl-text-muted">v 2.0.4 · HouseLog Calm OS</footer>
       </section>
     </main>
   );

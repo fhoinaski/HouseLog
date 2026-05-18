@@ -6,6 +6,50 @@ HouseLog is a premium multi-tenant SaaS for technical property records, maintena
 
 The product is not an open marketplace. It is a private technical operating system for premium properties, builders, owners, managers, and vetted providers.
 
+---
+
+## Required First Read
+
+Before analysis, audit or implementation, read:
+
+- `AGENTS.md`
+- `docs/ai-context/00-index.md`
+
+Then read only the task-specific context files.
+
+For frontend visual work, also read:
+
+- `docs/design/house-log-calm-os.md`
+- `docs/ai-context/07-frontend-map.md`
+
+For backend/security work, also read:
+
+- `docs/ai-context/06-security-rules.md`
+- `docs/ai-context/08-backend-map.md`
+
+Do not scan the whole repository before checking the AI context maps.
+
+---
+
+## Current Frontend Visual System
+
+The current official frontend visual system is `HouseLog Calm OS`.
+
+Older visual references such as `The Architectural Lens`, `Echelon Slate`, `DESIGN.md`, and dark/tech layouts are legacy/context only.
+
+For new frontend UI:
+- use Calm OS tokens/classes;
+- prefer light premium surfaces;
+- keep text contrast strong;
+- avoid hardcoded dark cards;
+- avoid low-contrast labels/placeholders;
+- use accessible forms, buttons and dialogs;
+- keep loading, empty and error states clear.
+
+Do not make broad visual migrations unless explicitly requested. Migrate by focused blocks.
+
+---
+
 ## Priorities
 
 Always prioritize:
@@ -21,7 +65,9 @@ Always prioritize:
 9. Cloudflare/D1/R2/KV/Queues compatibility;
 10. no feature creep.
 
-## Global rules
+---
+
+## Global Rules
 
 - Do not accept `tenantId` from request body.
 - Always derive `tenantId` from authenticated context.
@@ -47,7 +93,9 @@ Always prioritize:
 - Do not create new features while fixing bugs.
 - Prefer the smallest safe diff.
 
-## Work mode
+---
+
+## Work Mode
 
 Before editing files, respond briefly with:
 
@@ -67,11 +115,14 @@ After implementation, final output must be short:
 
 Keep this under 10 lines.
 
-## Audit mode
+---
+
+## Audit Mode
 
 When asked to audit:
 
 - Do not alter files.
+- Read `docs/ai-context/00-index.md` first.
 - Read only the requested files unless a direct dependency is necessary.
 - Return a compact table:
   - finding;
@@ -82,7 +133,9 @@ When asked to audit:
 - Do not explain general concepts.
 - Do not generate long reports unless explicitly requested.
 
-## Implementation mode
+---
+
+## Implementation Mode
 
 When asked to implement:
 
@@ -91,11 +144,13 @@ When asked to implement:
 - Add or update regression tests.
 - Preserve existing public API contracts unless the task explicitly says to change them.
 - Preserve existing status codes unless there is a security reason to change them.
-- Update docs only when the task requires it or when security behavior changes.
+- Update docs only when the task requires it or when security/design behavior changes.
 
-## Validation commands
+---
 
-Prefer running only the validations relevant to the change.
+## Validation Commands
+
+Prefer running only validations relevant to the change.
 
 For backend/API changes:
 
@@ -104,3 +159,23 @@ npm run type-check
 npm run test:api
 npm run build
 git diff --check
+```
+
+For frontend changes:
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run test
+npm run build
+git diff --check
+```
+
+For docs-only changes:
+
+```bash
+git diff --check
+git status --short
+```
+
+Only run scripts that exist in the related `package.json`.

@@ -148,7 +148,7 @@ function ErrorState({ title, description, onRetry }: { title: string; descriptio
 }
 
 function SummaryText({ children }: { children: React.ReactNode }) {
-  return <p className="line-clamp-2 text-sm leading-6 text-text-secondary">{children}</p>;
+  return <p className="line-clamp-2 text-sm leading-6 text-hl-text-muted">{children}</p>;
 }
 
 export function PropertyWarrantiesReadonly({ propertyId }: { propertyId: string }) {
@@ -315,18 +315,18 @@ function WarrantyCard({
   onDelete: (warranty: Warranty) => void;
 }) {
   return (
-    <article className="rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 shadow-[var(--shadow-card)]">
+    <article className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={warranty.status} label={WARRANTY_STATUS_LABELS[warranty.status] ?? warranty.status} />
-            <span className="text-xs font-medium text-text-tertiary">
+            <span className="text-xs font-medium text-hl-text-muted">
               {WARRANTY_TYPE_LABELS[warranty.warranty_type] ?? warranty.warranty_type}
             </span>
           </div>
-          <h2 className="mt-3 text-base font-medium leading-tight text-text-primary">{warranty.title}</h2>
+          <h2 className="mt-3 text-base font-medium leading-tight text-hl-text">{warranty.title}</h2>
         </div>
-        <ShieldCheck className="h-5 w-5 shrink-0 text-text-success" aria-hidden="true" />
+        <ShieldCheck className="h-5 w-5 shrink-0 text-hl-success" aria-hidden="true" />
       </div>
 
       <dl className="mt-4 grid gap-2 text-sm">
@@ -335,8 +335,8 @@ function WarrantyCard({
           <InfoCell label="Fim" value={formatDate(warranty.end_date)} />
         </div>
         <InfoCell label="Fornecedor" value={warranty.provider_name || 'Não informado'} />
-        <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2">
-          <dt className="text-xs text-text-tertiary">Cobertura</dt>
+        <div className="rounded-[var(--hl-radius-control)] bg-hl-surface-muted px-3 py-2">
+          <dt className="text-xs text-hl-text-muted">Cobertura</dt>
           <dd className="mt-1">
             <SummaryText>{warranty.coverage || warranty.description || 'Cobertura não informada.'}</SummaryText>
           </dd>
@@ -351,7 +351,7 @@ function WarrantyCard({
         <Button
           variant="ghost"
           size="sm"
-          className="text-text-danger hover:bg-bg-danger"
+          className="text-hl-danger hover:bg-[color-mix(in_srgb,var(--hl-danger)_12%,var(--hl-surface))]"
           loading={deleting}
           onClick={() => void onDelete(warranty)}
         >
@@ -529,19 +529,19 @@ function RenovationCard({
   onDelete: (renovation: Renovation) => void;
 }) {
   return (
-    <article className="rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 shadow-[var(--shadow-card)]">
+    <article className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={renovation.status} label={RENOVATION_STATUS_LABELS[renovation.status] ?? renovation.status} />
-            <span className="text-xs font-medium text-text-tertiary">
+            <span className="text-xs font-medium text-hl-text-muted">
               {RENOVATION_CATEGORY_LABELS[renovation.category] ?? renovation.category}
             </span>
           </div>
-          <h2 className="mt-3 text-base font-medium leading-tight text-text-primary">{renovation.title}</h2>
-          {renovation.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-text-secondary">{renovation.description}</p>}
+          <h2 className="mt-3 text-base font-medium leading-tight text-hl-text">{renovation.title}</h2>
+          {renovation.description && <p className="mt-2 line-clamp-2 text-sm leading-6 text-hl-text-muted">{renovation.description}</p>}
         </div>
-        <FolderKanban className="h-5 w-5 shrink-0 text-text-accent" aria-hidden="true" />
+        <FolderKanban className="h-5 w-5 shrink-0 text-hl-primary" aria-hidden="true" />
       </div>
 
       <dl className="mt-4 grid gap-2 text-sm">
@@ -561,7 +561,7 @@ function RenovationCard({
         <Button
           variant="ghost"
           size="sm"
-          className="text-text-danger hover:bg-bg-danger"
+          className="text-hl-danger hover:bg-[color-mix(in_srgb,var(--hl-danger)_12%,var(--hl-surface))]"
           loading={deleting}
           onClick={() => void onDelete(renovation)}
         >
@@ -686,27 +686,27 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
                 <div
                   key={pkg.id}
                   className={cn(
-                    'group relative w-full rounded-[var(--radius-xl)] border border-border-subtle bg-bg-surface p-4 text-left transition-colors hover:bg-bg-subtle',
-                    selectedPackage?.id === pkg.id && 'border-border-focus bg-bg-accent-subtle'
+                    'group relative w-full rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 text-left transition-colors hover:bg-hl-surface-muted',
+                    selectedPackage?.id === pkg.id && 'border-hl-primary bg-hl-surface-muted'
                   )}
                 >
                   <button
                     type="button"
                     onClick={() => setSelectedPackageId(pkg.id)}
-                    className="absolute inset-0 rounded-[var(--radius-xl)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+                    className="absolute inset-0 rounded-[var(--hl-radius-card)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]"
                     aria-label={pkg.title}
                   />
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge status={pkg.status} label={HANDOVER_STATUS_LABELS[pkg.status] ?? pkg.status} />
-                        <span className="text-xs font-medium text-text-tertiary">{HANDOVER_TYPE_LABELS[pkg.type] ?? pkg.type}</span>
+                        <span className="text-xs font-medium text-hl-text-muted">{HANDOVER_TYPE_LABELS[pkg.type] ?? pkg.type}</span>
                       </div>
-                      <p className="mt-3 text-sm font-medium text-text-primary">{pkg.title}</p>
-                      {pkg.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{pkg.description}</p>}
+                      <p className="mt-3 text-sm font-medium text-hl-text">{pkg.title}</p>
+                      {pkg.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-hl-text-muted">{pkg.description}</p>}
                     </div>
                     <div className="relative z-10 flex shrink-0 items-center gap-1">
-                      <span className="mr-1 text-xs text-text-tertiary">v{pkg.version}</span>
+                      <span className="mr-1 text-xs text-hl-text-muted">v{pkg.version}</span>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -722,7 +722,7 @@ export function PropertyHandoverReadonly({ propertyId }: { propertyId: string })
                         loading={deletingId === pkg.id}
                         onClick={() => setPendingDeletePkg(pkg)}
                       >
-                        <Trash2 className="h-4 w-4 text-text-danger" aria-hidden="true" />
+                        <Trash2 className="h-4 w-4 text-hl-danger" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -882,8 +882,8 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
               <MetricBox label="Progresso" value={`${progress.percent}%`} tone="accent" />
             </div>
 
-            <div className="h-2 overflow-hidden rounded-full bg-bg-subtle">
-              <div className="h-full rounded-full bg-bg-accent-subtle" style={{ width: `${progress.percent}%` }} />
+            <div className="h-2 overflow-hidden rounded-full bg-hl-surface-muted">
+              <div className="h-full rounded-full bg-hl-primary" style={{ width: `${progress.percent}%` }} />
             </div>
 
             {items.length === 0 ? (
@@ -963,7 +963,7 @@ function ChecklistItemRow({
   onStatusChange: (item: HandoverChecklistItem, status: HandoverChecklistItem['status']) => void;
 }) {
   return (
-    <article className="rounded-[var(--radius-lg)] border border-border-subtle bg-bg-surface px-3 py-3">
+    <article className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -983,22 +983,22 @@ function ChecklistItemRow({
                 ))}
               </SelectContent>
             </Select>
-            <span className="text-xs text-text-tertiary">{CHECKLIST_CATEGORY_LABELS[item.category] ?? item.category}</span>
-            {item.required && <span className="text-xs font-medium text-text-warning">Obrigatório</span>}
+            <span className="text-xs text-hl-text-muted">{CHECKLIST_CATEGORY_LABELS[item.category] ?? item.category}</span>
+            {item.required && <span className="text-xs font-medium text-hl-warning">Obrigatório</span>}
           </div>
-          <p className="mt-2 text-sm font-medium text-text-primary">{item.title}</p>
-          {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-text-secondary">{item.description}</p>}
-          {item.notes && <p className="mt-2 text-xs leading-5 text-text-secondary">Notas: {item.notes}</p>}
+          <p className="mt-2 text-sm font-medium text-hl-text">{item.title}</p>
+          {item.description && <p className="mt-1 line-clamp-2 text-xs leading-5 text-hl-text-muted">{item.description}</p>}
+          {item.notes && <p className="mt-2 text-xs leading-5 text-hl-text-muted">Notas: {item.notes}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {updatingStatus ? (
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-border-subtle border-t-text-accent" aria-hidden="true" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-hl-border border-t-hl-primary" aria-hidden="true" />
           ) : item.status === 'issue' ? (
-            <AlertTriangle className="h-4 w-4 text-text-danger" aria-hidden="true" />
+            <AlertTriangle className="h-4 w-4 text-hl-danger" aria-hidden="true" />
           ) : item.status === 'done' ? (
-            <CheckCircle2 className="h-4 w-4 text-text-success" aria-hidden="true" />
+            <CheckCircle2 className="h-4 w-4 text-hl-success" aria-hidden="true" />
           ) : (
-            <PackageCheck className="h-4 w-4 text-text-tertiary" aria-hidden="true" />
+            <PackageCheck className="h-4 w-4 text-hl-text-muted" aria-hidden="true" />
           )}
           <Button variant="ghost" size="icon" aria-label="Editar item" disabled={updatingStatus} onClick={() => onEdit(item)}>
             <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -1011,7 +1011,7 @@ function ChecklistItemRow({
             disabled={updatingStatus}
             onClick={() => void onDelete(item)}
           >
-            <Trash2 className="h-4 w-4 text-text-danger" aria-hidden="true" />
+            <Trash2 className="h-4 w-4 text-hl-danger" aria-hidden="true" />
           </Button>
         </div>
       </div>
@@ -1031,21 +1031,21 @@ function MetricBox({
   return (
     <div
       className={cn(
-        'rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-3',
-        tone === 'success' && 'bg-bg-success',
-        tone === 'warning' && 'bg-bg-warning',
-        tone === 'danger' && 'bg-bg-danger',
-        tone === 'accent' && 'bg-bg-accent-subtle'
+        'rounded-[var(--hl-radius-control)] bg-hl-surface-muted px-3 py-3',
+        tone === 'success' && 'bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))]',
+        tone === 'warning' && 'bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))]',
+        tone === 'danger' && 'bg-[color-mix(in_srgb,var(--hl-danger)_12%,var(--hl-surface))]',
+        tone === 'accent' && 'bg-hl-surface-muted'
       )}
     >
-      <p className="text-xs text-text-tertiary">{label}</p>
+      <p className="text-xs text-hl-text-muted">{label}</p>
       <p
         className={cn(
-          'mt-1 text-2xl font-light tabular-nums text-text-primary',
-          tone === 'success' && 'text-text-success',
-          tone === 'warning' && 'text-text-warning',
-          tone === 'danger' && 'text-text-danger',
-          tone === 'accent' && 'text-text-accent'
+          'mt-1 text-2xl font-light tabular-nums text-hl-text',
+          tone === 'success' && 'text-hl-success',
+          tone === 'warning' && 'text-hl-warning',
+          tone === 'danger' && 'text-hl-danger',
+          tone === 'accent' && 'text-hl-primary'
         )}
       >
         {value}
@@ -1056,9 +1056,9 @@ function MetricBox({
 
 function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-[var(--radius-lg)] bg-bg-subtle px-3 py-2">
-      <dt className="text-xs text-text-tertiary">{label}</dt>
-      <dd className="mt-0.5 text-text-secondary">{value}</dd>
+    <div className="rounded-[var(--hl-radius-control)] bg-hl-surface-muted px-3 py-2">
+      <dt className="text-xs text-hl-text-muted">{label}</dt>
+      <dd className="mt-0.5 text-hl-text">{value}</dd>
     </div>
   );
 }

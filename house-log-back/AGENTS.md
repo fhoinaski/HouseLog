@@ -122,6 +122,10 @@ Sensitive areas:
 - uploads;
 - offline sync endpoints.
 
+Frontend visual work is governed by `HouseLog Calm OS` in `house-log-front/AGENTS.md`.
+
+Do not modify frontend visual files from backend tasks unless the user explicitly asks for a full-stack change.
+
 ---
 
 ## Tenant and Authorization Rules
@@ -257,6 +261,10 @@ Before changing an API contract:
 Use existing helpers and patterns before creating new ones.
 
 Avoid broad refactors unless explicitly requested.
+
+When changing backend contracts, update frontend API maps and consumers only when necessary.
+
+Do not introduce frontend UI changes during backend security/API work unless explicitly required.
 
 ---
 

@@ -108,7 +108,7 @@ export default function SettingsPage() {
       <Card>
         <CardContent className="p-5">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-(--color-avatar-owner-bg) text-lg font-medium text-(--color-avatar-owner-fg)">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-hl-surface-muted text-lg font-medium text-hl-primary">
               {user?.name?.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -153,7 +153,7 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">O email não pode ser alterado</p>
                 </div>
                 {profileErrors.root && (
-                  <p className="text-xs text-text-danger">{profileErrors.root.message}</p>
+                  <p className="text-xs text-hl-danger">{profileErrors.root.message}</p>
                 )}
                 <Button type="submit" loading={savingProfile}>Salvar alterações</Button>
               </form>
@@ -174,18 +174,18 @@ export default function SettingsPage() {
                   <Label htmlFor="currentPw">Senha atual</Label>
                   <Input id="currentPw" type="password" {...regPw('currentPassword')} />
                   {pwErrors.currentPassword && (
-                    <p className="text-xs text-text-danger">{pwErrors.currentPassword.message}</p>
+                    <p className="text-xs text-hl-danger">{pwErrors.currentPassword.message}</p>
                   )}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="newPw">Nova senha</Label>
                   <Input id="newPw" type="password" {...regPw('newPassword')} />
-                  {pwErrors.newPassword && <p className="text-xs text-text-danger">{pwErrors.newPassword.message}</p>}
+                  {pwErrors.newPassword && <p className="text-xs text-hl-danger">{pwErrors.newPassword.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="confirmPw">Confirmar nova senha</Label>
                   <Input id="confirmPw" type="password" {...regPw('confirmPassword')} />
-                  {pwErrors.confirmPassword && <p className="text-xs text-text-danger">{pwErrors.confirmPassword.message}</p>}
+                  {pwErrors.confirmPassword && <p className="text-xs text-hl-danger">{pwErrors.confirmPassword.message}</p>}
                 </div>
                 <Button type="submit" loading={savingPw}>Alterar senha</Button>
               </form>
@@ -195,7 +195,7 @@ export default function SettingsPage() {
           <Card className="mt-4">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Shield className="h-4 w-4 text-text-success" />
+                <Shield className="h-4 w-4 text-hl-success" />
                 Sessões ativas
               </CardTitle>
             </CardHeader>
@@ -236,7 +236,7 @@ export default function SettingsPage() {
                       onChange={(e) => setNotifPrefs((p) => ({ ...p, [n.key]: e.target.checked }))}
                       className="peer sr-only"
                     />
-                    <div className="peer h-5 w-9 rounded-full bg-bg-muted after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-interactive-primary-bg peer-checked:after:translate-x-4" />
+                    <div className="peer h-5 w-9 rounded-full bg-hl-surface-muted after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:bg-hl-primary peer-checked:after:translate-x-4" />
                   </label>
                 </div>
               ))}

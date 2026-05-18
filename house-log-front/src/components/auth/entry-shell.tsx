@@ -23,7 +23,7 @@ export function EntryShell({ eyebrow, title, description, children, footer, clas
     <main className="relative min-h-screen overflow-hidden bg-hl-bg px-4 py-5 text-hl-text sm:px-6 lg:px-8">
       <section className="relative mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-[1120px] items-center gap-5 lg:grid-cols-[1.08fr_0.92fr]">
         <aside className="hidden lg:block">
-          <Link href="/splash" className="inline-flex items-center gap-3 rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]">
+          <Link href="/splash" className="inline-flex items-center gap-3 rounded-[var(--hl-radius-control)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]">
             <span className="flex h-11 w-11 items-center justify-center rounded-[var(--hl-radius-control)] bg-hl-surface-muted text-hl-primary">
               <Building2 className="h-5 w-5" strokeWidth={1.8} />
             </span>
@@ -63,7 +63,7 @@ export function EntryShell({ eyebrow, title, description, children, footer, clas
         <div className={cn('mx-auto w-full max-w-[430px]', className)}>
           <div className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-5 shadow-hl-soft sm:p-6">
             <header className="mb-7">
-              <Link href="/splash" className="mb-7 inline-flex items-center gap-3 rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] lg:hidden">
+              <Link href="/splash" className="mb-7 inline-flex items-center gap-3 rounded-[var(--hl-radius-control)] focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)] lg:hidden">
                 <span className="flex h-10 w-10 items-center justify-center rounded-[var(--hl-radius-control)] bg-hl-surface-muted text-hl-primary">
                   <Building2 className="h-5 w-5" strokeWidth={1.8} />
                 </span>

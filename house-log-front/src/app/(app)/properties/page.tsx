@@ -90,25 +90,25 @@ function PropertyCard({ property }: { property: Property }) {
       label: 'Inventário',
       href: `/properties/${property.id}/inventory`,
       icon: Package,
-      className: 'text-text-warning bg-bg-warning hover:bg-bg-warning-emphasis',
+      className: 'text-hl-warning bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))] hover:bg-[color-mix(in_srgb,var(--hl-warning)_20%,var(--hl-surface))]',
     },
     {
       label: 'Serviços',
       href: `/properties/${property.id}/services`,
       icon: Hammer,
-      className: 'text-text-accent bg-bg-info hover:bg-bg-info-emphasis',
+      className: 'text-hl-primary bg-hl-surface-muted hover:bg-hl-border',
     },
     {
       label: 'Financeiro',
       href: `/properties/${property.id}/financial`,
       icon: Wallet,
-      className: 'text-text-success bg-bg-success hover:bg-bg-success-emphasis',
+      className: 'text-hl-success bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))] hover:bg-[color-mix(in_srgb,var(--hl-success)_20%,var(--hl-surface))]',
     },
     {
       label: 'Documentos',
       href: `/properties/${property.id}/documents`,
       icon: FileText,
-      className: 'text-text-info bg-[var(--button-tonal-bg)] hover:bg-[var(--button-tonal-hover)]',
+      className: 'text-hl-text bg-hl-surface-muted hover:bg-hl-border',
     },
   ];
 
@@ -121,7 +121,7 @@ function PropertyCard({ property }: { property: Property }) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Imóvel gerenciado</p>
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Imóvel gerenciado</p>
                 <Badge variant={getHealthVariant(property.health_score)}>{getHealthLabel(property.health_score)}</Badge>
               </div>
               <CardTitle className="mt-2 text-xl leading-tight text-hl-text sm:text-[22px]">{property.name}</CardTitle>
@@ -138,7 +138,7 @@ function PropertyCard({ property }: { property: Property }) {
                 key={href}
                 href={href}
                 className={cn(
-                  'property-card-action group flex min-h-11 items-center rounded-[var(--radius-md)] px-3 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98]',
+                  'property-card-action group flex min-h-11 items-center rounded-[var(--hl-radius-control)] px-3 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)] active:scale-[0.98]',
                   className
                 )}
               >
@@ -155,13 +155,13 @@ function PropertyCard({ property }: { property: Property }) {
               <div className="grid grid-cols-2 gap-2 text-xs text-hl-text-muted">
                 <span>
                   <span className="block text-[10px] uppercase tracking-[0.08em]">Área</span>
-                  <span className="mt-0.5 block text-sm text-text-secondary">
+                  <span className="mt-0.5 block text-sm text-hl-text">
                     {property.area_m2 ? `${property.area_m2} m²` : 'Não informada'}
                   </span>
                 </span>
                 <span>
                   <span className="block text-[10px] uppercase tracking-[0.08em]">Ano</span>
-                  <span className="mt-0.5 block text-sm text-text-secondary">
+                  <span className="mt-0.5 block text-sm text-hl-text">
                     {property.year_built ?? 'Não informado'}
                   </span>
                 </span>
@@ -185,7 +185,7 @@ function LoadingState() {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i} variant="glass" density="compact" className="shadow-[var(--shadow-md)]">
+        <Card key={i} variant="section" density="compact" className="border border-hl-border bg-hl-surface shadow-hl-subtle">
           <CardContent className="grid gap-3.5 p-3.5 sm:gap-4 sm:p-4 xl:grid-cols-[168px_minmax(0,1fr)]">
             <div className="hl-skeleton min-h-32 rounded-[var(--radius-lg)] sm:min-h-36 xl:min-h-44" />
             <div className="space-y-4">
@@ -209,13 +209,13 @@ function LoadingState() {
 
 function EmptyState() {
   return (
-    <Card variant="glass" density="comfortable" className="shadow-[var(--shadow-md)]">
+    <Card variant="section" density="comfortable" className="border border-hl-border bg-hl-surface shadow-hl-subtle">
       <CardContent className="px-6 py-12 text-center sm:px-8">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--radius-xl)] bg-[var(--button-tonal-bg)] text-text-accent">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[var(--hl-radius-card)] bg-hl-surface-muted text-hl-primary">
           <Building2 className="h-8 w-8" strokeWidth={1.8} />
         </div>
-        <h2 className="mt-6 text-2xl font-medium text-text-primary">Nenhum imóvel cadastrado</h2>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-text-secondary">
+        <h2 className="mt-6 text-2xl font-medium text-hl-text">Nenhum imóvel cadastrado</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-hl-text-muted">
           Crie o primeiro ativo para organizar inventário, serviços, documentos e financeiro em um fluxo operacional.
         </p>
         <Button className="mt-7" asChild>
@@ -231,14 +231,14 @@ function EmptyState() {
 
 function ErrorState() {
   return (
-    <Card variant="glass" density="comfortable" className="shadow-[var(--shadow-md)]">
+    <Card variant="section" density="comfortable" className="border border-hl-border bg-hl-surface shadow-hl-subtle">
       <CardContent className="flex items-start gap-3 p-5 sm:p-6">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-bg-danger text-text-danger">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--hl-radius-control)] bg-[color-mix(in_srgb,var(--hl-danger)_12%,var(--hl-surface))] text-hl-danger">
           <AlertCircle className="h-5 w-5" strokeWidth={1.8} />
         </div>
         <div>
-          <h2 className="text-base font-medium text-text-primary">Não foi possível carregar os imóveis</h2>
-          <p className="mt-1 text-sm leading-6 text-text-secondary">
+          <h2 className="text-base font-medium text-hl-text">Não foi possível carregar os imóveis</h2>
+          <p className="mt-1 text-sm leading-6 text-hl-text-muted">
             Verifique sua conexão ou tente novamente em instantes.
           </p>
         </div>
@@ -274,11 +274,11 @@ export default function PropertiesPage() {
       <Card variant="section" density="compact" className="overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(17rem,auto)] sm:items-center sm:p-5">
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-accent">Portfólio operacional</p>
-            <h1 className="mt-1.5 text-xl font-medium leading-tight text-text-primary sm:text-2xl">
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-primary">Portfólio operacional</p>
+            <h1 className="mt-1.5 text-xl font-medium leading-tight text-hl-text sm:text-2xl">
               Seus imóveis
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-snug text-text-secondary">
+            <p className="mt-2 max-w-xl text-sm leading-snug text-hl-text-muted">
               Inventário, serviços, documentos e financeiro por ativo.
             </p>
             <Button asChild className="mt-3 w-full sm:w-auto">
@@ -303,11 +303,11 @@ export default function PropertiesPage() {
       <section className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-text-tertiary">Ativos cadastrados</p>
-            <h2 className="mt-1.5 text-xl font-medium leading-tight text-text-primary">Mapa de gestão</h2>
+            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Ativos cadastrados</p>
+            <h2 className="mt-1.5 text-xl font-medium leading-tight text-hl-text">Mapa de gestão</h2>
           </div>
-          <div className="inline-flex min-h-10 items-center gap-2 self-start rounded-[var(--radius-md)] bg-[var(--surface-strong)] px-3 text-sm text-text-secondary shadow-[var(--shadow-xs)] sm:self-auto">
-            <Search className="h-4 w-4 text-text-tertiary" strokeWidth={1.8} />
+          <div className="inline-flex min-h-10 items-center gap-2 self-start rounded-[var(--hl-radius-control)] bg-hl-surface-muted px-3 text-sm text-hl-text-muted shadow-hl-subtle sm:self-auto">
+            <Search className="h-4 w-4 text-hl-text-muted" strokeWidth={1.8} />
             Busca global em breve
           </div>
         </div>

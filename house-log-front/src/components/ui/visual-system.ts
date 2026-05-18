@@ -3,11 +3,11 @@ import { cva } from 'class-variance-authority';
 export const surfaceVariants = cva('', {
   variants: {
     tone: {
-      page: 'bg-[var(--surface-page)] text-text-primary',
-      base: 'bg-[var(--surface-base)] text-text-primary',
-      raised: 'bg-[var(--surface-raised)] text-text-primary',
-      strong: 'bg-[var(--surface-strong)] text-text-primary',
-      glass: 'bg-[var(--surface-glass)] text-text-primary backdrop-blur-[var(--surface-blur)]',
+      page: 'bg-hl-bg text-hl-text',
+      base: 'bg-hl-surface text-hl-text',
+      raised: 'bg-hl-surface text-hl-text shadow-hl-soft',
+      strong: 'bg-hl-surface-muted text-hl-text',
+      glass: 'bg-hl-surface text-hl-text',
       inverse: 'bg-[var(--surface-inverse)] text-text-inverse',
     },
     radius: {
@@ -30,15 +30,15 @@ export const surfaceVariants = cva('', {
   },
 });
 
-export const cardVariants = cva('hl-card text-text-primary', {
+export const cardVariants = cva('hl-card text-hl-text', {
   variants: {
     variant: {
       default: '',
-      tonal: 'bg-[var(--surface-strong)]',
-      section: 'rounded-[var(--radius-xl)] bg-[var(--surface-base)]',
-      raised: 'bg-[var(--surface-raised)] shadow-[var(--surface-shadow-raised)]',
-      glass: 'bg-[var(--surface-glass)] backdrop-blur-[var(--surface-blur)]',
-      interactive: 'card-hover cursor-pointer bg-[var(--surface-base)]',
+      tonal: 'bg-hl-surface-muted',
+      section: 'rounded-[var(--hl-radius-card)] bg-hl-surface',
+      raised: 'bg-hl-surface shadow-hl-soft',
+      glass: 'bg-hl-surface',
+      interactive: 'cursor-pointer bg-hl-surface hover:bg-hl-surface-muted',
     },
     density: {
       compact: '[--card-padding:12px]',
@@ -64,8 +64,8 @@ export const buttonVariants = cva(
         secondary: 'hl-btn-secondary',
         ghost: 'hl-btn-ghost',
         premium: 'bg-[var(--button-premium-bg)] text-[var(--button-premium-text)] shadow-[var(--button-premium-shadow)] hover:bg-[var(--button-premium-hover)] focus-visible:shadow-[var(--button-premium-focus)]',
-        tonal: 'bg-[var(--button-tonal-bg)] text-[var(--button-tonal-text)] hover:bg-[var(--button-tonal-hover)] focus-visible:shadow-[var(--field-focus-ring)]',
-        link: 'h-auto min-h-0 px-0 py-0 text-text-accent underline-offset-4 hover:underline',
+        tonal: 'bg-hl-surface-muted text-hl-text hover:bg-hl-border focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]',
+        link: 'h-auto min-h-0 px-0 py-0 text-hl-primary underline-offset-4 hover:underline',
       },
       size: {
         default: 'px-4 py-2',
@@ -84,7 +84,7 @@ export const badgeVariants = cva('hl-badge transition-colors', {
       default: 'hl-badge-draft',
       secondary: 'hl-badge-draft',
       destructive: 'hl-badge-approval',
-      outline: 'hl-badge-draft border-half border-border-default bg-bg-surface',
+      outline: 'hl-badge-draft border border-hl-border bg-hl-surface',
       success: 'hl-badge-done',
       warning: 'hl-badge-pending',
       urgent: 'hl-badge-urgent',
@@ -101,12 +101,12 @@ export const badgeVariants = cva('hl-badge transition-colors', {
 });
 
 export const chipVariants = cva(
-  'min-h-11 rounded-[var(--radius-md)] px-4 py-2 text-left text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+  'min-h-11 rounded-[var(--hl-radius-control)] px-4 py-2 text-left text-[13px] font-medium transition-all duration-150 focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)]',
   {
     variants: {
       active: {
-        true: 'bg-[var(--chip-bg-active)] text-[var(--chip-text-active)]',
-        false: 'bg-[var(--chip-bg)] text-[var(--chip-text)] hover:bg-[var(--field-bg-hover)]',
+        true: 'bg-hl-primary text-white',
+        false: 'bg-hl-surface-muted text-hl-text hover:bg-hl-border',
       },
     },
     defaultVariants: {
@@ -119,8 +119,8 @@ export const fieldVariants = cva('', {
   variants: {
     variant: {
       default: '',
-      tonal: 'bg-[var(--field-bg-hover)]',
-      ghost: 'border-transparent bg-transparent hover:bg-[var(--field-bg-hover)]',
+      tonal: 'bg-hl-surface-muted',
+      ghost: 'border-transparent bg-transparent hover:bg-hl-surface-muted',
     },
     density: {
       compact: 'min-h-9 text-sm',
@@ -135,18 +135,18 @@ export const fieldVariants = cva('', {
 });
 
 export const sensitiveFieldVariants = cva(
-  'group/sensitive flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] bg-[var(--field-bg)] px-3 py-2 text-text-primary transition-all duration-150 focus-within:shadow-[var(--field-focus-ring)] hover:bg-[var(--field-bg-hover)]',
+  'group/sensitive flex min-h-11 items-center gap-2 rounded-[var(--hl-radius-control)] bg-hl-surface border border-hl-border px-3 py-2 text-hl-text transition-all duration-150 focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--hl-primary)_15%,transparent)] hover:bg-hl-surface-muted',
   {
     variants: {
       tone: {
         default: '',
-        subtle: 'bg-[var(--surface-base)]',
-        strong: 'bg-[var(--surface-strong)]',
+        subtle: 'bg-hl-surface',
+        strong: 'bg-hl-surface-muted',
       },
       state: {
-        masked: 'text-text-secondary',
-        revealed: 'text-text-primary',
-        empty: 'text-text-tertiary',
+        masked: 'text-hl-text-muted',
+        revealed: 'text-hl-text',
+        empty: 'text-hl-text-muted',
       },
     },
     defaultVariants: {
@@ -156,7 +156,7 @@ export const sensitiveFieldVariants = cva(
   }
 );
 
-export const pageHeaderVariants = cva('flex flex-col gap-3 text-text-primary', {
+export const pageHeaderVariants = cva('flex flex-col gap-3 text-hl-text', {
   variants: {
     density: {
       compact: 'py-1',
@@ -263,11 +263,11 @@ export const actionTileIconVariants = cva(
   {
     variants: {
       tone: {
-        default: 'bg-[var(--surface-strong)] text-text-primary',
-        accent: 'bg-bg-accent-subtle text-text-accent',
-        warning: 'bg-bg-warning text-text-warning',
-        success: 'bg-bg-success text-text-success',
-        muted: 'bg-bg-subtle text-text-secondary',
+        default: 'bg-hl-surface-muted text-hl-text-muted',
+        accent: 'bg-hl-surface-muted text-hl-primary',
+        warning: 'bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))] text-hl-warning',
+        success: 'bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))] text-hl-success',
+        muted: 'bg-hl-surface-muted text-hl-text-muted',
       },
     },
     defaultVariants: {
@@ -276,10 +276,10 @@ export const actionTileIconVariants = cva(
   }
 );
 
-export const documentRowVariants = cva('rounded-[var(--radius-xl)] bg-[var(--surface-base)] p-4 text-text-primary', {
+export const documentRowVariants = cva('rounded-[var(--hl-radius-card)] bg-hl-surface p-4 text-hl-text', {
   variants: {
     interactive: {
-      true: 'transition-colors hover:bg-[var(--field-bg-hover)]',
+      true: 'transition-colors hover:bg-hl-surface-muted',
       false: '',
     },
   },
@@ -293,11 +293,11 @@ export const documentTypeIconVariants = cva(
   {
     variants: {
       tone: {
-        default: 'bg-bg-subtle text-text-secondary',
-        accent: 'bg-bg-accent-subtle text-text-accent',
-        warning: 'bg-bg-warning text-text-warning',
-        success: 'bg-bg-success text-text-success',
-        danger: 'bg-bg-danger text-text-danger',
+        default: 'bg-hl-surface-muted text-hl-text-muted',
+        accent: 'bg-hl-surface-muted text-hl-primary',
+        warning: 'bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))] text-hl-warning',
+        success: 'bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))] text-hl-success',
+        danger: 'bg-[color-mix(in_srgb,var(--hl-danger)_12%,var(--hl-surface))] text-hl-danger',
       },
     },
     defaultVariants: {
@@ -307,12 +307,12 @@ export const documentTypeIconVariants = cva(
 );
 
 export const inventoryItemCardVariants = cva(
-  'group/inventory cursor-pointer overflow-hidden rounded-[var(--radius-xl)] bg-[var(--surface-base)] text-text-primary transition-[background-color,transform] duration-150 hover:bg-[var(--field-bg-hover)] active:scale-[0.98]',
+  'group/inventory cursor-pointer overflow-hidden rounded-[var(--hl-radius-card)] bg-hl-surface text-hl-text transition-[background-color,transform] duration-150 hover:bg-hl-surface-muted active:scale-[0.98]',
   {
     variants: {
       state: {
         default: '',
-        lowStock: 'bg-bg-warning',
+        lowStock: 'bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))]',
       },
     },
     defaultVariants: {
@@ -321,11 +321,11 @@ export const inventoryItemCardVariants = cva(
   }
 );
 
-export const inventoryPhotoFrameVariants = cva('relative h-32 overflow-hidden bg-bg-subtle', {
+export const inventoryPhotoFrameVariants = cva('relative h-32 overflow-hidden bg-hl-surface-muted', {
   variants: {
     tone: {
       default: '',
-      empty: 'bg-[var(--surface-strong)]',
+      empty: 'bg-hl-surface-muted',
     },
   },
   defaultVariants: {
@@ -421,11 +421,11 @@ export const chatPanelVariants = cva(
   }
 );
 
-export const chatBubbleVariants = cva('max-w-[min(88%,34rem)] rounded-[var(--radius-lg)] px-3 py-2 text-sm leading-6', {
+export const chatBubbleVariants = cva('max-w-[min(88%,34rem)] rounded-[var(--hl-radius-card)] px-3 py-2 text-sm leading-6', {
   variants: {
     mine: {
-      true: 'bg-[var(--interactive-primary-bg)] text-[var(--interactive-primary-text)]',
-      false: 'bg-[var(--surface-base)] text-text-primary',
+      true: 'bg-hl-primary text-white',
+      false: 'bg-hl-surface text-hl-text',
     },
   },
   defaultVariants: {

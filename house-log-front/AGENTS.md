@@ -16,7 +16,9 @@ Stack:
 
 Design system:
 
-`The Architectural Lens`
+`HouseLog Calm OS`
+
+`The Architectural Lens`, `Echelon Slate`, and `DESIGN.md` are legacy/context only. Do not use them as the default visual direction.
 
 Follow the root `AGENTS.md` first. This file adds frontend-specific rules.
 
@@ -35,6 +37,10 @@ Then read only the frontend-specific context required by the task, usually:
 - `../docs/ai-context/06-security-rules.md`
 - `../docs/ai-context/09-testing-guide.md`
 - `../docs/ai-context/10-ai-workflow.md`
+
+For visual work, also read:
+
+- `../docs/design/house-log-calm-os.md`
 
 Do not scan `src/app`, `src/components`, `src/lib`, hooks or tests before checking the AI context maps.
 
@@ -70,6 +76,90 @@ Do not inspect all files in:
 
 ---
 
+## HouseLog Calm OS Rules
+
+`HouseLog Calm OS` is the current official frontend theme.
+
+Use Calm OS for all new screens, components and visual refactors.
+
+Core direction:
+- light premium interface;
+- warm neutral background;
+- white/elevated cards;
+- soft borders;
+- subtle shadows;
+- strong text contrast;
+- calm status colors;
+- mobile-first layout;
+- accessible forms and dialogs;
+- clear loading, empty and error states.
+
+Use semantic tokens whenever possible:
+- `--hl-bg`
+- `--hl-bg-muted`
+- `--hl-surface`
+- `--hl-surface-muted`
+- `--hl-surface-elevated`
+- `--hl-border`
+- `--hl-border-strong`
+- `--hl-text`
+- `--hl-text-muted`
+- `--hl-text-soft`
+- `--hl-primary`
+- `--hl-primary-hover`
+- `--hl-primary-soft`
+- `--hl-success`
+- `--hl-warning`
+- `--hl-danger`
+- `--hl-info`
+
+Prefer helper classes:
+- `.hl-calm-os`
+- `.hl-calm-card`
+- `.hl-calm-surface`
+- `.hl-calm-section`
+- `.hl-calm-muted`
+- `.hl-calm-border`
+- `.hl-calm-focus`
+- `.hl-calm-bottom-safe`
+
+Avoid in new work:
+- hardcoded dark cards;
+- `bg-slate-*` as main surface;
+- `bg-zinc-*` as main surface;
+- `bg-black`;
+- `text-white` on normal app surfaces;
+- `text-slate-100/200/300` on light pages;
+- `border-white/*`;
+- heavy `backdrop-blur`;
+- low-contrast labels/placeholders;
+- placeholder-only form fields;
+- `div onClick` for clickable cards.
+
+If a screen still uses legacy dark UI, migrate only the touched block unless the task explicitly asks for a full screen migration.
+
+---
+
+## Calm OS Migration Rule
+
+Do not migrate the whole app in one broad diff.
+
+Migration order:
+1. auth/login/splash;
+2. provider flow;
+3. owner dashboard/properties;
+4. service orders/proposals/chat;
+5. documents/handover/warranties/renovations;
+6. settings and admin surfaces.
+
+When touching a legacy dark screen:
+- migrate the touched section to Calm OS;
+- preserve behavior and API contracts;
+- keep loading/error/empty states;
+- document remaining legacy areas when relevant.
+
+---
+
 ## Frontend Architecture Rules
 
 Preserve:
@@ -86,7 +176,7 @@ Preserve:
 - API contract compatibility;
 - responsive behavior;
 - premium visual quality;
-- The Architectural Lens visual direction.
+- HouseLog Calm OS visual direction.
 
 Never:
 - invent backend data;
@@ -98,11 +188,15 @@ Never:
 - introduce heavy visual effects in provider/mobile flows without need.
 
 When touching UI:
-- use existing components/tokens when available;
-- preserve keyboard accessibility;
-- preserve meaningful labels;
-- preserve error feedback;
-- keep copy concise and professional.
+1. preserve functionality;
+2. keep API contracts unchanged;
+3. migrate touched visual blocks to Calm OS;
+4. fix low contrast text;
+5. use accessible labels;
+6. avoid `div onClick` for clickable cards;
+7. use `Link` or `button`;
+8. preserve loading/error/empty states;
+9. keep copy concise and professional.
 
 ---
 
@@ -179,7 +273,9 @@ When touching forms:
 - keep field names aligned with backend contracts;
 - show actionable errors;
 - avoid uncontrolled/controlled inconsistencies;
-- do not use `defaultValue` where controlled `value` is required for editable reset flows.
+- do not use `defaultValue` where controlled `value` is required for editable reset flows;
+- keep labels visible and accessible;
+- do not rely on placeholders as the only label.
 
 ---
 
@@ -218,6 +314,15 @@ When touching provider/mobile flows:
 - prefer dynamic import for heavy visual components when appropriate;
 - avoid unnecessary client components;
 - avoid broad memoization unless profiling or obvious repeated rendering justifies it.
+
+---
+
+## Visual Documentation Rule
+
+If a visual change introduces or modifies a reusable Calm OS pattern, update:
+- `../docs/design/house-log-calm-os.md`;
+- `../docs/ai-context/07-frontend-map.md`;
+- `../docs/TECH_DEBT_REGISTER.md` when related to TD-008.
 
 ---
 
@@ -264,7 +369,7 @@ Only run scripts that exist in `package.json`.
 Common frontend validations:
 
 ```bash
-npm run type-check
+npx tsc --noEmit
 npm run lint
 npm run test
 npm run build

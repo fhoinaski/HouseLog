@@ -27,16 +27,16 @@ export function RequireAuth({ children }: RequireAuthProps) {
 
   if (loading || !user) {
     return (
-      <div className="safe-top safe-bottom flex min-h-screen items-center justify-center bg-bg-page px-4">
-        <div className="w-full max-w-sm rounded-[var(--radius-lg)] border border-border-subtle bg-bg-surface p-6 text-center shadow-[var(--shadow-card)]">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--interactive-secondary)] text-text-accent">
+      <div className="safe-top safe-bottom flex min-h-screen items-center justify-center bg-hl-bg px-4">
+        <div className="w-full max-w-sm rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-6 text-center shadow-hl-subtle">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-hl-surface-muted text-hl-primary">
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="mt-4 space-y-1">
-            <p className="text-sm font-semibold text-text-primary">Validando sessão</p>
-            <p className="text-sm text-text-secondary">Preparando o ambiente seguro do HouseLog.</p>
+            <p className="text-sm font-semibold text-hl-text">Validando sessão</p>
+            <p className="text-sm text-hl-text-muted">Preparando o ambiente seguro do HouseLog.</p>
           </div>
-          <Loader2 className="mx-auto mt-5 h-5 w-5 animate-spin text-text-tertiary" aria-hidden="true" />
+          <Loader2 className="mx-auto mt-5 h-5 w-5 animate-spin text-hl-text-muted" aria-hidden="true" />
         </div>
       </div>
     );
