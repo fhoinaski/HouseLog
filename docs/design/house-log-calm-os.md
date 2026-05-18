@@ -15,22 +15,28 @@ O visual dark/tech anterior passa a ser legado: pode continuar existindo em tela
 - Legibilidade, calma, usabilidade, mobile-first e confianca antes de efeito visual.
 - Premium sem exagero: menos glass, menos gradiente escuro, menos contraste agressivo.
 
-## Tokens Base
+## Tokens Base (paleta refinada 2026-05-17)
+
+Valores definidos como `@layer`-agnostic em `globals.css` (bloco `:root` unlayered ao final do arquivo), garantindo precedencia sobre `tokens.css`.
 
 | Token | Valor | Uso |
 |---|---:|---|
-| `--hl-bg` | `#F7F5F0` | Fundo de pagina |
-| `--hl-surface` | `#FFFFFF` | Cards, listas, barras e modais |
-| `--hl-surface-muted` | `#F1EFE8` | Hover, chips e surfaces secundarias |
-| `--hl-border` | `#E5E1D8` | Bordas suaves |
-| `--hl-text` | `#1F2933` | Texto principal |
-| `--hl-text-muted` | `#6B7280` | Texto secundario e placeholder |
-| `--hl-primary` | `#2F5D62` | Acao principal HouseLog |
-| `--hl-primary-blue` | `#2563EB` | Acao informativa ou link importante |
-| `--hl-success` | `#16A34A` | Sucesso |
-| `--hl-warning` | `#D97706` | Atencao |
-| `--hl-danger` | `#DC2626` | Erro ou risco |
-| `--hl-info` | `#2563EB` | Informacao |
+| `--hl-bg` | `#f7f6f3` | Fundo de pagina (off-white quente) |
+| `--hl-surface` | `#ffffff` | Cards, listas, barras e modais |
+| `--hl-surface-muted` | `#f2f0eb` | Hover, chips e surfaces secundarias |
+| `--hl-border` | `#e4e1d9` | Bordas suaves |
+| `--hl-text` | `#1c1a17` | Texto principal (quase preto quente) |
+| `--hl-text-muted` | `#706b62` | Texto secundario e placeholder |
+| `--hl-primary` | `#1b4f6f` | Acao principal — petroleo profundo |
+| `--hl-primary-blue` | `#1b4f6f` | Alias de --hl-primary |
+| `--hl-success` | `#2a7a50` | Sucesso |
+| `--hl-warning` | `#b86b0e` | Atencao |
+| `--hl-danger` | `#c0352c` | Erro ou risco |
+| `--hl-info` | `#1f5fa8` | Informacao |
+| `--hl-shadow-subtle` | ver globals.css | Sombra discreta de card |
+| `--hl-shadow-soft` | ver globals.css | Sombra suave de modal/painel |
+| `--hl-radius-card` | `0.75rem` | Raio de cards e modais |
+| `--hl-radius-control` | `0.5rem` | Raio de inputs, botoes e chips |
 
 ## Padroes de Input, Button, Modal e Badge (2026-05-17)
 
@@ -86,12 +92,15 @@ O visual dark/tech anterior passa a ser legado: pode continuar existindo em tela
 
 ## Implementacao
 
-- Fonte de verdade: `house-log-front/src/app/tokens.css`.
+- Paleta refinada: bloco `:root` unlayered no final de `globals.css`, com precedencia sobre `tokens.css`.
 - Ponte Tailwind: `house-log-front/src/app/globals.css` em `@theme inline`.
-- Classes Tailwind disponiveis incluem `bg-hl-bg`, `bg-hl-surface`, `border-hl-border`, `text-hl-text`, `text-hl-text-muted`, `text-hl-primary`, `shadow-hl-subtle` e `shadow-hl-soft`.
+- Shadcn bridge: `@layer base :root` em `globals.css` aponta para tokens `--hl-*` (nao para tokens legados dark). Isso garante que componentes shadcn (`Card`, `Dialog`, `Popover`, etc.) usem a paleta Calm OS.
+- `ThemeProvider`: `defaultTheme="light"` com `enableSystem={false}` — sem classe `.dark` globalmente.
+- Classes Tailwind disponiveis: `bg-hl-bg`, `bg-hl-surface`, `bg-hl-surface-muted`, `border-hl-border`, `text-hl-text`, `text-hl-text-muted`, `text-hl-primary`, `shadow-hl-subtle` e `shadow-hl-soft`.
 - Wrapper oficial: `.hl-calm-os`, aplicado pelo `AppShell` autenticado para fundo, texto e navegacao clara.
 - Classes auxiliares globais: `.hl-calm-card`, `.hl-calm-surface`, `.hl-calm-section`, `.hl-calm-muted`, `.hl-calm-border`, `.hl-calm-focus` e `.hl-calm-bottom-safe`.
-- Tokens antigos continuam ativos ate cada area ser migrada.
+- `--field-focus-ring`, `--nav-text-active` e `--nav-text-inactive` sobrescritos em `@layer base :root` para apontar para tokens Calm OS — nao alterar componentes de nav diretamente para foco ou cor de texto.
+- Tokens antigos continuam ativos ate cada area ser migrada. Nao remover sem mapear consumidores.
 
 ## Tema Atual
 

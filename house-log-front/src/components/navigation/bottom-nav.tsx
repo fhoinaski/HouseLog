@@ -40,7 +40,7 @@ export function BottomNav() {
                 href={item.href}
                 data-active={active}
                 className={
-                  'nav-dock-item tap-highlight-none flex min-h-11 min-w-14 flex-col items-center justify-center gap-[3px] rounded-[var(--radius-md)] px-2 transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] ' +
+                  'nav-dock-item tap-highlight-none flex min-h-11 min-w-14 flex-col items-center justify-center gap-[3px] rounded-[var(--hl-radius-control)] px-2 transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] ' +
                   (active ? 'bg-hl-surface-muted' : 'hover:bg-hl-surface-muted')
                 }
               >

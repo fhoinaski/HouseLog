@@ -33,8 +33,8 @@ export function PageSection({
       {hasHeader && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
-            {title && <h2 className="text-base font-medium text-text-primary">{title}</h2>}
-            {description && <p className="max-w-2xl text-sm leading-6 text-text-secondary">{description}</p>}
+            {title && <h2 className="text-base font-medium text-hl-text">{title}</h2>}
+            {description && <p className="max-w-2xl text-sm leading-6 text-hl-text-muted">{description}</p>}
           </div>
           {actions && <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div>}
         </div>

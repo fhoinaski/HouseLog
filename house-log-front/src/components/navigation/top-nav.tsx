@@ -39,16 +39,16 @@ export function TopNav() {
       <header className="top-nav-header fixed left-0 right-0 top-0 z-sticky hidden h-16 items-center border-b border-hl-border bg-hl-surface px-4 shadow-hl-subtle md:flex">
         <Link
           href={user?.role === 'provider' || user?.role === 'temp_provider' ? '/provider/dashboard' : '/dashboard'}
-          className="top-nav-brand flex shrink-0 items-center gap-2 rounded-[var(--radius-md)] px-1 py-1 transition-colors hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+          className="top-nav-brand flex shrink-0 items-center gap-2 rounded-[var(--hl-radius-control)] px-1 py-1 transition-colors hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
         >
-          <div className="top-nav-brand-icon flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] bg-hl-surface-muted">
+          <div className="top-nav-brand-icon flex h-9 w-9 items-center justify-center rounded-[var(--hl-radius-control)] bg-hl-surface-muted">
             <Home size={16} strokeWidth={1.8} className="text-nav-text-active" />
           </div>
           <span className="top-nav-brand-text text-md font-medium text-text-inverse">HouseLog</span>
         </Link>
 
         <nav
-          className="top-nav-list absolute left-1/2 flex h-11 -translate-x-1/2 items-center rounded-[var(--radius-lg)] bg-hl-surface-muted p-1"
+          className="top-nav-list absolute left-1/2 flex h-11 -translate-x-1/2 items-center rounded-[var(--hl-radius-card)] bg-hl-surface-muted p-1"
           aria-label="Navegação principal"
         >
           {items.map((item) => {
@@ -60,7 +60,7 @@ export function TopNav() {
                 href={item.href}
                 data-active={active ? 'true' : 'false'}
                 className={
-                  'top-nav-item flex h-full items-center gap-1.5 rounded-[var(--radius-md)] px-4 text-sm font-medium transition-colors duration-150 ' +
+                  'top-nav-item flex h-full items-center gap-1.5 rounded-[var(--hl-radius-control)] px-4 text-sm font-medium transition-colors duration-150 ' +
                   (active
                     ? 'bg-hl-surface text-hl-primary'
                     : 'text-hl-text-muted hover:bg-hl-surface-muted hover:text-hl-text')

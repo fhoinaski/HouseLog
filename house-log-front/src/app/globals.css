@@ -170,29 +170,34 @@
   --z-index-tooltip: 700;
 }
 
-/* shadcn/ui <-> HouseLog token mapping */
+/* shadcn/ui <-> HouseLog Calm OS token mapping */
 @layer base {
   :root {
-    --background: var(--bg-page);
-    --foreground: var(--text-primary);
-    --card: var(--card-bg);
-    --card-foreground: var(--text-primary);
-    --popover: var(--bg-surface-overlay);
-    --popover-foreground: var(--text-primary);
-    --primary: var(--interactive-primary-bg);
-    --primary-foreground: var(--interactive-primary-text);
-    --secondary: var(--bg-subtle);
-    --secondary-foreground: var(--text-secondary);
-    --muted: var(--bg-muted);
-    --muted-foreground: var(--text-tertiary);
-    --accent: var(--bg-accent-subtle);
-    --accent-foreground: var(--text-accent);
-    --destructive: var(--interactive-danger-bg);
-    --destructive-foreground: var(--interactive-danger-text);
-    --border: var(--border-default);
-    --input: var(--input-border);
-    --ring: var(--border-focus);
-    --radius: var(--radius-md);
+    --background: var(--hl-bg);
+    --foreground: var(--hl-text);
+    --card: var(--hl-surface);
+    --card-foreground: var(--hl-text);
+    --popover: var(--hl-surface);
+    --popover-foreground: var(--hl-text);
+    --primary: var(--hl-primary);
+    --primary-foreground: #ffffff;
+    --secondary: var(--hl-surface-muted);
+    --secondary-foreground: var(--hl-text);
+    --muted: var(--hl-surface-muted);
+    --muted-foreground: var(--hl-text-muted);
+    --accent: var(--hl-surface-muted);
+    --accent-foreground: var(--hl-text);
+    --destructive: var(--hl-danger);
+    --destructive-foreground: #ffffff;
+    --border: var(--hl-border);
+    --input: var(--hl-border);
+    --ring: var(--hl-primary);
+    --radius: var(--hl-radius-control);
+
+    /* ---- Calm OS global overrides (resolve old token references) ---- */
+    --field-focus-ring:      0 0 0 3px color-mix(in srgb, var(--hl-primary) 15%, transparent);
+    --nav-text-active:       var(--hl-primary);
+    --nav-text-inactive:     var(--hl-text-muted);
 
     /* ---- legacy alias map (do not use in new code) ---- */
     --hl-bg-page:            var(--bg-page);
@@ -552,21 +557,21 @@ body {
 
   .hl-error {
     margin-top: 4px;
-    color: var(--text-danger);
+    color: var(--hl-danger);
     font-size: var(--text-xs);
     line-height: var(--leading-snug);
   }
 
   .hl-hint {
     margin-top: 4px;
-    color: var(--text-tertiary);
+    color: var(--hl-text-muted);
     font-size: var(--text-xs);
     line-height: var(--leading-snug);
   }
 
   .hl-section-title {
     margin-bottom: 8px;
-    color: var(--text-secondary);
+    color: var(--hl-text-muted);
     font-size: var(--text-xs);
     font-weight: var(--font-medium);
     letter-spacing: var(--tracking-wider);
@@ -818,7 +823,7 @@ body {
 
 .hl-calm-focus:focus-visible {
   outline: none;
-  box-shadow: var(--shadow-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hl-primary) 15%, transparent);
 }
 
 .hl-calm-bottom-safe {
@@ -885,6 +890,29 @@ body {
 
 .hl-calm-os .top-nav-brand-icon svg {
   color: var(--hl-primary);
+}
+
+/* ── Refined Calm OS palette ─────────────────────────────────────────────────
+ * Unlayered :root — takes precedence over tokens.css (same source after import).
+ * Direction: warm premium + petróleo profundo + texto forte.
+ * ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --hl-bg:             #f7f6f3;
+  --hl-surface:        #ffffff;
+  --hl-surface-muted:  #f2f0eb;
+  --hl-border:         #e4e1d9;
+  --hl-text:           #1c1a17;
+  --hl-text-muted:     #706b62;
+  --hl-primary:        #1b4f6f;
+  --hl-primary-blue:   #1b4f6f;
+  --hl-success:        #2a7a50;
+  --hl-warning:        #b86b0e;
+  --hl-danger:         #c0352c;
+  --hl-info:           #1f5fa8;
+  --hl-shadow-subtle:  0 1px 2px rgba(28, 26, 23, 0.05), 0 1px 4px rgba(28, 26, 23, 0.04);
+  --hl-shadow-soft:    0 4px 20px rgba(28, 26, 23, 0.08), 0 1px 6px rgba(28, 26, 23, 0.04);
+  --hl-radius-card:    0.75rem;
+  --hl-radius-control: 0.5rem;
 }
 
 @layer base {
