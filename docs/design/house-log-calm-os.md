@@ -102,6 +102,34 @@ Valores definidos como `@layer`-agnostic em `globals.css` (bloco `:root` unlayer
 - `--field-focus-ring`, `--nav-text-active` e `--nav-text-inactive` sobrescritos em `@layer base :root` para apontar para tokens Calm OS — nao alterar componentes de nav diretamente para foco ou cor de texto.
 - Tokens antigos continuam ativos ate cada area ser migrada. Nao remover sem mapear consumidores.
 
+## Layout e Container
+
+### PageContainer (`src/components/layout/page-container.tsx`)
+
+Componente padrao de container de pagina. Centraliza o conteudo, aplica padding responsivo e define largura maxima consistente.
+
+| Variante | max-width | Uso tipico |
+|---|---|---|
+| `default` | 1200px | Dashboard, lista de imoveis |
+| `narrow` | 1024px | Schedule, financial, provider flows |
+| `form` | 3xl (768px) | Formularios de criacao/edicao |
+
+Padding padrao: `px-4 py-5 sm:px-5 md:px-6 md:py-6`.
+
+Uso: `<PageContainer variant="narrow" className="space-y-5">`.
+
+Nao usar `max-w-` ou `mx-auto` inline nas pages — centralizar via `PageContainer`.
+
+### Navegacao
+
+**Desktop (TopNav):** Logo + pill central com items (Inicio, Imoveis, Agenda, Financeiro, Config.) + avatar de perfil a direita. Maximo ~5 items visivel.
+
+**Mobile (BottomNav):** Dock com ate 5 items: Inicio, Imoveis, Agenda, Financeiro, Config. para owner/manager. Provider: Inicio, Oportunidades, Minhas OS, Config.
+
+Settings agora aparece no bottom nav para owner e manager (acessivel no mobile sem depender do avatar do top nav, que e oculto no mobile).
+
+**Navegacao contextual de imovel:** tabs dentro do detalhe do imovel — nao usar nav global para modulos internos.
+
 ## Tema Atual
 
 - Calm OS e o tema principal do frontend.

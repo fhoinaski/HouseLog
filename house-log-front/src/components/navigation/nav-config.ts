@@ -22,12 +22,14 @@ export const NAV_CONFIG: Record<string, NavItem[]> = {
     { label: 'Imóveis', href: '/properties', icon: Building2 },
     { label: 'Agenda', href: '/schedule', icon: CalendarDays },
     { label: 'Financeiro', href: '/financial', icon: BarChart2 },
+    { label: 'Config.', href: '/settings', icon: Settings2 },
   ],
   manager: [
     { label: 'Início', href: '/dashboard', icon: Home, matchExact: true },
     { label: 'Imóveis', href: '/properties', icon: Building2 },
     { label: 'Financeiro', href: '/financial', icon: BarChart2 },
     { label: 'Agenda', href: '/schedule', icon: CalendarDays },
+    { label: 'Config.', href: '/settings', icon: Settings2 },
   ],
   provider: [
     { label: 'Início', href: '/provider/dashboard', icon: Home, matchExact: true },

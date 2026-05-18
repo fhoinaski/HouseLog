@@ -16,6 +16,7 @@ import {
   Package,
   type LucideIcon,
 } from 'lucide-react';
+import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -522,7 +523,7 @@ export default function DashboardPage() {
   const isLoadingDashboard = propertiesLoading || servicesLoading;
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-[1180px] space-y-6 bg-hl-bg px-4 py-4 text-hl-text md:px-6 md:py-6 md:pb-8">
+    <PageContainer className="space-y-6">
       <PageHeader
         density="editorial"
         eyebrow="HouseLog Calm OS"
@@ -579,6 +580,6 @@ export default function DashboardPage() {
       </div>
 
       <AgendaSection schedule={todaySchedule} isLoading={servicesLoading} />
-    </div>
+    </PageContainer>
   );
 }

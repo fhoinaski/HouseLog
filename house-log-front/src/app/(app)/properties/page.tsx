@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { PROPERTY_TYPE_LABELS, cn } from '@/lib/utils';
+import { PageContainer } from '@/components/layout/page-container';
 
 type PropertyAction = {
   label: string;
@@ -270,7 +271,7 @@ export default function PropertiesPage() {
   ];
 
   return (
-    <div className="mx-auto min-h-full w-full max-w-[1240px] space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-6 md:px-8 md:py-5 lg:px-10">
+    <PageContainer className="space-y-5">
       <Card variant="section" density="compact" className="overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(17rem,auto)] sm:items-center sm:p-5">
           <div className="min-w-0">
@@ -336,6 +337,6 @@ export default function PropertiesPage() {
           </>
         )}
       </section>
-    </div>
+    </PageContainer>
   );
 }

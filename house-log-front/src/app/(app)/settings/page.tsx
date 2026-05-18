@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VisualThemeToggle } from '@/components/theme/visual-theme-toggle';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/page-container';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrador', owner: 'Proprietário',
@@ -98,10 +99,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6 px-4 py-4 sm:px-5 sm:py-5">
+    <PageContainer variant="narrow" className="space-y-6">
       <div>
-        <h1 className="text-2xl font-medium">Configurações</h1>
-        <p className="text-sm text-muted-foreground">Gerencie sua conta e preferências</p>
+        <h1 className="text-2xl font-medium text-hl-text">Configurações</h1>
+        <p className="text-sm text-hl-text-muted">Gerencie sua conta e preferências</p>
       </div>
 
       {/* User card */}
@@ -113,7 +114,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <p className="font-medium">{user?.name}</p>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-sm text-hl-text-muted">{user?.email}</p>
               <Badge variant="secondary" className="mt-1 text-xs">
                 {ROLE_LABELS[user?.role ?? ''] ?? user?.role}
               </Badge>
@@ -150,7 +151,7 @@ export default function SettingsPage() {
                 <div className="space-y-1.5">
                   <Label>Email</Label>
                   <Input value={user?.email ?? ''} disabled className="opacity-60" />
-                  <p className="text-xs text-muted-foreground">O email não pode ser alterado</p>
+                  <p className="text-xs text-hl-text-muted">O email não pode ser alterado</p>
                 </div>
                 {profileErrors.root && (
                   <p className="text-xs text-hl-danger">{profileErrors.root.message}</p>
@@ -203,7 +204,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between text-sm">
                 <div>
                   <p className="font-medium">Este dispositivo</p>
-                  <p className="text-xs text-muted-foreground">Sessão atual</p>
+                  <p className="text-xs text-hl-text-muted">Sessão atual</p>
                 </div>
                 <Badge variant="success">Ativo</Badge>
               </div>
@@ -227,7 +228,7 @@ export default function SettingsPage() {
                 <div key={n.key} className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">{n.label}</p>
-                    <p className="text-xs text-muted-foreground">{n.description}</p>
+                    <p className="text-xs text-hl-text-muted">{n.description}</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
@@ -251,6 +252,6 @@ export default function SettingsPage() {
           <VisualThemeToggle />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageContainer>
   );
 }

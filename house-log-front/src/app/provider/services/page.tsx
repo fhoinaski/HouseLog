@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { providerApi, type ProviderServiceOrder } from '@/lib/api';
 import { SERVICE_PRIORITY_LABELS, SERVICE_STATUS_LABELS, SYSTEM_TYPE_LABELS, formatDate } from '@/lib/utils';
+import { PageContainer } from '@/components/layout/page-container';
 
 const PRIORITY_VARIANT: Record<string, BadgeProps['variant']> = {
   urgent: 'urgent',
@@ -40,7 +41,7 @@ export default function ProviderServicesPage() {
   const orders = data?.data ?? [];
 
   return (
-    <div className="min-h-full space-y-5 bg-hl-bg px-4 pb-8 pt-4 text-hl-text sm:px-5 sm:py-5">
+    <PageContainer variant="narrow" className="space-y-5">
       <header className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-4 py-4 shadow-hl-subtle">
         <p className="text-xs font-medium uppercase tracking-wide text-hl-primary">Operação privada</p>
         <div className="mt-2 flex items-start justify-between gap-3">
@@ -125,7 +126,7 @@ export default function ProviderServicesPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

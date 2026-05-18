@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Briefcase, Wrench, CheckCircle2, Clock, AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
+import { PageContainer } from '@/components/layout/page-container';
 
 export default function ProviderDashboard() {
   const { user } = useAuth();
@@ -75,7 +76,7 @@ export default function ProviderDashboard() {
   const firstName = user?.name?.split(' ')[0] ?? 'prestador';
 
   return (
-    <div className="min-h-full space-y-5 bg-hl-bg px-4 pb-8 pt-4 text-hl-text sm:px-5 sm:py-5">
+    <PageContainer variant="narrow" className="space-y-5">
       <header className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface px-4 py-4 shadow-hl-subtle">
         <p className="text-xs font-medium uppercase tracking-wide text-hl-primary">Rede homologada</p>
         <div className="mt-2 flex items-start justify-between gap-3">
@@ -199,6 +200,6 @@ export default function ProviderDashboard() {
           </div>
         </section>
       )}
-    </div>
+    </PageContainer>
   );
 }

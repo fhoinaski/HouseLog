@@ -7,6 +7,7 @@ import { propertiesApi } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/page-container';
 
 export default function FinancialPage() {
   const { data, isLoading } = useSWR('financial-properties', () => propertiesApi.list(), {
@@ -18,7 +19,7 @@ export default function FinancialPage() {
   const properties = data?.data ?? [];
 
   return (
-    <div className="mx-auto max-w-[980px] space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+    <PageContainer variant="narrow" className="space-y-4">
       <Card variant="raised" density="comfortable">
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -100,6 +101,6 @@ export default function FinancialPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

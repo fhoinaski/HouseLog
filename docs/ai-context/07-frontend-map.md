@@ -39,6 +39,13 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 
 - `src/components/services/service-chat.tsx`: Textarea tem label acessivel via `aria-labelledby` (label `sr-only`). Composer desativado quando `forbidden=true` (403/404). Padding inferior `pb-[env(safe-area-inset-bottom,0px)]` evita sobreposicao pelo teclado virtual mobile. Botao de envio tem `aria-label` contextual.
 
+## Layout e Container (2026-05-17)
+
+- `src/components/layout/page-container.tsx`: componente `PageContainer` padrao de container de pagina. Variantes: `default` (max-w-[1200px]), `narrow` (max-w-[1024px]), `form` (max-w-3xl). Padding responsivo padrao `px-4 py-5 sm:px-5 md:px-6 md:py-6`. Todas as pages principais usam `PageContainer` — nao recriar container inline.
+- `src/components/navigation/nav-config.ts`: owner e manager receberam item `Config.` → `/settings` com icone `Settings2` — settings agora acessivel no bottom nav mobile. Provider mantem 4 items com `Config.` ja existente.
+- Pages migradas para `PageContainer`: `/dashboard`, `/properties`, `/schedule`, `/financial`, `/settings`, `/provider/dashboard`, `/provider/services`.
+- `settings/page.tsx`: estava com `max-w-2xl` sem `mx-auto` (P1 desktop) — corrigido para `PageContainer variant="narrow"`. Tokens `text-muted-foreground` migrados para `text-hl-text-muted`.
+
 ## Design system (2026-05-17)
 
 Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-calm-os.md`.
