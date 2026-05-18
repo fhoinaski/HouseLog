@@ -76,7 +76,9 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 
 ## Owner/Manager Calm OS (2026-05-17)
 
-- `src/app/(app)/dashboard/page.tsx`: entrada owner/manager alinhada ao Calm OS via surfaces claras e componentes compartilhados.
+- `src/app/(app)/dashboard/page.tsx`: entrada owner/manager alinhada ao Calm OS via surfaces claras e componentes compartilhados. Atualizado em 2026-05-18 para central operacional CRM tecnico: busca dados reais por imovel (`propertiesApi`, `servicesApi`, `serviceRequestsApi`, `warrantiesApi`, `documentsApi`), nao envia `tenantId`, mostra erro com retry e usa `src/components/dashboard/dashboard-model.ts` para derivar metricas, pipeline, atividades e pendencias filtrando somente imoveis carregados.
+- `src/components/dashboard/dashboard-sections.tsx`: componentes do dashboard owner/manager para `PipelineSummary`, `CriticalPendingList`, `RecentActivityList`, erro e no-access state, usando tokens Calm OS e estados loading/empty.
+- `src/__tests__/dashboard-model.test.ts`: cobre derivacao do modelo operacional, estado vazio e descarte de linhas fora do conjunto de imoveis carregado.
 - `src/app/(app)/properties/page.tsx`: lista de imoveis migrada para Calm OS — action chips de acesso rapido (inventario, servicos, financeiro, documentos) usam tokens `--hl-*` com `color-mix` para tons; LoadingState/EmptyState/ErrorState usam `Card variant="section"` com surface/border/shadow Calm OS; header, secao "Ativos cadastrados" e search bar migrados.
 - `src/app/(app)/properties/new/page.tsx`: tela de criacao de imovel totalmente migrada — fundo `bg-hl-bg`, header `border-hl-border bg-hl-surface`, cover upload, todos os blocos de campo (`bg-hl-surface focus-within:bg-hl-surface-muted`), labels com `text-hl-text-muted`, error banner com `color-mix` danger.
 - `src/app/(app)/properties/[id]/page.tsx`: detalhe do imovel recebeu base Calm OS no wrapper e hero, reduzindo overlay escuro sem alterar abas/modulos.

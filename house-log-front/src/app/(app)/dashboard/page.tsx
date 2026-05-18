@@ -12,10 +12,21 @@ import {
   ChevronRight,
   ClipboardCheck,
   Clock3,
+  FileText,
   FilePlus,
   Package,
+  ShieldCheck,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  CriticalPendingList,
+  DashboardErrorPanel,
+  DashboardNoAccessState,
+  PipelineSummary,
+  RecentActivityList,
+} from '@/components/dashboard/dashboard-sections';
+import { buildDashboardModel, type DashboardDocumentInput, type DashboardServiceInput } from '@/components/dashboard/dashboard-model';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageSection } from '@/components/layout/page-section';
@@ -25,24 +36,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth-context';
-import { propertiesApi, servicesApi, type Property, type ServiceOrder } from '@/lib/api';
-import { cn, formatCurrency } from '@/lib/utils';
+import {
+  documentsApi,
+  propertiesApi,
+  serviceRequestsApi,
+  servicesApi,
+  warrantiesApi,
+  type Document,
+  type Property,
+  type ServiceOrder,
+  type Warranty,
+} from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 type PropertyListItem = Property & {
   activeServicesCount: number;
   completedServicesCount: number;
   coverPhotoUrl?: string;
   photoUrl?: string;
-};
-
-type BidItem = {
-  id: string;
-  serviceOrderId: string;
-  propertyId: string;
-  title: string;
-  providerName: string;
-  amount: number | null;
-  createdAt: string;
 };
 
 type ScheduleItem = {
@@ -322,54 +333,6 @@ function PropertiesSection({ properties, isLoading }: { properties: PropertyList
   );
 }
 
-function BidsSection({ bids, isLoading }: { bids: BidItem[]; isLoading: boolean }) {
-  return (
-    <PageSection
-      title="Orcamentos para analisar"
-      description="Decisoes pendentes conectadas a ordens de servico reais."
-      tone="strong"
-      density="editorial"
-      actions={bids.length > 0 ? <Badge variant="requested">{bids.length}</Badge> : null}
-    >
-      {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
-          ))}
-        </div>
-      ) : bids.length === 0 ? (
-        <EmptyState
-          icon={<ClipboardCheck className="h-6 w-6" />}
-          title="Nenhum orcamento pendente"
-          description="Quando houver uma OS para aprovacao, ela aparecera aqui."
-          tone="subtle"
-        />
-      ) : (
-        <div className="space-y-2">
-          {bids.map((bid) => (
-            <Link
-              key={bid.id}
-              href={`/properties/${bid.propertyId}/services/${bid.serviceOrderId}`}
-              className="block rounded-[var(--radius-lg)] bg-bg-warning p-4 transition-colors hover:bg-bg-warning-emphasis focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-medium leading-snug text-text-primary">{bid.title}</p>
-                <span className="mt-0.5 shrink-0 text-xs text-text-tertiary">
-                  {new Date(bid.createdAt).toLocaleDateString('pt-BR')}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-text-secondary">
-                {bid.providerName}
-                {bid.amount !== null ? ` - ${formatCurrency(Number(bid.amount))}` : ' - Sem valor'}
-              </p>
-            </Link>
-          ))}
-        </div>
-      )}
-    </PageSection>
-  );
-}
-
 function AgendaSection({ schedule, isLoading }: { schedule: ScheduleItem[]; isLoading: boolean }) {
   return (
     <PageSection
@@ -429,9 +392,14 @@ function AgendaSection({ schedule, isLoading }: { schedule: ScheduleItem[]; isLo
 export default function DashboardPage() {
   const { user } = useAuth();
 
-  const { data: propertiesData, isLoading: propertiesLoading } = useSWR(
+  const {
+    data: propertiesData,
+    isLoading: propertiesLoading,
+    error: propertiesError,
+    mutate: retryProperties,
+  } = useSWR(
     user ? 'properties' : null,
-    () => propertiesApi.list(),
+    () => propertiesApi.list({ limit: 50 }),
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
@@ -443,7 +411,12 @@ export default function DashboardPage() {
   const baseProperties = useMemo(() => propertiesData?.data ?? [], [propertiesData]);
   const propertyIds = useMemo(() => baseProperties.map((property) => property.id), [baseProperties]);
 
-  const { data: servicesMap, isLoading: servicesLoading } = useSWR(
+  const {
+    data: servicesMap,
+    isLoading: servicesLoading,
+    error: servicesError,
+    mutate: retryServices,
+  } = useSWR(
     user && propertyIds.length > 0 ? ['dashboard-services', ...propertyIds] : null,
     async () => {
       const entries = await Promise.all(
@@ -462,6 +435,78 @@ export default function DashboardPage() {
     }
   );
 
+  const {
+    data: serviceRequestsMap,
+    isLoading: serviceRequestsLoading,
+    error: serviceRequestsError,
+    mutate: retryServiceRequests,
+  } = useSWR(
+    user && propertyIds.length > 0 ? ['dashboard-service-requests', ...propertyIds] : null,
+    async () => {
+      const entries = await Promise.all(
+        propertyIds.map(async (propertyId) => {
+          const response = await serviceRequestsApi.list(propertyId, { limit: 50 });
+          return [propertyId, response.data] as const;
+        })
+      );
+      return new Map(entries);
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+      dedupingInterval: 30_000,
+      errorRetryCount: 3,
+    }
+  );
+
+  const {
+    data: warrantiesMap,
+    isLoading: warrantiesLoading,
+    error: warrantiesError,
+    mutate: retryWarranties,
+  } = useSWR(
+    user && propertyIds.length > 0 ? ['dashboard-warranties', ...propertyIds] : null,
+    async () => {
+      const entries = await Promise.all(
+        propertyIds.map(async (propertyId) => {
+          const response = await warrantiesApi.list(propertyId, { status: 'active' });
+          return [propertyId, response.warranties] as const;
+        })
+      );
+      return new Map<string, Warranty[]>(entries);
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+      dedupingInterval: 30_000,
+      errorRetryCount: 3,
+    }
+  );
+
+  const {
+    data: documentsMap,
+    isLoading: documentsLoading,
+    error: documentsError,
+    mutate: retryDocuments,
+  } = useSWR(
+    user && propertyIds.length > 0 ? ['dashboard-documents', ...propertyIds] : null,
+    async () => {
+      const entries = await Promise.all(
+        propertyIds.map(async (propertyId) => {
+          const response = await documentsApi.list(propertyId);
+          return [propertyId, response.data] as const;
+        })
+      );
+      return new Map<string, Document[]>(entries);
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+      dedupingInterval: 30_000,
+      errorRetryCount: 3,
+    }
+  );
+
   const properties = useMemo<PropertyListItem[]>(() => {
     return baseProperties.map((property) => {
       const items = servicesMap?.get(property.id) ?? [];
@@ -470,26 +515,6 @@ export default function DashboardPage() {
       return { ...property, activeServicesCount, completedServicesCount };
     });
   }, [baseProperties, servicesMap]);
-
-  const pendingBids = useMemo<BidItem[]>(() => {
-    const rows: BidItem[] = [];
-    servicesMap?.forEach((services) => {
-      services
-        .filter((service) => service.status === 'requested')
-        .forEach((service) => {
-          rows.push({
-            id: service.id,
-            serviceOrderId: service.id,
-            propertyId: service.property_id,
-            title: service.title ?? 'Sem titulo',
-            providerName: service.assigned_to_name ?? 'Prestador pendente',
-            amount: service.cost,
-            createdAt: service.created_at,
-          });
-        });
-    });
-    return rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6);
-  }, [servicesMap]);
 
   const todaySchedule = useMemo<ScheduleItem[]>(() => {
     const byProperty = new Map(baseProperties.map((property) => [property.id, property.name] as const));
@@ -517,10 +542,96 @@ export default function DashboardPage() {
     return rows.sort((a, b) => a.time.localeCompare(b.time)).slice(0, 8);
   }, [baseProperties, servicesMap]);
 
-  const activeServices = properties.reduce((sum, property) => sum + property.activeServicesCount, 0);
+  const dashboardModel = useMemo(() => {
+    const services: DashboardServiceInput[] = Array.from(servicesMap?.values() ?? [])
+      .flat()
+      .map((service) => ({
+        id: service.id,
+        propertyId: service.property_id,
+        title: service.title,
+        status: service.status,
+        priority: service.priority,
+        createdAt: service.created_at,
+        scheduledAt: service.scheduled_at,
+        completedAt: service.completed_at,
+        assignedToName: service.assigned_to_name,
+        cost: service.cost,
+      }));
+
+    const serviceRequests = Array.from(serviceRequestsMap?.values() ?? [])
+      .flat()
+      .map((request) => ({
+        id: request.id,
+        propertyId: request.property_id,
+        title: request.title,
+        status: request.status,
+        createdAt: request.created_at,
+        updatedAt: request.updated_at,
+        proposalsCount: request.proposals_count,
+        pendingProposalsCount: request.pending_proposals_count,
+        acceptedProposalsCount: request.accepted_proposals_count,
+        bestAmount: request.best_amount,
+      }));
+
+    const warranties = Array.from(warrantiesMap?.values() ?? [])
+      .flat()
+      .map((warranty) => ({
+        id: warranty.id,
+        propertyId: warranty.property_id,
+        title: warranty.title,
+        providerName: warranty.provider_name,
+        status: warranty.status,
+        endDate: warranty.end_date,
+        createdAt: warranty.created_at,
+      }));
+
+    const documents: DashboardDocumentInput[] = Array.from(documentsMap?.values() ?? [])
+      .flat()
+      .map((document) => ({
+        id: document.id,
+        propertyId: document.property_id,
+        title: document.title,
+        type: document.type,
+        createdAt: document.created_at,
+        expiryDate: document.expiry_date,
+      }));
+
+    return buildDashboardModel({
+      properties: baseProperties.map((property) => ({
+        id: property.id,
+        name: property.name,
+        address: property.address,
+        healthScore: property.health_score,
+      })),
+      services,
+      serviceRequests,
+      warranties,
+      documents,
+    });
+  }, [baseProperties, documentsMap, serviceRequestsMap, servicesMap, warrantiesMap]);
+
+  const activeServices = dashboardModel.metrics.openTickets;
   const completedServices = properties.reduce((sum, property) => sum + property.completedServicesCount, 0);
   const firstName = user?.name?.split(' ')[0] ?? 'voce';
-  const isLoadingDashboard = propertiesLoading || servicesLoading;
+  const isLoadingDashboard =
+    propertiesLoading || servicesLoading || serviceRequestsLoading || warrantiesLoading || documentsLoading;
+  const hasDashboardError = Boolean(propertiesError || servicesError || serviceRequestsError || warrantiesError || documentsError);
+
+  function retryDashboard() {
+    void retryProperties();
+    void retryServices();
+    void retryServiceRequests();
+    void retryWarranties();
+    void retryDocuments();
+  }
+
+  if (!user) {
+    return (
+      <PageContainer className="space-y-6">
+        <DashboardNoAccessState />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer className="space-y-6">
@@ -532,10 +643,12 @@ export default function DashboardPage() {
         actions={
           <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface px-4 py-3 text-left shadow-hl-subtle">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">{formatDashboardDate()}</p>
-            <p className="mt-1 text-sm text-hl-text-muted">{activeServices} OS abertas</p>
+            <p className="mt-1 text-sm text-hl-text-muted">{activeServices} operacoes abertas</p>
           </div>
         }
       />
+
+      {hasDashboardError ? <DashboardErrorPanel onRetry={retryDashboard} /> : null}
 
       <PageSection tone="surface" density="editorial">
         <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
@@ -551,35 +664,50 @@ export default function DashboardPage() {
 
           <div className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-5">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Lente operacional</p>
-            <p className="mt-2 text-2xl font-medium leading-tight text-hl-text">{activeServices} OS abertas</p>
+            <p className="mt-2 text-2xl font-medium leading-tight text-hl-text">{activeServices} operacoes abertas</p>
             <p className="mt-2 text-sm leading-6 text-hl-text-muted">
-              {pendingBids.length > 0
-                ? `${pendingBids.length} orcamento(s) precisam de analise.`
+              {dashboardModel.metrics.pendingBudgets > 0
+                ? `${dashboardModel.metrics.pendingBudgets} orcamento(s) precisam de analise.`
                 : 'Sem orcamentos pendentes para aprovacao.'}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge variant={todaySchedule.length > 0 ? 'approved' : 'normal'}>{todaySchedule.length} hoje</Badge>
               <Badge variant={activeServices > 0 ? 'in_progress' : 'normal'}>{properties.length} imoveis</Badge>
+              <Badge variant={dashboardModel.metrics.expiringWarranties > 0 ? 'requested' : 'normal'}>
+                {dashboardModel.metrics.expiringWarranties} garantias
+              </Badge>
             </div>
           </div>
         </div>
       </PageSection>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <MetricCard icon={Building2} label="Imoveis" value={properties.length} helper={properties.length === 1 ? 'ativo monitorado' : 'ativos monitorados'} tone="accent" />
-        <MetricCard icon={ClipboardCheck} label="OS abertas" value={activeServices} helper={activeServices === 1 ? 'demanda em andamento' : 'demandas em andamento'} tone="warning" />
-        <MetricCard icon={Clock3} label="Hoje" value={todaySchedule.length} helper={todaySchedule.length === 1 ? 'visita agendada' : 'visitas agendadas'} tone="default" />
-        <MetricCard icon={CalendarCheck} label="Concluidas" value={completedServices} helper={completedServices === 1 ? 'servico finalizado' : 'servicos finalizados'} tone="success" />
+        <MetricCard icon={Building2} label="Imoveis ativos" value={dashboardModel.metrics.activeProperties} helper="ativos monitorados" tone="accent" />
+        <MetricCard icon={ClipboardCheck} label="Chamados abertos" value={activeServices} helper="demandas e OS em aberto" tone="warning" />
+        <MetricCard icon={Wrench} label="OS em campo" value={dashboardModel.metrics.inProgressOrders} helper="execucao em andamento" tone="default" />
+        <MetricCard icon={ShieldCheck} label="Garantias vencendo" value={dashboardModel.metrics.expiringWarranties} helper="proximos 30 dias" tone="success" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <MetricCard icon={Clock3} label="Agenda hoje" value={todaySchedule.length} helper="visitas e execucoes" tone="default" density="compact" />
+        <MetricCard icon={CalendarCheck} label="Concluidas" value={completedServices} helper="historico finalizado" tone="success" density="compact" />
+        <MetricCard icon={FileText} label="Documentos" value={dashboardModel.metrics.documents} helper="registros carregados" tone="default" density="compact" />
+        <MetricCard icon={BarChart2} label="Orcamentos" value={dashboardModel.metrics.pendingBudgets} helper="propostas pendentes" tone="warning" density="compact" />
       </div>
 
       <QuickActions properties={properties} isLoading={isLoadingDashboard} />
 
+      <PipelineSummary stages={dashboardModel.pipeline} isLoading={isLoadingDashboard} />
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.45fr_1fr]">
         <PropertiesSection properties={properties} isLoading={isLoadingDashboard} />
-        <BidsSection bids={pendingBids} isLoading={servicesLoading} />
+        <CriticalPendingList items={dashboardModel.criticalPendings} isLoading={isLoadingDashboard} />
       </div>
 
-      <AgendaSection schedule={todaySchedule} isLoading={servicesLoading} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1fr]">
+        <AgendaSection schedule={todaySchedule} isLoading={servicesLoading} />
+        <RecentActivityList items={dashboardModel.activities} isLoading={isLoadingDashboard} />
+      </div>
     </PageContainer>
   );
 }
