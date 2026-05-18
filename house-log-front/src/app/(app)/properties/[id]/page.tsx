@@ -1,6 +1,6 @@
 'use client';
 
-import { type ComponentType, use, useState } from 'react';
+import { type ComponentType, type ReactNode, use, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import useSWR from 'swr';
@@ -48,11 +48,17 @@ import { MetricCard } from '@/components/ui/metric-card';
 import {
   apiFetcher,
   documentIngestionApi,
+  documentsApi,
   maintenanceApi,
   propertiesApi,
+  serviceRequestsApi,
+  servicesApi,
+  type Document,
   type MaintenanceSchedule,
+  type Property,
   type PropertyDashboard,
   type PropertyDocumentIngestionSummary,
+  type ServiceRequestSummary,
   type ServiceOrder,
 } from '@/lib/api';
 import {
@@ -85,6 +91,369 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
+function PropertyProfileHeader({
+  property,
+  propertyId,
+  healthScore,
+  technicalHealth,
+  openOrders,
+  urgentOrders,
+  memoriaEmDias,
+  totalEvents,
+  onCreateOrder,
+}: {
+  property: Property;
+  propertyId: string;
+  healthScore: number | null;
+  technicalHealth: PropertyTechnicalHealthView;
+  openOrders: number;
+  urgentOrders: number;
+  memoriaEmDias: number;
+  totalEvents: number;
+  onCreateOrder: () => void;
+}) {
+  const healthScoreClass = healthScore === null ? 'text-hl-text-muted' : scoreColor(healthScore);
+  const clientName = property.owner_name ?? 'Cliente nao informado';
+
+  return (
+    <section className="relative overflow-hidden rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface shadow-hl-subtle">
+      {property.cover_url ? (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url(${property.cover_url})`,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+          }}
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(247,246,243,0.20),rgba(247,246,243,0.92)_64%,rgba(247,246,243,1))]" />
+        </div>
+      ) : (
+        <div className="absolute inset-0 bg-hl-surface-soft" />
+      )}
+
+      <div className="relative z-10 p-4 sm:p-6 md:p-7">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/properties" className="text-xs font-medium text-hl-text-muted transition-colors hover:text-hl-text">
+                Meus imoveis
+              </Link>
+              <span className="text-hl-text-muted">/</span>
+              <Badge variant="secondary" className="text-xs">
+                {PROPERTY_TYPE_LABELS[property.type]}
+              </Badge>
+              <Badge variant={urgentOrders > 0 ? 'urgent' : openOrders > 0 ? 'requested' : 'success'}>
+                {urgentOrders > 0 ? 'Critico' : openOrders > 0 ? 'Em operacao' : 'Estavel'}
+              </Badge>
+            </div>
+
+            <p className="mt-5 text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Perfil 360 do imovel</p>
+            <h1 className="mt-2 text-3xl font-medium leading-tight tracking-normal text-hl-text md:text-4xl">{property.name}</h1>
+
+            <div className="mt-3 grid gap-2 text-sm text-hl-text-muted md:grid-cols-[minmax(0,1.2fr)_minmax(220px,0.8fr)]">
+              <p className="flex min-w-0 items-start gap-2">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 break-words">{property.address}, {property.city}</span>
+              </p>
+              <p className="flex min-w-0 items-start gap-2">
+                <Users className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 truncate">Cliente: {clientName}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 md:justify-end">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/properties/${propertyId}/edit`}>
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/properties/${propertyId}/report`}>
+                <FileText className="h-3.5 w-3.5" />
+                Dossie
+              </Link>
+            </Button>
+            <Button size="sm" onClick={onCreateOrder}>
+              <Wrench className="h-3.5 w-3.5" />
+              Nova OS
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-border md:grid-cols-4">
+          <ProfileStat label="Saude" value={healthScore ?? 'Em formacao'} helper={technicalHealth.label} valueClassName={healthScoreClass} suffix={healthScore === null ? null : '/100'} />
+          <ProfileStat label="Memoria" value={memoriaEmDias.toLocaleString('pt-BR')} helper="dias rastreados" />
+          <ProfileStat label="Eventos" value={totalEvents} helper="OS registradas" />
+          <div className="bg-hl-surface px-3 py-3 sm:px-4">
+            <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-hl-text-muted">Estado tecnico</p>
+            {healthScore === null ? (
+              <p className="mt-2 text-xs leading-5 text-hl-text-muted">Aguardando documentos tecnicos.</p>
+            ) : (
+              <div className="mt-3">
+                <ScoreBar score={healthScore} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfileStat({
+  label,
+  value,
+  helper,
+  suffix,
+  valueClassName,
+}: {
+  label: string;
+  value: string | number;
+  helper: string;
+  suffix?: string | null;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="bg-hl-surface px-3 py-3 sm:px-4">
+      <p className="text-[10px] font-medium uppercase tracking-[0.07em] text-hl-text-muted">{label}</p>
+      <div className="mt-1 flex items-baseline gap-1">
+        <span className={cn('text-xl font-medium tabular-nums text-hl-text sm:text-2xl', valueClassName)}>{value}</span>
+        {suffix ? <span className="text-xs text-hl-text-muted">{suffix}</span> : null}
+      </div>
+      <p className="mt-1 text-[10px] text-hl-text-muted">{helper}</p>
+    </div>
+  );
+}
+
+function PropertyTabs({
+  tabs,
+  activeTab,
+  onTabChange,
+}: {
+  tabs: PropertyProfileTab[];
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
+}) {
+  return (
+    <nav aria-label="Perfil 360 do imovel" className="overflow-x-auto rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface px-2 py-2 shadow-hl-subtle">
+      <div className="flex min-w-max gap-1">
+        {tabs.map((tab) => {
+          const isActive = tab.panel === activeTab;
+          const className = cn(
+            'inline-flex min-h-10 items-center justify-center rounded-[var(--hl-radius-md)] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+            isActive ? 'bg-hl-accent-muted text-hl-accent' : 'text-hl-text-muted hover:bg-hl-surface-soft hover:text-hl-text'
+          );
+
+          const panel = tab.panel;
+          if (panel) {
+            return (
+              <button key={tab.id} type="button" onClick={() => onTabChange(panel)} aria-current={isActive ? 'page' : undefined} className={className}>
+                {tab.label}
+              </button>
+            );
+          }
+
+          return (
+            <Link key={tab.id} href={tab.href ?? '#'} className={className}>
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function PropertySummaryCards({ metrics }: { metrics: ProfileMetric[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {metrics.map((metric) => (
+        <MetricCard
+          key={metric.label}
+          label={metric.label}
+          value={metric.value}
+          helper={metric.helper}
+          icon={metric.icon}
+          tone={metric.tone ?? 'default'}
+          density="compact"
+        />
+      ))}
+    </div>
+  );
+}
+
+function PropertyEmptyState({
+  icon,
+  title,
+  description,
+  href,
+  actionLabel,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  href: string;
+  actionLabel: string;
+}) {
+  return (
+    <EmptyState
+      icon={icon}
+      title={title}
+      description={description}
+      actions={
+        <Button asChild variant="tonal" size="sm">
+          <Link href={href}>{actionLabel}</Link>
+        </Button>
+      }
+      tone="subtle"
+    />
+  );
+}
+
+function PropertyOverviewPanel({
+  propertyId,
+  property,
+  documents,
+  documentsLoading,
+  documentsError,
+  serviceOrders,
+  requests,
+  operationsLoading,
+}: {
+  propertyId: string;
+  property: Property;
+  documents: Document[];
+  documentsLoading: boolean;
+  documentsError: boolean;
+  serviceOrders: ServiceOrder[];
+  requests: ServiceRequestSummary[];
+  operationsLoading: boolean;
+}) {
+  const recentDocuments = documents
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 4);
+  const linkedOperations = [
+    ...requests.map((request) => ({
+      id: `request-${request.id}`,
+      title: request.title,
+      description: request.pending_proposals_count > 0 ? `${request.pending_proposals_count} proposta(s) pendente(s)` : 'Chamado aberto',
+      href: `/properties/${propertyId}/service-requests/${request.id}`,
+      date: request.updated_at,
+      badge: 'Chamado',
+    })),
+    ...serviceOrders.map((order) => ({
+      id: `service-${order.id}`,
+      title: order.title,
+      description: order.assigned_to_name ?? SYSTEM_TYPE_LABELS[order.system_type] ?? order.system_type,
+      href: `/properties/${propertyId}/services/${order.id}`,
+      date: order.completed_at ?? order.created_at,
+      badge: order.status === 'in_progress' ? 'Em execucao' : order.status === 'requested' ? 'Diagnostico' : 'OS',
+    })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
+
+  return (
+    <PageSection
+      title="Visao geral 360"
+      description="Dados de identificacao, ultimos documentos e movimentos operacionais do imovel."
+      tone="surface"
+      density="editorial"
+    >
+      <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4">
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Dados principais</p>
+          <dl className="mt-4 grid gap-3 text-sm">
+            <ProfileInfo label="Cliente vinculado" value={property.owner_name ?? 'Nao informado'} />
+            <ProfileInfo label="Endereco" value={`${property.address}, ${property.city}`} />
+            <ProfileInfo label="Tipo" value={PROPERTY_TYPE_LABELS[property.type]} />
+            <ProfileInfo label="Area / Ano" value={`${property.area_m2 ? `${property.area_m2} m2` : 'Area nao informada'} / ${property.year_built ?? 'Ano nao informado'}`} />
+            <ProfileInfo label="Estrutura" value={property.structure ?? 'Nao informada'} />
+          </dl>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <section className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Documentos recentes</p>
+              <Link href={`/properties/${propertyId}/documents`} className="text-xs font-medium text-hl-accent hover:underline">Ver todos</Link>
+            </div>
+            {documentsError ? (
+              <p className="mt-4 rounded-[var(--hl-radius-md)] bg-bg-danger px-3 py-2 text-xs text-text-danger">Nao foi possivel carregar documentos.</p>
+            ) : documentsLoading ? (
+              <div className="mt-4 space-y-2">
+                {[...Array(3)].map((_, index) => <div key={index} className="hl-skeleton h-12 rounded-[var(--hl-radius-md)]" />)}
+              </div>
+            ) : recentDocuments.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {recentDocuments.map((document) => (
+                  <Link key={document.id} href={`/properties/${propertyId}/documents`} className="block rounded-[var(--hl-radius-md)] bg-hl-surface-soft px-3 py-2 transition-colors hover:bg-hl-surface-muted">
+                    <span className="block truncate text-sm font-medium text-hl-text">{document.title}</span>
+                    <span className="mt-0.5 block text-xs text-hl-text-muted">{formatDate(document.created_at)}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <PropertyEmptyState
+                icon={<FileText className="h-6 w-6" />}
+                title="Sem documentos"
+                description="Envie arquivos tecnicos para formar a memoria do imovel."
+                href={`/properties/${propertyId}/documents`}
+                actionLabel="Abrir documentos"
+              />
+            )}
+          </section>
+
+          <section className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Chamados e OS</p>
+              <Link href={`/properties/${propertyId}/services`} className="text-xs font-medium text-hl-accent hover:underline">Ver OS</Link>
+            </div>
+            {operationsLoading ? (
+              <div className="mt-4 space-y-2">
+                {[...Array(3)].map((_, index) => <div key={index} className="hl-skeleton h-12 rounded-[var(--hl-radius-md)]" />)}
+              </div>
+            ) : linkedOperations.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {linkedOperations.map((operation) => (
+                  <Link key={operation.id} href={operation.href} className="block rounded-[var(--hl-radius-md)] bg-hl-surface-soft px-3 py-2 transition-colors hover:bg-hl-surface-muted">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm font-medium text-hl-text">{operation.title}</span>
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.06em] text-hl-text-muted">{operation.badge}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-hl-text-muted">{operation.description}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <PropertyEmptyState
+                icon={<Wrench className="h-6 w-6" />}
+                title="Sem chamados ou OS"
+                description="Registre a primeira demanda para iniciar o historico operacional."
+                href={`/properties/${propertyId}/service-requests`}
+                actionLabel="Abrir chamados"
+              />
+            )}
+          </section>
+        </div>
+      </div>
+    </PageSection>
+  );
+}
+
+function ProfileInfo({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-[var(--hl-radius-md)] bg-hl-surface-soft px-3 py-2">
+      <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-hl-text-muted">{label}</dt>
+      <dd className="mt-1 min-w-0 break-words text-sm font-medium text-hl-text">{value}</dd>
+    </div>
+  );
+}
+
 // ─── system icon map ──────────────────────────────────────────────────────────
 
 const SYSTEM_ICONS: Record<string, ComponentType<{ className?: string }>> = {
@@ -112,6 +481,21 @@ const SYSTEM_ACCENT: Record<string, string> = {
 // ─── tab types ────────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'historico';
+
+type PropertyProfileTab = {
+  id: 'overview' | 'rooms' | 'requests' | 'services' | 'history' | 'photos' | 'documents' | 'warranties' | 'inventory' | 'dossier';
+  label: string;
+  href?: string;
+  panel?: Tab;
+};
+
+type ProfileMetric = {
+  label: string;
+  value: string | number;
+  helper: string;
+  icon: ComponentType<{ className?: string }>;
+  tone?: 'default' | 'accent' | 'success' | 'warning' | 'danger';
+};
 
 type SmartRecordState = 'empty' | 'pending' | 'ready' | 'error';
 
@@ -1168,6 +1552,19 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     error: propertySummaryError,
     isLoading: propertySummaryLoading,
   } = useSWR(['property-ingestion-summary', id], () => documentIngestionApi.propertySummary(id));
+  const {
+    data: documentsPreviewData,
+    error: documentsPreviewError,
+    isLoading: documentsPreviewLoading,
+  } = useSWR(['property-documents-preview', id], () => documentsApi.list(id));
+  const { data: serviceOrdersPreviewData, isLoading: serviceOrdersPreviewLoading } = useSWR(
+    ['property-services-preview', id],
+    () => servicesApi.list(id)
+  );
+  const { data: requestsPreviewData, isLoading: requestsPreviewLoading } = useSWR(
+    ['property-service-requests-preview', id],
+    () => serviceRequestsApi.list(id, { limit: 5 })
+  );
 
   if (propLoading) {
     return (
@@ -1230,6 +1627,38 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     expiringWarranties,
   });
   const currentMonthExpenses = d?.expenses.this_month ?? 0;
+  const documentsPreview = documentsPreviewData?.data ?? [];
+  const serviceOrdersPreview = serviceOrdersPreviewData?.data ?? [];
+  const requestsPreview = requestsPreviewData?.data ?? [];
+  const profileMetrics: ProfileMetric[] = [
+    {
+      label: 'Despesa mensal',
+      value: formatCurrency(currentMonthExpenses),
+      helper: 'Mes atual',
+      icon: BarChart3,
+    },
+    {
+      label: 'Chamados abertos',
+      value: openOrders + requestsPreview.filter((request) => request.status === 'OPEN').length,
+      helper: `${urgentOrders} urgentes`,
+      icon: Wrench,
+      tone: urgentOrders > 0 ? 'danger' : 'default',
+    },
+    {
+      label: 'OS concluidas',
+      value: d?.services.done ?? 0,
+      helper: 'Historico executado',
+      icon: CheckCircle2,
+      tone: 'success',
+    },
+    {
+      label: 'Itens inventario',
+      value: d?.inventory.total ?? 0,
+      helper: d && d.inventory.low_stock > 0 ? `${d.inventory.low_stock} em falta` : 'Tudo ok',
+      icon: Package,
+      tone: d && d.inventory.low_stock > 0 ? 'warning' : 'default',
+    },
+  ];
   const attentionItems = [
     ...(urgentOrders > 0
       ? [{ tone: 'danger' as const, icon: ShieldAlert, title: `${urgentOrders} OS urgente${urgentOrders > 1 ? 's' : ''}`, description: 'Priorize a triagem e a execução.' }]
@@ -1253,11 +1682,37 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     { id: 'historico', label: 'Histórico' },
   ];
 
+  const profileTabs: PropertyProfileTab[] = [
+    { id: 'overview', label: 'Visao geral', panel: 'overview' },
+    { id: 'rooms', label: 'Ambientes', href: `/properties/${id}/rooms` },
+    { id: 'requests', label: 'Chamados', href: `/properties/${id}/service-requests` },
+    { id: 'services', label: 'Ordens de servico', href: `/properties/${id}/services` },
+    { id: 'history', label: 'Historico', panel: 'historico' },
+    { id: 'photos', label: 'Fotos', href: `/properties/${id}/timeline` },
+    { id: 'documents', label: 'Documentos', href: `/properties/${id}/documents` },
+    { id: 'warranties', label: 'Garantias', href: `/properties/${id}/warranties` },
+    { id: 'inventory', label: 'Inventario', href: `/properties/${id}/inventory` },
+    { id: 'dossier', label: 'Dossie', href: `/properties/${id}/report` },
+  ];
+
   return (
     <div className="mx-auto min-h-full max-w-[1180px] space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
+      <PropertyProfileHeader
+        property={property}
+        propertyId={id}
+        healthScore={healthScore}
+        technicalHealth={technicalHealth}
+        openOrders={openOrders}
+        urgentOrders={urgentOrders}
+        memoriaEmDias={memoriaEmDias}
+        totalEvents={totalEvents}
+        onCreateOrder={() => setCreateOpen(true)}
+      />
+
+      <PropertyTabs tabs={profileTabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* ── EDITORIAL HERO ──────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface shadow-hl-subtle">
+      <div className="hidden">
 
         {/* Cover photo or gradient backdrop */}
         {property.cover_url ? (
@@ -1387,6 +1842,19 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       {/* ── TAB: VISÃO GERAL ─────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          <PropertyOverviewPanel
+            propertyId={id}
+            property={property}
+            documents={documentsPreview}
+            documentsLoading={documentsPreviewLoading}
+            documentsError={Boolean(documentsPreviewError)}
+            serviceOrders={serviceOrdersPreview}
+            requests={requestsPreview}
+            operationsLoading={serviceOrdersPreviewLoading || requestsPreviewLoading}
+          />
+
+          <PropertySummaryCards metrics={profileMetrics} />
+
           <TechnicalHealthPanel
             propertyId={id}
             healthScore={healthScore}
