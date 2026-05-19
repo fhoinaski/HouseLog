@@ -74,7 +74,7 @@ export function PremiumModulePlaceholder({
           {plannedItems.map((item) => (
             <div
               key={item}
-              className="rounded-[var(--radius-lg)] border border-border-subtle bg-bg-subtle px-3 py-3 text-sm leading-6 text-text-secondary"
+              className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface-muted px-3 py-3 text-sm leading-6 text-hl-text-muted"
             >
               {item}
             </div>

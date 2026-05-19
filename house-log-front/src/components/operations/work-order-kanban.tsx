@@ -23,6 +23,7 @@ import {
 } from '@/components/operations/kanban-model';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { PriorityBadge } from '@/components/ui/priority-badge';
 import { StatusBadge as BaseStatusBadge } from '@/components/ui/status-badge';
 import type { ServiceOrder } from '@/lib/api/_core';
 import type { ServiceRequestSummary } from '@/lib/api/service-requests';
@@ -30,7 +31,6 @@ import {
   cn,
   formatCurrency,
   formatDate,
-  SERVICE_PRIORITY_LABELS,
   SERVICE_STATUS_LABELS,
   SYSTEM_TYPE_LABELS,
 } from '@/lib/utils';
@@ -53,67 +53,71 @@ export function WorkOrderKanban({
   error,
 }: WorkOrderKanbanProps) {
   return (
-    <div className="space-y-5">
+    <div className="w-full min-w-0 space-y-5">
       {error && <KanbanErrorState message={error} />}
 
       {serviceRequests.length > 0 && (
-        <section className="space-y-3" aria-labelledby="service-requests-kanban-title">
+        <section className="w-full min-w-0 space-y-3" aria-labelledby="service-requests-kanban-title">
           <KanbanSectionHeader
             eyebrow="Chamados"
             title="Pipeline de chamados e orçamentos"
             description="Chamados ainda não são movimentados por Kanban; o estágio vem das propostas reais."
           />
-          <div className="grid gap-3 overflow-x-auto pb-2 lg:grid-cols-4">
-            {SERVICE_REQUEST_KANBAN_COLUMNS.map((column) => {
-              const items = groupByStatus(serviceRequests, SERVICE_REQUEST_KANBAN_COLUMNS, getServiceRequestStage)[column.id];
+          <div className="w-full min-w-0 overflow-x-auto pb-4">
+            <div className="flex w-max min-w-max gap-3">
+              {SERVICE_REQUEST_KANBAN_COLUMNS.map((column) => {
+                const items = groupByStatus(serviceRequests, SERVICE_REQUEST_KANBAN_COLUMNS, getServiceRequestStage)[column.id];
 
-              return (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  count={items.length}
-                  empty={<KanbanEmptyColumn label="Nenhum chamado neste estágio." />}
-                >
-                  {items.map((request) => (
-                    <TicketKanbanCard key={request.id} propertyId={propertyId} request={request} />
-                  ))}
-                </KanbanColumn>
-              );
-            })}
+                return (
+                  <KanbanColumn
+                    key={column.id}
+                    column={column}
+                    count={items.length}
+                    empty={<KanbanEmptyColumn label="Nenhum chamado neste estágio." />}
+                  >
+                    {items.map((request) => (
+                      <TicketKanbanCard key={request.id} propertyId={propertyId} request={request} />
+                    ))}
+                  </KanbanColumn>
+                );
+              })}
+            </div>
           </div>
         </section>
       )}
 
       {serviceOrders.length > 0 && (
-        <section className="space-y-3" aria-labelledby="service-orders-kanban-title">
+        <section className="w-full min-w-0 space-y-3" aria-labelledby="service-orders-kanban-title">
           <KanbanSectionHeader
             eyebrow="Ordens de serviço"
             title="Pipeline técnico de execução"
             description="A movimentação usa apenas transições existentes no domínio da OS."
           />
-          <div className="grid gap-3 overflow-x-auto pb-2 lg:grid-cols-5">
-            {SERVICE_ORDER_KANBAN_COLUMNS.map((column) => {
-              const items = groupByStatus(serviceOrders, SERVICE_ORDER_KANBAN_COLUMNS, (order) => order.status)[column.id];
+          <div className="w-full min-w-0 overflow-x-auto pb-4">
+            <div className="flex w-max min-w-max gap-3">
+              {SERVICE_ORDER_KANBAN_COLUMNS.map((column) => {
+                const items = groupByStatus(serviceOrders, SERVICE_ORDER_KANBAN_COLUMNS, (order) => order.status)[column.id];
 
-              return (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  count={items.length}
-                  empty={<KanbanEmptyColumn label="Nenhuma OS neste estágio." />}
-                >
-                  {items.map((order) => (
-                    <ServiceOrderKanbanCard
-                      key={order.id}
-                      propertyId={propertyId}
-                      order={order}
-                      moving={movingOrderId === order.id}
-                      onMove={onMoveServiceOrder}
-                    />
-                  ))}
-                </KanbanColumn>
-              );
-            })}
+                return (
+                  <KanbanColumn
+                    key={column.id}
+                    column={column}
+                    count={items.length}
+                    empty={<KanbanEmptyColumn label="Nenhuma OS neste estágio." />}
+                  >
+                    {items.map((order) => (
+                      <ServiceOrderKanbanCard
+                        key={order.id}
+                        propertyId={propertyId}
+                        order={order}
+                        moving={movingOrderId === order.id}
+                        onMove={onMoveServiceOrder}
+                      />
+                    ))}
+                  </KanbanColumn>
+                );
+              })}
+            </div>
           </div>
         </section>
       )}
@@ -155,7 +159,7 @@ export function KanbanColumn<TStatus extends string>({
   empty: ReactNode;
 }) {
   return (
-    <div className="min-w-[17rem] rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface-soft/70 p-3">
+    <div className="w-[280px] shrink-0 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface-soft/70 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-hl-text">{column.title}</h3>
@@ -183,7 +187,7 @@ export function ServiceOrderKanbanCard({
   const mainTransition = transitions[transitions.length - 1];
 
   return (
-    <article className="rounded-[var(--hl-radius-md)] border border-hl-border bg-hl-surface p-3 shadow-[var(--hl-shadow-soft)]">
+    <article className="w-full min-w-0 overflow-hidden rounded-[var(--hl-radius-md)] border border-hl-border bg-hl-surface p-3 shadow-[var(--hl-shadow-soft)]">
       <div className="flex items-start justify-between gap-2">
         <Link
           href={`/properties/${propertyId}/services/${order.id}`}
@@ -196,7 +200,7 @@ export function ServiceOrderKanbanCard({
             {order.room_name ?? 'Ambiente não informado'}
           </p>
         </Link>
-        <PriorityBadge priority={order.priority} />
+        <PriorityBadge priority={order.priority} className="shrink-0 text-xs" />
       </div>
 
       <div className="mt-3 space-y-2 text-xs text-hl-text-muted">
@@ -235,7 +239,7 @@ export function TicketKanbanCard({
   const stage = getServiceRequestStage(request);
 
   return (
-    <article className="rounded-[var(--hl-radius-md)] border border-hl-border bg-hl-surface p-3 shadow-[var(--hl-shadow-soft)]">
+    <article className="w-full min-w-0 overflow-hidden rounded-[var(--hl-radius-md)] border border-hl-border bg-hl-surface p-3 shadow-[var(--hl-shadow-soft)]">
       <div className="flex items-start justify-between gap-2">
         <Link
           href={`/properties/${propertyId}/service-requests/${request.id}`}
@@ -275,15 +279,6 @@ export function StatusBadge({ status, label }: { status: string; label: ReactNod
   return <BaseStatusBadge status={status} label={label} className="shrink-0" />;
 }
 
-export function PriorityBadge({ priority }: { priority: ServiceOrder['priority'] }) {
-  const tone = {
-    urgent: 'border-transparent bg-[color-mix(in_srgb,var(--hl-danger)_12%,var(--hl-surface))] text-hl-danger',
-    normal: 'border-transparent bg-[color-mix(in_srgb,var(--hl-info)_10%,var(--hl-surface))] text-hl-info',
-    preventive: 'border-transparent bg-[color-mix(in_srgb,var(--hl-success)_10%,var(--hl-surface))] text-hl-success',
-  }[priority];
-
-  return <Badge className={cn('shrink-0 text-xs', tone)}>{SERVICE_PRIORITY_LABELS[priority]}</Badge>;
-}
 
 export function KanbanEmptyColumn({ label, spacious }: { label: string; spacious?: boolean }) {
   return (

@@ -134,4 +134,37 @@ describe('buildDashboardModel', () => {
     expect(model.criticalPendings).toEqual([]);
     expect(model.activities).toEqual([]);
   });
+
+  it('excludes warranties and documents whose propertyId is not in the input set', () => {
+    const model = buildDashboardModel({
+      ...baseInput,
+      now: new Date('2026-05-18T12:00:00.000Z'),
+      warranties: [
+        {
+          id: 'foreign-warranty',
+          propertyId: 'foreign-property',
+          title: 'Garantia de outro tenant',
+          providerName: null,
+          status: 'active',
+          endDate: '2026-06-01',
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      documents: [
+        {
+          id: 'foreign-doc',
+          propertyId: 'foreign-property',
+          title: 'Documento de outro tenant',
+          type: 'warranty',
+          createdAt: '2026-05-01T00:00:00.000Z',
+          expiryDate: '2026-05-25',
+        },
+      ],
+    });
+
+    expect(model.metrics.expiringWarranties).toBe(0);
+    expect(model.metrics.documents).toBe(0);
+    expect(model.criticalPendings.map((i) => i.id)).not.toContain('warranty-foreign-warranty');
+    expect(model.criticalPendings.map((i) => i.id)).not.toContain('document-foreign-doc');
+  });
 });

@@ -175,7 +175,7 @@ export const pageSectionVariants = cva('space-y-3', {
     tone: {
       plain: '',
       surface: 'rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle',
-      strong: 'rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle',
+      strong:  'rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface-muted p-4',
     },
     density: {
       compact: 'space-y-2',
@@ -196,10 +196,10 @@ export const metricCardVariants = cva(
     variants: {
       tone: {
         default: '',
-        accent: 'bg-hl-surface',
-        success: 'bg-hl-surface',
-        warning: 'bg-hl-surface',
-        danger: 'bg-hl-surface',
+        accent:  'bg-[color-mix(in_srgb,var(--hl-primary)_6%,var(--hl-surface))] border-[color-mix(in_srgb,var(--hl-primary)_20%,var(--hl-border))]',
+        success: 'bg-[color-mix(in_srgb,var(--hl-success)_6%,var(--hl-surface))] border-[color-mix(in_srgb,var(--hl-success)_20%,var(--hl-border))]',
+        warning: 'bg-[color-mix(in_srgb,var(--hl-warning)_6%,var(--hl-surface))] border-[color-mix(in_srgb,var(--hl-warning)_20%,var(--hl-border))]',
+        danger:  'bg-[color-mix(in_srgb,var(--hl-danger)_6%,var(--hl-surface))]  border-[color-mix(in_srgb,var(--hl-danger)_20%,var(--hl-border))]',
         strong: 'bg-hl-surface-muted',
       },
       density: {
@@ -385,8 +385,8 @@ export const emptyStateVariants = cva(
     variants: {
       tone: {
         default: '',
-        subtle: 'bg-hl-surface',
-        strong: 'bg-hl-surface-muted',
+        subtle:  'border border-hl-border shadow-hl-subtle',
+        strong:  'bg-hl-surface-muted',
       },
       density: {
         compact: 'py-8',

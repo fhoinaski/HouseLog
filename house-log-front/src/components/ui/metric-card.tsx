@@ -36,11 +36,11 @@ export function MetricCard({
           </div>
         )}
         <div className="min-w-0">
-          <p className={cn('text-xl font-medium leading-tight text-text-primary', valueClassName)}>{value}</p>
-          <p className={cn('truncate text-xs text-text-secondary', labelClassName)}>{label}</p>
+          <p className={cn('text-xl font-medium leading-tight text-hl-text', valueClassName)}>{value}</p>
+          <p className={cn('truncate text-xs text-hl-text-muted', labelClassName)}>{label}</p>
         </div>
       </div>
-      {helper && <p className="mt-3 text-xs leading-5 text-text-tertiary">{helper}</p>}
+      {helper && <p className="mt-3 text-xs leading-5 text-hl-text-soft">{helper}</p>}
     </div>
   );
 }

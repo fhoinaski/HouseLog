@@ -128,7 +128,7 @@ function LoadingGrid() {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {[...Array(4)].map((_, index) => (
-        <div key={index} className="hl-skeleton h-40 rounded-[var(--radius-xl)]" />
+        <div key={index} className="hl-skeleton h-40 rounded-[var(--hl-radius-card)]" />
       ))}
     </div>
   );
@@ -860,9 +860,9 @@ function ChecklistPanel({ propertyId, handoverPackage }: { propertyId: string; h
       >
         {isLoading && (
           <div className="space-y-3">
-            <div className="hl-skeleton h-24 rounded-[var(--radius-xl)]" />
+            <div className="hl-skeleton h-24 rounded-[var(--hl-radius-card)]" />
             {[...Array(4)].map((_, index) => (
-              <div key={index} className="hl-skeleton h-20 rounded-[var(--radius-xl)]" />
+              <div key={index} className="hl-skeleton h-20 rounded-[var(--hl-radius-card)]" />
             ))}
           </div>
         )}

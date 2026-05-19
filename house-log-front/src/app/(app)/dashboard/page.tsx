@@ -151,7 +151,7 @@ const QUICK_ACTION_DIALOG_COPY: Record<QuickActionIntent, { title: string; descr
 function PropertyThumbnail({ name, photoUrl }: { name: string; photoUrl?: string }) {
   if (photoUrl) {
     return (
-      <div className="h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[var(--radius-md)]">
+      <div className="h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[var(--hl-radius-control)]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={photoUrl} alt={name} className="h-full w-full object-cover" />
       </div>
@@ -159,19 +159,19 @@ function PropertyThumbnail({ name, photoUrl }: { name: string; photoUrl?: string
   }
 
   return (
-    <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-bg-accent-subtle">
-      <span className="text-sm font-medium text-text-accent">{getInitials(name)}</span>
+    <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[var(--hl-radius-control)] bg-[color-mix(in_srgb,var(--hl-primary)_8%,var(--hl-surface))]">
+      <span className="text-sm font-medium text-hl-primary">{getInitials(name)}</span>
     </div>
   );
 }
 
 function PropertyRow({ property, action }: { property: PropertyListItem; action?: ReactNode }) {
   return (
-    <div className="flex min-h-[72px] items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3 text-left transition-colors hover:bg-[var(--field-bg-hover)]">
+    <div className="flex min-h-[72px] items-center gap-3 rounded-[var(--hl-radius-card)] bg-hl-surface px-3 py-3 text-left transition-colors hover:bg-hl-surface-muted">
       <PropertyThumbnail name={property.name} photoUrl={property.coverPhotoUrl ?? property.photoUrl} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text-primary">{property.name}</p>
-        <p className="mt-0.5 truncate text-xs text-text-secondary">{property.address}</p>
+        <p className="truncate text-sm font-medium text-hl-text">{property.name}</p>
+        <p className="mt-0.5 truncate text-xs text-hl-text-muted">{property.address}</p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {property.activeServicesCount > 0 && <Badge variant="requested">{property.activeServicesCount} OS aberta(s)</Badge>}
           {property.completedServicesCount > 0 && <Badge variant="completed">{property.completedServicesCount} OK</Badge>}
@@ -232,14 +232,14 @@ function QuickActions({ properties, isLoading }: { properties: PropertyListItem[
                 type="button"
                 disabled={isLoading}
                 onClick={() => handleAction(action)}
-                className="group flex min-h-28 flex-col justify-between rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-4 text-left transition-all duration-150 hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                className="group flex min-h-28 flex-col justify-between rounded-[var(--hl-radius-card)] bg-hl-surface p-4 text-left transition-all duration-150 hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-bg-accent-subtle text-text-accent">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[var(--hl-radius-control)] bg-[color-mix(in_srgb,var(--hl-primary)_8%,var(--hl-surface))] text-hl-primary">
                   <Icon className="h-5 w-5" strokeWidth={1.8} />
                 </span>
                 <span>
-                  <span className="block text-sm font-medium text-text-primary">{action.label}</span>
-                  <span className="mt-0.5 block text-xs leading-snug text-text-tertiary">{action.description}</span>
+                  <span className="block text-sm font-medium text-hl-text">{action.label}</span>
+                  <span className="mt-0.5 block text-xs leading-snug text-hl-text-soft">{action.description}</span>
                 </span>
               </button>
             );
@@ -262,15 +262,15 @@ function QuickActions({ properties, isLoading }: { properties: PropertyListItem[
                 <button key={property.id} type="button" onClick={() => chooseProperty(property.id)} className="block w-full">
                   <PropertyRow
                     property={property}
-                    action={<ChevronRight size={17} strokeWidth={1.8} className="shrink-0 text-text-disabled" />}
+                    action={<ChevronRight size={17} strokeWidth={1.8} className="shrink-0 text-hl-text-soft" />}
                   />
                 </button>
               ))}
             </div>
 
-            <div className="mt-4 rounded-[var(--radius-lg)] bg-[var(--surface-base)] p-3">
-              <p className="text-xs leading-5 text-text-secondary">
-                Nao encontrou o ativo certo? Cadastre um novo imovel antes de iniciar a acao operacional.
+            <div className="mt-4 rounded-[var(--hl-radius-card)] bg-hl-surface-muted p-3">
+              <p className="text-xs leading-5 text-hl-text-muted">
+                Não encontrou o ativo certo? Cadastre um novo imóvel antes de iniciar a ação operacional.
               </p>
               <Button asChild variant="ghost" size="sm" className="mt-2">
                 <Link href="/properties/new">Adicionar imovel</Link>
@@ -299,8 +299,8 @@ function PropertiesSection({ properties, isLoading }: { properties: PropertyList
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="flex items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3">
-              <div className="hl-skeleton h-[52px] w-[52px] shrink-0 rounded-[var(--radius-md)]" />
+            <div key={index} className="flex items-center gap-3 rounded-[var(--hl-radius-card)] bg-hl-surface px-3 py-3">
+              <div className="hl-skeleton h-[52px] w-[52px] shrink-0 rounded-[var(--hl-radius-control)]" />
               <div className="flex-1 space-y-2">
                 <div className="hl-skeleton h-4 w-3/4 rounded" />
                 <div className="hl-skeleton h-3 w-1/2 rounded" />
@@ -344,7 +344,7 @@ function AgendaSection({ schedule, isLoading }: { schedule: ScheduleItem[]; isLo
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="flex items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3">
+            <div key={index} className="flex items-center gap-3 rounded-[var(--hl-radius-card)] bg-hl-surface px-3 py-3">
               <div className="hl-skeleton h-9 w-1 shrink-0 rounded-sm" />
               <div className="flex-1 space-y-2">
                 <div className="hl-skeleton h-4 w-2/3 rounded" />
@@ -366,21 +366,21 @@ function AgendaSection({ schedule, isLoading }: { schedule: ScheduleItem[]; isLo
             <Link
               key={item.id ?? index}
               href={`/properties/${item.propertyId}/services/${item.serviceOrderId}`}
-              className="flex items-center gap-3 rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-3 transition-colors hover:bg-[var(--field-bg-hover)] focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
+              className="flex items-center gap-3 rounded-[var(--hl-radius-card)] bg-hl-surface px-3 py-3 transition-colors hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]"
             >
               <div
                 className={cn(
                   'h-9 w-1 shrink-0 rounded-sm',
-                  item.status === 'confirmed' || item.status === 'in_progress' ? 'bg-text-success' : 'bg-text-warning'
+                  item.status === 'confirmed' || item.status === 'in_progress' ? 'bg-hl-success' : 'bg-hl-warning'
                 )}
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-text-primary">{item.title}</p>
-                <p className="mt-0.5 text-xs text-text-secondary">
+                <p className="truncate text-sm font-medium text-hl-text">{item.title}</p>
+                <p className="mt-0.5 text-xs text-hl-text-muted">
                   {item.time} - {item.propertyName}
                 </p>
               </div>
-              <ChevronRight size={16} strokeWidth={1.8} className="shrink-0 text-text-disabled" />
+              <ChevronRight size={16} strokeWidth={1.8} className="shrink-0 text-hl-text-soft" />
             </Link>
           ))}
         </div>
@@ -637,55 +637,24 @@ export default function DashboardPage() {
     <PageContainer className="space-y-6">
       <PageHeader
         density="editorial"
-        eyebrow="HouseLog Calm OS"
+        eyebrow="Central operacional"
         title={`${getGreeting()} ${firstName}`}
-        description="Visao operacional dos imoveis, ordens de servico e decisoes pendentes em uma leitura rapida."
+        description="Visão operacional dos imóveis, ordens de serviço e decisões pendentes em uma leitura rápida."
         actions={
           <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface px-4 py-3 text-left shadow-hl-subtle">
             <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">{formatDashboardDate()}</p>
-            <p className="mt-1 text-sm text-hl-text-muted">{activeServices} operacoes abertas</p>
+            <p className="mt-1 text-sm text-hl-text-muted">{activeServices} operações abertas</p>
           </div>
         }
       />
 
       {hasDashboardError ? <DashboardErrorPanel onRetry={retryDashboard} /> : null}
 
-      <PageSection tone="surface" density="editorial">
-        <div className="grid gap-4 md:grid-cols-[1.4fr_1fr]">
-          <div className="hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-5 md:block">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Sistema operacional privado</p>
-            <h2 className="mt-3 text-2xl font-medium leading-tight text-hl-text md:text-3xl">
-              Clareza tecnica para cada decisao do imovel.
-            </h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-hl-text-muted">
-              Acompanhe portfolio, demandas abertas, agenda e aprovacoes sem sair do contexto real dos ativos.
-            </p>
-          </div>
-
-          <div className="rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface p-5">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">Lente operacional</p>
-            <p className="mt-2 text-2xl font-medium leading-tight text-hl-text">{activeServices} operacoes abertas</p>
-            <p className="mt-2 text-sm leading-6 text-hl-text-muted">
-              {dashboardModel.metrics.pendingBudgets > 0
-                ? `${dashboardModel.metrics.pendingBudgets} orcamento(s) precisam de analise.`
-                : 'Sem orcamentos pendentes para aprovacao.'}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Badge variant={todaySchedule.length > 0 ? 'approved' : 'normal'}>{todaySchedule.length} hoje</Badge>
-              <Badge variant={activeServices > 0 ? 'in_progress' : 'normal'}>{properties.length} imoveis</Badge>
-              <Badge variant={dashboardModel.metrics.expiringWarranties > 0 ? 'requested' : 'normal'}>
-                {dashboardModel.metrics.expiringWarranties} garantias
-              </Badge>
-            </div>
-          </div>
-        </div>
-      </PageSection>
-
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <MetricCard icon={Building2} label="Imoveis ativos" value={dashboardModel.metrics.activeProperties} helper="ativos monitorados" tone="accent" />
         <MetricCard icon={ClipboardCheck} label="Chamados abertos" value={activeServices} helper="demandas e OS em aberto" tone="warning" />
         <MetricCard icon={Wrench} label="OS em campo" value={dashboardModel.metrics.inProgressOrders} helper="execucao em andamento" tone="default" />
-        <MetricCard icon={ShieldCheck} label="Garantias vencendo" value={dashboardModel.metrics.expiringWarranties} helper="proximos 30 dias" tone="success" />
+        <MetricCard icon={ShieldCheck} label="Garantias vencendo" value={dashboardModel.metrics.expiringWarranties} helper="próximos 30 dias" tone={dashboardModel.metrics.expiringWarranties > 0 ? 'warning' : 'success'} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -33,13 +33,13 @@ export function ServiceOrderCard({
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {leadingIcon && (
-            <div className="service-order-leading-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-bg-accent-subtle text-text-accent">
+            <div className="service-order-leading-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--hl-radius-control)] bg-[color-mix(in_srgb,var(--hl-primary)_12%,var(--hl-surface))] text-hl-primary">
               {leadingIcon}
             </div>
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-text-primary">{title}</p>
-            {meta && <p className="mt-0.5 truncate text-xs text-text-secondary">{meta}</p>}
+            <p className="truncate text-sm font-medium text-hl-text">{title}</p>
+            {meta && <p className="mt-0.5 truncate text-xs text-hl-text-muted">{meta}</p>}
           </div>
         </div>
 
@@ -47,19 +47,19 @@ export function ServiceOrderCard({
           <div className="flex shrink-0 items-center gap-3">
             {(value || status) && (
               <div className="flex flex-col items-end gap-1">
-                {value && <span className="text-sm font-medium text-text-success">{value}</span>}
+                {value && <span className="text-sm font-medium text-hl-success">{value}</span>}
                 {status}
               </div>
             )}
             {actionIcon === undefined ? (
-              <ChevronRight className="h-4 w-4 text-text-tertiary transition-colors group-hover/service-order:text-text-secondary" />
+              <ChevronRight className="h-4 w-4 text-hl-text-soft transition-colors group-hover/service-order:text-hl-text-muted" />
             ) : (
               actionIcon
             )}
           </div>
         )}
       </div>
-      {footer && <div className="mt-3 text-xs text-text-tertiary">{footer}</div>}
+      {footer && <div className="mt-3 text-xs text-hl-text-soft">{footer}</div>}
     </div>
   );
 }

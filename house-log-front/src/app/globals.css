@@ -249,7 +249,7 @@
     --field-bg-hover:        var(--surface-strong);
     --field-text:            var(--input-text);
     --field-placeholder:     var(--input-placeholder);
-    --field-focus-ring:      var(--input-shadow-focus);
+    /* --field-focus-ring intentionally NOT redefined here — see unlayered :root below */
     --provider-accent:       var(--bg-accent);
     --provider-surface:      var(--surface-base);
     --provider-surface-strong: var(--surface-strong);
@@ -664,15 +664,9 @@ body {
     }
   }
 
-  /* mobile: top nav is hidden — only the device safe-area inset (notch/island) */
+  /* sidebar layout: no fixed top nav on any viewport — only device safe-area inset */
   .safe-top {
     padding-top: env(safe-area-inset-top);
-  }
-  /* desktop: account for the fixed top nav height */
-  @media (min-width: 768px) {
-    .safe-top {
-      padding-top: calc(var(--nav-height-top) + env(safe-area-inset-top));
-    }
   }
 
   .scroll-hidden {
@@ -986,6 +980,25 @@ body {
   --interactive-primary-bg:   var(--hl-accent);
   --interactive-primary-hover:#143d59;
   --interactive-primary-text: #ffffff;
+
+  /* ── Focus ring — canonical Calm OS value (unlayered wins over @layer base) ─
+   * Fixes: --field-focus-ring was overridden in @layer base :root by the legacy
+   * alias --field-focus-ring: var(--input-shadow-focus). Since unlayered :root
+   * has higher cascade priority than @layer, defining it here guarantees the
+   * correct Calm OS value regardless of tokens.css content.
+   * ──────────────────────────────────────────────────────────────────────────── */
+  --field-focus-ring:         0 0 0 3px color-mix(in srgb, var(--hl-accent) 15%, transparent);
+  --input-shadow-focus:       0 0 0 3px color-mix(in srgb, var(--hl-accent) 15%, transparent);
+
+  /* ── Surface outline — remap for --provider-divider ─────────────────────── */
+  --surface-outline:          var(--hl-border-soft);
+
+  /* ── Chip color tokens → Calm OS light values ──────────────────────────── */
+  --chip-bg:                  var(--hl-surface-muted);
+  --chip-text:                var(--hl-text);
+  --chip-border:              var(--hl-border-soft);
+  --chip-bg-active:           var(--hl-primary);
+  --chip-text-active:         #ffffff;
 }
 
 @layer base {

@@ -116,91 +116,93 @@ export default function ServicesPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="mx-auto max-w-[1040px] space-y-4 px-4 py-4 sm:px-5 sm:py-5">
-      <PageHeader
-        density="compact"
-        eyebrow="Centro operacional"
-        title="Servicos"
-        description="Ordens aprovadas, em execucao ou concluidas neste imovel."
-        actions={
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Nova OS
-          </Button>
-        }
-      />
+    <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
+      <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-4">
+        <PageHeader
+          density="compact"
+          eyebrow="Centro operacional"
+          title="Servicos"
+          description="Ordens aprovadas, em execucao ou concluidas neste imovel."
+          actions={
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Nova OS
+            </Button>
+          }
+        />
 
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        <MetricCard
-          icon={Clock}
-          label="Abertos"
-          value={operationalCounts.open}
-          helper="a iniciar"
-          tone="warning"
-          density="compact"
-        />
-        <MetricCard
-          icon={Wrench}
-          label="Em execucao"
-          value={operationalCounts.active}
-          helper="servicos ativos"
-          tone="default"
-          density="compact"
-        />
-        <MetricCard
-          icon={CheckCircle2}
-          label="Concluidos"
-          value={operationalCounts.done}
-          helper="finalizados"
-          tone="success"
-          density="compact"
-        />
-        <MetricCard
-          icon={ShieldCheck}
-          label="Garantia"
-          value={operationalCounts.warranty}
-          helper="com cobertura"
-          tone="accent"
-          density="compact"
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-2 tap-highlight-none">
-        {SERVICE_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className="hl-chip"
-            data-active={activeTab === tab.key ? 'true' : undefined}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-2 shadow-[var(--hl-shadow-soft)]">
-        <div className="px-2">
-          <p className="text-sm font-semibold text-hl-text">Visualização operacional</p>
-          <p className="text-xs text-hl-text-muted">Use Kanban para fluxo e Lista para leitura detalhada.</p>
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+          <MetricCard
+            icon={Clock}
+            label="Abertos"
+            value={operationalCounts.open}
+            helper="a iniciar"
+            tone="warning"
+            density="compact"
+          />
+          <MetricCard
+            icon={Wrench}
+            label="Em execucao"
+            value={operationalCounts.active}
+            helper="servicos ativos"
+            tone="default"
+            density="compact"
+          />
+          <MetricCard
+            icon={CheckCircle2}
+            label="Concluidos"
+            value={operationalCounts.done}
+            helper="finalizados"
+            tone="success"
+            density="compact"
+          />
+          <MetricCard
+            icon={ShieldCheck}
+            label="Garantia"
+            value={operationalCounts.warranty}
+            helper="com cobertura"
+            tone="accent"
+            density="compact"
+          />
         </div>
-        <div className="flex rounded-[var(--hl-radius-md)] bg-hl-surface-soft p-1" role="group" aria-label="Modo de visualização">
-          {(['kanban', 'list'] as const).map((mode) => (
+
+        <div className="flex flex-wrap gap-2 tap-highlight-none">
+          {SERVICE_TABS.map((tab) => (
             <button
-              key={mode}
+              key={tab.key}
               type="button"
-              className="rounded-[var(--hl-radius-sm)] px-3 py-2 text-sm font-medium text-hl-text-muted transition data-[active=true]:bg-hl-surface data-[active=true]:text-hl-text data-[active=true]:shadow-[var(--hl-shadow-soft)]"
-              data-active={viewMode === mode}
-              aria-pressed={viewMode === mode}
-              onClick={() => setViewMode(mode)}
+              className="hl-chip"
+              data-active={activeTab === tab.key ? 'true' : undefined}
+              onClick={() => setActiveTab(tab.key)}
             >
-              {mode === 'kanban' ? 'Kanban' : 'Lista'}
+              {tab.label}
             </button>
           ))}
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-2 shadow-[var(--hl-shadow-soft)]">
+          <div className="px-2">
+            <p className="text-sm font-semibold text-hl-text">Visualização operacional</p>
+            <p className="text-xs text-hl-text-muted">Use Kanban para fluxo e Lista para leitura detalhada.</p>
+          </div>
+          <div className="flex rounded-[var(--hl-radius-md)] bg-hl-surface-soft p-1" role="group" aria-label="Modo de visualização">
+            {(['kanban', 'list'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className="rounded-[var(--hl-radius-sm)] px-3 py-2 text-sm font-medium text-hl-text-muted transition data-[active=true]:bg-hl-surface data-[active=true]:text-hl-text data-[active=true]:shadow-[var(--hl-shadow-soft)]"
+                data-active={viewMode === mode}
+                aria-pressed={viewMode === mode}
+                onClick={() => setViewMode(mode)}
+              >
+                {mode === 'kanban' ? 'Kanban' : 'Lista'}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <PageSection tone="strong" density="default">
+      <PageSection tone="strong" density="default" className="w-full min-w-0 max-w-none">
         {error ? (
           <EmptyState
             icon={<AlertTriangle className="h-6 w-6" />}

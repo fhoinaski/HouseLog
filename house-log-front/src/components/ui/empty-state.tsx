@@ -22,15 +22,23 @@ export function EmptyState({
   ...props
 }: EmptyStateProps) {
   return (
-    <div className={cn('empty-state', emptyStateVariants({ tone, density, className }))} {...props}>
+    <div
+      className={cn('empty-state', emptyStateVariants({ tone, density, className }))}
+      role="status"
+      {...props}
+    >
       {icon && (
-        <div className="empty-state-icon mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--radius-lg)] bg-bg-accent-subtle text-text-accent">
+        <div className="empty-state-icon mb-4 flex h-12 w-12 items-center justify-center rounded-[var(--hl-radius-card)] bg-hl-surface-muted text-hl-primary">
           {icon}
         </div>
       )}
-      <h3 className="max-w-sm text-sm font-medium text-text-primary">{title}</h3>
-      {description && <p className="mt-1 max-w-md text-sm leading-6 text-text-secondary">{description}</p>}
-      {actions && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{actions}</div>}
+      <h3 className="max-w-sm text-sm font-medium text-hl-text">{title}</h3>
+      {description && (
+        <p className="mt-1 max-w-md text-sm leading-6 text-hl-text-muted">{description}</p>
+      )}
+      {actions && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{actions}</div>
+      )}
     </div>
   );
 }

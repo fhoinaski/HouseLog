@@ -9,16 +9,16 @@ import { cn } from '@/lib/utils';
 import type { DashboardActivityItem, DashboardPendingItem, DashboardPipelineStage } from './dashboard-model';
 
 const pendingToneClass: Record<DashboardPendingItem['severity'], string> = {
-  danger: 'border-l-text-danger bg-bg-danger',
-  warning: 'border-l-text-warning bg-bg-warning',
-  info: 'border-l-text-info bg-bg-info',
+  danger: 'border-l-hl-danger  bg-[color-mix(in_srgb,var(--hl-danger)_8%,var(--hl-surface))]',
+  warning: 'border-l-hl-warning bg-[color-mix(in_srgb,var(--hl-warning)_8%,var(--hl-surface))]',
+  info:    'border-l-hl-info    bg-[color-mix(in_srgb,var(--hl-info)_8%,var(--hl-surface))]',
 };
 
 const activityToneClass: Record<DashboardActivityItem['tone'], string> = {
   default: 'bg-hl-surface-soft text-hl-text-muted',
-  accent: 'bg-hl-accent-muted text-hl-accent',
-  success: 'bg-bg-success text-text-success',
-  warning: 'bg-bg-warning text-text-warning',
+  accent:  'bg-hl-accent-muted text-hl-accent',
+  success: 'bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))] text-hl-success',
+  warning: 'bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))] text-hl-warning',
 };
 
 export function PipelineSummary({
@@ -175,10 +175,10 @@ export function RecentActivityList({
 
 export function DashboardErrorPanel({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="rounded-[var(--hl-radius-card)] border border-hl-border-strong bg-bg-danger px-4 py-3 text-sm text-hl-text">
+    <div className="rounded-[var(--hl-radius-card)] border border-[color-mix(in_srgb,var(--hl-danger)_25%,var(--hl-border))] bg-[color-mix(in_srgb,var(--hl-danger)_8%,var(--hl-surface))] px-4 py-3 text-sm text-hl-text">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-text-danger" strokeWidth={1.8} />
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-hl-danger" strokeWidth={1.8} />
           <div>
             <p className="font-medium">Nao foi possivel carregar toda a central operacional.</p>
             <p className="mt-1 text-xs leading-5 text-hl-text-muted">
