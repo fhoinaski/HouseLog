@@ -27,6 +27,8 @@ Helpers de autorizacao compartilhados devem receber `tenantId` e `tenantRole` do
 
 Auth, tenant authorization, credentials, documents/media, service orders, bids/messages, audit log, deploy config, public links, handover, uploads e offline sync.
 
+- `routes/auth.ts`: register/login/mfa/me retornam `activeTenantId` no payload de sessao; owner/admin sem tenant ativo recebem bootstrap server-side de tenant padrao quando aplicavel.
+
 Search usa `src/lib/search-field-policy.ts` para controlar campos permitidos e proibidos por entidade. A rota nao deve adicionar campo pesquisavel fora dessa policy.
 
 Public links usam `src/lib/public-link-rate-limit.ts` para rate limit granular em KV por `flow + action + IP + tokenHashPrefix`. O helper recebe hash de token, nunca token plaintext. Acoes publicas de mutacao usam limite menor que leitura.

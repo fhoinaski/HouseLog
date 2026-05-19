@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { authApi, setToken, clearToken, isMfaChallenge, type User } from './api';
+import { clearRefreshCooldown } from './api/core/session';
 import { clearLegacyAuthStorage } from './api/core/storage';
 import { clearOfflineStateForLogout } from './auth-logout-cleanup';
 
@@ -68,6 +69,7 @@ function getTokenExpiry(token: string): number | null {
 
 function storeSession(access: string, user?: User) {
   setToken(access); // in-memory only — never touches localStorage
+  clearRefreshCooldown();
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 

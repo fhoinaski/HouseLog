@@ -1,6 +1,6 @@
 import { createMiddleware } from 'hono/factory';
 import { and, eq } from 'drizzle-orm';
-import { verifyJwt } from '../lib/jwt';
+import { verifyJwt, resolveJwtSecret } from '../lib/jwt';
 import { getDb } from '../db/client';
 import { tenantMembers, tenants } from '../db/schema';
 import {
@@ -21,11 +21,7 @@ export const authMiddleware = createMiddleware<{
   }
 
   const token = authHeader.slice(7);
-  const secret = c.env.JWT_SECRET;
-
-  if (!secret) {
-    return c.json({ error: 'Configuração de segurança inválida', code: 'SERVER_ERROR' }, 500);
-  }
+  const secret = resolveJwtSecret({ JWT_SECRET: c.env.JWT_SECRET, ENVIRONMENT: c.env.ENVIRONMENT });
 
   try {
     const payload = await verifyJwt(token, secret);

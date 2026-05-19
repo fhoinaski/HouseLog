@@ -2,7 +2,7 @@
 
 import { type ComponentType, type ReactNode, use, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 import {
   Activity,
@@ -38,7 +38,9 @@ import {
   Upload,
 } from 'lucide-react';
 import { PageSection } from '@/components/layout/page-section';
+import { PremiumPropertyDashboard } from '@/components/properties/premium-property-dashboard';
 import { PropertySummaryCard } from '@/components/properties/property-summary-card';
+import { PROPERTY_DETAIL_TABS, normalizePropertyDetailTab, type PropertyDetailTabId } from '@/components/properties/property-tabs-model';
 import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { ActionTile } from '@/components/ui/action-tile';
 import { Badge } from '@/components/ui/badge';
@@ -49,23 +51,29 @@ import {
   apiFetcher,
   documentIngestionApi,
   documentsApi,
+  inventoryApi,
   maintenanceApi,
   propertiesApi,
+  roomsApi,
   serviceRequestsApi,
   servicesApi,
+  warrantiesApi,
   type Document,
   type MaintenanceSchedule,
+  type InventoryItem,
   type Property,
   type PropertyDashboard,
   type PropertyDocumentIngestionSummary,
+  type Room,
   type ServiceRequestSummary,
   type ServiceOrder,
+  type Warranty,
 } from '@/lib/api';
 import {
   buildPropertyTechnicalHealthView,
   type PropertyTechnicalHealthView,
 } from '@/lib/property-technical-health';
-import { cn, formatCurrency, formatDate, PROPERTY_TYPE_LABELS, SYSTEM_TYPE_LABELS, scoreBg, scoreColor } from '@/lib/utils';
+import { cn, formatCurrency, formatDate, INVENTORY_CATEGORY_LABELS, PROPERTY_TYPE_LABELS, ROOM_TYPE_LABELS, SYSTEM_TYPE_LABELS, scoreBg, scoreColor } from '@/lib/utils';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -229,35 +237,32 @@ function ProfileStat({
 }
 
 function PropertyTabs({
+  propertyId,
   tabs,
   activeTab,
-  onTabChange,
 }: {
+  propertyId: string;
   tabs: PropertyProfileTab[];
   activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
 }) {
   return (
     <nav aria-label="Perfil 360 do imovel" className="w-full min-w-0 overflow-x-auto rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface px-2 py-2 shadow-hl-subtle">
       <div className="flex w-max min-w-max gap-2">
         {tabs.map((tab) => {
-          const isActive = tab.panel === activeTab;
+          const isActive = tab.id === activeTab;
           const className = cn(
             'inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-[var(--hl-radius-md)] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
             isActive ? 'bg-hl-accent-muted text-hl-accent' : 'text-hl-text-muted hover:bg-hl-surface-soft hover:text-hl-text'
           );
 
-          const panel = tab.panel;
-          if (panel) {
-            return (
-              <button key={tab.id} type="button" onClick={() => onTabChange(panel)} aria-current={isActive ? 'page' : undefined} className={className}>
-                {tab.label}
-              </button>
-            );
-          }
-
           return (
-            <Link key={tab.id} href={tab.href ?? '#'} className={className}>
+            <Link
+              key={tab.id}
+              href={`/properties/${propertyId}?tab=${tab.id}`}
+              scroll={false}
+              aria-current={isActive ? 'page' : undefined}
+              className={className}
+            >
               {tab.label}
             </Link>
           );
@@ -445,6 +450,418 @@ function PropertyOverviewPanel({
   );
 }
 
+function PropertyRoomsPanel({ propertyId, rooms, isLoading }: { propertyId: string; rooms: Room[]; isLoading: boolean }) {
+  const byFloor = rooms.reduce<Record<number, Room[]>>((acc, room) => {
+    const floor = room.floor;
+    (acc[floor] ??= []).push(room);
+    return acc;
+  }, {});
+  const floors = Object.keys(byFloor)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  return (
+    <PageSection title="Ambientes" description="Leitura dos cômodos vinculados ao imóvel." tone="surface" density="editorial">
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[...Array(4)].map((_, index) => <div key={index} className="hl-skeleton h-24 rounded-[var(--hl-radius-lg)]" />)}
+        </div>
+      ) : rooms.length > 0 ? (
+        <div className="space-y-4">
+          {floors.map((floor) => (
+            <section key={floor} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-hl-text-muted">
+                  {floor === 0 ? 'Térreo' : floor === -1 ? 'Subsolo' : `${floor}º andar`}
+                </p>
+                <span className="flex-1 border-t border-hl-border" aria-hidden="true" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {byFloor[floor]?.map((room) => (
+                  <article key={room.id} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
+                    <p className="text-sm font-medium text-hl-text">{room.name}</p>
+                    <p className="mt-1 text-xs leading-5 text-hl-text-muted">{ROOM_TYPE_LABELS[room.type] ?? room.type}</p>
+                    <div className="mt-3 flex items-center justify-between gap-2 text-xs text-hl-text-muted">
+                      <span>Andar {room.floor}</span>
+                      <span>{room.area_m2 ? `${room.area_m2} m²` : 'Área não informada'}</span>
+                    </div>
+                    {room.notes ? <p className="mt-3 line-clamp-2 text-xs leading-5 text-hl-text-muted">{room.notes}</p> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+          <div className="flex justify-end">
+            <Button variant="outline" asChild>
+              <Link href={`/properties/${propertyId}/rooms`}>Abrir ambientes</Link>
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <PropertyEmptyState
+          icon={<Home className="h-6 w-6" />}
+          title="Nenhum ambiente cadastrado"
+          description="Cadastre cômodos para organizar inventário, manutenção e contexto operacional do imóvel."
+          href={`/properties/${propertyId}/rooms`}
+          actionLabel="Abrir ambientes"
+        />
+      )}
+    </PageSection>
+  );
+}
+
+function PropertyTicketsPanel({
+  propertyId,
+  requests,
+  isLoading,
+}: {
+  propertyId: string;
+  requests: ServiceRequestSummary[];
+  isLoading: boolean;
+}) {
+  const openCount = requests.filter((request) => request.status === 'OPEN').length;
+  const withProposals = requests.filter((request) => request.proposals_count > 0).length;
+
+  return (
+    <PageSection title="Chamados" description="Solicitações de orçamento e seu estágio comercial." tone="surface" density="editorial">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard icon={FileText} label="Abertos" value={openCount} helper="solicitações em andamento" tone="warning" density="compact" />
+        <MetricCard icon={ClipboardCheck} label="Com propostas" value={withProposals} helper="já receberam retorno" tone="accent" density="compact" />
+        <MetricCard icon={CheckCircle2} label="Total" value={requests.length} helper="registros carregados" tone="default" density="compact" />
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {[...Array(2)].map((_, index) => <div key={index} className="hl-skeleton h-36 rounded-[var(--hl-radius-lg)]" />)}
+        </div>
+      ) : requests.length > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {requests.slice(0, 6).map((request) => (
+            <article key={request.id} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-hl-text">{request.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-hl-text-muted">
+                    {request.status === 'OPEN' ? 'Chamado aberto' : 'Chamado encerrado'} · {request.proposals_count} proposta(s)
+                  </p>
+                </div>
+                <Badge variant={request.accepted_proposals_count > 0 ? 'success' : request.proposals_count > 0 ? 'warning' : 'normal'}>
+                  {request.accepted_proposals_count > 0 ? 'Aprovado' : request.proposals_count > 0 ? 'Em análise' : 'Aguardando'}
+                </Badge>
+              </div>
+              <p className="mt-3 line-clamp-2 text-xs leading-5 text-hl-text-muted">{request.description ?? 'Sem descrição detalhada.'}</p>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="text-xs text-hl-text-muted">Atualizado em {formatDate(request.updated_at ?? request.created_at)}</span>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/properties/${propertyId}/service-requests/${request.id}`}>Abrir</Link>
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <PropertyEmptyState
+          icon={<FileText className="h-6 w-6" />}
+          title="Nenhum chamado encontrado"
+          description="Os chamados e propostas desse imóvel aparecem aqui quando houver solicitações carregadas."
+          href={`/properties/${propertyId}/service-requests`}
+          actionLabel="Abrir chamados"
+        />
+      )}
+    </PageSection>
+  );
+}
+
+function PropertyServicesPanel({
+  propertyId,
+  orders,
+  isLoading,
+}: {
+  propertyId: string;
+  orders: ServiceOrder[];
+  isLoading: boolean;
+}) {
+  const openCount = orders.filter((order) => order.status === 'requested' || order.status === 'approved').length;
+  const activeCount = orders.filter((order) => order.status === 'in_progress').length;
+  const closedCount = orders.filter((order) => order.status === 'completed' || order.status === 'verified').length;
+
+  return (
+    <PageSection title="Ordens de serviço" description="Execução técnica e histórico operacional do imóvel." tone="surface" density="editorial">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard icon={Wrench} label="Abertas" value={openCount} helper="aguardando execução" tone="warning" density="compact" />
+        <MetricCard icon={RefreshCw} label="Em execução" value={activeCount} helper="trabalho em campo" tone="accent" density="compact" />
+        <MetricCard icon={CheckCircle2} label="Concluídas" value={closedCount} helper="histórico fechado" tone="success" density="compact" />
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {[...Array(2)].map((_, index) => <div key={index} className="hl-skeleton h-36 rounded-[var(--hl-radius-lg)]" />)}
+        </div>
+      ) : orders.length > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {orders.slice(0, 6).map((order) => (
+            <article key={order.id} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-hl-text">{order.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-hl-text-muted">
+                    {SYSTEM_TYPE_LABELS[order.system_type] ?? order.system_type} · {order.assigned_to_name ?? 'Sem prestador definido'}
+                  </p>
+                </div>
+                <Badge variant={order.status === 'in_progress' ? 'warning' : order.status === 'completed' || order.status === 'verified' ? 'success' : 'normal'}>
+                  {order.status === 'in_progress' ? 'Em execução' : order.status === 'completed' || order.status === 'verified' ? 'Concluída' : 'Aberta'}
+                </Badge>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 text-xs text-hl-text-muted">
+                <span>{formatDate(order.created_at)}</span>
+                {order.cost != null ? <span>{formatCurrency(order.cost)}</span> : <span>Sem custo</span>}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/properties/${propertyId}/services/${order.id}`}>Abrir OS</Link>
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <PropertyEmptyState
+          icon={<Wrench className="h-6 w-6" />}
+          title="Nenhuma OS carregada"
+          description="As ordens de serviço aparecem aqui quando existirem registros carregados para este imóvel."
+          href={`/properties/${propertyId}/services`}
+          actionLabel="Abrir serviços"
+        />
+      )}
+    </PageSection>
+  );
+}
+
+function countPhotos(raw: string | null): number {
+  if (!raw) return 0;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string').length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function PropertyPhotosPanel({ propertyId, orders, isLoading }: { propertyId: string; orders: ServiceOrder[]; isLoading: boolean }) {
+  const photoOrders = orders.filter((order) => countPhotos(order.before_photos) > 0 || countPhotos(order.after_photos) > 0);
+
+  return (
+    <PageSection title="Fotos" description="Evidências visuais registradas nas OS concluídas ou em execução." tone="surface" density="editorial">
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, index) => <div key={index} className="hl-skeleton h-36 rounded-[var(--hl-radius-lg)]" />)}
+        </div>
+      ) : photoOrders.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {photoOrders.slice(0, 6).map((order) => (
+            <article key={order.id} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
+              <p className="truncate text-sm font-medium text-hl-text">{order.title}</p>
+              <p className="mt-1 text-xs text-hl-text-muted">
+                {countPhotos(order.before_photos)} antes · {countPhotos(order.after_photos)} depois
+              </p>
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/properties/${propertyId}/services/${order.id}`}>Ver OS</Link>
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <PropertyEmptyState
+          icon={<FileText className="h-6 w-6" />}
+          title="Sem evidências visuais"
+          description="As fotos de antes e depois aparecem aqui quando houver OS com mídia registrada."
+          href={`/properties/${propertyId}/timeline`}
+          actionLabel="Abrir histórico"
+        />
+      )}
+    </PageSection>
+  );
+}
+
+function PropertyDocumentsPanel({
+  propertyId,
+  documents,
+  documentsLoading,
+  documentsError,
+  ingestionStatus,
+}: {
+  propertyId: string;
+  documents: Document[];
+  documentsLoading: boolean;
+  documentsError: boolean;
+  ingestionStatus: IngestionSummaryStatus;
+}) {
+  return (
+    <div className="space-y-6">
+      <SmartRecordWidget propertyId={propertyId} {...ingestionStatus} />
+      <TechnicalPendingPanel propertyId={propertyId} {...ingestionStatus} />
+      <SmartRecordEmptyPrompt propertyId={propertyId} summary={ingestionStatus.summary} isLoading={ingestionStatus.isLoading} />
+
+      <PageSection title="Documentos" description="Arquivos recentes e leitura documental do imóvel." tone="surface" density="editorial">
+        {documentsError ? (
+          <EmptyState
+            icon={<AlertTriangle className="h-6 w-6" />}
+            title="Não foi possível carregar documentos"
+            description="Tente novamente para revisar o acervo documental deste imóvel."
+            tone="subtle"
+            density="spacious"
+            actions={
+              <Button variant="outline" asChild>
+                <Link href={`/properties/${propertyId}/documents`}>Abrir documentos</Link>
+              </Button>
+            }
+          />
+        ) : documentsLoading ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[...Array(3)].map((_, index) => <div key={index} className="hl-skeleton h-24 rounded-[var(--hl-radius-lg)]" />)}
+          </div>
+        ) : documents.length > 0 ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-2">
+              {documents.slice(0, 6).map((document) => (
+                <Link key={document.id} href={`/properties/${propertyId}/documents`} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle transition-colors hover:bg-hl-surface-muted">
+                  <p className="truncate text-sm font-medium text-hl-text">{document.title}</p>
+                  <p className="mt-1 text-xs text-hl-text-muted">{formatDate(document.created_at)}</p>
+                </Link>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" asChild>
+                <Link href={`/properties/${propertyId}/documents`}>Abrir documentos</Link>
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <PropertyEmptyState
+            icon={<FileText className="h-6 w-6" />}
+            title="Sem documentos"
+            description="Envie arquivos técnicos para formar a memória documental do imóvel."
+            href={`/properties/${propertyId}/documents`}
+            actionLabel="Abrir documentos"
+          />
+        )}
+      </PageSection>
+    </div>
+  );
+}
+
+function PropertyWarrantiesPanel({
+  propertyId,
+  warranties,
+  expiring,
+  isLoading,
+}: {
+  propertyId: string;
+  warranties: Warranty[];
+  expiring: PropertyDashboard['warranties_expiring'];
+  isLoading: boolean;
+}) {
+  const activeCount = warranties.filter((warranty) => warranty.status === 'active').length;
+
+  return (
+    <PageSection title="Garantias" description="Cobertura técnica, vigências e vencimentos próximos." tone="surface" density="editorial">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard icon={ShieldCheck} label="Ativas" value={activeCount} helper="cobertura vigente" tone="success" density="compact" />
+        <MetricCard icon={ShieldAlert} label="A vencer" value={expiring.length} helper="próximos 30 dias" tone="warning" density="compact" />
+        <MetricCard icon={CheckCircle2} label="Total" value={warranties.length} helper="carregadas no painel" tone="default" density="compact" />
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, index) => <div key={index} className="hl-skeleton h-24 rounded-[var(--hl-radius-lg)]" />)}
+        </div>
+      ) : warranties.length > 0 ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {warranties.slice(0, 6).map((warranty) => (
+            <article key={warranty.id} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
+              <p className="truncate text-sm font-medium text-hl-text">{warranty.title}</p>
+              <p className="mt-1 text-xs text-hl-text-muted">
+                {warranty.provider_name ?? 'Fornecedor não informado'} · vence em {formatDate(warranty.end_date)}
+              </p>
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/properties/${propertyId}/warranties`}>Abrir garantias</Link>
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <PropertyEmptyState
+          icon={<ShieldCheck className="h-6 w-6" />}
+          title="Nenhuma garantia carregada"
+          description="As garantias aparecem aqui quando houver registros vinculados ao imóvel."
+          href={`/properties/${propertyId}/warranties`}
+          actionLabel="Abrir garantias"
+        />
+      )}
+    </PageSection>
+  );
+}
+
+function PropertyInventoryPanel({
+  propertyId,
+  items,
+  isLoading,
+}: {
+  propertyId: string;
+  items: InventoryItem[];
+  isLoading: boolean;
+}) {
+  const lowStockCount = items.filter((item) => item.quantity <= item.reserve_qty).length;
+
+  return (
+    <PageSection title="Inventário" description="Itens e materiais associados ao imóvel." tone="surface" density="editorial">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MetricCard icon={Package} label="Itens" value={items.length} helper="carregados no painel" tone="default" density="compact" />
+        <MetricCard icon={AlertTriangle} label="Baixo estoque" value={lowStockCount} helper="abaixo do mínimo" tone="warning" density="compact" />
+        <MetricCard icon={ShieldCheck} label="Com garantia" value={items.filter((item) => Boolean(item.warranty_until)).length} helper="vigência registrada" tone="success" density="compact" />
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, index) => <div key={index} className="hl-skeleton h-28 rounded-[var(--hl-radius-lg)]" />)}
+        </div>
+      ) : items.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.slice(0, 6).map((item) => (
+            <article key={item.id} className="rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-4 shadow-hl-subtle">
+              <p className="truncate text-sm font-medium text-hl-text">{item.name}</p>
+              <p className="mt-1 text-xs text-hl-text-muted">
+                {item.quantity} {item.unit} · {INVENTORY_CATEGORY_LABELS[item.category] ?? item.category}
+              </p>
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/properties/${propertyId}/inventory`}>Abrir inventário</Link>
+                </Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <PropertyEmptyState
+          icon={<Package className="h-6 w-6" />}
+          title="Nenhum item de inventário"
+          description="Os itens do inventário aparecem aqui quando já estiverem cadastrados para o imóvel."
+          href={`/properties/${propertyId}/inventory`}
+          actionLabel="Abrir inventário"
+        />
+      )}
+    </PageSection>
+  );
+}
+
+function PropertyHandoverPanel({ propertyId }: { propertyId: string }) {
+  return <PremiumPropertyDashboard propertyId={propertyId} />;
+}
+
 function ProfileInfo({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-[var(--hl-radius-md)] bg-hl-surface-soft px-3 py-2">
@@ -480,13 +897,11 @@ const SYSTEM_ACCENT: Record<string, string> = {
 
 // ─── tab types ────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'historico';
+type Tab = PropertyDetailTabId;
 
 type PropertyProfileTab = {
-  id: 'overview' | 'rooms' | 'requests' | 'services' | 'history' | 'photos' | 'documents' | 'warranties' | 'inventory' | 'dossier';
+  id: PropertyDetailTabId;
   label: string;
-  href?: string;
-  panel?: Tab;
 };
 
 type ProfileMetric = {
@@ -1541,11 +1956,13 @@ function TimelinePreview({ propertyId }: { propertyId: string }) {
 export default function PropertyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const activeTab = normalizePropertyDetailTab(searchParams.get('tab'));
 
   const { data: propData, isLoading: propLoading } = useSWR(['property', id], () => propertiesApi.get(id));
   const { data: dash, isLoading: dashLoading } = useSWR(['dashboard', id], () => propertiesApi.dashboard(id));
+  const { data: roomsPreviewData, isLoading: roomsPreviewLoading } = useSWR(['property-rooms-preview', id], () => roomsApi.list(id));
   const { data: maintenanceData, isLoading: maintenanceLoading } = useSWR(['maintenance', id], () => maintenanceApi.list(id));
   const {
     data: propertySummaryData,
@@ -1557,6 +1974,14 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
     error: documentsPreviewError,
     isLoading: documentsPreviewLoading,
   } = useSWR(['property-documents-preview', id], () => documentsApi.list(id));
+  const { data: inventoryPreviewData, isLoading: inventoryPreviewLoading } = useSWR(
+    ['property-inventory-preview', id],
+    () => inventoryApi.list(id)
+  );
+  const { data: warrantiesPreviewData, isLoading: warrantiesPreviewLoading } = useSWR(
+    ['property-warranties-preview', id],
+    () => warrantiesApi.list(id)
+  );
   const { data: serviceOrdersPreviewData, isLoading: serviceOrdersPreviewLoading } = useSWR(
     ['property-services-preview', id],
     () => servicesApi.list(id)
@@ -1677,23 +2102,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       : []),
   ];
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview',  label: 'Visão geral' },
-    { id: 'historico', label: 'Histórico' },
-  ];
-
-  const profileTabs: PropertyProfileTab[] = [
-    { id: 'overview', label: 'Visao geral', panel: 'overview' },
-    { id: 'rooms', label: 'Ambientes', href: `/properties/${id}/rooms` },
-    { id: 'requests', label: 'Chamados', href: `/properties/${id}/service-requests` },
-    { id: 'services', label: 'Ordens de servico', href: `/properties/${id}/services` },
-    { id: 'history', label: 'Historico', panel: 'historico' },
-    { id: 'photos', label: 'Fotos', href: `/properties/${id}/timeline` },
-    { id: 'documents', label: 'Documentos', href: `/properties/${id}/documents` },
-    { id: 'warranties', label: 'Garantias', href: `/properties/${id}/warranties` },
-    { id: 'inventory', label: 'Inventario', href: `/properties/${id}/inventory` },
-    { id: 'dossier', label: 'Dossie', href: `/properties/${id}/report` },
-  ];
+  const profileTabs: PropertyProfileTab[] = PROPERTY_DETAIL_TABS;
 
   return (
     <div className="mx-auto min-h-full w-full min-w-0 max-w-[1180px] space-y-5 bg-hl-bg px-4 py-4 pb-[calc(var(--nav-height-bottom)+1.5rem+env(safe-area-inset-bottom))] text-hl-text sm:px-5 sm:py-5 md:pb-6 lg:px-8">
@@ -1709,7 +2118,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
         onCreateOrder={() => setCreateOpen(true)}
       />
 
-      <PropertyTabs tabs={profileTabs} activeTab={activeTab} onTabChange={setActiveTab} />
+      <PropertyTabs propertyId={id} tabs={profileTabs} activeTab={activeTab} />
 
       {/* ── EDITORIAL HERO ──────────────────────────────────────────────── */}
       <div className="hidden">
@@ -1819,25 +2228,8 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="-mx-4 mt-5 flex border-t border-border-subtle px-0 sm:-mx-6 md:-mx-7">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'relative min-h-11 px-4 py-3 text-sm font-medium transition-colors focus-visible:outline-none',
-                  activeTab === tab.id
-                    ? 'text-text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[var(--border-focus)]'
-                    : 'text-text-tertiary hover:text-text-secondary'
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
           </div>
         </div>
-      </div>
 
       {/* ── TAB: VISÃO GERAL ─────────────────────────────────────────────── */}
       {activeTab === 'overview' && (
@@ -2107,8 +2499,53 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
+      {activeTab === 'rooms' && (
+        <PropertyRoomsPanel propertyId={id} rooms={roomsPreviewData?.rooms ?? []} isLoading={roomsPreviewLoading} />
+      )}
+
+      {activeTab === 'tickets' && (
+        <PropertyTicketsPanel propertyId={id} requests={requestsPreview} isLoading={requestsPreviewLoading} />
+      )}
+
+      {activeTab === 'services' && (
+        <PropertyServicesPanel propertyId={id} orders={serviceOrdersPreview} isLoading={serviceOrdersPreviewLoading} />
+      )}
+
+      {activeTab === 'photos' && (
+        <PropertyPhotosPanel propertyId={id} orders={serviceOrdersPreview} isLoading={serviceOrdersPreviewLoading} />
+      )}
+
+      {activeTab === 'documents' && (
+        <PropertyDocumentsPanel
+          propertyId={id}
+          documents={documentsPreview}
+          documentsLoading={documentsPreviewLoading}
+          documentsError={Boolean(documentsPreviewError)}
+          ingestionStatus={ingestionStatus}
+        />
+      )}
+
+      {activeTab === 'warranties' && (
+        <PropertyWarrantiesPanel
+          propertyId={id}
+          warranties={warrantiesPreviewData?.warranties ?? []}
+          expiring={expiringWarranties}
+          isLoading={warrantiesPreviewLoading}
+        />
+      )}
+
+      {activeTab === 'inventory' && (
+        <PropertyInventoryPanel
+          propertyId={id}
+          items={inventoryPreviewData?.data ?? []}
+          isLoading={inventoryPreviewLoading}
+        />
+      )}
+
+      {activeTab === 'handover' && <PropertyHandoverPanel propertyId={id} />}
+
       {/* ── TAB: HISTÓRICO ───────────────────────────────────────────────── */}
-      {activeTab === 'historico' && (
+      {activeTab === 'history' && (
         <div className="mx-auto max-w-2xl space-y-8 pb-8">
           <div className="space-y-4">
             <p className="text-sm text-text-tertiary">

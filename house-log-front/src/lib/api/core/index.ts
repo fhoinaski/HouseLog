@@ -1,7 +1,7 @@
 export { BASE } from './config';
 export { getToken, setToken, clearToken } from './storage';
 export { normalizeMediaUrl, normalizeApiMediaUrls } from './media';
-export { qs, request, apiFetcher, getApiErrorMessage } from './http';
+export { clearRefreshCooldown, qs, request, apiFetcher, getApiErrorMessage } from './http';
 export type {
   User,
   AuthPairResponse,

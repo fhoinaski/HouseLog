@@ -22,6 +22,7 @@ vi.mock('../lib/jwt', () => ({
   hashPassword: vi.fn(async (pw: string) => `hashed:${pw}`),
   verifyPassword: vi.fn(async () => true),
   verifyJwt: vi.fn(async () => ({ sub: 'user-1', email: 'test@example.com', role: 'owner' })),
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
 }));
 
 vi.mock('../lib/refresh', () => ({
@@ -83,6 +84,7 @@ function buildUserRow() {
     email: 'test@example.com',
     name: 'Test User',
     role: 'owner' as const,
+    active_tenant_id: 'tenant-1',
     providerCategories: [],
     passwordHash: 'hashed:password',
     phone: null,
@@ -108,38 +110,56 @@ function buildUserRow() {
   };
 }
 
-function createLoginDb() {
-  const userRow = buildUserRow();
+function createMockDb(selectResponses: unknown[][]) {
+  const insertCalls: Array<Record<string, unknown>> = [];
+  const updateCalls: Array<Record<string, unknown>> = [];
+  let selectIndex = 0;
+
   const query = {
-    where: vi.fn(() => ({ limit: vi.fn(async () => [userRow]) })),
+    where: vi.fn(() => query),
+    innerJoin: vi.fn(() => query),
+    leftJoin: vi.fn(() => query),
+    orderBy: vi.fn(() => query),
+    limit: vi.fn(async () => selectResponses[selectIndex++] ?? []),
   };
-  const selectFrom = vi.fn(() => query);
-  const mfaQuery = {
-    where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
-  };
-  return {
-    select: vi.fn()
-      .mockReturnValueOnce({ from: vi.fn(() => query) })   // users query
-      .mockReturnValue({ from: vi.fn(() => mfaQuery) }),    // mfa query
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
+
+  const db = {
+    select: vi.fn(() => ({ from: vi.fn(() => query) })),
+    insert: vi.fn(() => ({
+      values: vi.fn(async (values: Record<string, unknown>) => {
+        insertCalls.push(values);
+      }),
     })),
-    insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
-    _selectFrom: selectFrom,
+    update: vi.fn(() => ({
+      set: vi.fn((values: Record<string, unknown>) => ({
+        where: vi.fn(async () => {
+          updateCalls.push(values);
+        }),
+      })),
+    })),
+    transaction: vi.fn(async (callback: (tx: typeof db) => Promise<unknown>) => callback(db)),
+    __insertCalls: insertCalls,
+    __updateCalls: updateCalls,
   };
+
+  return db;
+}
+
+function createLoginDb() {
+  return createMockDb([
+    [buildUserRow()],
+    [{ activeTenantId: 'tenant-1' }],
+    [{ tenantId: 'tenant-1' }],
+    [],
+  ]);
 }
 
 function createRegisterDb() {
-  const emptyQuery = {
-    where: vi.fn(() => ({ limit: vi.fn(async () => []) })),
-  };
-  return {
-    select: vi.fn(() => ({ from: vi.fn(() => emptyQuery) })),
-    insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
-    })),
-  };
+  return createMockDb([
+    [],
+    [{ activeTenantId: null }],
+    [],
+  ]);
 }
 
 function createRefreshDb() {
@@ -160,19 +180,16 @@ function createRefreshDb() {
 function createMeDb() {
   const userRow = {
     ...buildUserRow(),
+    active_tenant_id: null,
     created_at: new Date().toISOString(),
     last_login: null,
     mfa_enabled: 0,
   };
-  return {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        leftJoin: vi.fn(() => ({
-          where: vi.fn(() => ({ limit: vi.fn(async () => [userRow]) })),
-        })),
-      })),
-    })),
-  };
+  return createMockDb([
+    [userRow],
+    [{ activeTenantId: null }],
+    [],
+  ]);
 }
 
 beforeEach(() => {
@@ -254,7 +271,8 @@ describe('POST /auth/login — cookie HttpOnly', () => {
 
 describe('POST /auth/register — cookie HttpOnly', () => {
   it('seta cookie houselog_refresh sem retornar refresh_token no body', async () => {
-    vi.mocked(getDb).mockReturnValue(createRegisterDb() as never);
+    const db = createRegisterDb();
+    vi.mocked(getDb).mockReturnValue(db as never);
 
     const req = new Request('http://localhost/register', {
       method: 'POST',
@@ -275,6 +293,52 @@ describe('POST /auth/register — cookie HttpOnly', () => {
     expect(setCookieHeader).toContain('houselog_refresh=');
     expect(setCookieHeader.toLowerCase()).toContain('httponly');
     expect(body).not.toHaveProperty('refresh_token');
+    expect(body).toHaveProperty('user.active_tenant_id');
+    expect(body).toHaveProperty('user.activeTenantId');
+    expect((db.__insertCalls as Array<Record<string, unknown>>).length).toBe(3);
+    expect((db.__updateCalls as Array<Record<string, unknown>>).some((values) => 'activeTenantId' in values)).toBe(true);
+  });
+});
+
+describe('POST /auth/login — tenant ativo', () => {
+  it('mantém active_tenant_id quando já existe um tenant ativo', async () => {
+    vi.mocked(getDb).mockReturnValue(createLoginDb() as never);
+
+    const req = new Request('http://localhost/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'test@example.com', password: 'password123' }),
+    });
+
+    const res = await auth.fetch(req, buildEnv());
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty('user.active_tenant_id', 'tenant-1');
+    expect(body).toHaveProperty('user.activeTenantId', 'tenant-1');
+  });
+});
+
+describe('GET /auth/me — bootstrap de tenant', () => {
+  it('cria o tenant ativo ao carregar a sessão de um owner sem tenant', async () => {
+    const db = createMeDb();
+    vi.mocked(getDb).mockReturnValue(db as never);
+
+    const req = new Request('http://localhost/me', {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer access-token-mock',
+      },
+    });
+
+    const res = await auth.fetch(req, buildEnv());
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body).toHaveProperty('user.active_tenant_id');
+    expect(body).toHaveProperty('user.activeTenantId');
+    expect((db.__insertCalls as Array<Record<string, unknown>>).length).toBe(2);
+    expect((db.__updateCalls as Array<Record<string, unknown>>).some((values) => 'activeTenantId' in values)).toBe(true);
   });
 });
 

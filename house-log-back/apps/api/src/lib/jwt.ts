@@ -9,6 +9,7 @@ export type JwtPayload = {
 };
 
 const ALG = 'HS256';
+const DEV_JWT_SECRET = 'houselog-dev-jwt-secret';
 
 function base64url(data: ArrayBuffer): string {
   return btoa(String.fromCharCode(...new Uint8Array(data)))
@@ -34,6 +35,15 @@ async function getKey(secret: string): Promise<CryptoKey> {
     false,
     ['sign', 'verify']
   );
+}
+
+export function resolveJwtSecret(input: { JWT_SECRET?: string; ENVIRONMENT?: string }): string {
+  const secret = input.JWT_SECRET?.trim();
+  if (secret) return secret;
+  if (input.ENVIRONMENT === 'production') {
+    throw new Error('JWT_SECRET must be configured in production');
+  }
+  return DEV_JWT_SECRET;
 }
 
 export async function signJwt(

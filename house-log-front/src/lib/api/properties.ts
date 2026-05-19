@@ -1,5 +1,6 @@
 import { qs, request } from './_core';
 import type { CursorPage, Property, PropertyDashboard, PropertyProvider } from './_core';
+import type { PropertyCreateInput, PropertyUpdateInput } from '@houselog/contracts';
 
 export const propertiesApi = {
   list: (params?: { limit?: number; cursor?: string; search?: string }) =>
@@ -7,10 +8,10 @@ export const propertiesApi = {
 
   get: (id: string) => request<{ property: Property }>(`/properties/${id}`),
 
-  create: (data: Partial<Property>) =>
+  create: (data: PropertyCreateInput) =>
     request<{ property: Property }>('/properties', { method: 'POST', body: JSON.stringify(data) }),
 
-  update: (id: string, data: Partial<Property>) =>
+  update: (id: string, data: PropertyUpdateInput) =>
     request<{ property: Property }>(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   delete: (id: string) => request<{ success: boolean }>(`/properties/${id}`, { method: 'DELETE' }),

@@ -26,6 +26,21 @@ export function handleUnauthorized(path: string): void {
 // A single in-flight promise shared across all concurrent callers —
 // prevents multiple simultaneous /auth/refresh requests during token expiry.
 let _refreshPromise: Promise<string | null> | null = null;
+let _refreshCooldownUntil = 0;
+
+const REFRESH_FAILURE_COOLDOWN_MS = 10_000;
+
+export function clearRefreshCooldown(): void {
+  _refreshCooldownUntil = 0;
+}
+
+function markRefreshFailureCooldown(): void {
+  _refreshCooldownUntil = Date.now() + REFRESH_FAILURE_COOLDOWN_MS;
+}
+
+function isRefreshCoolingDown(): boolean {
+  return Date.now() < _refreshCooldownUntil;
+}
 
 /**
  * Calls POST /auth/refresh using the HttpOnly cookie and stores the new access token
@@ -34,6 +49,7 @@ let _refreshPromise: Promise<string | null> | null = null;
  * Returns the new access token, or null if the session could not be renewed.
  */
 export async function refreshAccessToken(): Promise<string | null> {
+  if (isRefreshCoolingDown()) return null;
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async (): Promise<string | null> => {
@@ -42,12 +58,18 @@ export async function refreshAccessToken(): Promise<string | null> {
         method: 'POST',
         credentials: 'include',
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        markRefreshFailureCooldown();
+        return null;
+      }
       const body = (await res.json()) as { access_token?: string };
       const token = body.access_token ?? null;
       if (token) setToken(token);
+      if (token) clearRefreshCooldown();
+      else markRefreshFailureCooldown();
       return token;
     } catch {
+      markRefreshFailureCooldown();
       return null;
     } finally {
       _refreshPromise = null;

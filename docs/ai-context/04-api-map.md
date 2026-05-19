@@ -26,6 +26,8 @@ O frontend tambem aceita formato legado preservado pelo helper antigo.
 ## Familias de rotas
 
 - Auth: `/api/v1/auth/*`.
+  - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/mfa/challenge` e `GET /api/v1/auth/me` retornam `active_tenant_id`/`activeTenantId` no payload de sessao.
+  - Primeiro acesso de `owner`/`admin` sem tenant ativo pode bootstrapar um tenant padrao no servidor; nao aceitar `tenantId` do cliente.
 - Properties: `/api/v1/properties/*`.
 - Services: `/api/v1/services/*` e rotas dentro de property.
 - Provider: `/api/v1/provider/*`.

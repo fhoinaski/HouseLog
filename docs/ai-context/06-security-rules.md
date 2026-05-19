@@ -15,6 +15,7 @@
 ## Auth e sessao
 
 Refresh token fica em cookie `HttpOnly` no escopo `/api/v1/auth`. Access token fica em memoria no frontend. Nao usar `localStorage` ou `sessionStorage` para tokens.
+`activeTenantId` da sessao e sempre derivado do servidor; nunca aceitar tenant do cliente. Bootstrap de tenant para primeiro acesso ocorre apenas em `auth/register`, `auth/login`, `auth/mfa/challenge` e `auth/me`.
 
 ## R2 e midia
 

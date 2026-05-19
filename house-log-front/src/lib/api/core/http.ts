@@ -43,6 +43,8 @@ async function parseErrorBody(res: Response): Promise<RawBody> {
   return res.json().catch(() => ({ error: 'Erro desconhecido', code: 'UNKNOWN' })) as Promise<RawBody>;
 }
 
+export { clearRefreshCooldown } from './session';
+
 export function qs(params?: Record<string, string | number | undefined>): string {
   if (!params) return '';
   const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== '');

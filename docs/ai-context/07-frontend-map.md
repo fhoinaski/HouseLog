@@ -10,6 +10,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - `src/components`: componentes de UI, layout, propriedades, servicos, documentos, handover e provider.
 - `src/lib/api`: clients modulares da API.
 - `src/lib/api/core`: HTTP, sessao, storage, tipos e configuracao.
+- `src/lib/api/core/session.ts`: faz bootstrap silencioso da sessao via `POST /auth/refresh`, deduplica refresh concorrente e aplica um cooldown curto apos falha para evitar bursts de chamadas 401/refresh em navegacoes protegidas.
 - `src/lib`: auth context, offline queues, sync e utilitarios.
 
 ## Rotas principais
@@ -18,6 +19,8 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - Auth: `src/app/(auth)`.
 - Propriedades: `src/app/(app)/properties`.
 - Contexto de imovel: `src/app/(app)/properties/[id]`.
+- `src/app/(app)/properties/[id]/page.tsx`: pagina unica do perfil do imovel com hero fixo, metricas e tabs internas via `?tab=...` (`overview`, `rooms`, `tickets`, `services`, `history`, `photos`, `documents`, `warranties`, `inventory`, `handover`). As rotas filhas continuam como deep links para detalhes especificos.
+- `src/components/properties/property-tabs-model.ts`: normaliza a tab ativa do detalhe do imovel e garante fallback para `overview` quando o query param e invalido.
 - Provider: `src/app/provider`.
 - Publicas tokenizadas: `src/app/audit/[token]`, `src/app/share/service/[token]`, `src/app/invite/[token]`, `src/app/handover/[token]`.
 
@@ -82,8 +85,8 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - `src/components/operations/work-order-kanban.tsx` + `kanban-model.ts`: Kanban Calm OS para chamados (`service_requests`) e OS. Chamados usam estagio derivado de `OPEN/CLOSED` + contagem de propostas; OS usa somente status reais `requested`, `approved`, `in_progress`, `completed`, `verified`. A mudanca de status de OS chama `servicesApi.updateStatus(propertyId, orderId, status)` sem `tenantId` no client e preserva erro sem optimistic update.
 - `src/app/(app)/properties/[id]/services/page.tsx` e `service-requests/page.tsx`: mantem lista atual e adiciona toggle Lista/Kanban. `services/page.tsx` agora separa cabeçalho/metricas em faixa estreita e deixa a area operacional full-width para o Kanban nao ser cortado; continua permitindo avancar OS por transicoes existentes do backend. `service-requests/page.tsx` usa Kanban visual/read-only para orcamentos.
 - `src/app/(app)/properties/page.tsx`: lista de imoveis migrada para Calm OS — action chips de acesso rapido (inventario, servicos, financeiro, documentos) usam tokens `--hl-*` com `color-mix` para tons; LoadingState/EmptyState/ErrorState usam `Card variant="section"` com surface/border/shadow Calm OS; header, secao "Ativos cadastrados" e search bar migrados.
-- `src/app/(app)/properties/new/page.tsx`: tela de criacao de imovel totalmente migrada — fundo `bg-hl-bg`, header `border-hl-border bg-hl-surface`, cover upload, todos os blocos de campo (`bg-hl-surface focus-within:bg-hl-surface-muted`), labels com `text-hl-text-muted`, error banner com `color-mix` danger.
-- `src/app/(app)/properties/[id]/page.tsx`: detalhe do imovel recebeu base Calm OS no wrapper e hero, reduzindo overlay escuro sem alterar abas/modulos. Atualizado em 2026-05-18 para Perfil 360 do Imovel: novo header CRM tecnico, tabs 360 hibridas apontando para modulos existentes, painel de visao geral com cliente/endereco/dados-base, documentos recentes e chamados/OS vinculados via APIs por `propertyId`. Em 2026-05-18 ganhou grids mobile-first nas faixas de resumos e modulos, tabs com scroll horizontal proprio e padding-bottom para evitar sobreposicao da bottom nav no celular. Nao envia `tenantId`.
+- `src/app/(app)/properties/new/page.tsx`: tela de criacao de imovel usa layout CRM tecnico premium em Calm OS com `PageContainer`, header com CTA desktop, grid principal + aside, secoes Identificacao/Localizacao/Contexto tecnico, upload de capa apenas como pre-visualizacao e resumo "O que sera criado". Payload e montado por `src/components/properties/property-create-form-model.ts` e `propertiesApi.create` usa `PropertyCreateInput`, sem `tenantId`.
+- `src/app/(app)/properties/page.tsx`: listagem de imoveis virou carteira tecnica CRM-style com header premium, resumo operacional, busca por nome/endereco/cliente, filtros locais por saude e card mais informativo com cliente/responsavel, area, ano, estrutura e CTA principal para detalhe. Mantem navegação por `propertyId` e nao inventa dados fora do contrato.
 - `src/app/(app)/schedule/page.tsx`: tela de agenda migrada — blocos info/empty/property-links usam `bg-hl-surface`/`bg-hl-surface-muted`, focus ring Calm OS, icone warning com `color-mix`.
 - `src/app/(app)/financial/page.tsx`: tela financeira migrada com mesmo padrao do schedule, icone success com `color-mix`.
 - `src/app/(app)/settings/page.tsx`: avatar usa `bg-hl-surface-muted text-hl-primary`, erros usam `text-hl-danger`, shield usa `text-hl-success`, toggle usa `peer-checked:bg-hl-primary`.

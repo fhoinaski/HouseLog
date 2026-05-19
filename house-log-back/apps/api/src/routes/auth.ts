@@ -2,13 +2,13 @@ import { Hono } from 'hono';
 import { setCookie, getCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { signJwt, hashPassword, verifyPassword } from '../lib/jwt';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { signJwt, hashPassword, verifyPassword, resolveJwtSecret } from '../lib/jwt';
 import { writeAuditLog } from '../lib/audit';
 import { ok, err } from '../lib/response';
 import { authMiddleware } from '../middleware/auth';
 import { getDb } from '../db/client';
-import { mfaChallenges, userMfa, users } from '../db/schema';
+import { mfaChallenges, tenantMembers, tenants, userMfa, users } from '../db/schema';
 import {
   issueRefreshToken,
   rotateRefreshToken,
@@ -30,6 +30,16 @@ const REFRESH_COOKIE = 'houselog_refresh';
 const REFRESH_COOKIE_PATH = '/api/v1/auth';
 
 type AuthContext = Context<{ Bindings: Bindings; Variables: Variables }>;
+
+type SessionDb = Pick<ReturnType<typeof getDb>, 'select' | 'insert' | 'update'>;
+
+type SessionUserRow = {
+  id: string;
+  email: string;
+  name: string;
+  role: User['role'];
+  activeTenantId: string | null;
+};
 
 function setRefreshCookie(c: AuthContext, token: string, ttlDays: number): void {
   const isProduction = c.env.ENVIRONMENT === 'production';
@@ -127,9 +137,13 @@ async function issueTokenPair(
   c: AuthContext,
   user: Pick<User, 'id' | 'email' | 'role'>
 ): Promise<{ access: string }> {
+  const jwtSecret = resolveJwtSecret({
+    JWT_SECRET: c.env.JWT_SECRET,
+    ENVIRONMENT: c.env.ENVIRONMENT,
+  });
   const access = await signJwt(
     { sub: user.id, email: user.email, role: user.role },
-    c.env.JWT_SECRET,
+    jwtSecret,
     ACCESS_TOKEN_TTL
   );
   const ttlDays = Number(c.env.REFRESH_TOKEN_TTL_DAYS ?? 30);
@@ -140,6 +154,84 @@ async function issueTokenPair(
   });
   setRefreshCookie(c, refresh.token, ttlDays);
   return { access };
+}
+
+async function ensureActiveTenantContext(db: SessionDb, user: SessionUserRow): Promise<string | null> {
+  const [currentUser] = await db
+    .select({ activeTenantId: users.activeTenantId })
+    .from(users)
+    .where(and(eq(users.id, user.id), isNull(users.deletedAt)))
+    .limit(1) as Array<{ activeTenantId: string | null }>;
+
+  if (!currentUser) return null;
+
+  if (currentUser.activeTenantId) {
+    const [activeMembership] = await db
+      .select({ tenantId: tenantMembers.tenantId })
+      .from(tenantMembers)
+      .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+      .where(and(
+        eq(tenantMembers.userId, user.id),
+        eq(tenantMembers.tenantId, currentUser.activeTenantId),
+        eq(tenantMembers.status, 'active'),
+        eq(tenants.status, 'active')
+      ))
+      .limit(1) as Array<{ tenantId: string }>;
+
+    if (activeMembership) {
+      return currentUser.activeTenantId;
+    }
+  }
+
+  const [membership] = await db
+    .select({ tenantId: tenantMembers.tenantId })
+    .from(tenantMembers)
+    .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
+    .where(and(
+      eq(tenantMembers.userId, user.id),
+      eq(tenantMembers.status, 'active'),
+      eq(tenants.status, 'active')
+    ))
+    .orderBy(asc(tenantMembers.createdAt))
+    .limit(1) as Array<{ tenantId: string }>;
+
+  if (membership) {
+    await db
+      .update(users)
+      .set({ activeTenantId: membership.tenantId, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, user.id));
+    return membership.tenantId;
+  }
+
+  if (user.role !== 'owner' && user.role !== 'admin') {
+    return null;
+  }
+
+  const tenantId = nanoid();
+  const tenantName = user.name.trim() ? `Espaço de ${user.name.trim()}` : 'Meu espaço HouseLog';
+  const tenantSlug = `tenant-${user.id}`;
+
+  await db.insert(tenants).values({
+    id: tenantId,
+    name: tenantName,
+    slug: tenantSlug,
+    ownerId: user.id,
+  });
+
+  await db.insert(tenantMembers).values({
+    id: nanoid(),
+    tenantId,
+    userId: user.id,
+    role: 'owner',
+    status: 'active',
+  });
+
+  await db
+    .update(users)
+    .set({ activeTenantId: tenantId, updatedAt: new Date().toISOString() })
+    .where(eq(users.id, user.id));
+
+  return tenantId;
 }
 
 // ── POST /auth/register ─────────────────────────────────────────────────────
@@ -197,6 +289,10 @@ auth.post('/register', async (c) => {
     providerPortfolioCases,
   });
 
+  const activeTenantId = role === 'owner' || role === 'admin'
+    ? await ensureActiveTenantContext(db, { id, email, name, role, activeTenantId: null })
+    : null;
+
   const pair = await issueTokenPair(c, { id, email, role });
 
   await writeAuditLog(c.env.DB, {
@@ -219,6 +315,8 @@ auth.post('/register', async (c) => {
         email,
         name,
         role,
+        active_tenant_id: activeTenantId,
+        activeTenantId,
         phone: phone ?? null,
         whatsapp: parsed.data.whatsapp ?? null,
         service_area: parsed.data.service_area ?? null,
@@ -270,10 +368,11 @@ auth.post('/login', async (c) => {
       provider_education: users.providerEducation,
       provider_portfolio_cases: users.providerPortfolioCases,
       avatar_url: users.avatarUrl,
+      active_tenant_id: users.activeTenantId,
     })
     .from(users)
     .where(and(eq(users.email, email), isNull(users.deletedAt)))
-    .limit(1) as User[];
+    .limit(1) as Array<Pick<User, 'id' | 'email' | 'name' | 'role' | 'provider_categories' | 'password_hash' | 'phone' | 'whatsapp' | 'service_area' | 'pix_key' | 'pix_key_type' | 'provider_bio' | 'provider_courses' | 'provider_specializations' | 'provider_portfolio' | 'provider_education' | 'provider_portfolio_cases' | 'avatar_url'> & { active_tenant_id: string | null }>;
 
   if (!user) {
     await writeAuditLog(c.env.DB, {
@@ -303,9 +402,6 @@ auth.post('/login', async (c) => {
   // Migra legado SHA-256 → PBKDF2 na primeira autenticação bem-sucedida
   const isLegacy = !user.password_hash.startsWith('pbkdf2:');
   const newHash = isLegacy ? await hashPassword(password) : user.password_hash;
-  const updateFields = isLegacy
-    ? `password_hash = ?, last_login = datetime('now')`
-    : `last_login = datetime('now')`;
   await db
     .update(users)
     .set(
@@ -314,6 +410,14 @@ auth.post('/login', async (c) => {
         : { lastLogin: new Date().toISOString() }
     )
     .where(eq(users.id, user.id));
+
+  const activeTenantId = await ensureActiveTenantContext(db, {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    activeTenantId: user.active_tenant_id,
+  });
 
   // MFA habilitado? Emite challenge em vez do token final.
   const [mfa] = await db
@@ -352,6 +456,8 @@ auth.post('/login', async (c) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      active_tenant_id: activeTenantId,
+      activeTenantId,
       provider_categories: user.provider_categories ?? [],
       phone: user.phone,
       whatsapp: user.whatsapp,
@@ -369,7 +475,6 @@ auth.post('/login', async (c) => {
   });
 });
 
-// ── POST /auth/mfa/challenge ────────────────────────────────────────────────
 // Segunda etapa do login quando MFA está habilitado.
 auth.post('/mfa/challenge', async (c) => {
   const body = await c.req.json().catch(() => null);
@@ -377,8 +482,8 @@ auth.post('/mfa/challenge', async (c) => {
   if (!parsed.success) return err(c, 'Dados inválidos', 'VALIDATION_ERROR', 422);
 
   const { challenge_token, code } = parsed.data;
-
   const db = getDb(c.env.DB);
+
   const [challenge] = await db
     .select({
       id: mfaChallenges.id,
@@ -458,11 +563,20 @@ auth.post('/mfa/challenge', async (c) => {
       provider_education: users.providerEducation,
       provider_portfolio_cases: users.providerPortfolioCases,
       avatar_url: users.avatarUrl,
+      active_tenant_id: users.activeTenantId,
     })
     .from(users)
     .where(and(eq(users.id, challenge.user_id), isNull(users.deletedAt)))
-    .limit(1) as Array<Pick<User, 'id' | 'email' | 'name' | 'role' | 'provider_categories' | 'phone' | 'whatsapp' | 'service_area' | 'pix_key' | 'pix_key_type' | 'provider_bio' | 'provider_courses' | 'provider_specializations' | 'provider_portfolio' | 'provider_education' | 'provider_portfolio_cases' | 'avatar_url'>>;
+    .limit(1) as Array<Pick<User, 'id' | 'email' | 'name' | 'role' | 'provider_categories' | 'phone' | 'whatsapp' | 'service_area' | 'pix_key' | 'pix_key_type' | 'provider_bio' | 'provider_courses' | 'provider_specializations' | 'provider_portfolio' | 'provider_education' | 'provider_portfolio_cases' | 'avatar_url'> & { active_tenant_id: string | null }>;
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
+
+  const activeTenantId = await ensureActiveTenantContext(db, {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    activeTenantId: user.active_tenant_id,
+  });
 
   const pair = await issueTokenPair(c, user);
 
@@ -479,7 +593,11 @@ auth.post('/mfa/challenge', async (c) => {
     token: pair.access,
     access_token: pair.access,
     expires_in: ACCESS_TOKEN_TTL,
-    user,
+    user: {
+      ...user,
+      active_tenant_id: activeTenantId,
+      activeTenantId,
+    },
   });
 });
 
@@ -509,7 +627,7 @@ auth.post('/refresh', async (c) => {
 
   const access = await signJwt(
     { sub: user.id, email: user.email, role: user.role },
-    c.env.JWT_SECRET,
+    resolveJwtSecret({ JWT_SECRET: c.env.JWT_SECRET, ENVIRONMENT: c.env.ENVIRONMENT }),
     ACCESS_TOKEN_TTL
   );
 
@@ -583,16 +701,32 @@ auth.get('/me', authMiddleware, async (c) => {
       avatar_url: users.avatarUrl,
       created_at: users.createdAt,
       last_login: users.lastLogin,
+      active_tenant_id: users.activeTenantId,
       mfa_enabled: sql<number>`CASE WHEN ${userMfa.enabledAt} IS NOT NULL THEN 1 ELSE 0 END`,
     })
     .from(users)
     .leftJoin(userMfa, eq(userMfa.userId, users.id))
     .where(and(eq(users.id, userId), isNull(users.deletedAt)))
-    .limit(1) as Array<Omit<User, 'password_hash' | 'deleted_at'> & { mfa_enabled: number }>;
+    .limit(1) as Array<Omit<User, 'password_hash' | 'deleted_at'> & { active_tenant_id: string | null; mfa_enabled: number }>;
 
   if (!user) return err(c, 'Usuário não encontrado', 'NOT_FOUND', 404);
 
-  return ok(c, { user: { ...user, mfa_enabled: Boolean(user.mfa_enabled) } });
+  const activeTenantId = await ensureActiveTenantContext(db, {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    activeTenantId: user.active_tenant_id,
+  });
+
+  return ok(c, {
+    user: {
+      ...user,
+      active_tenant_id: activeTenantId,
+      activeTenantId,
+      mfa_enabled: Boolean(user.mfa_enabled),
+    },
+  });
 });
 
 // ── MFA: setup / verify / disable ───────────────────────────────────────────

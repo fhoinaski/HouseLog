@@ -24,6 +24,8 @@ No pacote `house-log-front`:
 - `npm run test`
 - `npm run test:e2e`
 
+Testes recentes de auth/sessao incluem `src/__tests__/session.test.ts`, cobrindo cooldown de refresh e reset ao estabelecer nova sessao.
+
 Use e2e apenas quando o fluxo visual/navegacao justificar.
 
 ## Backend
@@ -36,6 +38,8 @@ No pacote `house-log-back/apps/api`:
 - `npm run db:check`
 
 Use `db:check` quando schema/migration estiver no escopo.
+
+Testes recentes de auth/sessao incluem `src/routes/auth-session.test.ts`, cobrindo cookie HttpOnly, `activeTenantId` no payload de sessao e bootstrap de tenant no primeiro acesso.
 
 ## Testes que IA deve procurar
 
