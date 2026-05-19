@@ -31,7 +31,7 @@ export function PropertyContextHeader({ propertyId }: PropertyContextHeaderProps
   return (
     <section className="mx-auto w-full max-w-[1180px] px-4 pt-4 sm:px-5 sm:pt-5">
       <div className="rounded-[var(--radius-xl)] bg-[var(--surface-base)] px-3 py-3 sm:px-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Link
             href={`/properties/${propertyId}`}
             aria-label="Voltar para o resumo do imovel"
@@ -64,7 +64,7 @@ export function PropertyContextHeader({ propertyId }: PropertyContextHeaderProps
             <PropertySwitcher propertyId={propertyId} compact />
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 sm:hidden">
+          <div className="flex w-full shrink-0 items-center justify-end gap-1 sm:hidden">
             <div className="flex flex-col items-end gap-1">
               <span className={cn('text-sm font-medium tabular-nums', isPlaceholderScore ? 'text-text-secondary' : scoreColor(score))}>
                 {scoreLabel}

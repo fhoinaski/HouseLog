@@ -163,27 +163,27 @@ function PropertyProfileHeader({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 md:justify-end">
-            <Button variant="outline" size="sm" asChild>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
               <Link href={`/properties/${propertyId}/edit`}>
                 <Pencil className="h-3.5 w-3.5" />
                 Editar
               </Link>
             </Button>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" asChild className="w-full sm:w-auto">
               <Link href={`/properties/${propertyId}/report`}>
                 <FileText className="h-3.5 w-3.5" />
                 Dossie
               </Link>
             </Button>
-            <Button size="sm" onClick={onCreateOrder}>
+            <Button size="sm" onClick={onCreateOrder} className="w-full sm:w-auto">
               <Wrench className="h-3.5 w-3.5" />
               Nova OS
             </Button>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-border md:grid-cols-4">
+        <div className="mt-6 grid grid-cols-1 gap-px overflow-hidden rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-border sm:grid-cols-2 lg:grid-cols-4">
           <ProfileStat label="Saude" value={healthScore ?? 'Em formacao'} helper={technicalHealth.label} valueClassName={healthScoreClass} suffix={healthScore === null ? null : '/100'} />
           <ProfileStat label="Memoria" value={memoriaEmDias.toLocaleString('pt-BR')} helper="dias rastreados" />
           <ProfileStat label="Eventos" value={totalEvents} helper="OS registradas" />
@@ -238,12 +238,12 @@ function PropertyTabs({
   onTabChange: (tab: Tab) => void;
 }) {
   return (
-    <nav aria-label="Perfil 360 do imovel" className="overflow-x-auto rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface px-2 py-2 shadow-hl-subtle">
-      <div className="flex min-w-max gap-1">
+    <nav aria-label="Perfil 360 do imovel" className="w-full min-w-0 overflow-x-auto rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface px-2 py-2 shadow-hl-subtle">
+      <div className="flex w-max min-w-max gap-2">
         {tabs.map((tab) => {
           const isActive = tab.panel === activeTab;
           const className = cn(
-            'inline-flex min-h-10 items-center justify-center rounded-[var(--hl-radius-md)] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
+            'inline-flex min-h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-[var(--hl-radius-md)] px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)]',
             isActive ? 'bg-hl-accent-muted text-hl-accent' : 'text-hl-text-muted hover:bg-hl-surface-soft hover:text-hl-text'
           );
 
@@ -269,7 +269,7 @@ function PropertyTabs({
 
 function PropertySummaryCards({ metrics }: { metrics: ProfileMetric[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {metrics.map((metric) => (
         <MetricCard
           key={metric.label}
@@ -954,7 +954,7 @@ function SmartRecordWidget({ propertyId, summary, isLoading, hasError }: { prope
               <p className="text-sm font-semibold text-text-primary">{view.label}</p>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">{view.helper}</p>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-[var(--radius-lg)] bg-[var(--surface-base)] px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">Documentos analisados</p>
                   <p className="mt-1 text-lg font-light tabular-nums text-text-primary">
@@ -1696,7 +1696,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   ];
 
   return (
-    <div className="mx-auto min-h-full max-w-[1180px] space-y-5 bg-hl-bg px-4 py-4 text-hl-text sm:px-5 sm:py-5">
+    <div className="mx-auto min-h-full w-full min-w-0 max-w-[1180px] space-y-5 bg-hl-bg px-4 py-4 pb-[calc(var(--nav-height-bottom)+1.5rem+env(safe-area-inset-bottom))] text-hl-text sm:px-5 sm:py-5 md:pb-6 lg:px-8">
       <PropertyProfileHeader
         property={property}
         propertyId={id}
@@ -2038,7 +2038,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                     </p>
                     <span className="flex-1 border-t border-border-subtle" aria-hidden="true" />
                   </div>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     {[
                       { href: `/properties/${id}/warranties`,  icon: ShieldCheck,    label: 'Garantias',  description: 'Contratos e prazos',  tone: 'success' as const },
                       { href: `/properties/${id}/renovations`, icon: FolderKanban,   label: 'Reformas',   description: 'Obras e intervenções', tone: 'accent'  as const },
@@ -2056,7 +2056,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
                     Operacional
                   </p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {[
                       { href: `/properties/${id}/services`,    icon: Wrench,    label: 'OS',         description: 'Ordens de serviço',   tone: 'accent'  as const },
                       { href: `/properties/${id}/maintenance`, icon: RefreshCw, label: 'Manutenção', description: 'Plano preventivo',    tone: 'warning' as const },
@@ -2072,7 +2072,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
                     Financeiro
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {[
                       { href: `/properties/${id}/financial`, icon: BarChart3, label: 'Financeiro', description: 'Despesas e custos',   tone: 'success' as const },
                       { href: `/properties/${id}/report`,    icon: Activity,  label: 'Relatório',  description: 'Relatório do imóvel', tone: 'accent'  as const },
@@ -2093,7 +2093,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
               </p>
               <span className="flex-1 border-t border-border-subtle" aria-hidden="true" />
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { href: `/properties/${id}/team`,        icon: Users,    label: 'Equipe',       description: 'Responsáveis e colaboradores', tone: 'muted' as const },
                 { href: `/properties/${id}/access`,      icon: KeyRound, label: 'Acessos',      description: 'Permissões e convites',        tone: 'muted' as const },
