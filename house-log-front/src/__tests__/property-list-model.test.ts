@@ -37,13 +37,13 @@ describe('property-list-model', () => {
         id: 'property-2',
         name: 'Apartamento Lago',
         address: 'Alameda Central, 88',
-        city: 'São Paulo',
+        city: 'Sao Paulo',
         health_score: 68,
         owner_name: 'Grupo Atlas',
       }),
       buildProperty({
         id: 'property-3',
-        name: 'Galpão Norte',
+        name: 'Galpao Norte',
         address: 'Avenida Industrial, 450',
         city: 'Belo Horizonte',
         health_score: 34,
@@ -61,20 +61,20 @@ describe('property-list-model', () => {
     });
   });
 
-  it('filtra por nome, endereço, cidade, cliente e saúde sem inventar campos', () => {
+  it('filtra por nome, endereco, cidade, cliente e saude sem inventar campos', () => {
     const properties = [
       buildProperty({ id: 'property-1', health_score: 92, owner_name: 'Marina Lopes' }),
       buildProperty({
         id: 'property-2',
         name: 'Apartamento Lago',
         address: 'Alameda Central, 88',
-        city: 'São Paulo',
+        city: 'Sao Paulo',
         health_score: 68,
         owner_name: 'Grupo Atlas',
       }),
       buildProperty({
         id: 'property-3',
-        name: 'Galpão Norte',
+        name: 'Galpao Norte',
         address: 'Avenida Industrial, 450',
         city: 'Belo Horizonte',
         health_score: 34,
@@ -89,10 +89,10 @@ describe('property-list-model', () => {
     expect(filterProperties(properties, 'galpao', 'critical').map((property) => property.id)).toEqual(['property-3']);
   });
 
-  it('expõe a legenda de saúde operacional esperada pela listagem', () => {
-    expect(getPropertyHealthLabel(92)).toBe('Saudável');
-    expect(getPropertyHealthLabel(68)).toBe('Atenção');
-    expect(getPropertyHealthLabel(34)).toBe('Crítico');
+  it('expoe a legenda de saude operacional esperada pela listagem', () => {
+    expect(getPropertyHealthLabel(92)).toBe('Saudavel');
+    expect(getPropertyHealthLabel(68)).toBe('Atencao');
+    expect(getPropertyHealthLabel(34)).toBe('Critico');
     expect(PROPERTY_HEALTH_FILTERS.map((filter) => filter.value)).toEqual(['all', 'healthy', 'attention', 'critical']);
   });
 });

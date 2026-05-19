@@ -20,6 +20,7 @@ import {
   KeyRound,
   Lock,
   MapPin,
+  Menu,
   Package,
   Pencil,
   RefreshCw,
@@ -45,6 +46,7 @@ import { ServiceOrderCreateModal } from '@/components/services/service-order-cre
 import { ActionTile } from '@/components/ui/action-tile';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MetricCard } from '@/components/ui/metric-card';
 import {
@@ -315,6 +317,234 @@ function PropertyEmptyState({
       }
       tone="subtle"
     />
+  );
+}
+
+type PropertyModuleTone = 'default' | 'accent' | 'warning' | 'success' | 'muted';
+type PropertyModuleSection = 'main' | 'technical' | 'operations' | 'financial' | 'admin';
+
+type PropertyModuleShortcut = {
+  href: string;
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  description: string;
+  tone: PropertyModuleTone;
+  tabId?: PropertyDetailTabId;
+};
+
+type PropertyModuleGroup = {
+  id: string;
+  section: PropertyModuleSection;
+  title: string;
+  shortcuts: PropertyModuleShortcut[];
+};
+
+function buildPropertyModuleGroups(propertyId: string): PropertyModuleGroup[] {
+  return [
+    {
+      id: 'main',
+      section: 'main',
+      title: 'Principal',
+      shortcuts: [
+        { href: `/properties/${propertyId}?tab=overview`, tabId: 'overview', icon: Building2, label: 'Visao geral', description: 'Resumo 360', tone: 'accent' },
+        { href: `/properties/${propertyId}?tab=rooms`, tabId: 'rooms', icon: Home, label: 'Ambientes', description: 'Comodos e areas', tone: 'default' },
+        { href: `/properties/${propertyId}?tab=tickets`, tabId: 'tickets', icon: ClipboardCheck, label: 'Chamados', description: 'Solicitacoes', tone: 'warning' },
+        { href: `/properties/${propertyId}?tab=services`, tabId: 'services', icon: Wrench, label: 'Ordens de servico', description: 'Execucao tecnica', tone: 'accent' },
+        { href: `/properties/${propertyId}?tab=history`, tabId: 'history', icon: GitBranch, label: 'Historico', description: 'Linha operacional', tone: 'muted' },
+      ],
+    },
+    {
+      id: 'technical-record',
+      section: 'technical',
+      title: 'Prontuario tecnico',
+      shortcuts: [
+        { href: `/properties/${propertyId}?tab=photos`, tabId: 'photos', icon: Paintbrush, label: 'Fotos', description: 'Evidencias visuais', tone: 'muted' },
+        { href: `/properties/${propertyId}?tab=documents`, tabId: 'documents', icon: FileText, label: 'Documentos', description: 'Arquivos do imovel', tone: 'muted' },
+        { href: `/properties/${propertyId}?tab=warranties`, tabId: 'warranties', icon: ShieldCheck, label: 'Garantias', description: 'Contratos e prazos', tone: 'success' },
+        { href: `/properties/${propertyId}?tab=inventory`, tabId: 'inventory', icon: Package, label: 'Inventario', description: 'Itens e sistemas', tone: 'warning' },
+        { href: `/properties/${propertyId}?tab=handover`, tabId: 'handover', icon: ClipboardCheck, label: 'Dossie', description: 'Entrega tecnica', tone: 'muted' },
+        { href: `/properties/${propertyId}/renovations`, icon: FolderKanban, label: 'Reformas', description: 'Obras e intervencoes', tone: 'accent' },
+      ],
+    },
+    {
+      id: 'operations',
+      section: 'operations',
+      title: 'Operacional',
+      shortcuts: [
+        { href: `/properties/${propertyId}/maintenance`, icon: RefreshCw, label: 'Manutencao', description: 'Plano preventivo', tone: 'warning' },
+        { href: `/properties/${propertyId}/map`, icon: Compass, label: 'Mapa tecnico', description: 'Pontos e sistemas', tone: 'muted' },
+      ],
+    },
+    {
+      id: 'financial',
+      section: 'financial',
+      title: 'Financeiro',
+      shortcuts: [
+        { href: `/properties/${propertyId}/financial`, icon: BarChart3, label: 'Financeiro', description: 'Despesas e custos', tone: 'success' },
+        { href: `/properties/${propertyId}/report`, icon: Activity, label: 'Relatorio', description: 'Dossie do imovel', tone: 'accent' },
+      ],
+    },
+    {
+      id: 'administration',
+      section: 'admin',
+      title: 'Administracao',
+      shortcuts: [
+        { href: `/properties/${propertyId}/team`, icon: Users, label: 'Equipe', description: 'Responsaveis', tone: 'muted' },
+        { href: `/properties/${propertyId}/access`, icon: KeyRound, label: 'Acessos', description: 'Permissoes', tone: 'muted' },
+        { href: `/properties/${propertyId}/credentials`, icon: Lock, label: 'Credenciais', description: 'Acessos tecnicos', tone: 'muted' },
+      ],
+    },
+  ];
+}
+
+function propertyModuleToneClasses(tone: PropertyModuleTone): string {
+  switch (tone) {
+    case 'accent':
+      return 'bg-hl-accent-muted text-hl-accent';
+    case 'warning':
+      return 'bg-[color-mix(in_srgb,var(--hl-warning)_12%,var(--hl-surface))] text-hl-warning';
+    case 'success':
+      return 'bg-[color-mix(in_srgb,var(--hl-success)_12%,var(--hl-surface))] text-hl-success';
+    case 'muted':
+      return 'bg-hl-surface-muted text-hl-text-muted';
+    default:
+      return 'bg-hl-surface-soft text-hl-text-muted';
+  }
+}
+
+function PropertyModuleShortcutLink({
+  shortcut,
+  isActive = false,
+  layout = 'list',
+  onNavigate,
+}: {
+  shortcut: PropertyModuleShortcut;
+  isActive?: boolean;
+  layout?: 'list' | 'chip';
+  onNavigate?: () => void;
+}) {
+  const Icon = shortcut.icon;
+  const iconClassName = cn(
+    'flex shrink-0 items-center justify-center rounded-[var(--hl-radius-sm)]',
+    layout === 'chip' ? 'h-7 w-7' : 'h-8 w-8',
+    isActive ? 'bg-hl-surface text-hl-accent' : propertyModuleToneClasses(shortcut.tone)
+  );
+
+  return (
+    <Link
+      href={shortcut.href}
+      scroll={shortcut.tabId ? false : undefined}
+      aria-label={`Abrir ${shortcut.label}`}
+      aria-current={isActive ? 'page' : undefined}
+      onClick={onNavigate}
+      className={cn(
+        'group flex min-w-0 items-center text-left transition-colors hover:bg-hl-surface-muted focus-visible:outline-none focus-visible:shadow-[var(--field-focus-ring)] active:scale-[0.99]',
+        layout === 'chip'
+          ? 'min-h-11 shrink-0 gap-2 rounded-[var(--hl-radius-md)] border border-hl-border bg-hl-surface px-3 py-2 shadow-hl-subtle'
+          : 'gap-2.5 rounded-[var(--hl-radius-md)] px-2.5 py-2',
+        isActive ? 'bg-hl-accent-muted text-hl-accent' : 'text-hl-text-muted'
+      )}
+    >
+      <span className={iconClassName}>
+        <Icon className="h-4 w-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0">
+        <span className={cn('block truncate text-sm font-medium', isActive ? 'text-hl-accent' : 'text-hl-text')}>{shortcut.label}</span>
+        <span className={cn('mt-0.5 block truncate text-[11px] leading-4 text-hl-text-muted', layout === 'chip' && 'max-w-32')}>{shortcut.description}</span>
+      </span>
+    </Link>
+  );
+}
+
+function getSecondaryModuleGroups(groups: PropertyModuleGroup[]): PropertyModuleGroup[] {
+  return groups.filter((group) => group.section !== 'main');
+}
+
+function PropertyModuleBar({
+  groups,
+  activeTab,
+}: {
+  groups: PropertyModuleGroup[];
+  activeTab: PropertyDetailTabId;
+}) {
+  const shortcuts = getSecondaryModuleGroups(groups).flatMap((group) => group.shortcuts);
+
+  return (
+    <section className="hidden min-w-0 rounded-[var(--hl-radius-lg)] border border-hl-border bg-hl-surface p-3 shadow-hl-subtle md:block" aria-label="Modulos do imovel">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-hl-text-muted">Modulos do imovel</p>
+          <p className="mt-1 text-xs text-hl-text-muted">Atalhos tecnicos e administrativos sem sair do perfil.</p>
+        </div>
+      </div>
+      <div className="flex min-w-0 gap-2 overflow-x-auto pb-1">
+        {shortcuts.map((shortcut) => (
+          <PropertyModuleShortcutLink
+            key={shortcut.href}
+            shortcut={shortcut}
+            isActive={shortcut.tabId === activeTab}
+            layout="chip"
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PropertyMobileModulesMenu({
+  groups,
+  activeTab,
+}: {
+  groups: PropertyModuleGroup[];
+  activeTab: PropertyDetailTabId;
+}) {
+  const [open, setOpen] = useState(false);
+  const secondaryGroups = getSecondaryModuleGroups(groups);
+  const hasActiveModule = secondaryGroups.some((group) =>
+    group.shortcuts.some((shortcut) => shortcut.tabId === activeTab)
+  );
+
+  return (
+    <div className="md:hidden">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+        className={cn('w-full justify-center', hasActiveModule && 'border-hl-accent bg-hl-accent-muted text-hl-accent')}
+      >
+        <Menu className="h-4 w-4" aria-hidden="true" />
+        Mais modulos
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bottom-0 top-auto w-full max-w-none translate-x-[-50%] translate-y-0 rounded-b-none rounded-t-[var(--hl-radius-lg)] border-x-0 border-b-0 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-4 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:max-w-md md:hidden">
+          <DialogHeader>
+            <DialogTitle>Mais modulos</DialogTitle>
+            <DialogDescription>Acesse prontuario, financeiro e administracao do imovel.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[65dvh] space-y-4 overflow-y-auto pr-1">
+            {secondaryGroups.map((group) => (
+              <section key={group.id} className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-hl-text-muted">{group.title}</p>
+                <div className="grid gap-1.5">
+                  {group.shortcuts.map((shortcut) => (
+                    <PropertyModuleShortcutLink
+                      key={shortcut.href}
+                      shortcut={shortcut}
+                      isActive={shortcut.tabId === activeTab}
+                      onNavigate={() => setOpen(false)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
@@ -2102,7 +2332,10 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       : []),
   ];
 
-  const profileTabs: PropertyProfileTab[] = PROPERTY_DETAIL_TABS;
+  const profileTabs: PropertyProfileTab[] = PROPERTY_DETAIL_TABS.filter((tab) =>
+    ['overview', 'rooms', 'tickets', 'services', 'history'].includes(tab.id)
+  );
+  const moduleGroups = buildPropertyModuleGroups(id);
 
   return (
     <div className="mx-auto min-h-full w-full min-w-0 max-w-[1180px] space-y-5 bg-hl-bg px-4 py-4 pb-[calc(var(--nav-height-bottom)+1.5rem+env(safe-area-inset-bottom))] text-hl-text sm:px-5 sm:py-5 md:pb-6 lg:px-8">
@@ -2119,6 +2352,10 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       />
 
       <PropertyTabs propertyId={id} tabs={profileTabs} activeTab={activeTab} />
+
+      <PropertyModuleBar groups={moduleGroups} activeTab={activeTab} />
+
+      <PropertyMobileModulesMenu groups={moduleGroups} activeTab={activeTab} />
 
       {/* ── EDITORIAL HERO ──────────────────────────────────────────────── */}
       <div className="hidden">
@@ -2232,6 +2469,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
         </div>
 
       {/* ── TAB: VISÃO GERAL ─────────────────────────────────────────────── */}
+      <main className="min-w-0 space-y-6">
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <PropertyOverviewPanel
@@ -2412,7 +2650,9 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           )}
 
           {/* Summary card + gestão técnica */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <PropertySummaryCard property={property} />
+
+          <div className="hidden">
             <PropertySummaryCard property={property} className="h-full" />
 
             <PageSection
@@ -2478,7 +2718,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </div>
 
           {/* Administração do imóvel — módulos de configuração e controle de acesso */}
-          <div>
+          <div className="hidden">
             <div className="mb-3 flex items-center gap-2">
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">
                 Administração do imóvel
@@ -2564,6 +2804,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
           </div>
         </div>
       )}
+      </main>
 
       <ServiceOrderCreateModal
         open={createOpen}

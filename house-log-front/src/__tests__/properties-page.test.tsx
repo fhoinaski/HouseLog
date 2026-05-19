@@ -67,9 +67,12 @@ beforeEach(() => {
 });
 
 describe('PropertiesPage', () => {
-  it('renderiza a carteira com imóveis e CTA de detalhe', () => {
+  it('renderiza a carteira com imoveis e CTA de detalhe', () => {
     usePaginationMock.mockReturnValue({
-      data: [buildProperty({ id: 'property-1' }), buildProperty({ id: 'property-2', name: 'Apartamento Lago', city: 'São Paulo', health_score: 68, owner_name: 'Grupo Atlas' })],
+      data: [
+        buildProperty({ id: 'property-1' }),
+        buildProperty({ id: 'property-2', name: 'Apartamento Lago', city: 'Sao Paulo', health_score: 68, owner_name: 'Grupo Atlas' }),
+      ],
       isLoading: false,
       isLoadingMore: false,
       hasMore: true,
@@ -80,17 +83,50 @@ describe('PropertiesPage', () => {
 
     const html = renderToStaticMarkup(<PropertiesPage />);
 
-    expect(html).toContain('Carteira técnica');
-    expect(html).toContain('Imóveis do cliente em visão operacional');
+    expect(html).toContain('Carteira tecnica');
+    expect(html).toContain('Imoveis');
     expect(html).toContain('Casa Jardim');
     expect(html).toContain('Apartamento Lago');
-    expect(html).toContain('Nome, endereço ou cliente');
-    expect(html).toContain('Abrir imóvel');
+    expect(html).toContain('Nome, endereco ou cliente');
+    expect(html).toContain('Abrir prontuario');
+    expect(html).toContain('aria-label="Abrir imovel Casa Jardim"');
     expect(html).toContain('href="/properties/property-1"');
-    expect(html).toContain('sm:grid-cols-2 xl:grid-cols-4');
+    expect(html).toContain('lg:grid-cols-2');
   });
 
-  it('renderiza empty state quando não há imóveis', () => {
+  it('renderiza card com dados minimos e placeholder de iniciais', () => {
+    usePaginationMock.mockReturnValue({
+      data: [
+        buildProperty({
+          id: 'property-min',
+          name: 'Loft',
+          address: 'Rua A',
+          city: 'Sao Paulo',
+          area_m2: null,
+          year_built: null,
+          structure: null,
+          owner_name: undefined,
+          cover_url: null,
+        }),
+      ],
+      isLoading: false,
+      isLoadingMore: false,
+      hasMore: false,
+      loadMore: vi.fn(),
+      error: null,
+      mutate: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(<PropertiesPage />);
+
+    expect(html).toContain('Loft');
+    expect(html).toContain('Nao informado');
+    expect(html).toContain('Nao informada');
+    expect(html).toContain('Perfil tecnico');
+    expect(html).toContain('>L</span>');
+  });
+
+  it('renderiza empty state quando nao ha imoveis', () => {
     usePaginationMock.mockReturnValue({
       data: [],
       isLoading: false,
@@ -103,9 +139,9 @@ describe('PropertiesPage', () => {
 
     const html = renderToStaticMarkup(<PropertiesPage />);
 
-    expect(html).toContain('Nenhum imóvel cadastrado');
-    expect(html).toContain('Cadastrar imóvel');
-    expect(html).toContain('Organização estilo CRM técnico');
+    expect(html).toContain('Nenhum imovel cadastrado');
+    expect(html).toContain('Cadastrar imovel');
+    expect(html).toContain('prontuarios tecnicos');
   });
 
   it('renderiza estado de erro com retry', () => {
@@ -121,7 +157,7 @@ describe('PropertiesPage', () => {
 
     const html = renderToStaticMarkup(<PropertiesPage />);
 
-    expect(html).toContain('Não foi possível carregar os imóveis');
+    expect(html).toContain('Nao foi possivel carregar os imoveis');
     expect(html).toContain('Tentar novamente');
   });
 });

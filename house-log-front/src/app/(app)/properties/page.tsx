@@ -6,8 +6,8 @@ import {
   AlertCircle,
   BarChart3,
   Building2,
-  ChevronRight,
   CalendarDays,
+  ChevronRight,
   MapPin,
   Plus,
   Search,
@@ -23,8 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
-import { PROPERTY_TYPE_LABELS, cn } from '@/lib/utils';
-import { formatDate } from '@/lib/utils';
+import { PROPERTY_TYPE_LABELS, cn, formatDate } from '@/lib/utils';
 import { PageContainer } from '@/components/layout/page-container';
 import {
   buildPropertyPortfolioSummary,
@@ -45,12 +44,18 @@ type PropertyMetric = {
 };
 
 function getInitials(name: string) {
-  return name
+  const initials = name
     .split(' ')
     .slice(0, 2)
     .map((part) => part[0])
     .join('')
     .toUpperCase();
+
+  return initials || 'HL';
+}
+
+function formatOptionalNumber(value: number | null | undefined, suffix: string) {
+  return typeof value === 'number' ? `${value} ${suffix}` : 'Nao informado';
 }
 
 function MetricCard({ label, value, helper, tone, icon: Icon }: PropertyMetric) {
@@ -71,27 +76,32 @@ function MetricCard({ label, value, helper, tone, icon: Icon }: PropertyMetric) 
 }
 
 function PropertyVisual({ property }: { property: Property }) {
+  const typeLabel = PROPERTY_TYPE_LABELS[property.type] ?? property.type;
+
   if (property.cover_url) {
     return (
       <div
-        className="relative min-h-32 overflow-hidden rounded-[var(--hl-radius-card)] bg-cover bg-center shadow-hl-subtle sm:min-h-36 xl:min-h-44"
+        className="relative min-h-28 overflow-hidden rounded-[var(--hl-radius-card)] bg-cover bg-center shadow-hl-subtle sm:min-h-32 lg:min-h-full"
         style={{
           backgroundImage: `linear-gradient(180deg, rgba(247,245,240,0.08), rgba(31,41,51,0.42)), url(${property.cover_url})`,
         }}
         aria-label={property.name}
       >
         <div className="absolute bottom-3 left-3 rounded-full bg-hl-surface px-3 py-1 text-xs font-medium text-hl-text shadow-hl-subtle">
-          {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
+          {typeLabel}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative flex min-h-32 items-center justify-center overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-hl-surface-muted shadow-hl-subtle sm:min-h-36 xl:min-h-44">
-      <span className="relative text-4xl font-medium text-hl-primary">{getInitials(property.name)}</span>
+    <div className="relative flex min-h-28 items-center justify-center overflow-hidden rounded-[var(--hl-radius-card)] border border-hl-border bg-[linear-gradient(135deg,var(--hl-surface),var(--hl-surface-muted))] shadow-hl-subtle sm:min-h-32 lg:min-h-full">
+      <div className="absolute inset-0 opacity-70 [background-image:radial-gradient(circle_at_18%_18%,color-mix(in_srgb,var(--hl-primary)_10%,transparent),transparent_34%),linear-gradient(135deg,transparent_0%,color-mix(in_srgb,var(--hl-border)_55%,transparent)_100%)]" />
+      <span className="relative flex h-14 w-14 items-center justify-center rounded-[var(--hl-radius-card)] bg-hl-surface text-xl font-semibold tracking-tight text-hl-primary shadow-hl-subtle">
+        {getInitials(property.name)}
+      </span>
       <div className="absolute bottom-3 left-3 rounded-full bg-hl-surface px-3 py-1 text-xs font-medium text-hl-text shadow-hl-subtle">
-        {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
+        {typeLabel}
       </div>
     </div>
   );
@@ -99,63 +109,80 @@ function PropertyVisual({ property }: { property: Property }) {
 
 function PropertyFact({ label, value, icon: Icon }: { label: string; value: string | number; icon: LucideIcon }) {
   return (
-    <div className="rounded-[var(--hl-radius-control)] border border-hl-border bg-hl-surface-muted p-3">
+    <div className="min-w-0 rounded-[var(--hl-radius-control)] bg-hl-surface-muted px-3 py-2.5">
       <dt className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em] text-hl-text-muted">
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
         {label}
       </dt>
-      <dd className="mt-2 min-w-0 text-sm font-medium leading-6 text-hl-text">{value}</dd>
+      <dd className="mt-1 truncate text-sm font-medium leading-5 text-hl-text">{value}</dd>
     </div>
   );
 }
 
 function PropertyCard({ property }: { property: Property }) {
+  const typeLabel = PROPERTY_TYPE_LABELS[property.type] ?? property.type;
+  const healthLabel = getPropertyHealthLabel(property.health_score);
   const createdAtLabel = formatDate(property.created_at);
-  const areaValue = property.area_m2 ? `${property.area_m2} m²` : 'Não informada';
-  const yearValue = property.year_built ?? 'Não informado';
-  const structureValue = property.structure ?? 'Não informada';
+  const areaValue = formatOptionalNumber(property.area_m2, 'm2');
+  const yearValue = property.year_built ?? 'Nao informado';
+  const structureValue = property.structure ?? 'Nao informada';
+  const ownerValue = property.owner_name ?? 'Nao informado';
 
   return (
-    <Card variant="section" density="compact" className="property-card overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle">
-      <CardContent className="grid gap-3.5 p-3.5 sm:gap-4 sm:p-4 xl:grid-cols-[168px_minmax(0,1fr)]">
+    <Card
+      variant="section"
+      density="compact"
+      className="property-card overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle transition-colors hover:border-[color-mix(in_srgb,var(--hl-primary)_24%,var(--hl-border))] hover:shadow-hl-soft"
+    >
+      <CardContent className="grid gap-4 p-3.5 sm:p-4 lg:grid-cols-[136px_minmax(0,1fr)] xl:grid-cols-[148px_minmax(0,1fr)]">
         <PropertyVisual property={property} />
 
-        <div className="flex min-w-0 flex-col gap-4">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{PROPERTY_TYPE_LABELS[property.type] ?? property.type}</Badge>
-              <Badge variant={getPropertyHealthVariant(property.health_score)}>
-                {getPropertyHealthLabel(property.health_score)}
+        <div className="flex min-w-0 flex-col gap-3">
+          <div className="min-w-0 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1.5">
+                <CardTitle className="truncate text-lg leading-tight text-hl-text sm:text-xl">{property.name}</CardTitle>
+                <p className="flex items-start gap-2 text-sm leading-5 text-hl-text-muted">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-hl-text-muted" strokeWidth={1.8} />
+                  <span className="min-w-0 break-words">
+                    {property.address}, {property.city}
+                  </span>
+                </p>
+              </div>
+
+              <Badge variant={getPropertyHealthVariant(property.health_score)} className="shrink-0">
+                {healthLabel}
               </Badge>
             </div>
 
-            <div className="space-y-2">
-              <CardTitle className="text-xl leading-tight text-hl-text sm:text-[22px]">{property.name}</CardTitle>
-              <p className="flex items-start gap-2 text-sm leading-6 text-hl-text-muted">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-hl-text-muted" strokeWidth={1.8} />
-                <span className="min-w-0 break-words">
-                  {property.address}, {property.city}
-                </span>
-              </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">{typeLabel}</Badge>
+              <span className="rounded-full bg-hl-surface-muted px-2.5 py-1 text-xs font-medium text-hl-text-muted">
+                Perfil tecnico
+              </span>
             </div>
-
-            <dl className="grid gap-2 sm:grid-cols-2">
-              <PropertyFact label="Cliente / responsável" value={property.owner_name ?? 'Não informado'} icon={Building2} />
-              <PropertyFact label="Área técnica" value={areaValue} icon={BarChart3} />
-              <PropertyFact label="Ano base" value={yearValue} icon={CalendarDays} />
-              <PropertyFact label="Estrutura" value={structureValue} icon={ShieldCheck} />
-            </dl>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-[var(--hl-radius-control)] bg-hl-surface-muted p-3 sm:flex-row sm:items-center sm:justify-between">
+          <dl className="grid gap-2 sm:grid-cols-2">
+            <PropertyFact label="Responsavel" value={ownerValue} icon={Building2} />
+            <PropertyFact label="Area tecnica" value={areaValue} icon={BarChart3} />
+            <PropertyFact label="Ano base" value={yearValue} icon={CalendarDays} />
+            <PropertyFact label="Estrutura" value={structureValue} icon={ShieldCheck} />
+          </dl>
+
+          <div className="flex flex-col gap-3 border-t border-hl-border pt-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-5 text-hl-text-muted">
-              <span className="block uppercase tracking-[0.08em]">Registro HouseLog</span>
-              <span className="mt-0.5 block text-sm font-medium text-hl-text">{createdAtLabel}</span>
+              Registrado em <span className="font-medium text-hl-text">{createdAtLabel}</span>
             </p>
 
-            <Button asChild variant="tonal" size="sm" className="w-full sm:w-auto">
-              <Link href={`/properties/${property.id}`}>
-                Abrir imóvel
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="w-full border-[color-mix(in_srgb,var(--hl-primary)_22%,var(--hl-border))] text-hl-primary hover:bg-[color-mix(in_srgb,var(--hl-primary)_8%,var(--hl-surface))] sm:w-auto"
+            >
+              <Link href={`/properties/${property.id}`} aria-label={`Abrir imovel ${property.name}`}>
+                Abrir prontuario
                 <ChevronRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -186,12 +213,12 @@ function LoadingState() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} variant="section" density="compact" className="border border-hl-border bg-hl-surface shadow-hl-subtle">
-            <CardContent className="grid gap-3.5 p-3.5 sm:gap-4 sm:p-4 xl:grid-cols-[168px_minmax(0,1fr)]">
-              <div className="hl-skeleton min-h-32 rounded-[var(--hl-radius-card)] sm:min-h-36 xl:min-h-44" />
-              <div className="space-y-4">
+            <CardContent className="grid gap-4 p-3.5 sm:p-4 lg:grid-cols-[136px_minmax(0,1fr)] xl:grid-cols-[148px_minmax(0,1fr)]">
+              <div className="hl-skeleton min-h-28 rounded-[var(--hl-radius-card)] sm:min-h-32 lg:min-h-full" />
+              <div className="space-y-3">
                 <div className="space-y-3">
                   <div className="hl-skeleton h-3 w-28 rounded-full" />
                   <div className="hl-skeleton h-7 w-3/4 rounded" />
@@ -199,10 +226,10 @@ function LoadingState() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {Array.from({ length: 4 }).map((_, j) => (
-                    <div key={j} className="hl-skeleton h-14 rounded-[var(--hl-radius-control)]" />
+                    <div key={j} className="hl-skeleton h-12 rounded-[var(--hl-radius-control)]" />
                   ))}
                 </div>
-                <div className="hl-skeleton h-12 rounded-[var(--hl-radius-control)]" />
+                <div className="hl-skeleton h-10 rounded-[var(--hl-radius-control)]" />
               </div>
             </CardContent>
           </Card>
@@ -220,9 +247,9 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
           <AlertCircle className="h-5 w-5" strokeWidth={1.8} />
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-medium text-hl-text">Não foi possível carregar os imóveis</h2>
+          <h2 className="text-base font-medium text-hl-text">Nao foi possivel carregar os imoveis</h2>
           <p className="mt-1 text-sm leading-6 text-hl-text-muted">
-            Verifique sua conexão ou tente novamente em instantes.
+            Verifique sua conexao ou tente novamente em instantes.
           </p>
           <Button className="mt-4" variant="outline" onClick={onRetry}>
             Tentar novamente
@@ -257,30 +284,30 @@ export default function PropertiesPage() {
 
   const metrics: PropertyMetric[] = [
     {
-      label: 'imóveis carregados',
+      label: 'imoveis carregados',
       value: portfolioSummary.total,
-      helper: `${portfolioSummary.cities} cidades · saúde média ${portfolioSummary.averageHealth ?? '—'}`,
+      helper: `${portfolioSummary.cities} cidades · saude media ${portfolioSummary.averageHealth ?? '--'}`,
       tone: 'accent',
       icon: Building2,
     },
     {
-      label: 'saudáveis',
+      label: 'saudaveis',
       value: portfolioSummary.healthy,
-      helper: 'saúde técnica acima de 80',
+      helper: 'saude tecnica acima de 80',
       tone: 'success',
       icon: ShieldCheck,
     },
     {
-      label: 'em atenção',
+      label: 'em atencao',
       value: portfolioSummary.attention,
-      helper: 'saúde técnica entre 55 e 79',
+      helper: 'saude tecnica entre 55 e 79',
       tone: 'warning',
       icon: TriangleAlert,
     },
     {
-      label: 'críticos',
+      label: 'criticos',
       value: portfolioSummary.critical,
-      helper: 'saúde técnica abaixo de 55',
+      helper: 'saude tecnica abaixo de 55',
       tone: 'danger',
       icon: XCircle,
     },
@@ -298,17 +325,17 @@ export default function PropertiesPage() {
       <Card variant="section" density="compact" className="overflow-hidden border border-hl-border bg-hl-surface shadow-hl-subtle">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(17rem,auto)] sm:items-center sm:p-5">
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-[0.08em] text-hl-primary">Carteira técnica</p>
-            <h1 className="mt-1.5 text-xl font-medium leading-tight text-hl-text sm:text-2xl">
-              Imóveis do cliente em visão operacional
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-hl-primary">Carteira tecnica</p>
+            <h1 className="mt-1.5 text-2xl font-semibold leading-tight text-hl-text sm:text-3xl">
+              Imoveis
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-snug text-hl-text-muted">
-              Organização estilo CRM técnico para acompanhar saúde, contexto e acesso rápido ao prontuário de cada ativo.
+            <p className="mt-2 max-w-xl text-sm leading-6 text-hl-text-muted">
+              Gerencie os prontuarios tecnicos, documentos, chamados e historico dos imoveis.
             </p>
             <Button asChild className="mt-3 w-full sm:w-auto">
               <Link href="/properties/new">
                 <Plus className="h-4 w-4" />
-                Novo imóvel
+                Novo imovel
               </Link>
             </Button>
           </div>
@@ -317,7 +344,7 @@ export default function PropertiesPage() {
             {[
               { label: 'carregados', value: total },
               { label: 'cidades', value: portfolioSummary.cities },
-              { label: 'saúde média', value: portfolioSummary.averageHealth ?? '—' },
+              { label: 'saude media', value: portfolioSummary.averageHealth ?? '--' },
             ].map((metric) => (
               <div key={metric.label} className="min-w-0 rounded-[var(--hl-radius-control)] bg-hl-surface px-3 py-3">
                 <p className="truncate text-xl font-medium leading-none text-hl-text sm:text-2xl">{metric.value}</p>
@@ -345,14 +372,14 @@ export default function PropertiesPage() {
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                 <label className="space-y-2">
                   <span className="text-xs font-medium uppercase tracking-[0.08em] text-hl-text-muted">
-                    Buscar imóveis
+                    Buscar imoveis
                   </span>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-hl-text-muted" strokeWidth={1.8} />
                     <Input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Nome, endereço ou cliente"
+                      placeholder="Nome, endereco ou cliente"
                       className="pl-9"
                       autoComplete="off"
                     />
@@ -384,12 +411,12 @@ export default function PropertiesPage() {
                   <span className="font-medium text-hl-text">
                     {filteredProperties.length}
                   </span>{' '}
-                  de <span className="font-medium text-hl-text">{properties.length}</span> imóveis carregados
+                  de <span className="font-medium text-hl-text">{properties.length}</span> imoveis carregados
                 </p>
                 <p>
-                  Saúde média da visão atual{' '}
+                  Saude media da visao atual{' '}
                   <span className="font-medium text-hl-text">
-                    {visibleSummary.averageHealth ?? '—'}
+                    {visibleSummary.averageHealth ?? '--'}
                   </span>
                 </p>
               </div>
@@ -398,11 +425,11 @@ export default function PropertiesPage() {
             {filteredProperties.length === 0 ? (
               <EmptyState
                 icon={<Building2 className="h-6 w-6" />}
-                title={hasActiveFilters ? 'Nenhum imóvel corresponde aos filtros' : 'Nenhum imóvel cadastrado'}
+                title={hasActiveFilters ? 'Nenhum imovel corresponde aos filtros' : 'Nenhum imovel cadastrado'}
                 description={
                   hasActiveFilters
-                    ? 'Ajuste a busca ou limpe os filtros para voltar à carteira completa.'
-                    : 'Crie o primeiro ativo para organizar inventário, serviços, documentos e financeiro em um fluxo operacional.'
+                    ? 'Ajuste a busca ou limpe os filtros para voltar a carteira completa.'
+                    : 'Crie o primeiro ativo para organizar inventario, servicos, documentos e financeiro em um fluxo operacional.'
                 }
                 actions={
                   hasActiveFilters ? (
@@ -413,7 +440,7 @@ export default function PropertiesPage() {
                       <Button asChild>
                         <Link href="/properties/new">
                           <Plus className="h-4 w-4" />
-                          Novo imóvel
+                          Novo imovel
                         </Link>
                       </Button>
                     </>
@@ -421,14 +448,14 @@ export default function PropertiesPage() {
                     <Button asChild>
                       <Link href="/properties/new">
                         <Plus className="h-4 w-4" />
-                        Cadastrar imóvel
+                        Cadastrar imovel
                       </Link>
                     </Button>
                   )
                 }
               />
             ) : (
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="grid gap-4 lg:grid-cols-2">
                 {filteredProperties.map((property) => (
                   <PropertyCard key={property.id} property={property} />
                 ))}
@@ -438,7 +465,7 @@ export default function PropertiesPage() {
             {hasMore && (
               <div className="flex justify-center pt-2">
                 <Button variant="outline" onClick={loadMore} loading={isLoadingMore}>
-                  Carregar mais imóveis
+                  Carregar mais imoveis
                 </Button>
               </div>
             )}

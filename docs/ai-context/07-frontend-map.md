@@ -20,6 +20,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - Propriedades: `src/app/(app)/properties`.
 - Contexto de imovel: `src/app/(app)/properties/[id]`.
 - `src/app/(app)/properties/[id]/page.tsx`: pagina unica do perfil do imovel com hero fixo, metricas e tabs internas via `?tab=...` (`overview`, `rooms`, `tickets`, `services`, `history`, `photos`, `documents`, `warranties`, `inventory`, `handover`). As rotas filhas continuam como deep links para detalhes especificos.
+- `src/app/(app)/properties/[id]/page.tsx`: perfil do imovel usa tabs principais (`overview`, `rooms`, `tickets`, `services`, `history`) em todos os breakpoints, barra compacta de modulos secundarios em `md+` e botao "Mais modulos" com dialog compacto no mobile. Nao ha sub-sidebar contextual lateral dentro da pagina.
 - `src/components/properties/property-tabs-model.ts`: normaliza a tab ativa do detalhe do imovel e garante fallback para `overview` quando o query param e invalido.
 - Provider: `src/app/provider`.
 - Publicas tokenizadas: `src/app/audit/[token]`, `src/app/share/service/[token]`, `src/app/invite/[token]`, `src/app/handover/[token]`.

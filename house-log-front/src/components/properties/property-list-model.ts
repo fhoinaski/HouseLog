@@ -4,9 +4,9 @@ export type PropertyHealthFilter = 'all' | 'healthy' | 'attention' | 'critical';
 
 export const PROPERTY_HEALTH_FILTERS: Array<{ value: PropertyHealthFilter; label: string }> = [
   { value: 'all', label: 'Todos' },
-  { value: 'healthy', label: 'Saudáveis' },
-  { value: 'attention', label: 'Em atenção' },
-  { value: 'critical', label: 'Críticos' },
+  { value: 'healthy', label: 'Saudaveis' },
+  { value: 'attention', label: 'Em atencao' },
+  { value: 'critical', label: 'Criticos' },
 ];
 
 export type PropertyPortfolioSummary = {
@@ -61,9 +61,9 @@ function buildSearchableProperty(property: Property): NormalizedProperty {
 
 export function getPropertyHealthLabel(score: number | null | undefined): string {
   if (typeof score !== 'number') return 'Sem leitura';
-  if (score >= 80) return 'Saudável';
-  if (score >= 55) return 'Atenção';
-  return 'Crítico';
+  if (score >= 80) return 'Saudavel';
+  if (score >= 55) return 'Atencao';
+  return 'Critico';
 }
 
 export function getPropertyHealthVariant(score: number | null | undefined): 'normal' | 'success' | 'warning' | 'urgent' {
