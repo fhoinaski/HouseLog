@@ -196,6 +196,7 @@ describe('Fase D — resolvePropertyTenant (properties)', () => {
 
 vi.mock('../db/client', () => ({ getDb: vi.fn() }));
 vi.mock('../lib/jwt', () => ({
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
   verifyJwt: vi.fn(async () => ({
     sub: 'user-1',
     email: 'u@e.com',

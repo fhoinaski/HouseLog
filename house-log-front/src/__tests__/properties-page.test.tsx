@@ -84,14 +84,43 @@ describe('PropertiesPage', () => {
     const html = renderToStaticMarkup(<PropertiesPage />);
 
     expect(html).toContain('Carteira tecnica');
-    expect(html).toContain('Imoveis');
+    expect(html).toContain('Ativos tecnicos');
     expect(html).toContain('Casa Jardim');
     expect(html).toContain('Apartamento Lago');
     expect(html).toContain('Nome, endereco ou cliente');
     expect(html).toContain('Abrir prontuario');
     expect(html).toContain('aria-label="Abrir imovel Casa Jardim"');
     expect(html).toContain('href="/properties/property-1"');
-    expect(html).toContain('lg:grid-cols-2');
+    expect(html).toContain('grid-cols-1');
+    expect(html).toContain('2xl:grid-cols-3');
+  });
+
+  it('renderiza card com dados completos e preserva o link do imovel', () => {
+    usePaginationMock.mockReturnValue({
+      data: [
+        buildProperty({
+          id: 'property-full',
+          cover_url: 'https://cdn.example.test/casa.jpg',
+        }),
+      ],
+      isLoading: false,
+      isLoadingMore: false,
+      hasMore: false,
+      loadMore: vi.fn(),
+      error: null,
+      mutate: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(<PropertiesPage />);
+
+    expect(html).toContain('Marina Lopes');
+    expect(html).toContain('120 m2');
+    expect(html).toContain('2001');
+    expect(html).toContain('Alvenaria');
+    expect(html).toContain('Status tecnico: Saudavel');
+    expect(html).toContain('Registrado em');
+    expect(html).toContain('https://cdn.example.test/casa.jpg');
+    expect(html).toContain('href="/properties/property-full"');
   });
 
   it('renderiza card com dados minimos e placeholder de iniciais', () => {
@@ -123,7 +152,28 @@ describe('PropertiesPage', () => {
     expect(html).toContain('Nao informado');
     expect(html).toContain('Nao informada');
     expect(html).toContain('Perfil tecnico');
+    expect(html).toContain('data-testid="property-placeholder"');
     expect(html).toContain('>L</span>');
+  });
+
+  it('mantem classes responsivas para 390px sem largura fixa horizontal', () => {
+    usePaginationMock.mockReturnValue({
+      data: [buildProperty({ id: 'property-mobile' })],
+      isLoading: false,
+      isLoadingMore: false,
+      hasMore: false,
+      loadMore: vi.fn(),
+      error: null,
+      mutate: vi.fn(),
+    });
+
+    const html = renderToStaticMarkup(<PropertiesPage />);
+
+    expect(html).toContain('data-testid="properties-grid"');
+    expect(html).toContain('grid-cols-1');
+    expect(html).toContain('items-stretch');
+    expect(html).toContain('min-w-0');
+    expect(html).not.toContain('w-[390px]');
   });
 
   it('renderiza empty state quando nao ha imoveis', () => {

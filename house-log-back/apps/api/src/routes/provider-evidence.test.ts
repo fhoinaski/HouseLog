@@ -25,6 +25,7 @@ vi.mock('../lib/r2', () => ({
   uploadToR2: vi.fn(async () => undefined),
 }));
 vi.mock('../lib/jwt', () => ({
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
   verifyJwt: vi.fn(async () => ({
     sub: 'provider-1',
     email: 'provider@example.com',

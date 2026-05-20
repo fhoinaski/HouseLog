@@ -29,6 +29,7 @@ vi.mock('../lib/r2', () => ({
   deleteFromR2: vi.fn(async () => undefined),
 }));
 vi.mock('../lib/jwt', () => ({
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
   verifyJwt: vi.fn(async () => ({
     sub: 'user-1',
     email: 'test@example.com',

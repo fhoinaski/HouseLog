@@ -93,6 +93,12 @@ const S = StyleSheet.create({
     paddingBottom: 4,
     borderBottom: `0.5pt solid ${COLOR_PALETTE.neutral100}`,
   },
+  note: {
+    fontSize: 8,
+    color: COLOR_PALETTE.neutral600,
+    marginBottom: 8,
+    lineHeight: 1.4,
+  },
 
   // Property info grid
   propGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
@@ -474,6 +480,33 @@ export function PropertyDossieDocument({ dossie }: Props) {
                   <Text style={[S.tdCell, { width: 55 }]}>{s.priority}</Text>
                   <Text style={[S.tdCell, { width: 80 }]}>{fmtDate(s.completed_at)}</Text>
                   <Text style={[S.tdCell, { width: 70 }]}>{fmtCurrency(s.cost)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {dossie.photo_evidence.length > 0 && (
+          <View style={S.section}>
+            <Text style={S.sectionTitle}>Evidências fotográficas ({dossie.photo_evidence.length})</Text>
+            <Text style={S.note}>
+              As imagens permanecem em armazenamento privado. Este dossiê registra apenas a existência das evidências autorizadas.
+            </Text>
+            <View style={S.table}>
+              <View style={S.tableHeader}>
+                <Text style={[S.thCell, { flex: 2 }]}>Serviço</Text>
+                <Text style={[S.thCell, { flex: 1 }]}>Sistema</Text>
+                <Text style={[S.thCell, { width: 80 }]}>Conclusão</Text>
+                <Text style={[S.thCell, { width: 55 }]}>Antes</Text>
+                <Text style={[S.thCell, { width: 55 }]}>Depois</Text>
+              </View>
+              {dossie.photo_evidence.map((evidence, i) => (
+                <View key={i} style={i % 2 === 0 ? S.tableRow : S.tableRowAlt}>
+                  <Text style={[S.tdCell, { flex: 2 }]}>{evidence.service_title}</Text>
+                  <Text style={[S.tdCell, { flex: 1 }]}>{evidence.system_type}</Text>
+                  <Text style={[S.tdCell, { width: 80 }]}>{fmtDate(evidence.completed_at)}</Text>
+                  <Text style={[S.tdCell, { width: 55 }]}>{evidence.before_count}</Text>
+                  <Text style={[S.tdCell, { width: 55 }]}>{evidence.after_count}</Text>
                 </View>
               ))}
             </View>

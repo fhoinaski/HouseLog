@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
@@ -11,6 +11,23 @@ import type { DossiePayload, DossieTimelineEvent } from '@houselog/contracts';
 const reports = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 reports.use('*', authMiddleware);
 reports.use('*', resolveTenant);
+
+type ReportsContext = Context<{ Bindings: Bindings; Variables: Variables }>;
+
+type AuthorizedDossieContext = {
+  db: ReturnType<typeof getDb>;
+  propertyId: string;
+  userId: string;
+  tenantId: string;
+};
+
+type DossieContextResult =
+  | { ok: true; context: AuthorizedDossieContext }
+  | { ok: false; response: Response };
+
+function countPrivateMedia(value: string[] | null | undefined): number {
+  return Array.isArray(value) ? value.length : 0;
+}
 
 // ── Health score computation ──────────────────────────────────────────────────
 // Score = weighted sum of 6 factors (0–100):
@@ -295,7 +312,7 @@ reports.get('/valuation-pdf', async (c) => {
 // Returns a JSON payload for client-side PDF rendering.
 // No file is stored in R2 — PDF is generated in the browser via @react-pdf/renderer.
 
-reports.get('/dossie', async (c) => {
+async function authorizeDossieContext(c: ReportsContext): Promise<DossieContextResult> {
   const propertyId = c.req.param('propertyId')!;
   const userId = c.get('userId');
   const role = c.get('userRole');
@@ -309,12 +326,24 @@ reports.get('/dossie', async (c) => {
     .where(and(eq(properties.id, propertyId), eq(properties.tenantId, tenantId), isNull(properties.deletedAt)))
     .limit(1);
 
-  if (!tenantProperty) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+  if (!tenantProperty) {
+    return { ok: false, response: err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404) };
+  }
 
   const hasAccess = await assertPropertyAccess(c.env.DB, propertyId, userId, role, tenantId, c.get('tenantRole'));
-  if (!hasAccess) return err(c, 'Sem acesso', 'FORBIDDEN', 403);
+  if (!hasAccess) {
+    return { ok: false, response: err(c, 'Sem acesso', 'FORBIDDEN', 403) };
+  }
 
-  // ── Parallel data fetch ────────────────────────────────────────────────────
+  return { ok: true, context: { db, propertyId, userId, tenantId } };
+}
+
+async function buildDossiePayload(
+  db: ReturnType<typeof getDb>,
+  propertyId: string,
+  tenantId: string,
+  userId: string
+): Promise<DossiePayload | null> {
   const [
     propRow,
     tenantRow,
@@ -418,6 +447,8 @@ reports.get('/dossie', async (c) => {
         priority: serviceOrders.priority,
         completed_at: serviceOrders.completedAt,
         cost: serviceOrders.cost,
+        before_photos: serviceOrders.beforePhotos,
+        after_photos: serviceOrders.afterPhotos,
       })
       .from(serviceOrders)
       .where(
@@ -455,12 +486,10 @@ reports.get('/dossie', async (c) => {
       .orderBy(maintenanceSchedules.systemType),
   ]);
 
-  if (!propRow) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+  if (!propRow) return null;
 
-  // ── Room map for inventory enrichment ─────────────────────────────────────
   const roomMap = new Map<string, string>(roomRows.map((r) => [r.id, r.name]));
 
-  // ── Build timeline ─────────────────────────────────────────────────────────
   const timeline: DossieTimelineEvent[] = [
     ...completedSORows
       .filter((s) => s.completed_at)
@@ -476,7 +505,6 @@ reports.get('/dossie', async (c) => {
       .map((w) => ({ date: w.start_date!, type: 'warranty' as const, title: w.title })),
   ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50);
 
-  // ── Assemble payload ───────────────────────────────────────────────────────
   const payload: DossiePayload = {
     generated_at: new Date().toISOString(),
     tenant_name: tenantRow?.name ?? '',
@@ -504,11 +532,62 @@ reports.get('/dossie', async (c) => {
     })),
     warranties: warrantyRows,
     renovations: renovationRows,
-    service_orders: completedSORows,
+    service_orders: completedSORows.map(({ title, system_type, status, priority, completed_at, cost }) => ({
+      title,
+      system_type,
+      status,
+      priority,
+      completed_at,
+      cost,
+    })),
+    photo_evidence: completedSORows
+      .map((serviceOrderRow) => ({
+        service_title: serviceOrderRow.title,
+        system_type: serviceOrderRow.system_type,
+        completed_at: serviceOrderRow.completed_at,
+        before_count: countPrivateMedia(serviceOrderRow.before_photos),
+        after_count: countPrivateMedia(serviceOrderRow.after_photos),
+      }))
+      .filter((evidence) => evidence.before_count + evidence.after_count > 0),
     documents: documentRows,
     maintenance_schedules: maintenanceRows,
     timeline,
   };
+
+  return payload;
+}
+
+reports.get('/dossie/preview', async (c) => {
+  const authorized = await authorizeDossieContext(c);
+  if (!authorized.ok) return authorized.response;
+
+  const { db, propertyId, tenantId, userId } = authorized.context;
+  const payload = await buildDossiePayload(db, propertyId, tenantId, userId);
+  if (!payload) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  return ok(c, {
+    dossie: payload,
+    preview: {
+      generated_at: payload.generated_at,
+      sections: {
+        rooms: payload.rooms.length,
+        inventory_items: payload.inventory_items.length,
+        warranties: payload.warranties.length,
+        service_orders: payload.service_orders.length,
+        photo_evidence: payload.photo_evidence.length,
+        documents: payload.documents.length,
+      },
+    },
+  });
+});
+
+reports.get('/dossie', async (c) => {
+  const authorized = await authorizeDossieContext(c);
+  if (!authorized.ok) return authorized.response;
+
+  const { db, propertyId, tenantId, userId } = authorized.context;
+  const payload = await buildDossiePayload(db, propertyId, tenantId, userId);
+  if (!payload) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
 
   await writeAuditLog(c.env.DB, {
     tenantId,
@@ -521,6 +600,35 @@ reports.get('/dossie', async (c) => {
   });
 
   return ok(c, { dossie: payload });
+});
+
+reports.post('/dossie/export', async (c) => {
+  const authorized = await authorizeDossieContext(c);
+  if (!authorized.ok) return authorized.response;
+
+  const { db, propertyId, tenantId, userId } = authorized.context;
+  const payload = await buildDossiePayload(db, propertyId, tenantId, userId);
+  if (!payload) return err(c, 'Imovel nao encontrado', 'NOT_FOUND', 404);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'property',
+    entityId: propertyId,
+    action: 'property_dossie_pdf_exported',
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+  });
+
+  return ok(c, {
+    dossie: payload,
+    export: {
+      mode: 'client_pdf',
+      storage: 'browser_download',
+      filename: `dossie-tecnico-${propertyId}-${payload.generated_at.slice(0, 10)}.pdf`,
+      generated_at: payload.generated_at,
+    },
+  });
 });
 
 export { computeHealthScore };

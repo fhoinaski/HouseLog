@@ -7,6 +7,7 @@ import { ok, err } from '../lib/response';
 import { authMiddleware, assertPropertyAccess, resolveTenant } from '../middleware/auth';
 import { getDb } from '../db/client';
 import {
+  auditLog,
   documents,
   handoverChecklistItems,
   handoverPackages,
@@ -35,10 +36,14 @@ import {
   handoverPackageCreateSchema,
   handoverPackageFilterSchema,
   HandoverPackageRevokeInputSchema,
+  HandoverPackageDeliveryEventInputSchema,
   handoverPackageUpdateSchema,
+  type HandoverPackageDeliveryChannel,
   type HandoverPackageStatus,
   type HandoverPackageType,
 } from '@houselog/contracts';
+import { emailHandoverPublicLink, sendEmail } from '../lib/email';
+import { hashPublicHandoverToken } from '../lib/handover-public';
 
 const handoverPackagesRoute = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -118,9 +123,55 @@ type PackageIssueBody = {
   expires_at?: string | null;
 };
 
+const DELIVERY_ACTION_BY_CHANNEL: Record<HandoverPackageDeliveryChannel, string> = {
+  copy_link: 'handover_package_link_copied',
+  whatsapp: 'handover_package_whatsapp_opened',
+  email: 'handover_package_email_sent',
+  pdf: 'handover_package_pdf_exported',
+};
+
+const DELIVERY_CHANNEL_FROM_ACTION: Record<string, HandoverPackageDeliveryChannel> = Object.fromEntries(
+  Object.entries(DELIVERY_ACTION_BY_CHANNEL).map(([channel, action]) => [action, channel])
+) as Record<string, HandoverPackageDeliveryChannel>;
+
+const deliveryEventActions = new Set(Object.values(DELIVERY_ACTION_BY_CHANNEL));
+
 function optionalText(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+function maskEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) return 'Email informado';
+  const visiblePrefix = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visiblePrefix}${'*'.repeat(Math.max(2, localPart.length - visiblePrefix.length))}@${domain}`;
+}
+
+function extractPublicHandoverToken(appUrl: string, publicAccessUrl: string): string | null {
+  let parsed: URL;
+  let app: URL;
+  try {
+    parsed = new URL(publicAccessUrl);
+    app = new URL(appUrl);
+  } catch {
+    return null;
+  }
+
+  if (parsed.origin !== app.origin) return null;
+  const parts = parsed.pathname.split('/').filter(Boolean);
+  if (parts.length !== 2 || parts[0] !== 'handover') return null;
+  const token = parts[1] ? decodeURIComponent(parts[1]) : '';
+  return token.length >= 8 ? token : null;
+}
+
+function resolvePackagePropertyName(handoverPackage: HandoverPackageRow): string {
+  const property = handoverPackage.snapshot_json?.property;
+  if (property && typeof property === 'object' && 'name' in property && typeof property.name === 'string') {
+    return property.name;
+  }
+  return handoverPackage.title;
 }
 
 async function ensureTenantProperty(db: DbClient, tenantId: string, propertyId: string): Promise<boolean> {
@@ -238,6 +289,40 @@ async function getTenantPropertyOrResponse(
   if (!hasAccess) return { ok: false, response: err(c, 'Sem acesso', 'FORBIDDEN', 403) };
 
   return { ok: true };
+}
+
+async function loadHandoverPackageOrResponse(
+  c: HandoverContext,
+  db: DbClient,
+  input: { tenantId: string; propertyId: string; packageId: string }
+): Promise<{ ok: true; handoverPackage: HandoverPackageRow } | { ok: false; response: Response }> {
+  const [handoverPackage] = await db
+    .select(handoverPackageSelect)
+    .from(handoverPackages)
+    .where(
+      and(
+        eq(handoverPackages.id, input.packageId),
+        eq(handoverPackages.tenantId, input.tenantId),
+        eq(handoverPackages.propertyId, input.propertyId),
+        isNull(handoverPackages.deletedAt)
+      )
+    )
+    .limit(1) as HandoverPackageRow[];
+
+  if (!handoverPackage) return { ok: false, response: err(c, 'Dossie nao encontrado', 'NOT_FOUND', 404) };
+  return { ok: true, handoverPackage };
+}
+
+async function validatePublicUrlForPackage(input: {
+  appUrl: string;
+  publicAccessUrl?: string | null;
+  publicAccessTokenHash: string | null;
+}): Promise<boolean> {
+  if (!input.publicAccessUrl || !input.publicAccessTokenHash) return false;
+  const token = extractPublicHandoverToken(input.appUrl, input.publicAccessUrl);
+  if (!token) return false;
+  const tokenHash = await hashPublicHandoverToken(token);
+  return tokenHash === input.publicAccessTokenHash;
 }
 
 async function loadIssueSnapshotData(db: DbClient, tenantId: string, propertyId: string, packageId: string) {
@@ -991,6 +1076,158 @@ handoverPackagesRoute.post('/:id/revoke', async (c) => {
   });
 
   return ok(c, { package: revokedPackage });
+});
+
+handoverPackagesRoute.get('/:id/delivery-events', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const packageId = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const context = await getTenantPropertyOrResponse(c, db, propertyId, tenantId);
+  if (!context.ok) return context.response;
+
+  const loaded = await loadHandoverPackageOrResponse(c, db, { tenantId, propertyId, packageId });
+  if (!loaded.ok) return loaded.response;
+
+  const rows = await db
+    .select({
+      id: auditLog.id,
+      action: auditLog.action,
+      actor_id: auditLog.actorId,
+      new_data: auditLog.newData,
+      created_at: auditLog.createdAt,
+    })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.tenantId, tenantId),
+        eq(auditLog.propertyId, propertyId),
+        eq(auditLog.entityType, 'handover_package'),
+        eq(auditLog.entityId, packageId)
+      )
+    )
+    .orderBy(desc(auditLog.createdAt))
+    .limit(50);
+
+  const events = rows
+    .filter((row) => deliveryEventActions.has(row.action))
+    .map((row) => {
+      const data = row.new_data ?? {};
+      const status = data.status === 'sent' ? 'sent' : 'recorded';
+      const recipientEmailMasked = typeof data.recipient_email_masked === 'string'
+        ? data.recipient_email_masked
+        : null;
+      return {
+        id: row.id,
+        channel: DELIVERY_CHANNEL_FROM_ACTION[row.action],
+        status,
+        recipientEmailMasked,
+        created_at: row.created_at,
+        actor_id: row.actor_id,
+      };
+    })
+    .filter((event) => event.channel);
+
+  return ok(c, { events });
+});
+
+handoverPackagesRoute.post('/:id/delivery-events', async (c) => {
+  const db = getDb(c.env.DB);
+  const propertyId = c.req.param('propertyId')!;
+  const packageId = c.req.param('id')!;
+  const tenantId = c.get('tenantId');
+  const userId = c.get('userId');
+  if (!tenantId) return err(c, 'Tenant ativo obrigatorio', 'TENANT_REQUIRED', 400);
+
+  const context = await getTenantPropertyOrResponse(c, db, propertyId, tenantId);
+  if (!context.ok) return context.response;
+
+  const loaded = await loadHandoverPackageOrResponse(c, db, { tenantId, propertyId, packageId });
+  if (!loaded.ok) return loaded.response;
+  const handoverPackage = loaded.handoverPackage;
+
+  if (handoverPackage.status !== 'issued' && handoverPackage.status !== 'accepted') {
+    return err(c, 'Dossie ainda nao foi emitido.', 'PACKAGE_NOT_ISSUED', 409);
+  }
+  if (handoverPackage.revoked_at) {
+    return err(c, 'Dossie revogado.', 'PACKAGE_REVOKED', 409);
+  }
+  const expiresAtMs = handoverPackage.expires_at ? new Date(handoverPackage.expires_at).getTime() : Number.NaN;
+  if (Number.isNaN(expiresAtMs) || expiresAtMs <= Date.now()) {
+    return err(c, 'Link expirado.', 'LINK_EXPIRED', 409);
+  }
+
+  const body = await c.req.json().catch((): unknown => ({}));
+  const parsedBody = HandoverPackageDeliveryEventInputSchema.safeParse(body);
+  if (!parsedBody.success) {
+    return err(c, 'Dados do envio invalidos.', 'VALIDATION_ERROR', 422, parsedBody.error.flatten());
+  }
+
+  const data = parsedBody.data;
+  const needsPublicUrl = data.channel === 'copy_link' || data.channel === 'whatsapp' || data.channel === 'email';
+  if (needsPublicUrl) {
+    const validUrl = await validatePublicUrlForPackage({
+      appUrl: c.env.APP_URL,
+      publicAccessUrl: data.publicAccessUrl,
+      publicAccessTokenHash: handoverPackage.public_access_token_hash,
+    });
+    if (!validUrl) return err(c, 'Link publico invalido para este pacote.', 'PUBLIC_LINK_MISMATCH', 422);
+  }
+
+  if (data.channel === 'email' && !data.recipientEmail) {
+    return err(c, 'Email do destinatario obrigatorio.', 'VALIDATION_ERROR', 422);
+  }
+
+  if (data.channel === 'email' && !c.env.RESEND_API_KEY) {
+    return err(c, 'Envio de email indisponivel neste ambiente.', 'EMAIL_NOT_CONFIGURED', 409);
+  }
+
+  if (data.channel === 'email') {
+    await sendEmail(c.env.RESEND_API_KEY, {
+      to: data.recipientEmail!,
+      subject: `Entrega digital: ${handoverPackage.title}`,
+      html: emailHandoverPublicLink({
+        recipientName: data.recipientName,
+        propertyName: resolvePackagePropertyName(handoverPackage),
+        packageTitle: handoverPackage.title,
+        expiresAt: handoverPackage.expires_at,
+        publicAccessUrl: data.publicAccessUrl!,
+        appUrl: c.env.APP_URL,
+      }),
+    });
+  }
+
+  const action = DELIVERY_ACTION_BY_CHANNEL[data.channel];
+  const status = data.channel === 'email' ? 'sent' : 'recorded';
+  const recipientEmailMasked = maskEmail(data.recipientEmail);
+
+  await writeAuditLog(c.env.DB, {
+    tenantId,
+    propertyId,
+    entityType: 'handover_package',
+    entityId: packageId,
+    action,
+    actorId: userId,
+    actorIp: c.req.header('CF-Connecting-IP'),
+    newData: {
+      channel: data.channel,
+      status,
+      recipient_email_masked: recipientEmailMasked,
+      has_public_link: Boolean(data.publicAccessUrl),
+      source: 'handover_delivery_action',
+    },
+  });
+
+  return ok(c, {
+    event: {
+      channel: data.channel,
+      status,
+      recipientEmailMasked,
+      created_at: new Date().toISOString(),
+    },
+  });
 });
 
 handoverPackagesRoute.delete('/:id', async (c) => {

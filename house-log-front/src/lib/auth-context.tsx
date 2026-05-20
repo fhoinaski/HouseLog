@@ -87,11 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { access_token } = await authApi.refresh();
       setToken(access_token);
-      const stored = localStorage.getItem(USER_KEY);
-      if (stored) {
-        const parsedUser = JSON.parse(stored) as User;
-        setUser(parsedUser);
-      }
+      const { user: freshUser } = await authApi.me();
+      localStorage.setItem(USER_KEY, JSON.stringify(freshUser));
+      setUser(freshUser);
       scheduleRefresh(access_token);
     } catch {
       clearAll();

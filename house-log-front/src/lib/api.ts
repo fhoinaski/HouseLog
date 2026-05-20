@@ -26,6 +26,8 @@ export type {
   MfaChallengeResponse,
   Property,
   PropertyDashboard,
+  PropertyTimelineEvent,
+  PropertyTimelineEventType,
   PropertyProvider,
   ProviderNetworkOpportunity,
   ProviderOpportunity,
@@ -139,6 +141,8 @@ export type {
   HandoverPackageIssueResponse,
   HandoverPackage,
   HandoverPackageCreateInput,
+  HandoverPackageDeliveryEvent,
+  HandoverPackageDeliveryEventInput,
   HandoverPackageFilters,
   HandoverPackageUpdateInput,
 } from '@/lib/api/handover';
@@ -153,7 +157,16 @@ export type { AuditLinkData, ServiceMessage } from '@/lib/api/services';
 
 // Expenses & Reports
 export { expensesApi, reportsApi } from '@/lib/api/expenses';
-export type { DossiePayload, Expense, ExpenseCategory, ExpenseSummary, HealthScoreReport, ValuationPayload } from '@/lib/api/expenses';
+export type {
+  DossieExportResponse,
+  DossiePayload,
+  DossiePreviewResponse,
+  Expense,
+  ExpenseCategory,
+  ExpenseSummary,
+  HealthScoreReport,
+  ValuationPayload,
+} from '@/lib/api/expenses';
 
 // Maintenance
 export { maintenanceApi } from '@/lib/api/maintenance';

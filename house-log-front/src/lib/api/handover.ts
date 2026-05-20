@@ -7,6 +7,8 @@ import type {
   HandoverChecklistItemStatus,
   HandoverChecklistItemStatusUpdateInput,
   HandoverChecklistItemUpdateInput,
+  HandoverPackageDeliveryEvent,
+  HandoverPackageDeliveryEventInput,
   HandoverPackage,
   HandoverPackageCreateInput,
   HandoverPackageStatus,
@@ -21,6 +23,8 @@ export type {
   HandoverPackage,
   HandoverPackageCreateInput,
   HandoverPackageUpdateInput,
+  HandoverPackageDeliveryEvent,
+  HandoverPackageDeliveryEventInput,
 };
 
 export type HandoverPackageFilters = {
@@ -87,6 +91,24 @@ export const handoverPackagesApi = {
   delete: (propertyId: string, packageId: string) =>
     request<{ success: boolean }>(`/properties/${propertyId}/handover-packages/${packageId}`, {
       method: 'DELETE',
+    }),
+
+  deliveryEvents: (propertyId: string, packageId: string) =>
+    request<{ events: HandoverPackageDeliveryEvent[] }>(
+      `/properties/${propertyId}/handover-packages/${packageId}/delivery-events`
+    ),
+
+  recordDeliveryEvent: (propertyId: string, packageId: string, data: HandoverPackageDeliveryEventInput) =>
+    request<{
+      event: {
+        channel: HandoverPackageDeliveryEvent['channel'];
+        status: HandoverPackageDeliveryEvent['status'];
+        recipientEmailMasked: string | null;
+        created_at: string;
+      };
+    }>(`/properties/${propertyId}/handover-packages/${packageId}/delivery-events`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { use, useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
@@ -13,11 +14,15 @@ import {
   CircleAlert,
   ClipboardCheck,
   Copy,
+  Download,
   ExternalLink,
   FileText,
   Loader2,
+  Mail,
   MapPin,
+  MessageCircle,
   Package,
+  Send,
   Sparkles,
   ShieldAlert,
   ShieldCheck,
@@ -32,8 +37,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { MetricCard } from '@/components/ui/metric-card';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { HandoverPackagePDF } from '@/components/pdf/HandoverPackagePDF';
 import {
   documentsApi,
   handoverChecklistApi,
@@ -45,6 +52,7 @@ import {
   technicalSystemsApi,
   warrantiesApi,
   type Document,
+  type HandoverPackageDeliveryEvent,
   type HandoverChecklistItem,
   type HandoverPackage,
   type InventoryItem,
@@ -63,6 +71,19 @@ import {
   SYSTEM_TYPE_LABELS,
 } from '@/lib/utils';
 import type { HandoverPackageSnapshot } from '@houselog/contracts';
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then((module) => module.PDFDownloadLink),
+  {
+    ssr: false,
+    loading: () => (
+      <Button variant="outline" disabled>
+        <Download className="h-4 w-4" aria-hidden="true" />
+        PDF
+      </Button>
+    ),
+  }
+);
 
 const HANDOVER_STATUS_LABELS: Record<string, string> = {
   draft: 'Rascunho',
@@ -355,6 +376,54 @@ function PackageTile({
   );
 }
 
+const DELIVERY_CHANNEL_LABELS: Record<HandoverPackageDeliveryEvent['channel'], string> = {
+  copy_link: 'Link copiado',
+  whatsapp: 'WhatsApp aberto',
+  email: 'E-mail enviado',
+  pdf: 'PDF gerado',
+};
+
+function DeliveryHistory({
+  events,
+  isLoading,
+}: {
+  events: HandoverPackageDeliveryEvent[];
+  isLoading: boolean;
+}) {
+  return (
+    <PageSection title="Historico de envio" description="Acoes comerciais registradas no audit log do pacote." tone="surface" density="compact">
+      {isLoading ? (
+        <div className="space-y-2">
+          <div className="hl-skeleton h-12 rounded-xl" />
+          <div className="hl-skeleton h-12 rounded-xl" />
+        </div>
+      ) : events.length === 0 ? (
+        <p className="rounded-xl bg-bg-subtle p-3 text-sm leading-6 text-text-secondary">
+          Nenhum envio registrado para este pacote ainda.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {events.slice(0, 6).map((event) => (
+            <div key={event.id} className="rounded-xl border border-border-subtle bg-bg-surface px-3 py-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">
+                    {DELIVERY_CHANNEL_LABELS[event.channel]}
+                  </p>
+                  {event.recipientEmailMasked && (
+                    <p className="mt-1 text-xs text-text-secondary">{event.recipientEmailMasked}</p>
+                  )}
+                </div>
+                <p className="shrink-0 text-xs text-text-tertiary">{formatDateTime(event.created_at)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </PageSection>
+  );
+}
+
 export default function HandoverDigitalPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: propertyId } = use(params);
 
@@ -468,6 +537,18 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
   const [issuedLink, setIssuedLink] = useState<string | null>(null);
   const [issuedPackageId, setIssuedPackageId] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
+  const [openingWhatsapp, setOpeningWhatsapp] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [recordingPdf, setRecordingPdf] = useState(false);
+  const deliveryEventsQuery = useSWR(
+    selectedPackage ? ['handover-delivery-events', propertyId, selectedPackage.id] : null,
+    () => handoverPackagesApi.deliveryEvents(propertyId, selectedPackage!.id)
+  );
+  const deliveryEvents = useMemo(() => deliveryEventsQuery.data?.events ?? [], [deliveryEventsQuery.data]);
 
   useEffect(() => {
     if (issuedPackageId && selectedPackage?.id !== issuedPackageId) {
@@ -502,15 +583,79 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
   }
 
   async function copyIssuedLink() {
-    if (!issuedLink) return;
+    if (!issuedLink || !property) return;
     setCopying(true);
     try {
       await navigator.clipboard.writeText(issuedLink);
+      await handoverPackagesApi.recordDeliveryEvent(propertyId, selectedPackage.id, {
+        channel: 'copy_link',
+        publicAccessUrl: issuedLink,
+      });
+      await deliveryEventsQuery.mutate();
       toast.success('Link copiado.');
     } catch {
       toast.error('Não foi possível copiar o link.');
     } finally {
       setCopying(false);
+    }
+  }
+
+  async function openWhatsappShare() {
+    if (!issuedLink || !property) return;
+    setOpeningWhatsapp(true);
+    try {
+      await handoverPackagesApi.recordDeliveryEvent(propertyId, selectedPackage.id, {
+        channel: 'whatsapp',
+        publicAccessUrl: issuedLink,
+      });
+      await deliveryEventsQuery.mutate();
+      const text = `Handover Digital HouseLog - ${property.name}: ${issuedLink}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nao foi possivel registrar o envio por WhatsApp.';
+      toast.error('Falha ao abrir WhatsApp', { description: message });
+    } finally {
+      setOpeningWhatsapp(false);
+    }
+  }
+
+  async function sendEmailLink() {
+    if (!issuedLink) return;
+    setSendingEmail(true);
+    setEmailError(null);
+    try {
+      await handoverPackagesApi.recordDeliveryEvent(propertyId, selectedPackage.id, {
+        channel: 'email',
+        publicAccessUrl: issuedLink,
+        recipientEmail,
+        recipientName: recipientName.trim() || null,
+      });
+      await deliveryEventsQuery.mutate();
+      setEmailDialogOpen(false);
+      setRecipientEmail('');
+      setRecipientName('');
+      toast.success('E-mail enviado.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nao foi possivel enviar o e-mail.';
+      setEmailError(message);
+      toast.error('Falha ao enviar e-mail', { description: message });
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
+  async function recordPdfExport() {
+    setRecordingPdf(true);
+    try {
+      await handoverPackagesApi.recordDeliveryEvent(propertyId, selectedPackage.id, {
+        channel: 'pdf',
+      });
+      await deliveryEventsQuery.mutate();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'O PDF sera gerado, mas o evento nao foi registrado.';
+      toast.error('Falha ao registrar PDF', { description: message });
+    } finally {
+      setRecordingPdf(false);
     }
   }
 
@@ -609,6 +754,31 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
                   <Copy className="h-4 w-4" aria-hidden="true" />
                   Copiar link
                 </Button>
+                <Button variant="outline" onClick={() => void openWhatsappShare()} loading={openingWhatsapp}>
+                  <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                  WhatsApp
+                </Button>
+                <Button variant="outline" onClick={() => setEmailDialogOpen(true)}>
+                  <Mail className="h-4 w-4" aria-hidden="true" />
+                  E-mail
+                </Button>
+                {latestSnapshot && (
+                  <PDFDownloadLink
+                    document={<HandoverPackagePDF handoverPackage={selectedPackage} snapshot={latestSnapshot} />}
+                    fileName={`handover-${property.name}-${new Date().toISOString().slice(0, 10)}.pdf`}
+                  >
+                    {({ loading }) => (
+                      <Button
+                        variant="outline"
+                        disabled={loading || recordingPdf}
+                        onClick={() => void recordPdfExport()}
+                      >
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        {loading || recordingPdf ? 'Gerando...' : 'PDF completo'}
+                      </Button>
+                    )}
+                  </PDFDownloadLink>
+                )}
                 <Button variant="premium" asChild>
                   <a href={issuedLink} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -904,6 +1074,8 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
                 </div>
               )}
             </PageSection>
+
+            <DeliveryHistory events={deliveryEvents} isLoading={deliveryEventsQuery.isLoading} />
           </div>
 
           <div className="space-y-5 xl:sticky xl:top-5 xl:self-start">
@@ -966,6 +1138,25 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
                   {issuing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4" aria-hidden="true" />}
                   Emitir chave digital
                 </Button>
+
+                {(selectedPackage.status === 'issued' || selectedPackage.status === 'accepted') && latestSnapshot && (
+                  <PDFDownloadLink
+                    document={<HandoverPackagePDF handoverPackage={selectedPackage} snapshot={latestSnapshot} />}
+                    fileName={`handover-${property.name}-${new Date().toISOString().slice(0, 10)}.pdf`}
+                  >
+                    {({ loading }) => (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        disabled={loading || recordingPdf}
+                        onClick={() => void recordPdfExport()}
+                      >
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        {loading || recordingPdf ? 'Gerando PDF...' : 'Baixar PDF completo'}
+                      </Button>
+                    )}
+                  </PDFDownloadLink>
+                )}
 
                 <p className="text-xs leading-6 text-text-tertiary">
                   A emissão gera uma cópia congelada do pacote e um link público controlado por token. Não compartilhe fora do fluxo autorizado.
@@ -1040,6 +1231,63 @@ export default function HandoverDigitalPage({ params }: { params: Promise<{ id: 
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={emailDialogOpen} onOpenChange={(open) => { if (!sendingEmail) setEmailDialogOpen(open); }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Enviar handover por e-mail</DialogTitle>
+            <DialogDescription>
+              O destinatario recebera o link publico do pacote emitido. O token nao sera armazenado no historico.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void sendEmailLink();
+            }}
+          >
+            <label className="space-y-1.5 text-sm font-medium text-text-primary">
+              Nome do destinatario
+              <Input
+                value={recipientName}
+                onChange={(event) => setRecipientName(event.target.value)}
+                maxLength={120}
+                placeholder="Opcional"
+              />
+            </label>
+            <label className="space-y-1.5 text-sm font-medium text-text-primary">
+              E-mail
+              <Input
+                value={recipientEmail}
+                onChange={(event) => setRecipientEmail(event.target.value)}
+                type="email"
+                autoComplete="email"
+                maxLength={160}
+                required
+                placeholder="cliente@exemplo.com"
+              />
+            </label>
+
+            {emailError && (
+              <p role="alert" className="rounded-lg bg-bg-danger px-3 py-2 text-sm leading-6 text-text-danger">
+                {emailError}
+              </p>
+            )}
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" disabled={sendingEmail} onClick={() => setEmailDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" loading={sendingEmail}>
+                <Send className="h-4 w-4" aria-hidden="true" />
+                Enviar e-mail
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

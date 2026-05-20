@@ -11,6 +11,7 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - `src/lib/api`: clients modulares da API.
 - `src/lib/api/core`: HTTP, sessao, storage, tipos e configuracao.
 - `src/lib/api/core/session.ts`: faz bootstrap silencioso da sessao via `POST /auth/refresh`, deduplica refresh concorrente e aplica um cooldown curto apos falha para evitar bursts de chamadas 401/refresh em navegacoes protegidas.
+- `src/lib/auth-context.tsx`: no bootstrap/reload, renova o access token pelo cookie HttpOnly e busca `/auth/me` para hidratar o perfil atual; nao depende apenas de `hl_user` no localStorage para liberar rotas privadas.
 - `src/lib`: auth context, offline queues, sync e utilitarios.
 
 ## Rotas principais
@@ -21,9 +22,19 @@ Next.js App Router, React, TypeScript, Tailwind, SWR, React Hook Form, Zod e PWA
 - Contexto de imovel: `src/app/(app)/properties/[id]`.
 - `src/app/(app)/properties/[id]/page.tsx`: pagina unica do perfil do imovel com hero fixo, metricas e tabs internas via `?tab=...` (`overview`, `rooms`, `tickets`, `services`, `history`, `photos`, `documents`, `warranties`, `inventory`, `handover`). As rotas filhas continuam como deep links para detalhes especificos.
 - `src/app/(app)/properties/[id]/page.tsx`: perfil do imovel usa tabs principais (`overview`, `rooms`, `tickets`, `services`, `history`) em todos os breakpoints, barra compacta de modulos secundarios em `md+` e botao "Mais modulos" com dialog compacto no mobile. Nao ha sub-sidebar contextual lateral dentro da pagina.
+- `src/components/properties/property-timeline-panel.tsx`: painel reutilizavel da Timeline Tecnica. Consome `propertiesApi.timeline(propertyId)`, filtra localmente por tipo, usa Calm OS e mostra apenas eventos minimizados do backend; nao consome audit log bruto nem URLs privadas.
+- `src/components/properties/executive-property-dashboard.tsx`: painel executivo da aba Visao geral do imovel. Consome `propertiesApi.dashboard(propertyId)` via page, usa Calm OS e exibe saude tecnica, riscos, documentos pendentes, garantias, ultimo evento tecnico, OS, inventario e status de dossie sem inventar dados.
+- `src/components/properties/executive-property-dashboard.tsx`: inclui `AlertCenter` com filtro por severidade e cards de garantia/manutencao para `dashboard.preventive_alerts`; mostra estado limpo quando a lista vem vazia.
 - `src/components/properties/property-tabs-model.ts`: normaliza a tab ativa do detalhe do imovel e garante fallback para `overview` quando o query param e invalido.
 - Provider: `src/app/provider`.
 - Publicas tokenizadas: `src/app/audit/[token]`, `src/app/share/service/[token]`, `src/app/invite/[token]`, `src/app/handover/[token]`.
+
+## Handover Digital comercial (2026-05-20)
+
+- `src/app/(app)/properties/[id]/handover/page.tsx` mostra acoes pos-emissao somente quando a URL publica foi emitida na sessao atual: copiar link, WhatsApp, e-mail e PDF completo.
+- A mesma tela exibe historico de envio via `handoverPackagesApi.deliveryEvents`, derivado do audit log sanitizado.
+- `src/components/pdf/HandoverPackagePDF.tsx` gera PDF client-side do snapshot de handover com `@react-pdf/renderer`, sem armazenar arquivo e sem incluir token, R2 key ou IDs internos.
+- `src/components/handover/public-handover-acceptance.tsx` reforca o resumo do aceite antes do formulario publico.
 
 ## Provider Flow (2026-05-17)
 
@@ -87,7 +98,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 - `src/app/(app)/properties/[id]/services/page.tsx` e `service-requests/page.tsx`: mantem lista atual e adiciona toggle Lista/Kanban. `services/page.tsx` agora separa cabeçalho/metricas em faixa estreita e deixa a area operacional full-width para o Kanban nao ser cortado; continua permitindo avancar OS por transicoes existentes do backend. `service-requests/page.tsx` usa Kanban visual/read-only para orcamentos.
 - `src/app/(app)/properties/page.tsx`: lista de imoveis migrada para Calm OS — action chips de acesso rapido (inventario, servicos, financeiro, documentos) usam tokens `--hl-*` com `color-mix` para tons; LoadingState/EmptyState/ErrorState usam `Card variant="section"` com surface/border/shadow Calm OS; header, secao "Ativos cadastrados" e search bar migrados.
 - `src/app/(app)/properties/new/page.tsx`: tela de criacao de imovel usa layout CRM tecnico premium em Calm OS com `PageContainer`, header com CTA desktop, grid principal + aside, secoes Identificacao/Localizacao/Contexto tecnico, upload de capa apenas como pre-visualizacao e resumo "O que sera criado". Payload e montado por `src/components/properties/property-create-form-model.ts` e `propertiesApi.create` usa `PropertyCreateInput`, sem `tenantId`.
-- `src/app/(app)/properties/page.tsx`: listagem de imoveis virou carteira tecnica CRM-style com header premium, resumo operacional, busca por nome/endereco/cliente, filtros locais por saude e card mais informativo com cliente/responsavel, area, ano, estrutura e CTA principal para detalhe. Mantem navegação por `propertyId` e nao inventa dados fora do contrato.
+- `src/app/(app)/properties/page.tsx`: listagem de imoveis virou carteira tecnica CRM-style com header premium, resumo operacional, busca por nome/endereco/cliente, filtros locais por saude e cards compactos/equal-height com thumbnail menor, placeholder tecnico, cliente/responsavel, area, ano, estrutura, data de registro e CTA para detalhe. Mantem navegacao por `propertyId` e nao inventa dados fora do contrato.
 - `src/app/(app)/schedule/page.tsx`: tela de agenda migrada — blocos info/empty/property-links usam `bg-hl-surface`/`bg-hl-surface-muted`, focus ring Calm OS, icone warning com `color-mix`.
 - `src/app/(app)/financial/page.tsx`: tela financeira migrada com mesmo padrao do schedule, icone success com `color-mix`.
 - `src/app/(app)/settings/page.tsx`: avatar usa `bg-hl-surface-muted text-hl-primary`, erros usam `text-hl-danger`, shield usa `text-hl-success`, toggle usa `peer-checked:bg-hl-primary`.
@@ -97,6 +108,7 @@ Sistema visual oficial: `HouseLog Calm OS`. Fonte curta: `docs/design/house-log-
 
 - `src/components/auth/entry-shell.tsx`: shell de login/register totalmente migrado; foco ring usa `color-mix(in srgb, var(--hl-primary) 15%, transparent)`; `var(--radius-md)` substituido por `var(--hl-radius-control)` nos links de logo.
 - `src/components/auth/require-auth.tsx`: loading state de validacao de sessao migrado — `bg-hl-bg`, card `border-hl-border bg-hl-surface shadow-hl-subtle`, icone `bg-hl-surface-muted text-hl-primary`, textos `text-hl-text`/`text-hl-text-muted`, spinner `text-hl-text-muted`.
+- `src/components/auth/require-auth.tsx` e layouts protegidos preservam `next` com query string em redirects para login, incluindo deep links como `/properties/:id?tab=documents`.
 - `src/app/splash/page.tsx`: splash totalmente Calm OS — preview card interno com `bg-hl-surface-muted`, badge "Estavel" com `color-mix` success, metricas e itens de status com `bg-hl-surface-muted text-hl-text/muted`, footer com `text-hl-text-muted` e label "HouseLog Calm OS", foco ring Calm OS no logo.
 - `src/app/invite/[token]/page.tsx`: convite publico usa base Calm OS clara no wrapper, logo e card principal.
 - `src/app/(auth)/login/page.tsx`: tokens antigos (`text-text-secondary`, `text-text-accent`, `var(--provider-accent)`, `var(--divider-color)`, `var(--field-focus-ring)`) substituidos por tokens Calm OS (`text-hl-text-muted`, `text-hl-primary`, `var(--hl-primary)`, `bg-hl-border`).

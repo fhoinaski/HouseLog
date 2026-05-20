@@ -39,8 +39,10 @@ import {
   Upload,
 } from 'lucide-react';
 import { PageSection } from '@/components/layout/page-section';
+import { ExecutivePropertyDashboard } from '@/components/properties/executive-property-dashboard';
 import { PremiumPropertyDashboard } from '@/components/properties/premium-property-dashboard';
 import { PropertySummaryCard } from '@/components/properties/property-summary-card';
+import { PropertyTimelinePanel } from '@/components/properties/property-timeline-panel';
 import { PROPERTY_DETAIL_TABS, normalizePropertyDetailTab, type PropertyDetailTabId } from '@/components/properties/property-tabs-model';
 import { ServiceOrderCreateModal } from '@/components/services/service-order-create-modal';
 import { ActionTile } from '@/components/ui/action-tile';
@@ -2191,7 +2193,7 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
   const activeTab = normalizePropertyDetailTab(searchParams.get('tab'));
 
   const { data: propData, isLoading: propLoading } = useSWR(['property', id], () => propertiesApi.get(id));
-  const { data: dash, isLoading: dashLoading } = useSWR(['dashboard', id], () => propertiesApi.dashboard(id));
+  const { data: dash, error: dashError, isLoading: dashLoading, mutate: mutateDashboard } = useSWR(['dashboard', id], () => propertiesApi.dashboard(id));
   const { data: roomsPreviewData, isLoading: roomsPreviewLoading } = useSWR(['property-rooms-preview', id], () => roomsApi.list(id));
   const { data: maintenanceData, isLoading: maintenanceLoading } = useSWR(['maintenance', id], () => maintenanceApi.list(id));
   const {
@@ -2472,6 +2474,14 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       <main className="min-w-0 space-y-6">
       {activeTab === 'overview' && (
         <div className="space-y-6">
+          <ExecutivePropertyDashboard
+            propertyId={id}
+            dashboard={dash}
+            isLoading={dashLoading}
+            hasError={Boolean(dashError)}
+            onRetry={() => { void mutateDashboard(); }}
+          />
+
           <PropertyOverviewPanel
             propertyId={id}
             property={property}
@@ -2787,6 +2797,8 @@ export default function PropertyPage({ params }: { params: Promise<{ id: string 
       {/* ── TAB: HISTÓRICO ───────────────────────────────────────────────── */}
       {activeTab === 'history' && (
         <div className="mx-auto max-w-2xl space-y-8 pb-8">
+          <PropertyTimelinePanel propertyId={id} compact />
+
           <div className="space-y-4">
             <p className="text-sm text-text-tertiary">
               Últimas OS concluídas · <Link href={`/properties/${id}/timeline`} className="text-text-accent hover:underline">Ver linha do tempo completa</Link>

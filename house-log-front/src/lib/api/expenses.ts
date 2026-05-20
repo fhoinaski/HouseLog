@@ -57,6 +57,31 @@ export type ValuationPayload = {
   generated_at: string;
 };
 
+export type DossiePreviewResponse = {
+  dossie: DossiePayload;
+  preview: {
+    generated_at: string;
+    sections: {
+      rooms: number;
+      inventory_items: number;
+      warranties: number;
+      service_orders: number;
+      photo_evidence: number;
+      documents: number;
+    };
+  };
+};
+
+export type DossieExportResponse = {
+  dossie: DossiePayload;
+  export: {
+    mode: 'client_pdf';
+    storage: 'browser_download';
+    filename: string;
+    generated_at: string;
+  };
+};
+
 export const expensesApi = {
   list: (propertyId: string, params?: { month?: string; category?: string; cursor?: string }) =>
     request<CursorPage<Expense>>(
@@ -91,4 +116,10 @@ export const reportsApi = {
 
   dossie: (propertyId: string) =>
     request<{ dossie: DossiePayload }>(`/properties/${propertyId}/report/dossie`),
+
+  dossiePreview: (propertyId: string) =>
+    request<DossiePreviewResponse>(`/properties/${propertyId}/report/dossie/preview`),
+
+  exportDossiePdf: (propertyId: string) =>
+    request<DossieExportResponse>(`/properties/${propertyId}/report/dossie/export`, { method: 'POST' }),
 };

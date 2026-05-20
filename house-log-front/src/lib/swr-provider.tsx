@@ -11,7 +11,10 @@ export function handle401(): void {
   if (redirecting) return;
   redirecting = true;
   clearToken();
-  window.location.href = '/login';
+
+  const currentPath = window.location.pathname || '/dashboard';
+  const next = `${currentPath}${window.location.search}`;
+  window.location.href = `/login?next=${encodeURIComponent(next)}`;
 }
 
 export function SWRProvider({ children }: { children: React.ReactNode }) {

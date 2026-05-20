@@ -47,6 +47,14 @@ export const DossieServiceOrderSchema = z.object({
   cost: z.number().nullable(),
 });
 
+export const DossiePhotoEvidenceSchema = z.object({
+  service_title: z.string(),
+  system_type: z.string(),
+  completed_at: z.string().nullable(),
+  before_count: z.number(),
+  after_count: z.number(),
+});
+
 export const DossieDocumentSchema = z.object({
   title: z.string(),
   type: z.string(),
@@ -93,6 +101,7 @@ export const DossiePayloadSchema = z.object({
   warranties: z.array(DossieWarrantySchema),
   renovations: z.array(DossieRenovationSchema),
   service_orders: z.array(DossieServiceOrderSchema),
+  photo_evidence: z.array(DossiePhotoEvidenceSchema),
   documents: z.array(DossieDocumentSchema),
   maintenance_schedules: z.array(DossieMaintenanceScheduleSchema),
   timeline: z.array(DossieTimelineEventSchema),
@@ -104,6 +113,7 @@ export type DossieInventoryItem = z.infer<typeof DossieInventoryItemSchema>;
 export type DossieWarranty = z.infer<typeof DossieWarrantySchema>;
 export type DossieRenovation = z.infer<typeof DossieRenovationSchema>;
 export type DossieServiceOrder = z.infer<typeof DossieServiceOrderSchema>;
+export type DossiePhotoEvidence = z.infer<typeof DossiePhotoEvidenceSchema>;
 export type DossieDocument = z.infer<typeof DossieDocumentSchema>;
 export type DossieMaintenanceSchedule = z.infer<typeof DossieMaintenanceScheduleSchema>;
 export type DossieTimelineEvent = z.infer<typeof DossieTimelineEventSchema>;

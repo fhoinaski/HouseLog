@@ -1,5 +1,5 @@
 import { qs, request } from './_core';
-import type { CursorPage, Property, PropertyDashboard, PropertyProvider } from './_core';
+import type { CursorPage, Property, PropertyDashboard, PropertyProvider, PropertyTimelineEvent } from './_core';
 import type { PropertyCreateInput, PropertyUpdateInput } from '@houselog/contracts';
 
 export const propertiesApi = {
@@ -17,6 +17,9 @@ export const propertiesApi = {
   delete: (id: string) => request<{ success: boolean }>(`/properties/${id}`, { method: 'DELETE' }),
 
   dashboard: (id: string) => request<PropertyDashboard>(`/properties/${id}/dashboard`),
+
+  timeline: (id: string, params?: { limit?: number; before?: string }) =>
+    request<CursorPage<PropertyTimelineEvent>>(`/properties/${id}/timeline${qs(params)}`),
 
   applyTemplate: (id: string, type: 'house' | 'apt' | 'commercial' | 'warehouse') =>
     request<{ created: { rooms: number; maintenance: number } }>(`/properties/${id}/apply-template`, {

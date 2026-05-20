@@ -108,6 +108,8 @@ const serviceOrder = {
   priority: 'normal',
   completed_at: '2025-04-10',
   cost: 350,
+  before_photos: ['tenant-1/properties/prop-1/services/os-1/before-private.jpg'],
+  after_photos: ['tenant-1/properties/prop-1/services/os-1/after-private.jpg'],
 };
 
 const document = {
@@ -237,6 +239,7 @@ describe('GET /properties/:propertyId/report/dossie', () => {
     expect(Array.isArray(dossie.warranties)).toBe(true);
     expect(Array.isArray(dossie.renovations)).toBe(true);
     expect(Array.isArray(dossie.service_orders)).toBe(true);
+    expect(Array.isArray(dossie.photo_evidence)).toBe(true);
     expect(Array.isArray(dossie.documents)).toBe(true);
     expect(Array.isArray(dossie.maintenance_schedules)).toBe(true);
     expect(Array.isArray(dossie.timeline)).toBe(true);
@@ -280,6 +283,29 @@ describe('GET /properties/:propertyId/report/dossie', () => {
     expect(item!).not.toHaveProperty('room_id');
   });
 
+  it('inclui evidencias fotograficas sem expor chaves privadas', async () => {
+    const db = buildDb();
+    vi.mocked(getDb).mockReturnValue(db as unknown as ReturnType<typeof getDb>);
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/dossie',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    const body = await res.json() as { dossie: { photo_evidence: Record<string, unknown>[]; service_orders: Record<string, unknown>[] } };
+    expect(body.dossie.photo_evidence[0]).toMatchObject({
+      service_title: serviceOrder.title,
+      system_type: 'electrical',
+      before_count: 1,
+      after_count: 1,
+    });
+    expect(JSON.stringify(body.dossie)).not.toContain('before-private.jpg');
+    expect(JSON.stringify(body.dossie)).not.toContain('after-private.jpg');
+    expect(body.dossie.service_orders[0]).not.toHaveProperty('before_photos');
+    expect(body.dossie.service_orders[0]).not.toHaveProperty('after_photos');
+  });
+
   it('cria audit log com tenantId, propertyId e action correta', async () => {
     const db = buildDb();
     vi.mocked(getDb).mockReturnValue(db as unknown as ReturnType<typeof getDb>);
@@ -300,6 +326,42 @@ describe('GET /properties/:propertyId/report/dossie', () => {
     expect(auditCall.entityId).toBe('prop-1');
   });
 
+  it('preview retorna payload sanitizado sem registrar exportacao', async () => {
+    const db = buildDb();
+    vi.mocked(getDb).mockReturnValue(db as unknown as ReturnType<typeof getDb>);
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/dossie/preview',
+      { method: 'GET' },
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { dossie: Record<string, unknown>; preview: { sections: Record<string, number> } };
+    expect(body.dossie).toBeDefined();
+    expect(body.preview.sections.photo_evidence).toBe(1);
+    expect(vi.mocked(writeAuditLog)).not.toHaveBeenCalled();
+  });
+
+  it('exportacao PDF cria audit log explicito sem retornar key R2', async () => {
+    const db = buildDb();
+    vi.mocked(getDb).mockReturnValue(db as unknown as ReturnType<typeof getDb>);
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/dossie/export',
+      { method: 'POST' },
+      buildEnv()
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { dossie: Record<string, unknown>; export: Record<string, unknown> };
+    expect(body.export).toMatchObject({ mode: 'client_pdf', storage: 'browser_download' });
+    expect(JSON.stringify(body)).not.toContain('r2_key');
+    expect(JSON.stringify(body)).not.toContain('tenant-1/properties/prop-1/services/os-1');
+    expect(vi.mocked(writeAuditLog)).toHaveBeenCalledOnce();
+    expect(vi.mocked(writeAuditLog).mock.calls[0]![1]!.action).toBe('property_dossie_pdf_exported');
+  });
+
   it('tenant A não pode gerar dossiê do imóvel de tenant B', async () => {
     // tenant-2 is the active tenant but property belongs to tenant-1 → DB returns []
     authState.tenantId = 'tenant-2';
@@ -309,6 +371,21 @@ describe('GET /properties/:propertyId/report/dossie', () => {
     const res = await buildApp().request(
       '/properties/prop-1/report/dossie',
       { method: 'GET' },
+      buildEnv()
+    );
+
+    expect(res.status).toBe(404);
+    expect(vi.mocked(writeAuditLog)).not.toHaveBeenCalled();
+  });
+
+  it('tenant A nÃ£o pode exportar PDF do imÃ³vel de tenant B', async () => {
+    authState.tenantId = 'tenant-2';
+    const db = buildDb({ propertyCheckResult: [] });
+    vi.mocked(getDb).mockReturnValue(db as unknown as ReturnType<typeof getDb>);
+
+    const res = await buildApp().request(
+      '/properties/prop-1/report/dossie/export',
+      { method: 'POST' },
       buildEnv()
     );
 

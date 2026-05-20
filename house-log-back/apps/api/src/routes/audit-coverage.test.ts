@@ -19,6 +19,7 @@ vi.mock('../db/client', () => ({ getDb: vi.fn() }));
 vi.mock('../lib/audit', () => ({ writeAuditLog: vi.fn(async () => undefined) }));
 
 vi.mock('../lib/jwt', () => ({
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
   signJwt: vi.fn(async () => 'access-token-mock'),
   hashPassword: vi.fn(async (pw: string) => `hashed:${pw}`),
   verifyPassword: vi.fn(async (_plain: string, _hash: string) => true),

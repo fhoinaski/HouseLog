@@ -34,6 +34,13 @@ Listagens nao retornam segredo. Reveal deve ser acao explicita, autorizada, audi
 Tokens publicos devem ser gerados uma vez, armazenados como hash quando suportado, ter expiracao/revogacao quando o dominio exigir e retornar payload minimo.
 Rotas publicas tokenizadas devem aplicar rate limit granular por fluxo, IP e prefixo do hash do token. Nunca usar token plaintext em chave de rate limit, audit log, logs ou snapshots. Respostas publicas devem evitar diferenciar token inexistente de token malformado quando isso facilitar enumeracao.
 
+## Handover delivery events (2026-05-20)
+
+- Eventos comerciais privados de handover validam `tenantId + propertyId + packageId` antes de registrar ou enviar.
+- O token publico continua hash-only no banco; o endpoint de entrega pode receber a URL emitida apenas para validar que o hash do token bate com o pacote e nunca retorna token novamente.
+- Audit log de copia, WhatsApp, e-mail e PDF registra canal, status e e-mail mascarado; nao registra URL publica completa, token puro, token hash ou `package_hash`.
+- Envio por e-mail depende de `RESEND_API_KEY`; quando ausente, falha fechado com `EMAIL_NOT_CONFIGURED`.
+
 ## Audit log
 
 Mutacoes criticas usam `writeAuditLog`. Dados antigos e novos devem passar por sanitizacao. Inclua `tenantId` e `propertyId` quando aplicavel.

@@ -324,6 +324,13 @@ export function PublicHandoverAcceptance({
       </CardHeader>
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="rounded-[var(--radius-lg)] bg-bg-accent-subtle px-4 py-3">
+            <p className="text-sm font-medium text-text-accent">Resumo do aceite</p>
+            <p className="mt-1 text-sm leading-6 text-text-secondary">
+              Ao confirmar, voce registra o recebimento digital deste pacote de handover, incluindo documentos, garantias, sistemas, inventario tecnico e checklist liberados nesta versao.
+            </p>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1.5 text-sm font-medium text-text-primary">
               Nome

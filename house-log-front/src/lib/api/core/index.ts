@@ -11,6 +11,8 @@ export type {
   ServiceOrder,
   CursorPage,
   PropertyDashboard,
+  PropertyTimelineEvent,
+  PropertyTimelineEventType,
   Document,
   DocumentType,
   PropertyProvider,

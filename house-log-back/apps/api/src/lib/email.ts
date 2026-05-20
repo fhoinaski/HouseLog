@@ -146,3 +146,30 @@ export function emailServiceAssigned(p: {
     <a href="${p.serviceUrl}" style="display:block;background:#3b82f6;color:#fff;text-align:center;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Abrir OS no app</a>
   `, p.appUrl);
 }
+
+export function emailHandoverPublicLink(p: {
+  recipientName?: string | null;
+  propertyName: string;
+  packageTitle: string;
+  expiresAt?: string | null;
+  publicAccessUrl: string;
+  appUrl: string;
+}): string {
+  const greeting = p.recipientName?.trim() ? `Ola, ${p.recipientName.trim()}` : 'Ola';
+  const expires = p.expiresAt ? new Date(p.expiresAt).toLocaleDateString('pt-BR') : 'validade definida pelo responsavel';
+
+  return base('Entrega digital do imovel', `
+    <p style="color:#475569;margin:0 0 4px;font-size:14px">${greeting}</p>
+    <h1 style="color:#0f172a;font-size:20px;font-weight:700;margin:0 0 16px">Entrega digital do imovel</h1>
+    <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px">
+      Voce recebeu acesso ao pacote de handover digital do imovel. O link e individual, tem validade controlada e deve ser usado apenas pelo destinatario autorizado.
+    </p>
+    <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:24px">
+      <p style="margin:0 0 4px;color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:600">IMOVEL</p>
+      <p style="margin:0;color:#0f172a;font-size:16px;font-weight:600">${p.propertyName}</p>
+      <p style="margin:8px 0 0;color:#64748b;font-size:13px">Pacote: ${p.packageTitle}</p>
+      <p style="margin:4px 0 0;color:#64748b;font-size:13px">Validade: ${expires}</p>
+    </div>
+    <a href="${p.publicAccessUrl}" style="display:block;background:#3b82f6;color:#fff;text-align:center;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Abrir entrega digital</a>
+  `, p.appUrl);
+}

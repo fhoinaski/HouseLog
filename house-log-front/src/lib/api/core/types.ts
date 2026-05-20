@@ -160,8 +160,88 @@ export type PropertyDashboard = {
   expenses: { total: number; this_month: number };
   services: { total: number; requested: number; in_progress: number; done: number; urgent_open: number };
   inventory: { total: number; low_stock: number };
+  documents: {
+    total: number;
+    pending_review: number;
+    failed_processing: number;
+    expiring_soon: number;
+    expired: number;
+  };
+  warranties: {
+    total: number;
+    active: number;
+    expiring_soon: number;
+    expired: number;
+  };
+  handover: {
+    total: number;
+    issued: number;
+    accepted: number;
+    dossier_status: 'issued' | 'pending';
+  };
+  last_event: {
+    type:
+      | 'document_uploaded'
+      | 'warranty_created'
+      | 'service_request_opened'
+      | 'service_order_created'
+      | 'service_order_completed'
+      | 'inventory_updated'
+      | 'handover_issued'
+      | 'handover_accepted';
+    title: string;
+    at: string;
+    entity_type: 'document' | 'warranty' | 'service_request' | 'service_order' | 'inventory_item' | 'handover_package';
+    entity_id: string;
+    severity: 'neutral' | 'success' | 'warning' | 'critical';
+  } | null;
   monthly_expenses: { reference_month: string; total: number; category: string }[];
-  warranties_expiring: { id: string; name: string; warranty_until: string; days_left: number }[];
+  warranties_expiring: { id: string; name: string; warranty_until: string; days_left: number; source?: 'inventory' | 'warranty' }[];
+  preventive_alerts: {
+    id: string;
+    type:
+      | 'warranty_expiring'
+      | 'warranty_expired'
+      | 'maintenance_overdue'
+      | 'stale_service_order'
+      | 'missing_essential_documents'
+      | 'handover_pending';
+    severity: 'info' | 'warning' | 'critical';
+    title: string;
+    description: string;
+    entity_type: 'property' | 'warranty' | 'inventory_item' | 'maintenance_schedule' | 'service_order' | 'handover_package';
+    entity_id: string | null;
+    due_date: string | null;
+    days_delta: number | null;
+    action_href: string;
+  }[];
+};
+
+export type PropertyTimelineEventType =
+  | 'property_created'
+  | 'room_created'
+  | 'document_uploaded'
+  | 'warranty_created'
+  | 'service_request_opened'
+  | 'diagnostic_recorded'
+  | 'service_order_created'
+  | 'service_order_completed'
+  | 'evidence_uploaded'
+  | 'inventory_updated'
+  | 'renovation_completed'
+  | 'dossier_issued'
+  | 'handover_accepted';
+
+export type PropertyTimelineEvent = {
+  id: string;
+  type: PropertyTimelineEventType;
+  at: string;
+  title: string;
+  description: string | null;
+  entity_type: string;
+  entity_id: string;
+  severity: 'neutral' | 'success' | 'warning' | 'critical';
+  meta?: Record<string, string | number | boolean | null>;
 };
 
 export type Document = {

@@ -35,6 +35,7 @@ vi.mock('../lib/audit', () => ({
 }));
 
 vi.mock('../lib/jwt', () => ({
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
   verifyJwt: vi.fn(async () => ({
     sub: 'user-1',
     email: 'owner@example.com',

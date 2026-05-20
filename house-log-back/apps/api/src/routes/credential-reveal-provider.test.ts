@@ -23,6 +23,7 @@ const MOCK_IAT = 1_000_000;
 const MOCK_EXP = 9_999_999_999;
 
 vi.mock('../lib/jwt', () => ({
+  resolveJwtSecret: vi.fn(() => 'test-secret-key-minimum-32-chars-ok'),
   verifyJwt: vi.fn(async () => ({
     sub: 'provider-1',
     email: 'provider@example.com',

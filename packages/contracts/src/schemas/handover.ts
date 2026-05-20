@@ -274,6 +274,29 @@ export const HandoverPackageRevokeInputSchema = z.object({
   revokeReason: z.string().trim().min(5, 'Informe o motivo da revogacao.').max(500),
 }).strict();
 
+export const HandoverPackageDeliveryChannelSchema = z.enum([
+  'copy_link',
+  'whatsapp',
+  'email',
+  'pdf',
+]);
+
+export const HandoverPackageDeliveryEventInputSchema = z.object({
+  channel: HandoverPackageDeliveryChannelSchema,
+  publicAccessUrl: z.string().url().max(1000).optional().nullable(),
+  recipientEmail: z.string().trim().email('Informe um email valido.').max(160).optional().nullable(),
+  recipientName: z.string().trim().max(120).optional().nullable(),
+}).strict();
+
+export const HandoverPackageDeliveryEventSchema = z.object({
+  id: z.string(),
+  channel: HandoverPackageDeliveryChannelSchema,
+  status: z.enum(['recorded', 'sent']),
+  recipientEmailMasked: z.string().nullable(),
+  created_at: z.string(),
+  actor_id: z.string().nullable(),
+}).strict();
+
 export const HandoverPackageAcceptInputSchema = z.object({
   accepted_by_name: z.string().min(1, 'Informe o nome de quem recebeu.').max(120),
   accepted_by_email: z.string().email().optional().nullable(),
@@ -320,6 +343,9 @@ export type HandoverPackageUpdateInput = z.infer<typeof handoverPackageUpdateSch
 export type HandoverPackageFilterInput = z.infer<typeof handoverPackageFilterSchema>;
 export type HandoverPackageIssueInput = z.infer<typeof HandoverPackageIssueInputSchema>;
 export type HandoverPackageRevokeInput = z.infer<typeof HandoverPackageRevokeInputSchema>;
+export type HandoverPackageDeliveryChannel = z.infer<typeof HandoverPackageDeliveryChannelSchema>;
+export type HandoverPackageDeliveryEventInput = z.infer<typeof HandoverPackageDeliveryEventInputSchema>;
+export type HandoverPackageDeliveryEvent = z.infer<typeof HandoverPackageDeliveryEventSchema>;
 export type HandoverPackageAcceptInput = z.infer<typeof HandoverPackageAcceptInputSchema>;
 export type PublicHandoverPackageAcceptInput = z.infer<typeof PublicHandoverPackageAcceptInputSchema>;
 

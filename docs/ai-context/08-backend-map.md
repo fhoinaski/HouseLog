@@ -28,6 +28,9 @@ Helpers de autorizacao compartilhados devem receber `tenantId` e `tenantRole` do
 Auth, tenant authorization, credentials, documents/media, service orders, bids/messages, audit log, deploy config, public links, handover, uploads e offline sync.
 
 - `routes/auth.ts`: register/login/mfa/me retornam `activeTenantId` no payload de sessao; owner/admin sem tenant ativo recebem bootstrap server-side de tenant padrao quando aplicavel.
+- `routes/properties.ts`: `GET /properties/:id/dashboard` agrega indicadores executivos do imovel por `tenantId + propertyId` (saude, documentos, garantias, OS, inventario, manutencao, handover/dossie e ultimo evento tecnico), com payload minimizado e sem dados sensiveis.
+- `routes/properties.ts`: o mesmo dashboard calcula `preventive_alerts` on-demand, sem tabela nova, para garantias vencendo/vencidas, manutencao atrasada, OS aberta ha muitos dias, documentos essenciais ausentes e handover pendente. As queries seguem `tenantId + propertyId` e nao aceitam `tenantId` do client.
+- `routes/timeline.ts`: `GET /properties/:propertyId/timeline` agrega eventos seguros do prontuario (imovel, ambientes, documentos, garantias, chamados, diagnosticos de documento, OS, evidencias, inventario, reformas e handover). Valida tenant/property/access e nunca retorna audit log bruto, payload sensivel, R2 key, token ou URL privada.
 
 Search usa `src/lib/search-field-policy.ts` para controlar campos permitidos e proibidos por entidade. A rota nao deve adicionar campo pesquisavel fora dessa policy.
 
@@ -45,6 +48,12 @@ Public links usam `src/lib/public-link-rate-limit.ts` para rate limit granular e
 
 - `POST /provider/services/:id/invoice` — `canUploadProviderInvoice` (alias de `canViewAssignedProviderService`); cria documento no D1.
 - `POST /provider/services/:id/photos` — `canUploadProviderEvidence`; requer `assigned_to === userId` + status `approved`|`in_progress`; salva R2 key em `serviceOrders.afterPhotos`; audit sem R2 key. NAO usar `canManageProperty` para provider — bloqueia todos os roles de prestador.
+
+## Handover Digital comercial (2026-05-20)
+
+- `routes/handover-packages.ts` inclui `GET/POST /:id/delivery-events` para historico e acoes comerciais de link emitido.
+- O POST valida pacote emitido/aceito, expiracao, revogacao e correspondencia entre `publicAccessUrl` e `public_access_token_hash` antes de copia, WhatsApp ou e-mail.
+- `lib/email.ts` inclui `emailHandoverPublicLink` para envio Resend do link de entrega digital.
 
 ## Regras para IA
 

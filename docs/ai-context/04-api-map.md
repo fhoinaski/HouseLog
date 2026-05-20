@@ -29,10 +29,21 @@ O frontend tambem aceita formato legado preservado pelo helper antigo.
   - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/mfa/challenge` e `GET /api/v1/auth/me` retornam `active_tenant_id`/`activeTenantId` no payload de sessao.
   - Primeiro acesso de `owner`/`admin` sem tenant ativo pode bootstrapar um tenant padrao no servidor; nao aceitar `tenantId` do cliente.
 - Properties: `/api/v1/properties/*`.
+  - `GET /api/v1/properties/:id/dashboard`: dashboard executivo agregado do imovel. Usa tenant ativo + acesso ao property e retorna contadores minimizados de saude tecnica, documentos, garantias, OS, inventario, manutencao, handover/dossie e ultimo evento tecnico; nao retorna payload bruto, tokens, R2 keys ou URLs privadas.
+  - `GET /api/v1/properties/:id/dashboard` tambem retorna `preventive_alerts` calculados on-demand para garantias vencendo/vencidas, manutencao atrasada, OS aberta ha muitos dias, documentos essenciais ausentes e handover pendente. O payload e minimizado e usa somente `tenantId + propertyId` resolvidos no backend.
+  - `GET /api/v1/properties/:propertyId/timeline`: timeline tecnica agregada e segura do imovel. Usa `authMiddleware` + `resolveTenant` + acesso ao property; retorna eventos tipados e minimizados (`data`, `next_cursor`, `has_more`) sem payload bruto de audit log, URLs privadas, R2 keys ou tokens.
 - Services: `/api/v1/services/*` e rotas dentro de property.
 - Provider: `/api/v1/provider/*`.
 - Public/tokenized: audit links, service share, invite e handover publico.
 - Documents, credentials, expenses, maintenance, inventory, warranties, renovations, systems, technical points e handover seguem escopo por property quando aplicavel.
+
+## Handover Digital comercial (2026-05-20)
+
+- `POST /api/v1/properties/:propertyId/handover-packages/:id/delivery-events` registra acoes comerciais do link emitido: `copy_link`, `whatsapp`, `email`, `pdf`.
+- Para `copy_link`, `whatsapp` e `email`, o body envia `publicAccessUrl`; o backend extrai o token, valida origem `APP_URL` e confirma hash contra `public_access_token_hash` do pacote antes de auditar/enviar.
+- Para `email`, usa Resend quando `RESEND_API_KEY` existe; retorna `EMAIL_NOT_CONFIGURED` sem enviar quando ausente.
+- `GET /api/v1/properties/:propertyId/handover-packages/:id/delivery-events` retorna historico sanitizado a partir do audit log, sem token, token hash ou URL publica.
+- `packages/contracts/src/schemas/handover.ts` define `HandoverPackageDeliveryEventInputSchema` e `HandoverPackageDeliveryEventSchema`.
 
 ## Propostas de OS (service_bids) — (2026-05-17)
 
